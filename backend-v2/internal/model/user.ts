@@ -1,44 +1,63 @@
-import {InferSchemaType, model, Schema} from 'mongoose';
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    CreateDateColumn,
+    UpdateDateColumn,
+    ManyToMany,
+    JoinTable,
+} from 'typeorm';
 
-const userSchema = new Schema(
-    {
-        email: {
-            type: String,
-            required: true,
-        },
-        name: {
-            type: String,
-            required: true,
-        },
-        bio: String,
-        avatar: String,
-        followers: [{type: Schema.Types.ObjectId, ref: 'users'}],
-        followings: [{type: Schema.Types.ObjectId, ref: 'users'}],
-        lists: [
-            {
-                name: {type: String},
-                posts: [{type: Schema.Types.ObjectId, ref: 'posts'}],
-                images: [{type: String}],
-            },
-        ],
-        interests: [{type: String, required: true}],
-        ignore: [{type: Schema.Types.ObjectId, ref: 'posts'}],
-        mutedAuthor: [{type: Schema.Types.ObjectId, ref: 'users'}],
-        notifications: [
-            {
-                userId: {type: Schema.Types.ObjectId, ref: 'users'},
-                username: {type: String, required: true},
-                avatar: String,
-                message: {type: String, required: true},
-                postId: {type: Schema.Types.ObjectId, ref: 'posts'},
-                postTitle: String,
-                read: {type: Boolean, default: false},
-                createdAt: {type: Date, default: Date.now},
-            },
-        ],
-    },
-    {timestamps: true}
-);
+@Entity('users')
+export default class User {
+    @PrimaryGeneratedColumn('uuid')
+    id: string;
 
-type userSchemaInferType = InferSchemaType<typeof userSchema>;
-export default model<userSchemaInferType>('users', userSchema);
+    @Column({ type: 'varchar', length: 255, unique: true })
+    email: string;
+
+    @Column({ type: 'varchar', length: 255 })
+    name: string;
+
+    @Column({ type: 'text', nullable: true })
+    bio: string;
+
+    @Column({ type: 'varchar', length: 255, nullable: true })
+    avatar: string;
+
+    @ManyToMany(() => User, (user) => user.followings)
+    followers: User[];
+
+    @ManyToMany(() => User, (user) => user.followers)
+    followings: User[];
+
+    @Column({ type: 'json', nullable: true })
+    lists: Array<{ name: string; posts: string[]; images: string[] }>;
+
+    @Column({ type: 'simple-array', nullable: true })
+    interests: string[];
+
+    @Column({ type: 'simple-array', nullable: true })
+    ignore: string[];
+
+    @Column({ type: 'simple-array', nullable: true })
+    mutedAuthor: string[];
+
+    @Column({ type: 'json', nullable: true })
+    notifications: Array<{
+        userId: string;
+        username: string;
+        avatar?: string;
+        message: string;
+        postId?: string;
+        postTitle?: string;
+        read: boolean;
+        createdAt: Date;
+    }>;
+
+    @CreateDateColumn()
+    createdAt: Date;
+
+    @UpdateDateColumn()
+    updatedAt: Date;
+}

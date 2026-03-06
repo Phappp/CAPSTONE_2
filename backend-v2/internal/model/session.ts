@@ -1,16 +1,25 @@
-import {InferSchemaType, model, Schema} from 'mongoose';
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    CreateDateColumn,
+    UpdateDateColumn,
+} from 'typeorm';
 
-const sessionSchema = new Schema({
-    sessionID: {
-        type: String,
-        required: true,
-        unique: true,
-    },
-    userID: {
-        type: String,
-        required: true,
-    },
-}, { timestamps: true });
+@Entity('sessions')
+export default class Session {
+    @PrimaryGeneratedColumn('uuid')
+    id: string;
 
-type tokenSchemaInferType = InferSchemaType<typeof sessionSchema>;
-export default model<tokenSchemaInferType>('sessions', sessionSchema);
+    @Column({ type: 'varchar', length: 255, unique: true })
+    sessionID: string;
+
+    @Column({ type: 'varchar', length: 255 })
+    userID: string;
+
+    @CreateDateColumn()
+    createdAt: Date;
+
+    @UpdateDateColumn()
+    updatedAt: Date;
+}

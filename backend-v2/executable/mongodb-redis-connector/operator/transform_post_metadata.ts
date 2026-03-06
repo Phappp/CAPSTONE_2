@@ -1,30 +1,10 @@
-
-import {Operator} from '../pipeline';
-import _ from 'lodash';
+import { Operator } from '../pipeline';
 
 class TransformPostMetadata implements Operator {
     async run(data: any): Promise<any> {
-        if (!this.isNewPost(data)) {
-            return;
-        }
-       
+        console.warn('TransformPostMetadata: Post entity has been removed. This operator is deprecated.');
+        return null;
     }
-
-    isNewPost(data: any): boolean {
-        const operationType = _.get(data, 'operationType');
-        const author = _.get(data, 'fullDocument.userId', '');
-
-        return operationType === 'insert' && author !== '';
-    }
-    // isUpdatePost(data: any): boolean {
-    //     const operationType = _.get(data, 'operationType');
-    //     return operationType === 'update';
-    // }
-
-    // isDeletePost(data: any): boolean {
-    //     const operationType = _.get(data, 'operationType');
-    //     return operationType === 'delete';
-    // }
 }
 
 export {

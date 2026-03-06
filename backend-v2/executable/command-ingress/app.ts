@@ -11,13 +11,8 @@ import { createServer } from 'http';
 import { AuthController } from './features/auth/adapter/controller';
 import { AuthServiceImpl } from './features/auth/domain/service';
 import { GoogleIdentityBroker } from './features/auth/identity-broker/google-idp.broker';
-import { PostServiceImpl } from './features/post/domain/service';
-import { PostController } from './features/post/adapter/controller';
-   
-
 
 import initAuthRoute from './features/auth/adapter/route';
-import initPostRoute from './features/post/adapter/route';
 import initUserRoute from './features/user/adapter/route';
 
 import { UserController } from './features/user/adapter/controller';
@@ -49,14 +44,12 @@ const createHttpServer = (redisClient: any) => {
     env.JWT_SECRET,
     env.JWT_REFRESH_SECRET,
   );
-  const postService = new PostServiceImpl();
   const userService = new UserServiceImpl();
 
 
 
   // Setup route
   app.use('/auth', initAuthRoute(new AuthController(authService)));
-  app.use('/post', initPostRoute(new PostController(postService)));
   app.use('/users', initUserRoute(new UserController(userService, redisClient)));
 
 

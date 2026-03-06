@@ -1,9 +1,13 @@
 import { cleanEnv } from 'envalid';
-import { bool, port, str } from 'envalid/dist/validators';
+import { bool, port, str, num } from 'envalid/dist/validators';
 
 const env = cleanEnv(process.env, {
   PORT: port(),
-  MONGO_URI: str(),
+  DATABASE_HOST: str(),
+  DATABASE_PORT: num(),
+  DATABASE_USER: str(),
+  DATABASE_PASSWORD: str(),
+  DATABASE_NAME: str(),
   JWT_SECRET: str(),
   JWT_REFRESH_SECRET: str(),
   DEV: bool(),

@@ -1,48 +1,14 @@
-import {Operator} from '../pipeline';
-import _ from 'lodash';
-import {Db, ObjectId} from 'mongodb';
+import { Operator } from '../pipeline';
 
 class EnrichUserFollowInfo implements Operator {
-    mongoDBClient: Db;
 
-    constructor(mongoDBClient: Db) {
-        this.mongoDBClient = mongoDBClient;
+    constructor() {
     }
 
     async run(data: any): Promise<any> {
-        if (!this.isNewPost(data)) {
-            return;
-        }
-
-        const authorId = _.get(data, 'fullDocument.userId');
-        const author = await this.getUser(authorId);
-        const followers = _.get(author, 'followers', [])
-            .map((follower: any) => String(follower));
-
-        return {
-            ...data,
-            sinkMetadata: {
-                ..._.get(data, 'sinkMetadata', {}),
-                followers,
-            },
-        }
+        console.warn('EnrichUserFollowInfo: Post entity has been removed. This operator is deprecated.');
+        return null;
     }
-
-    isNewPost(data: any): boolean {
-        const operationType = _.get(data, 'operationType');
-        const author = _.get(data, 'fullDocument.userId', '');
-
-        return operationType === 'insert' && author !== '';
-    }
-
-    async getUser(userId: string): Promise<any> {
-        const user = await this.mongoDBClient
-            .collection('users')
-            .findOne({_id: new ObjectId(userId)});
-
-        return user;
-    }
-
 }
 
 export {

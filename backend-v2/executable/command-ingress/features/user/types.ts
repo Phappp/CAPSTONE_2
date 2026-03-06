@@ -1,15 +1,10 @@
-import { PostEntity } from "../post/types";
-import {RedisClientType} from 'redis'
-
-
-
+import { RedisClientType } from 'redis'
 
 type UserEntity = {
   id: string;
   email: string;
   name: string;
   avatar: string;
- 
 }
 
 interface UserService {
@@ -18,7 +13,6 @@ interface UserService {
   unfollowUser(sub: string, id: string): Promise<void>;
   getFollowing(sub: string, id: string): Promise<UserEntity>;
   getFollower(sub: string, id: string): Promise<UserEntity>;
-  getAllPostOfFollowing(sub: string, redisClient: RedisClientType): Promise<PostEntity[]>;  
 }
 
 export {

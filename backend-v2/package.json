@@ -10,7 +10,10 @@
     "dev": "nodemon executable/command-ingress/main.ts",
     "lint": "npx eslint .",
     "lint:fix": "npx eslint --fix .",
-    "cdc-test" : "nodemon executable/cdc-test/main.ts"
+    "cdc-test": "nodemon executable/cdc-test/main.ts",
+    "db:sync": "npx ts-node lib/sync-db.ts sync",
+    "db:drop": "npx ts-node lib/sync-db.ts drop",
+    "db:help": "npx ts-node lib/sync-db.ts"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +22,7 @@
     "@faker-js/faker": "^9.5.0",
     "@jest/globals": "^29.7.0",
     "axios": "^1.3.4",
+    "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -27,13 +31,14 @@
     "express-async-handler": "^1.2.0",
     "jsonwebtoken": "^9.0.0",
     "lodash": "^4.17.21",
-    "mongodb": "^6.13.0",
-    "mongoose": "^7.0.1",
     "morgan": "^1.10.0",
+    "mysql2": "^3.6.5",
     "qs": "^6.11.1",
     "redis": "^4.7.0",
+    "reflect-metadata": "^0.1.13",
     "short-uuid": "^5.2.0",
     "socket.io": "^4.6.1",
+    "typeorm": "^0.3.17",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

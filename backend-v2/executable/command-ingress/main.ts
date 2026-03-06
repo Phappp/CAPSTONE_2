@@ -1,12 +1,13 @@
-import {config} from 'dotenv';
+import { config } from 'dotenv';
 import path from 'path';
 config({ path: path.join(process.cwd(), '.env') });
-import {createHttpServer} from './app';
-import mongoose from 'mongoose';
+import { createHttpServer } from './app';
+import AppDataSource from '../../lib/database';
 import env from './utils/env';
 
 async function start() {
-    await mongoose.connect(env.MONGO_URI);
+    await AppDataSource.initialize();
+    console.log('Database connected');
     const redisClient = undefined;
     const server = createHttpServer(redisClient);
 
@@ -18,7 +19,7 @@ async function start() {
         // redisClient.quit();
 
         // Avoid connection leak.
-        mongoose.connection.close();
+        AppDataSource.destroy();
         process.exit(0);
     });
 }

@@ -1,5 +1,6 @@
 import asyncHandler from 'express-async-handler';
-import UserModel from '../../../../internal/model/user';
+import User from '../../../../internal/model/user';
+import AppDataSource from '../../../../lib/database';
 
 export const editUser = asyncHandler(async (req, res, next) => {
 
@@ -10,7 +11,7 @@ export const deleteUser = asyncHandler(async (req, res, next) => {
 });
 
 export const followUser = asyncHandler(async (req, res, next) => {
-  
+
 });
 
 export const unfollowUser = asyncHandler(async (req, res, next) => {
@@ -18,12 +19,13 @@ export const unfollowUser = asyncHandler(async (req, res, next) => {
 });
 
 export const suggestUsers = asyncHandler(async (req, res, next) => {
-  
+
 });
 
 export const getUser = asyncHandler(async (req, res, _next) => {
-  const {userId} = req.params;
-  const user = await UserModel.findOne({_id: userId});
+  const { userId } = req.params;
+  const userRepository = AppDataSource.getRepository(User);
+  const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
     res.status(404).json({
       message: 'user not found',
