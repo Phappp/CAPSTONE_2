@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import AvatarMenu from "../components/AvatarMenu";
 import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
+import { getAccessToken } from "../utils/authStorage";
 
 type Level = "beginner" | "intermediate" | "advanced";
 type Language = "vi" | "en";
@@ -86,18 +87,36 @@ export default function CreateCoursePage() {
     payload.short_description.trim().length > 0 &&
     payload.short_description.trim().length <= 200;
 
-  const handleImageChange = (file: File | null) => {
+  const handleImageChange = async (file: File | null) => {
     if (!file) {
       setImagePreview(null);
       handleBasicChange("thumbnail_url", null);
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImagePreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
-    handleBasicChange("thumbnail_url", file.name);
+
+    try {
+      const token = getAccessToken();
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(`${url}${COURSES_API.uploadCourseThumbnail()}`, {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Upload ảnh thất bại.");
+
+      const imageUrl = data?.url as string | undefined;
+      if (imageUrl) {
+        setImagePreview(`${url}${imageUrl}`);
+        handleBasicChange("thumbnail_url", `${url}${imageUrl}`);
+      }
+    } catch (e: any) {
+      setError(e?.message || "Upload ảnh thất bại.");
+    }
   };
 
   const handleSave = async (publish: boolean) => {
@@ -105,7 +124,7 @@ export default function CreateCoursePage() {
     setIsSubmitting(true);
     setError(null);
     try {
-      const token = localStorage.getItem("access_token");
+      const token = getAccessToken();
 
       const body: any = {
         title: payload.title,
@@ -126,6 +145,7 @@ export default function CreateCoursePage() {
             ? undefined
             : Number(payload.estimated_hours),
         tags: payload.tags,
+        thumbnail_url: payload.thumbnail_url || null,
       };
 
       const res = await fetch(`${url}${COURSES_API.createCourse}`, {
@@ -142,10 +162,12 @@ export default function CreateCoursePage() {
         throw new Error(text || "Không thể lưu khóa học.");
       }
 
-      // BE: cần trả về courseId; tạm thời giả định ok và quay về dashboard
-      if (publish) {
-        navigate("/teacher/dashboard");
-      }
+      const data = await res.json().catch(() => ({}));
+      const courseId = data?.id;
+
+      // Hiện tại: sau khi tạo -> quay về dashboard quản lý khóa học
+      if (publish) navigate("/teacher/dashboard");
+      // TODO: nếu cần, có thể điều hướng qua trang edit/detail theo courseId
     } catch (e: any) {
       setError(e.message || "Đã xảy ra lỗi.");
     } finally {
