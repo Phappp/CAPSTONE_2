@@ -1,326 +1,135 @@
-import Divider from "@mui/material/Divider";
-import Menu from "@mui/material/Menu";
-import MenuItem from "@mui/material/MenuItem";
-import {MouseEvent, useState} from "react";
-import {Link} from "react-router-dom";
-import {DEFAULT_IMG} from "../App";
-import {carrotIcon, librabryIcon, profileIcon, writeSmallIcon,} from "../assets/icons";
-import {useAuth} from "../contexts/Auth";
+import { useState } from "react";
+import { useAuth } from "../contexts/Auth";
+
+function getInitials(name?: string | null, email?: string | null) {
+  if (name && name.trim()) {
+    const parts = name.trim().split(/\s+/);
+    const first = parts[0]?.[0] ?? "";
+    const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
+    return (first + last).toUpperCase();
+  }
+  if (email) {
+    return email[0]?.toUpperCase() ?? "U";
+  }
+  return "U";
+}
 
 export default function AvatarMenu() {
-    const {isAuthenticated, user, logout} = useAuth();
-    return isAuthenticated ? (
-        <AuthMenu
-            avatar={user!.avatar}
-            email={user!.email}
-            userId={user!.id}
-            logout={logout}
-        />
-    ) : (
-        <UnAuthMenu/>
-    );
-}
+  const { user, logout } = useAuth();
+  const [open, setOpen] = useState(false);
 
-function UnAuthMenu() {
-    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-    const open = Boolean(anchorEl);
-    const handleClick = (
-        event: MouseEvent<HTMLImageElement | HTMLSpanElement>
-    ) => {
-        setAnchorEl(event.currentTarget);
-    };
-    const handleClose = () => {
-        setAnchorEl(null);
-    };
-    return (
+  const initials = getInitials(user?.full_name, user?.email);
+
+  return (
+    <div style={{ position: "relative", marginLeft: "auto" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.5rem",
+          padding: "0.25rem 0.6rem",
+          borderRadius: "999px",
+          border: "1px solid rgba(40, 140, 200, 0.25)",
+          background: "#ffffff",
+          cursor: "pointer",
+        }}
+      >
         <div
-            className="avatar"
-            style={{
-                display: "flex",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: "3px",
-            }}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: "50%",
+            background:
+              "linear-gradient(135deg, rgba(40,140,200,0.95), rgba(110,180,110,0.9))",
+            color: "#ffffff",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+          }}
         >
-            <img
-                onClick={handleClick}
-                style={{
-                    width: "32px",
-                    borderRadius: "50%",
-                    border: "1px solid #d9d9d9",
-                    cursor: "pointer",
-                }}
-                src={DEFAULT_IMG}
-                alt=""
-            />
-            <span
-                onClick={handleClick}
-                style={{color: "rgba(117, 117, 117, 1)", cursor: "pointer"}}
-            >
-        {carrotIcon}
-      </span>
-            <Menu
-                PaperProps={{
-                    style: {
-                        width: 250,
-                        padding: "10px 0",
-                        borderRadius: "4px",
-                        marginTop: "10px",
-                    },
-                }}
-                id="basic-menu"
-                anchorEl={anchorEl}
-                open={open}
-                onClose={handleClose}
-                MenuListProps={{
-                    "aria-labelledby": "basic-button",
-                }}
-            >
-                <GetStarted/>
-            </Menu>
+          {initials}
         </div>
-    );
-}
+        <div style={{ textAlign: "left" }}>
+          <div
+            style={{
+              fontSize: "0.9rem",
+              fontWeight: 500,
+              color: "#1f2933",
+            }}
+          >
+            {user?.full_name || user?.email || "Người dùng"}
+          </div>
+          <div
+            style={{
+              fontSize: "0.75rem",
+              color: "#607489",
+            }}
+          >
+            {user?.primary_role || user?.roles?.[0] || "learner"}
+          </div>
+        </div>
+      </button>
 
-function AuthMenu({
-                      avatar,
-                      email,
-                      userId,
-                      logout,
-                  }: {
-    avatar: string;
-    email: string;
-    userId: string;
-    logout(): void;
-}) {
-    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-    const open = Boolean(anchorEl);
-    const handleClick = (
-        event: MouseEvent<HTMLImageElement | HTMLSpanElement>
-    ) => {
-        setAnchorEl(event.currentTarget);
-    };
-    const handleClose = () => {
-        setAnchorEl(null);
-    };
-    return (
+      {open && (
         <div
-            className="avatar"
-            style={{
-                display: "flex",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: "3px",
-            }}
+          style={{
+            position: "absolute",
+            right: 0,
+            marginTop: "0.5rem",
+            minWidth: "180px",
+            background: "#ffffff",
+            borderRadius: 12,
+            boxShadow:
+              "0 14px 28px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(15,23,42,0.04)",
+            padding: "0.35rem 0.25rem",
+            zIndex: 20,
+          }}
         >
-            <img
-                onClick={handleClick}
-                style={{
-                    width: "32px",
-                    borderRadius: "50%",
-                    border: "1px solid #d9d9d9",
-                    cursor: "pointer",
-                }}
-                src={avatar ?? DEFAULT_IMG}
-                alt=""
-            />
-            <span
-                onClick={handleClick}
-                style={{color: "rgba(117, 117, 117, 1)", cursor: "pointer"}}
-            >
-        {carrotIcon}
-      </span>
-
-            <Menu
-                PaperProps={{
-                    style: {
-                        width: 240,
-                        padding: "10px 0",
-                        borderRadius: "4px",
-                        marginTop: "10px",
-                    },
-                }}
-                id="basic-menu"
-                anchorEl={anchorEl}
-                open={open}
-                onClose={handleClose}
-                MenuListProps={{
-                    "aria-labelledby": "basic-button",
-                }}
-            >
-                <Link
-                    to={`/users/${userId}`}
-                    style={{textDecoration: "none", color: "inherit"}}
-                >
-                    <MenuItem
-                        sx={[{"&:hover": {backgroundColor: "transparent"}}]}
-                        onClick={handleClose}
-                        style={{
-                            display: "flex",
-                            flexDirection: "row",
-                            alignItems: "center",
-                            padding: "8px 18px",
-                        }}
-                    >
-            <span
-                style={{color: "gray", margin: "0 10px", marginBottom: "-5px"}}
-            >
-              {profileIcon}
-            </span>
-                        <p
-                            style={{marginLeft: "5px", color: "#6b6a6a", fontSize: "14px"}}
-                        >
-                            Profile
-                        </p>
-                    </MenuItem>
-                </Link>
-                <Link
-                    to={`/write`}
-                    style={{textDecoration: "none", color: "inherit"}}
-                >
-                    <MenuItem
-                        sx={[{"&:hover": {backgroundColor: "transparent"}}]}
-                        onClick={handleClose}
-                        style={{
-                            display: "flex",
-                            flexDirection: "row",
-                            alignItems: "center",
-                            padding: "8px 18px",
-                        }}
-                    >
-            <span
-                style={{color: "gray", margin: "0 10px", marginBottom: "-5px"}}
-            >
-              {writeSmallIcon}
-            </span>
-                        <p
-                            style={{marginLeft: "5px", color: "#6b6a6a", fontSize: "14px"}}
-                        >
-                            Write Story
-                        </p>
-                    </MenuItem>
-                </Link>
-                <Link
-                    to={`/users/${userId}/lists`}
-                    style={{
-                        textDecoration: "none",
-                        color: "inherit",
-                    }}
-                >
-                    <MenuItem
-                        sx={[{"&:hover": {backgroundColor: "transparent"}}]}
-                        onClick={handleClose}
-                        style={{
-                            display: "flex",
-                            flexDirection: "row",
-                            alignItems: "center",
-                            padding: "8px 18px",
-                        }}
-                    >
-            <span
-                style={{color: "gray", margin: "0 10px", marginBottom: "-5px"}}
-            >
-              {librabryIcon}
-            </span>
-                        <p
-                            style={{marginLeft: "5px", color: "#6b6a6a", fontSize: "14px"}}
-                        >
-                            Librabry
-                        </p>
-                    </MenuItem>
-                </Link>
-                <Divider sx={{margin: "10px 0"}}/>
-                <MenuItem
-                    sx={[{"&:hover": {backgroundColor: "transparent"}}]}
-                    onClick={() => {
-                        handleClose();
-                        logout();
-                    }}
-                    style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "flex-start",
-                        padding: "0px 25px",
-                    }}
-                >
-                    <p
-                        style={{
-                            color: "#6b6a6a",
-                            fontSize: "14px",
-                            marginBottom: "4px",
-                            marginTop: "2px",
-                        }}
-                    >
-                        Sign out
-                    </p>
-                    <span
-                        style={{color: "gray", fontSize: "13.75px", marginBottom: "-3px"}}
-                    >
-            {email}
-          </span>
-                </MenuItem>
-            </Menu>
+          <button
+            type="button"
+            style={{
+              width: "100%",
+              padding: "0.5rem 0.75rem",
+              borderRadius: 8,
+              border: "none",
+              background: "transparent",
+              textAlign: "left",
+              fontSize: "0.85rem",
+              color: "#1f2933",
+              cursor: "pointer",
+            }}
+            // Chưa có trang thông tin chi tiết, tạm thời chỉ đóng menu
+            onClick={() => setOpen(false)}
+          >
+            Thông tin tài khoản
+          </button>
+          <button
+            type="button"
+            style={{
+              width: "100%",
+              padding: "0.5rem 0.75rem",
+              borderRadius: 8,
+              border: "none",
+              background: "transparent",
+              textAlign: "left",
+              fontSize: "0.85rem",
+              color: "#c0392b",
+              cursor: "pointer",
+            }}
+            onClick={() => {
+              setOpen(false);
+              logout();
+            }}
+          >
+            Đăng xuất
+          </button>
         </div>
-    );
+      )}
+    </div>
+  );
 }
 
-export function GetStarted({
-                               style,
-                               topStyle,
-                           }: {
-    style?: object;
-    topStyle?: object;
-}) {
-    return (
-        <div
-            style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "10px",
-                paddingBottom: "8px",
-                paddingTop: "7px",
-                ...style,
-            }}
-        >
-            <p style={{marginBottom: "12px", ...topStyle}}>Get started on Medium</p>
-            <Link
-                to="/signin/new"
-                style={{
-                    backgroundColor: "#1a8917",
-                    color: "white",
-                    border: "none",
-                    outline: "none",
-                    borderRadius: "17px",
-                    padding: "8px 12px",
-                    fontSize: "14px",
-                    textDecoration: "none",
-                    width: "170px",
-                    textAlign: "center",
-                    ...style,
-                }}
-            >
-                Sign up
-            </Link>
-            <Link
-                to="/signin/in"
-                style={{
-                    border: "1px solid gray",
-                    outline: "transparent",
-                    background: "transparent",
-                    borderRadius: "17px",
-                    padding: "7px 12px",
-                    color: "gray",
-                    marginRight: "-5px",
-                    fontSize: "14px",
-                    textDecoration: "none",
-                    width: "170px",
-                    textAlign: "center",
-                    ...style,
-                }}
-            >
-                Sign In
-            </Link>
-        </div>
-    );
-}
