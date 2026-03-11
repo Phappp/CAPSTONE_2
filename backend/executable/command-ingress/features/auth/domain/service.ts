@@ -1,0 +1,391 @@
+import { v4 as uuidv4 } from 'uuid';
+import bcrypt from 'bcryptjs';
+import {
+  AuthService,
+  ExchangeTokenResult,
+  ExchangeTokenRequest,
+  LoginRequest,
+  LoginResult,
+  RegisterRequest,
+  TokenPair,
+} from '../types';
+import User from '../../../../../internal/model/user';
+import Session from '../../../../../internal/model/session';
+import UserRole from '../../../../../internal/model/user_roles';
+import Role from '../../../../../internal/model/role';
+import PendingRegistration from '../../../../../internal/model/pending_registration';
+import jwt from 'jsonwebtoken';
+import { GoogleIdentityBroker } from '../identity-broker/google-idp.broker';
+import AppDataSource from '../../../../../lib/database';
+
+export class AuthServiceImpl implements AuthService {
+  googleIdentityBroker: GoogleIdentityBroker;
+  jwtSecret: string;
+  jwtRefreshSecret: string;
+
+  constructor(
+    googleIdentityBroker: GoogleIdentityBroker,
+    jwtSecret: string,
+    jwtRefreshSecret: string,
+  ) {
+    this.googleIdentityBroker = googleIdentityBroker;
+    this.jwtSecret = jwtSecret;
+    this.jwtRefreshSecret = jwtRefreshSecret;
+  }
+
+  private async signTokensForUser(user: User, sessionID: string): Promise<TokenPair> {
+    const jwtPayload = {
+      _id: user.id,
+      sub: user.id,
+      sid: sessionID,
+    };
+    const accessToken = this.signAccessToken(jwtPayload);
+    const refreshToken = this.signRefreshToken(jwtPayload);
+    return { accessToken, refreshToken };
+  }
+
+  private async mapUserToAuthUser(user: User) {
+    // Lấy các vai trò (roles) của user để frontend có thể điều hướng theo role
+    const userRoleRepository = AppDataSource.getRepository(UserRole);
+    const roleRepository = AppDataSource.getRepository(Role);
+
+    const userRoles = await userRoleRepository.find({
+      where: { user_id: user.id },
+    });
+
+    let roles: string[] = [];
+    if (userRoles.length > 0) {
+      const roleIds = userRoles.map((ur) => ur.role_id);
+      const dbRoles = await roleRepository.findByIds(roleIds);
+      roles = dbRoles.map((r) => r.name);
+    }
+
+    const primaryRole = roles[0] ?? null;
+
+    return {
+      id: user.id,
+      email: user.email,
+      full_name: user.full_name,
+      avatar_url: user.avatar_url,
+      roles,
+      primary_role: primaryRole,
+    };
+  }
+
+  signAccessToken(payload: any): string {
+    return jwt.sign({
+      ...payload,
+    }, this.jwtSecret, { expiresIn: '1d' });
+  }
+
+  signRefreshToken(payload: any): string {
+    return jwt.sign({ ...payload, typ: 'offline' }, this.jwtRefreshSecret, { expiresIn: '30d' });
+  }
+
+  verifyToken(token: string, secret: string): any {
+    return jwt.verify(token, secret);
+  }
+
+  async createUserIfNotExists(userProfile: any): Promise<any> {
+    const userRepository = AppDataSource.getRepository(User);
+    let user = await userRepository.findOne({ where: { email: userProfile.email } });
+    if (!user) {
+      user = userRepository.create({
+        email: userProfile.email,
+        full_name: userProfile.name ?? '',
+        avatar_url: userProfile.picture ?? '',
+        // Đăng nhập Google nên không dùng password cục bộ; set tạm chuỗi rỗng
+        password_hash: '',
+        is_active: true,
+      });
+
+      await userRepository.save(user);
+    }
+
+    return user;
+  }
+
+  private generateOtpCode(): string {
+    return String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
+  }
+
+  // Đăng ký tài khoản bằng email/mật khẩu: tạo user (is_active=false) và gửi OTP
+  async register(request: RegisterRequest): Promise<void> {
+    const userRepository = AppDataSource.getRepository(User);
+    const pendingRegistrationRepo = AppDataSource.getRepository(PendingRegistration);
+
+    const existingUser = await userRepository.findOne({ where: { email: request.email } });
+    if (existingUser) {
+      throw new Error('Email đã được sử dụng.');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(request.password, salt);
+
+    // Chuẩn hóa role, chỉ cho phép 'learner' hoặc 'course_manager'
+    const normalizedRole =
+      request.role === 'course_manager' ? 'course_manager' : 'learner';
+
+    // Tạo/ghi đè bản ghi đăng ký tạm với OTP
+    const code = this.generateOtpCode();
+    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
+
+    let pending = await pendingRegistrationRepo.findOne({
+      where: { email: request.email },
+    });
+
+    if (!pending) {
+      pending = pendingRegistrationRepo.create({
+        email: request.email,
+        full_name: request.fullName,
+        password_hash: passwordHash,
+        role_name: normalizedRole,
+        code,
+        expires_at: expires,
+      });
+    } else {
+      pending.full_name = request.fullName;
+      pending.password_hash = passwordHash;
+      pending.role_name = normalizedRole;
+      pending.code = code;
+      pending.expires_at = expires;
+    }
+
+    await pendingRegistrationRepo.save(pending);
+
+    // Gửi email OTP
+    try {
+      const { sendMail } = await import('../../../../../lib/mailer');
+      await sendMail(
+        request.email,
+        'Mã xác thực đăng ký tài khoản',
+        `Mã OTP của bạn là: ${code}. Mã có hiệu lực trong 10 phút.`
+      );
+    } catch (e) {
+      console.log('Send OTP email error:', e);
+    }
+  }
+
+  // Xác thực OTP và trả về token + user
+  async verifyRegistrationOtp(email: string, code: string): Promise<LoginResult> {
+    const userRepository = AppDataSource.getRepository(User);
+    const pendingRegistrationRepo = AppDataSource.getRepository(PendingRegistration);
+    const sessionRepository = AppDataSource.getRepository(Session);
+
+    const existingUser = await userRepository.findOne({ where: { email } });
+    if (existingUser) {
+      throw new Error('Tài khoản đã được kích hoạt hoặc email đã được sử dụng.');
+    }
+
+    const pending = await pendingRegistrationRepo.findOne({ where: { email } });
+    if (!pending) {
+      throw new Error('Không tìm thấy yêu cầu đăng ký cho email này.');
+    }
+
+    const now = new Date();
+    if (pending.code !== code || pending.expires_at < now) {
+      throw new Error('Mã OTP không hợp lệ hoặc đã hết hạn.');
+    }
+    // Tạo user thật khi OTP hợp lệ
+    const user = userRepository.create({
+      email: pending.email,
+      full_name: pending.full_name,
+      password_hash: pending.password_hash,
+      is_active: true,
+      email_verified_at: now,
+    });
+    await userRepository.save(user);
+
+    // Gán role mặc định theo đăng ký (learner / course_manager)
+    // Hỗ trợ cả tên role cũ (student/teacher) để tương thích dữ liệu DB cũ
+    // và tự tạo role nếu chưa tồn tại trong bảng `roles`.
+    try {
+      const roleRepository = AppDataSource.getRepository(Role);
+      const userRoleRepository = AppDataSource.getRepository(UserRole);
+
+      let targetNames: string[] = [];
+      if (pending.role_name === 'course_manager') {
+        // role mới cho giảng viên; fallback về 'teacher' nếu DB đang dùng tên cũ
+        targetNames = ['course_manager', 'teacher'];
+      } else if (pending.role_name === 'learner') {
+        // role mới cho học viên; fallback về 'student' nếu DB đang dùng tên cũ
+        targetNames = ['learner', 'student'];
+      } else {
+        targetNames = [pending.role_name];
+      }
+
+      let defaultRole = await roleRepository.findOne({
+        where: targetNames.map((name) => ({ name })),
+      });
+      // Nếu không tìm thấy role nào, tự tạo role theo pending.role_name
+      if (!defaultRole) {
+        defaultRole = roleRepository.create({
+          name: pending.role_name,
+          description: 'Auto-created default role from registration',
+        });
+        await roleRepository.save(defaultRole);
+      }
+      if (defaultRole) {
+        const existingUserRole = await userRoleRepository.findOne({
+          where: { user_id: user.id, role_id: defaultRole.id },
+        });
+        if (!existingUserRole) {
+          const userRole = userRoleRepository.create({
+            user_id: user.id,
+            role_id: defaultRole.id,
+          });
+          await userRoleRepository.save(userRole);
+        }
+      }
+    } catch (e) {
+      // Nếu lỗi khi gán role thì bỏ qua, không chặn kích hoạt
+      console.log('Assign default role error:', e);
+    }
+
+    // Xóa bản ghi đăng ký tạm sau khi đã tạo user
+    await pendingRegistrationRepo.delete({ id: pending.id });
+
+    const sessionID = uuidv4();
+    const session = sessionRepository.create({
+      sessionID,
+      userID: String(user.id),
+    });
+    await sessionRepository.save(session);
+
+    const tokens = await this.signTokensForUser(user, sessionID);
+    const authUser = await this.mapUserToAuthUser(user);
+
+    return {
+      ...tokens,
+      user: authUser,
+    };
+  }
+
+  // Đăng nhập bằng email/mật khẩu
+  async login(request: LoginRequest): Promise<LoginResult> {
+    const userRepository = AppDataSource.getRepository(User);
+    const now = new Date();
+
+    const user = await userRepository.findOne({ where: { email: request.email } });
+    // Nếu không tìm thấy user hoặc không có password hash -> trả lỗi chung
+    if (!user || !user.password_hash) {
+      throw new Error('Email hoặc mật khẩu không đúng.');
+    }
+
+    // Kiểm tra tài khoản bị khóa tạm thời do nhập sai nhiều lần
+    if (user.locked_until && user.locked_until > now) {
+      throw new Error('Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút.');
+    }
+
+    // Kiểm tra trạng thái kích hoạt email
+    if (!user.email_verified_at) {
+      throw new Error(
+        'Tài khoản chưa được kích hoạt. Vui lòng kiểm tra email để kích hoạt hoặc gửi lại email kích hoạt.'
+      );
+    }
+
+    // Kiểm tra tài khoản bị khóa vĩnh viễn / do admin
+    if (!user.is_active) {
+      throw new Error('Tài khoản của bạn đã bị khóa. Vui lòng liên hệ admin để được hỗ trợ.');
+    }
+
+    const isValid = await bcrypt.compare(request.password, user.password_hash);
+    if (!isValid) {
+      // Sai mật khẩu -> tăng biến đếm, nếu >= 5 thì khóa 15 phút
+      const currentFailed = user.failed_login_attempts || 0;
+      const newFailed = currentFailed + 1;
+      user.failed_login_attempts = newFailed;
+
+      if (newFailed >= 5) {
+        const lockedUntil = new Date(now.getTime() + 15 * 60 * 1000);
+        user.locked_until = lockedUntil;
+      }
+
+      await userRepository.save(user);
+      throw new Error('Email hoặc mật khẩu không đúng.');
+    }
+
+    // Đăng nhập thành công -> reset đếm sai & mở khóa, cập nhật last_login_at
+    user.failed_login_attempts = 0;
+    user.locked_until = null;
+    user.last_login_at = now;
+    await userRepository.save(user);
+
+    const sessionRepository = AppDataSource.getRepository(Session);
+    const sessionID = uuidv4();
+    const session = sessionRepository.create({
+      sessionID,
+      userID: String(user.id),
+    });
+    await sessionRepository.save(session);
+
+    const tokens = await this.signTokensForUser(user, sessionID);
+    const authUser = await this.mapUserToAuthUser(user);
+
+    return {
+      ...tokens,
+      user: authUser,
+    };
+  }
+
+  async exchangeWithGoogleIDP(request: ExchangeTokenRequest): Promise<ExchangeTokenResult> {
+    const { code } = request;
+    const googleToken = await this.googleIdentityBroker.exchangeAuthorizationCode(code);
+    const userProfile = await this.googleIdentityBroker.fetchProfile({
+      idToken: googleToken.idToken,
+      accessToken: googleToken.accessToken,
+    });
+
+    const user = await this.createUserIfNotExists(userProfile);
+    const sessionRepository = AppDataSource.getRepository(Session);
+    const sessionID = uuidv4();
+    const session = sessionRepository.create({ sessionID: sessionID, userID: String(user.id) });
+    await sessionRepository.save(session);
+
+    const tokens = await this.signTokensForUser(user, sessionID);
+
+    return {
+      refreshToken: tokens.refreshToken,
+      accessToken: tokens.accessToken,
+      sub: String(user.id),
+    };
+  }
+
+  async logout(refreshToken: string): Promise<void> {
+    const jwtClaims = jwt.verify(refreshToken, this.jwtRefreshSecret);
+    const sid = jwtClaims['sid'];
+
+    const sessionRepository = AppDataSource.getRepository(Session);
+    await sessionRepository.delete({
+      sessionID: sid,
+    });
+  }
+
+  async refreshToken(token: string): Promise<ExchangeTokenResult> {
+    const jwtClaims = this.verifyToken(token, this.jwtRefreshSecret);
+    const sessionID = jwtClaims['sid'];
+    const subject = jwtClaims['sub'];
+
+    const sessionRepository = AppDataSource.getRepository(Session);
+    const session = await sessionRepository.findOne({ where: { sessionID } });
+    if (!session) {
+      throw new Error('')
+    }
+
+    const jwtPayload = {
+      _id: jwtClaims['sub'],
+      sub: jwtClaims['sub'],
+      sid: sessionID,
+    };
+
+    const newAccessToken = this.signAccessToken(jwtPayload);
+    const newRefreshToken = this.signRefreshToken(jwtPayload);
+
+
+    return {
+      sub: String(subject),
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+    }
+  }
+}
