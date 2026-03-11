@@ -11,8 +11,10 @@ import { createServer } from 'http';
 import { AuthController } from './features/auth/adapter/controller';
 import { AuthServiceImpl } from './features/auth/domain/service';
 import { GoogleIdentityBroker } from './features/auth/identity-broker/google-idp.broker';
-
 import initAuthRoute from './features/auth/adapter/route';
+import { AdminUserController } from './features/admin-users/adapter/controller';
+import { AdminUserService } from './features/admin-users/domain/service';
+import initAdminUserRoute from './features/admin-users/adapter/route';
 
 const app = express();
 
@@ -40,9 +42,14 @@ const createHttpServer = (redisClient: any) => {
     env.JWT_SECRET,
     env.JWT_REFRESH_SECRET,
   );
+  const adminUserService = new AdminUserService();
 
   // Setup routes
   app.use('/api/auth', initAuthRoute(new AuthController(authService)));
+  app.use(
+    '/api/v1/admin/users',
+    initAdminUserRoute(new AdminUserController(adminUserService)),
+  );
 
 
   app.use(recoverMiddleware);
