@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AvatarMenu from "../components/AvatarMenu";
 import { url } from "../baseUrl";
+import { COURSES_API } from "../api/courses";
 
 type Level = "beginner" | "intermediate" | "advanced";
 type Language = "vi" | "en";
@@ -127,7 +128,7 @@ export default function CreateCoursePage() {
         tags: payload.tags,
       };
 
-      const res = await fetch(`${url}/api/v1/courses`, {
+      const res = await fetch(`${url}${COURSES_API.createCourse}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

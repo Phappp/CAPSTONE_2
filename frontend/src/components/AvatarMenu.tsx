@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/Auth";
 
 function getInitials(name?: string | null, email?: string | null) {
@@ -17,6 +18,7 @@ function getInitials(name?: string | null, email?: string | null) {
 export default function AvatarMenu() {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
 
   const initials = getInitials(user?.full_name, user?.email);
 
@@ -102,8 +104,10 @@ export default function AvatarMenu() {
               color: "#1f2933",
               cursor: "pointer",
             }}
-            // Chưa có trang thông tin chi tiết, tạm thời chỉ đóng menu
-            onClick={() => setOpen(false)}
+          onClick={() => {
+            setOpen(false);
+            navigate("/profile");
+          }}
           >
             Thông tin tài khoản
           </button>
