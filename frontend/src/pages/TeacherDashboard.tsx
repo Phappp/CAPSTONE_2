@@ -1,6 +1,8 @@
 import AvatarMenu from "../components/AvatarMenu";
+import { useNavigate } from "react-router-dom";
 
 export default function TeacherDashboard() {
+  const navigate = useNavigate();
   return (
     <div className="dashboard-page">
       <div
@@ -20,6 +22,26 @@ export default function TeacherDashboard() {
         </div>
         <AvatarMenu />
       </div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "1.5rem",
+        }}
+      >
+        <h2 style={{ fontSize: "1.1rem", fontWeight: 600 }}>Khóa học của tôi</h2>
+        <button
+          type="button"
+          className="primary-button"
+          style={{ width: "auto", paddingInline: "1.5rem" }}
+          onClick={() => navigate("/teacher/courses/new")}
+        >
+          Tạo khóa học mới
+        </button>
+      </div>
+
+      {/* TODO: danh sách khóa học của giảng viên sẽ hiển thị ở đây */}
     </div>
   );
 }

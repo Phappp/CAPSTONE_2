@@ -4,6 +4,7 @@ import RegisterPage from "./pages/RegisterPage";
 import StudentDashboard from "./pages/StudentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import CreateCoursePage from "./pages/CreateCoursePage";
 import Authentication from "./router/Authentication";
 
 export default function App() {
@@ -25,6 +26,14 @@ export default function App() {
         element={
           <Authentication>
             <TeacherDashboard />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/courses/new"
+        element={
+          <Authentication>
+            <CreateCoursePage />
           </Authentication>
         }
       />
