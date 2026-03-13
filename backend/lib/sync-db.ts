@@ -1,9 +1,13 @@
 /**
  * Database Schema Initialization Script
  * Run this once to create database tables:
- * 
+ *
  * npx ts-node lib/sync-db.ts
  */
+
+import { config } from 'dotenv';
+import path from 'path';
+config({ path: path.join(process.cwd(), '.env') });
 
 import { syncDatabase, dropDatabase } from './db-sync';
 
