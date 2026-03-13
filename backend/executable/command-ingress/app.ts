@@ -17,6 +17,9 @@ import initAuthRoute from './features/auth/adapter/route';
 import initCourseRoute from './features/course/adapter/route';
 import { CourseController } from './features/course/adapter/controller';
 import { CourseServiceImpl } from './features/course/domain/service';
+import initAssignmentRoute from './features/assignment/adapter/route';
+import { AssignmentController } from './features/assignment/adapter/controller';
+import { AssignmentServiceImpl } from './features/assignment/domain/service';
 
 const app = express();
 
@@ -49,7 +52,7 @@ const createHttpServer = (redisClient: any) => {
   // Setup routes
   app.use('/api/auth', initAuthRoute(new AuthController(authService)));
   app.use('/api/v1/courses', initCourseRoute(new CourseController(new CourseServiceImpl())));
-
+  app.use('/api/v1', initAssignmentRoute(new AssignmentController(new AssignmentServiceImpl())));
 
   app.use(recoverMiddleware);
 
