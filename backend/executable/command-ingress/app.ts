@@ -14,6 +14,11 @@ import { GoogleIdentityBroker } from './features/auth/identity-broker/google-idp
 
 import initAuthRoute from './features/auth/adapter/route';
 
+import { ProfileController } from './features/profiles/adapter/controller';
+import { ProfileService } from './features/profiles/domain/services';
+import { MysqlProfileRepository } from './features/profiles/domain/repository';
+import { createProfileRoutes } from './features/profiles/adapter/route';
+
 const app = express();
 
 const createHttpServer = (redisClient: any) => {
@@ -49,7 +54,23 @@ const createHttpServer = (redisClient: any) => {
 
   // app.use('/search', searchRouter);
   // app.use('/suggestions', setupSuggestionRoute());
+  const profileRepository = new MysqlProfileRepository();
 
+  const storageService = {
+    // Cập nhật đúng các tham số nếu cần để không bị lỗi logic sau này
+    uploadAvatar: async (file: Buffer, fileName: string, mimeType: string) => "mock-avatar-url", 
+    
+    // Đổi tên từ deleteAvatar thành deleteFile
+    deleteFile: async (fileUrl: string) => {
+      console.log("Mock delete file:", fileUrl);
+      return;
+    }
+  } as any;
+
+  const profileService = new ProfileService(profileRepository, storageService);
+  const profileController = new ProfileController(profileService);
+
+  app.use('/api', createProfileRoutes(profileController));
 
   return server;
 };

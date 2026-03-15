@@ -10,6 +10,7 @@ const   initAuthRoute: (controller: AuthController) => express.Router  = (contro
   router.route('/google/oauth').get(controller.exchangeGoogleToken.bind(controller));
   router.route('/logout').post(controller.logout.bind(controller));
   router.route('/token').post(controller.refreshToken.bind(controller));
+  router.post('/verify-2fa', (req, res) => controller.verify2FA(req as any, res));
 
   return router;
 };
