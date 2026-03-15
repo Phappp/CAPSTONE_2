@@ -5,6 +5,8 @@ import StudentDashboard from "./pages/StudentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import CreateCoursePage from "./pages/CreateCoursePage";
+import TeacherCourseDetailPage from "./pages/TeacherCourseDetailPage";
+import TeacherCourseContentBuilderPage from "./pages/TeacherCourseContentBuilderPage";
 import ProfilePage from "./pages/ProfilePage";
 import Authentication from "./router/Authentication";
 
@@ -43,6 +45,22 @@ export default function App() {
         element={
           <Authentication>
             <CreateCoursePage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/courses/:id"
+        element={
+          <Authentication>
+            <TeacherCourseDetailPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/courses/:id/content"
+        element={
+          <Authentication>
+            <TeacherCourseContentBuilderPage />
           </Authentication>
         }
       />

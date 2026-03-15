@@ -47,6 +47,14 @@ export default class Lesson {
     /** Mô tả bài học (nullable). */
     description: string;
 
+    @Column({
+        type: 'enum',
+        enum: ['video', 'text', 'quiz', 'assignment'],
+        default: 'text'
+    })
+    /** Loại bài học: video/text/quiz/assignment */
+    lesson_type: string;
+
     @Column()
     /** Thứ tự lesson trong module. */
     order_index: number;
