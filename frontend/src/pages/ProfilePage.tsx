@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import AvatarMenu from "../components/AvatarMenu";
 import { url } from "../baseUrl";
 import { PROFILE_API } from "../api/profile";
+import { useAuth } from "../contexts/Auth";
 
 type ProfileTab = "info" | "password" | "security";
 
@@ -33,6 +34,7 @@ interface ProfileFormState {
 
 export default function ProfilePage() {
   const navigate = useNavigate();
+  const { updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState<ProfileTab>("info");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -264,6 +266,9 @@ export default function ProfilePage() {
         json.data?.avatar_url || json.avatar_url || profile?.avatar_url || null;
       setProfile((prev) => (prev ? { ...prev, avatar_url: avatarUrl } : prev));
       setAvatarPreview(avatarUrl);
+      if (avatarUrl) {
+        updateUser({ avatar_url: avatarUrl });
+      }
       setSuccessMessage("Cập nhật ảnh đại diện thành công!");
     } catch (e: any) {
       setErrorMessage(e.message || "Đã xảy ra lỗi khi upload ảnh đại diện.");

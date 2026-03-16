@@ -27,6 +27,7 @@ type AuthContextValue = {
     remember: boolean;
   }) => Promise<void>;
   logout: () => void;
+  updateUser: (patch: Partial<AuthUser>) => void;
 };
 
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 phút không tương tác thì tự động đăng xuất
@@ -111,6 +112,8 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(nextAccess);
     setRefreshToken(nextRefresh);
     setUser(nextUser);
+    // Lưu thêm access token riêng để các màn khác (ví dụ ProfilePage) có thể đọc trực tiếp
+    window.localStorage.setItem("access_token", nextAccess);
     // Luôn lưu vào localStorage kèm thời điểm hoạt động gần nhất.
     window.localStorage.setItem(
       "auth",
@@ -149,6 +152,29 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     navigate("/", { replace: true });
   };
 
+  const updateUser: AuthContextValue["updateUser"] = (patch) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      try {
+        const raw =
+          window.localStorage.getItem("auth") ||
+          window.sessionStorage.getItem("auth");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const updated = {
+            ...parsed,
+            user: { ...(parsed.user ?? {}), ...patch },
+          };
+          window.localStorage.setItem("auth", JSON.stringify(updated));
+        }
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
+
   const value: AuthContextValue = {
     isAuthenticated,
     user,
@@ -156,6 +182,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     refreshToken,
     login,
     logout,
+    updateUser,
   };
 
   const idleTimerRef = useRef<number | null>(null);
