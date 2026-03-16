@@ -25,6 +25,7 @@ import { ProfileController } from './features/profiles/adapter/controller';
 import { ProfileService } from './features/profiles/domain/services';
 import { MysqlProfileRepository } from './features/profiles/domain/repository';
 import { createProfileRoutes } from './features/profiles/adapter/route';
+import { uploadBufferToCloudinary, isCloudinaryEnabled } from './lib/cloudinary';
 
 const app = express();
 
@@ -65,20 +66,33 @@ const createHttpServer = (redisClient: any) => {
   const profileRepository = new MysqlProfileRepository();
 
   const storageService = {
-    // Cập nhật đúng các tham số nếu cần để không bị lỗi logic sau này
-    uploadAvatar: async (file: Buffer, fileName: string, mimeType: string) => "mock-avatar-url", 
-    
-    // Đổi tên từ deleteAvatar thành deleteFile
-    deleteFile: async (fileUrl: string) => {
-      console.log("Mock delete file:", fileUrl);
+    uploadAvatar: async (file: Buffer, fileName: string, mimeType: string): Promise<string> => {
+      if (!isCloudinaryEnabled()) {
+        throw new Error('Cloudinary is not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET.');
+      }
+
+      const result = await uploadBufferToCloudinary({
+        buffer: file,
+        folder: 'avatars',
+        originalFilename: fileName,
+        resourceType: 'image',
+      });
+
+      return result.secure_url;
+    },
+    deleteFile: async (fileUrl: string): Promise<void> => {
+      // Hiện tại chỉ cần xóa metadata phía mình, Cloudinary có thể đặt lifecycle rule nếu cần
+      if (!fileUrl) return;
+      // Có thể mở rộng sau để gọi cld.uploader.destroy nếu lưu cả public_id
       return;
-    }
+    },
   } as any;
 
   const profileService = new ProfileService(profileRepository, storageService);
   const profileController = new ProfileController(profileService);
 
-  app.use('/api', createProfileRoutes(profileController));
+  // FE uses /api/v1/profile...
+  app.use('/api/v1', createProfileRoutes(profileController));
 
   return server;
 };

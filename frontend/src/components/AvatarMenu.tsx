@@ -51,9 +51,18 @@ export default function AvatarMenu() {
             justifyContent: "center",
             fontSize: "0.85rem",
             fontWeight: 600,
+            overflow: "hidden",
           }}
         >
-          {initials}
+          {user?.avatar_url ? (
+            <img
+              src={user.avatar_url}
+              alt="Avatar"
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            initials
+          )}
         </div>
         <div style={{ textAlign: "left" }}>
           <div
