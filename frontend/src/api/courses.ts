@@ -27,10 +27,14 @@ export const COURSES_API = {
     `${COURSES_API_BASE}/${id}/lessons/${lessonId}/resources`,
   deleteLessonResource: (id: number | string, resourceId: number | string) =>
     `${COURSES_API_BASE}/${id}/resources/${resourceId}`,
+  viewLessonResource: (courseId: number | string, resourceId: number | string) =>
+    `${COURSES_API_BASE}/${courseId}/resources/${resourceId}/view`,
   uploadLessonResource: (id: number | string, lessonId: number | string) =>
     `${COURSES_API_BASE}/${id}/lessons/${lessonId}/resources/upload`,
   uploadLessonResourcePreview: (id: number | string, resourceId: number | string) =>
     `${COURSES_API_BASE}/${id}/resources/${resourceId}/preview`,
+  lessonQuiz: (id: number | string, lessonId: number | string) =>
+    `${COURSES_API_BASE}/${id}/lessons/${lessonId}/quiz`,
   uploadCourseThumbnail: () => `${COURSES_API_BASE}/thumbnails/upload`,
 } as const;
 

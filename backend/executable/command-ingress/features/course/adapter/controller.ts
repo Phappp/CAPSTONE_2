@@ -1,4 +1,5 @@
 import { NextFunction, Response } from 'express';
+import axios from 'axios';
 import { BaseController } from '../../../shared/base-controller';
 import responseValidationError from '../../../shared/response';
 import { HttpRequest } from '../../../types';
@@ -214,6 +215,38 @@ export class CourseController extends BaseController {
       const resourceId = Number(req.params.resourceId);
       await this.service.deleteLessonResource(uid, courseId, resourceId);
       res.sendStatus(204);
+    });
+  }
+
+  async viewLessonResource(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const resourceId = Number(req.params.resourceId);
+      const { url, mime_type, filename } = await this.service.getLessonResourceViewUrl(
+        uid,
+        courseId,
+        resourceId
+      );
+
+      const axRes = await axios.get(url, {
+        responseType: 'stream',
+        validateStatus: () => true,
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept: '*/*',
+        },
+      });
+      if (axRes.status !== 200) {
+        res.status(502).json({ message: 'Không thể tải file từ kho lưu trữ.' });
+        return;
+      }
+
+      res.setHeader('Content-Type', mime_type || 'application/octet-stream');
+      const safeName = (filename || 'file').replace(/"/g, '%22');
+      res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+      axRes.data.pipe(res);
     });
   }
 }
