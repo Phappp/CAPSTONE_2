@@ -9,6 +9,7 @@ export default function TeacherDashboard() {
   const navigate = useNavigate();
   const TAB_STORAGE_KEY = "teacher_courses_tab";
   const SORT_STORAGE_KEY = "teacher_courses_sort";
+  const [openMenuCourseId, setOpenMenuCourseId] = useState<number | null>(null);
   const [stats, setStats] = useState<{
     total: number;
     published: number;
@@ -140,6 +141,19 @@ export default function TeacherDashboard() {
     }, 450);
     return () => window.clearTimeout(t);
   }, [searchInput]);
+
+  useEffect(() => {
+    const onDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      // Click outside the action menu closes it
+      if (!target.closest('[data-course-actions-menu="root"]')) {
+        setOpenMenuCourseId(null);
+      }
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, []);
 
   useEffect(() => {
     setPage(1);
@@ -441,67 +455,156 @@ export default function TeacherDashboard() {
                 </div>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                {/* Nếu đang lưu trữ thì không cho xuất bản/bỏ xuất bản */}
-                {c.status !== "archived" ? (
-                  c.status !== "published" ? (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      style={{ width: "auto" }}
-                      onClick={() => handleSetStatus(c.id, "published")}
-                      disabled={loading}
-                    >
-                      Xuất bản
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="primary-button"
-                      style={{
-                        width: "auto",
-                        background: "#dc2626",
-                        borderColor: "#dc2626",
-                      }}
-                      onClick={() => handleUnpublish(c.id)}
-                      disabled={loading}
-                    >
-                      Bỏ xuất bản
-                    </button>
-                  )
-                ) : null}
-
-                {c.status !== "archived" ? (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    style={{ width: "auto" }}
-                    onClick={() => handleSetStatus(c.id, "archived")}
-                    disabled={loading}
-                  >
-                    Lưu trữ
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    style={{ width: "auto" }}
-                    onClick={() => handleSetStatus(c.id, "draft")}
-                    disabled={loading}
-                  >
-                    Bỏ lưu trữ
-                  </button>
-                )}
-
+              <div
+                data-course-actions-menu="root"
+                style={{ position: "relative", display: "flex", alignItems: "flex-start" }}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <button
                   type="button"
-                  className="link-button"
-                  onClick={() => handleDelete(c.id)}
+                  className="secondary-button"
+                  aria-haspopup="menu"
+                  aria-expanded={openMenuCourseId === c.id}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setOpenMenuCourseId((cur) => (cur === c.id ? null : c.id));
+                  }}
                   disabled={loading}
-                  style={{ color: "#b91c1c", textAlign: "right" }}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    padding: 0,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 10,
+                    fontSize: 18,
+                    lineHeight: 1,
+                  }}
+                  title="Thao tác"
                 >
-                  Xóa
+                  ⋯
                 </button>
+
+                {openMenuCourseId === c.id ? (
+                  <div
+                    role="menu"
+                    style={{
+                      position: "absolute",
+                      top: 44,
+                      right: 0,
+                      minWidth: 180,
+                      background: "#fff",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 12,
+                      boxShadow: "0 10px 25px rgba(15, 23, 42, 0.10)",
+                      padding: 6,
+                      zIndex: 20,
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* Publish / Unpublish (archived => none) */}
+                    {c.status !== "archived" ? (
+                      c.status !== "published" ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="secondary-button"
+                          style={{ width: "100%", justifyContent: "flex-start" }}
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setOpenMenuCourseId(null);
+                            await handleSetStatus(c.id, "published");
+                          }}
+                          disabled={loading}
+                        >
+                          Xuất bản
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="secondary-button"
+                          style={{
+                            width: "100%",
+                            justifyContent: "flex-start",
+                            borderColor: "#fecaca",
+                            color: "#b91c1c",
+                          }}
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setOpenMenuCourseId(null);
+                            await handleUnpublish(c.id);
+                          }}
+                          disabled={loading}
+                        >
+                          Bỏ xuất bản
+                        </button>
+                      )
+                    ) : null}
+
+                    {/* Archive / Unarchive */}
+                    {c.status !== "archived" ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="secondary-button"
+                        style={{ width: "100%", justifyContent: "flex-start", marginTop: 6 }}
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setOpenMenuCourseId(null);
+                          await handleSetStatus(c.id, "archived");
+                        }}
+                        disabled={loading}
+                      >
+                        Lưu trữ
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="secondary-button"
+                        style={{ width: "100%", justifyContent: "flex-start", marginTop: 6 }}
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setOpenMenuCourseId(null);
+                          await handleSetStatus(c.id, "draft");
+                        }}
+                        disabled={loading}
+                      >
+                        Bỏ lưu trữ
+                      </button>
+                    )}
+
+                    <div style={{ height: 1, background: "#e5e7eb", margin: "8px 0" }} />
+
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="secondary-button"
+                      style={{
+                        width: "100%",
+                        justifyContent: "flex-start",
+                        borderColor: "#fecaca",
+                        color: "#b91c1c",
+                      }}
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setOpenMenuCourseId(null);
+                        await handleDelete(c.id);
+                      }}
+                      disabled={loading}
+                    >
+                      Xóa
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
           ))}

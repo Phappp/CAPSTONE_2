@@ -166,5 +166,10 @@ export interface CourseService {
     file: { filename: string; mime_type: string; size_bytes: number; url: string }
   ): Promise<void>;
   deleteLessonResource(subjectUserId: number, courseId: number, resourceId: number): Promise<void>;
+  getLessonResourceViewUrl(
+    subjectUserId: number,
+    courseId: number,
+    resourceId: number
+  ): Promise<{ url: string; mime_type: string | null; filename: string | null }>;
 }
 

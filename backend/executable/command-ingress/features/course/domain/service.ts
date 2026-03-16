@@ -1,4 +1,5 @@
 import AppDataSource from '../../../../../lib/database';
+import { getSignedDeliveryUrl } from '../../../lib/cloudinary';
 import Course from '../../../../../internal/model/course';
 import CourseInstructor from '../../../../../internal/model/course_instructor';
 import CourseEnrollment from '../../../../../internal/model/course_enrollment';
@@ -55,12 +56,14 @@ async function ensureUserIsCourseManager(userId: number) {
 }
 
 function mapCourseRowToItem(row: any): CourseListItem {
+  const rawThumb = row.thumbnail_url ?? null;
+  const thumbnail_url = rawThumb ? getSignedDeliveryUrl(rawThumb) : null;
   return {
     id: Number(row.id),
     title: String(row.title),
     slug: String(row.slug),
     short_description: row.short_description ?? null,
-    thumbnail_url: row.thumbnail_url ?? null,
+    thumbnail_url,
     level: String(row.level),
     language: String(row.language),
     status: row.status as CourseStatus,
@@ -626,6 +629,35 @@ export class CourseServiceImpl implements CourseService {
     if (!mod) throw new Error('Không tìm thấy tài nguyên.');
 
     await resourceRepo.delete({ id: resourceId } as any);
+  }
+
+  async getLessonResourceViewUrl(
+    subjectUserId: number,
+    courseId: number,
+    resourceId: number
+  ): Promise<{ url: string; mime_type: string | null; filename: string | null }> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+
+    const resourceRepo = AppDataSource.getRepository(LessonResource);
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const moduleRepo = AppDataSource.getRepository(Module);
+
+    const resource = await resourceRepo.findOne({ where: { id: resourceId } as any });
+    if (!resource) throw new Error('Không tìm thấy tài nguyên.');
+
+    const lesson = await lessonRepo.findOne({ where: { id: (resource as any).lesson_id } as any });
+    if (!lesson) throw new Error('Không tìm thấy tài nguyên.');
+    const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id, course_id: courseId } as any });
+    if (!mod) throw new Error('Không tìm thấy tài nguyên.');
+
+    const url = (resource as any).url;
+    const signedUrl = getSignedDeliveryUrl(url);
+    return {
+      url: signedUrl,
+      mime_type: (resource as any).mime_type ?? null,
+      filename: (resource as any).filename ?? null,
+    };
   }
 }
 

@@ -53,6 +53,7 @@ export default function TeacherCourseDetailPage() {
     thumbnail_url: string;
     status: CourseStatus;
   }>(null);
+  const [openStatusMenu, setOpenStatusMenu] = useState(false);
 
   const isDirty = useMemo(() => {
     if (!initialForm) return false;
@@ -109,19 +110,22 @@ export default function TeacherCourseDetailPage() {
     setError(null);
     setSaveSuccessOpen(false);
     try {
+      const payload: Record<string, unknown> = {
+        title: form.title,
+        short_description: form.short_description,
+        level: form.level,
+        language: form.language,
+      };
+      if (initialForm && form.thumbnail_url !== initialForm.thumbnail_url) {
+        payload.thumbnail_url = form.thumbnail_url || null;
+      }
       const res = await fetch(`${url}${COURSES_API.update(courseId)}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({
-          title: form.title,
-          short_description: form.short_description,
-          level: form.level,
-          language: form.language,
-          thumbnail_url: form.thumbnail_url || null,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -209,37 +213,7 @@ export default function TeacherCourseDetailPage() {
             </div>
             <div style={{ marginTop: "0.3rem", fontSize: "0.95rem", color: "#6b7280" }}>
               {course ? (
-                <>
-                  <span style={{ fontFamily: "monospace" }}>{course.slug}</span>
-                  <span
-                    style={{
-                      marginLeft: 8,
-                      fontSize: "0.8rem",
-                      padding: "0.15rem 0.6rem",
-                      borderRadius: "999px",
-                      background:
-                        course.status === "published"
-                          ? "#dcfce7"
-                          : course.status === "draft"
-                          ? "#fef3c7"
-                          : "#e5e7eb",
-                      color:
-                        course.status === "published"
-                          ? "#166534"
-                          : course.status === "draft"
-                          ? "#92400e"
-                          : "#374151",
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {course.status === "published"
-                      ? "ĐÃ XUẤT BẢN"
-                      : course.status === "draft"
-                      ? "BẢN NHÁP"
-                      : "ĐÃ LƯU TRỮ"}
-                  </span>
-                </>
+                <span style={{ fontFamily: "monospace" }}>{course.slug}</span>
               ) : (
                 "Đang tải..."
               )}
@@ -314,55 +288,137 @@ export default function TeacherCourseDetailPage() {
           </div>
         )}
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              className={
-                selectedStatus === "draft" ? "primary-button" : "secondary-button"
-              }
-              style={{ width: "auto" }}
-              onClick={() => setSelectedStatus("draft")}
-              disabled={loading}
-            >
-              Bản nháp
-            </button>
-            {/* Nếu khóa học đang lưu trữ thì ẩn option "Xuất bản" (cần bỏ lưu trữ trước) */}
-            {course?.status !== "archived" ? (
-              <button
-                type="button"
-                className={
-                  selectedStatus === "published"
-                    ? "primary-button"
-                    : "secondary-button"
-                }
-                style={{ width: "auto" }}
-                onClick={() => setSelectedStatus("published")}
-                disabled={loading}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+          <div>
+            {course ? (
+              <span
+                style={{
+                  fontSize: "0.8rem",
+                  padding: "0.2rem 0.65rem",
+                  borderRadius: "999px",
+                  background:
+                    course.status === "published"
+                      ? "#dcfce7"
+                      : course.status === "draft"
+                      ? "#fef3c7"
+                      : "#e5e7eb",
+                  color:
+                    course.status === "published"
+                      ? "#166534"
+                      : course.status === "draft"
+                      ? "#92400e"
+                      : "#374151",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                }}
               >
-                Xuất bản
-              </button>
+                {course.status === "published"
+                  ? "Đã xuất bản"
+                  : course.status === "draft"
+                  ? "Bản nháp"
+                  : "Đã lưu trữ"}
+              </span>
             ) : null}
+          </div>
+          <div style={{ position: "relative" }}>
             <button
               type="button"
-              className={
-                selectedStatus === "archived" ? "primary-button" : "secondary-button"
-              }
+              className="secondary-button"
               style={{ width: "auto" }}
-              onClick={() => setSelectedStatus("archived")}
+              onClick={() => setOpenStatusMenu((v) => !v)}
               disabled={loading}
             >
-              {course?.status === "archived" ? "Đang lưu trữ" : "Lưu trữ"}
+              <span className="material-symbols-outlined">more_vert</span>
             </button>
-            <button
-              type="button"
-              className="link-button"
-              style={{ color: "#b91c1c" }}
-              onClick={del}
-              disabled={loading}
-            >
-              Xóa
-            </button>
+            {openStatusMenu ? (
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "100%",
+                  marginTop: 4,
+                  background: "white",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  boxShadow: "0 10px 20px rgba(15,23,42,0.12)",
+                  padding: "0.35rem 0",
+                  minWidth: 180,
+                  zIndex: 20,
+                }}
+              >
+                <button
+                  type="button"
+                  className="link-button"
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "0.25rem 0.75rem",
+                    fontWeight: selectedStatus === "draft" ? 700 : 400,
+                  }}
+                  onClick={() => {
+                    setSelectedStatus("draft");
+                    setOpenStatusMenu(false);
+                  }}
+                  disabled={loading}
+                >
+                  Đặt thành bản nháp
+                </button>
+                {course?.status !== "archived" ? (
+                  <button
+                    type="button"
+                    className="link-button"
+                    style={{
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "0.25rem 0.75rem",
+                      fontWeight: selectedStatus === "published" ? 700 : 400,
+                    }}
+                    onClick={() => {
+                      setSelectedStatus("published");
+                      setOpenStatusMenu(false);
+                    }}
+                    disabled={loading}
+                  >
+                    Đặt thành đã xuất bản
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="link-button"
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "0.25rem 0.75rem",
+                    fontWeight: selectedStatus === "archived" ? 700 : 400,
+                  }}
+                  onClick={() => {
+                    setSelectedStatus("archived");
+                    setOpenStatusMenu(false);
+                  }}
+                  disabled={loading}
+                >
+                  {course?.status === "archived" ? "Đang lưu trữ" : "Đặt thành lưu trữ"}
+                </button>
+                <div style={{ borderTop: "1px solid #e5e7eb", margin: "0.25rem 0" }} />
+                <button
+                  type="button"
+                  className="link-button"
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "0.25rem 0.75rem",
+                    color: "#b91c1c",
+                  }}
+                  onClick={() => {
+                    setOpenStatusMenu(false);
+                    del();
+                  }}
+                  disabled={loading}
+                >
+                  Xóa khóa học
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -484,7 +540,11 @@ export default function TeacherCourseDetailPage() {
                             if (!res.ok) throw new Error(data?.message || "Upload ảnh thất bại.");
                             const imageUrl = data?.url as string | undefined;
                             if (imageUrl) {
-                              setForm((p) => ({ ...p, thumbnail_url: `${url}${imageUrl}` }));
+                              const thumbUrl =
+                                imageUrl.startsWith("http://") || imageUrl.startsWith("https://")
+                                  ? imageUrl
+                                  : `${url}${imageUrl}`;
+                              setForm((p) => ({ ...p, thumbnail_url: thumbUrl }));
                             }
                           } catch (err) {
                             // Giữ nguyên form, chỉ log nhẹ qua console

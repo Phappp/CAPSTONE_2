@@ -24,6 +24,7 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
   router.route('/:id/lessons/:lessonId').delete(requireAuthorizedUser, controller.deleteLesson.bind(controller));
   router.route('/:id/lessons/:lessonId/resources').get(requireAuthorizedUser, controller.listLessonResources.bind(controller));
   router.route('/:id/resources/:resourceId').delete(requireAuthorizedUser, controller.deleteLessonResource.bind(controller));
+  router.route('/:id/resources/:resourceId/view').get(requireAuthorizedUser, controller.viewLessonResource.bind(controller));
 
   router.use(initCourseUploadRoute(controller));
 
