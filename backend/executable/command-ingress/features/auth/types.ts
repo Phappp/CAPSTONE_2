@@ -53,6 +53,7 @@ interface AuthService {
 
   logout(token: string): Promise<void>;
   refreshToken(token: string): Promise<ExchangeTokenResult>;
+  verify2FA(email: string, code: string): Promise<LoginResult>;
 }
 
 export {

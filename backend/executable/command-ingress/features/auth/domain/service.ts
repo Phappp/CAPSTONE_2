@@ -262,54 +262,88 @@ export class AuthServiceImpl implements AuthService {
   }
 
   // Đăng nhập bằng email/mật khẩu
+  // Đăng nhập bằng email/mật khẩu
   async login(request: LoginRequest): Promise<LoginResult> {
     const userRepository = AppDataSource.getRepository(User);
     const now = new Date();
 
     const user = await userRepository.findOne({ where: { email: request.email } });
-    // Nếu không tìm thấy user hoặc không có password hash -> trả lỗi chung
     if (!user || !user.password_hash) {
       throw new Error('Email hoặc mật khẩu không đúng.');
     }
 
-    // Kiểm tra tài khoản bị khóa tạm thời do nhập sai nhiều lần
     if (user.locked_until && user.locked_until > now) {
       throw new Error('Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút.');
     }
 
-    // Kiểm tra trạng thái kích hoạt email
     if (!user.email_verified_at) {
-      throw new Error(
-        'Tài khoản chưa được kích hoạt. Vui lòng kiểm tra email để kích hoạt hoặc gửi lại email kích hoạt.'
-      );
+      throw new Error('Tài khoản chưa được kích hoạt.');
     }
 
-    // Kiểm tra tài khoản bị khóa vĩnh viễn / do admin
     if (!user.is_active) {
-      throw new Error('Tài khoản của bạn đã bị khóa. Vui lòng liên hệ admin để được hỗ trợ.');
+      throw new Error('Tài khoản của bạn đã bị khóa.');
     }
 
     const isValid = await bcrypt.compare(request.password, user.password_hash);
     if (!isValid) {
-      // Sai mật khẩu -> tăng biến đếm, nếu >= 5 thì khóa 15 phút
       const currentFailed = user.failed_login_attempts || 0;
       const newFailed = currentFailed + 1;
       user.failed_login_attempts = newFailed;
-
       if (newFailed >= 5) {
-        const lockedUntil = new Date(now.getTime() + 15 * 60 * 1000);
-        user.locked_until = lockedUntil;
+        user.locked_until = new Date(now.getTime() + 15 * 60 * 1000);
       }
-
       await userRepository.save(user);
       throw new Error('Email hoặc mật khẩu không đúng.');
     }
 
-    // Đăng nhập thành công -> reset đếm sai & mở khóa, cập nhật last_login_at
+    // Đăng nhập thành công -> reset đếm sai
     user.failed_login_attempts = 0;
     user.locked_until = null;
     user.last_login_at = now;
     await userRepository.save(user);
+
+    // --- LOGIC BẢO MẬT TAB 3 CHO ĐỒ ÁN ---
+
+    // 1. Kiểm tra Thông báo đăng nhập mới
+    if (user.notify_new_login) {
+      try {
+        const { sendMail } = await import('../../../../../lib/mailer');
+        await sendMail(
+          user.email,
+          'Cảnh báo đăng nhập mới - MindBridge',
+          `Tài khoản của bạn vừa được đăng nhập vào lúc ${now.toLocaleString('vi-VN')}.`
+        );
+      } catch (e) {
+        console.log('Notification email error:', e);
+      }
+    }
+
+    // 2. KIỂM TRA 2FA (QUAN TRỌNG)
+    if (user.is_2fa_enabled) {
+      const otpCode = this.generateOtpCode();
+      user.temp_otp = otpCode; // Lưu vào cột temp_otp trong DB
+      await userRepository.save(user);
+
+      // Gửi mã OTP qua email
+      try {
+        const { sendMail } = await import('../../../../../lib/mailer');
+        await sendMail(
+          user.email,
+          'Mã xác thực 2FA - MindBridge',
+          `Mã xác thực của bạn là: ${otpCode}. Mã có hiệu lực trong 5 phút.`
+        );
+      } catch (e) {
+        console.log('2FA OTP email error:', e);
+      }
+
+      // TRẢ VỀ YÊU CẦU 2FA VÀ DỪNG LUỒNG TẠI ĐÂY
+      return {
+        requires2FA: true,
+        email: user.email,
+      } as any;
+    }
+
+    // --- KẾT THÚC LOGIC BẢO MẬT ---
 
     const sessionRepository = AppDataSource.getRepository(Session);
     const sessionID = uuidv4();
@@ -387,5 +421,41 @@ export class AuthServiceImpl implements AuthService {
       accessToken: newAccessToken,
       refreshToken: newRefreshToken,
     }
+  }
+  async verify2FA(email: string, code: string): Promise<LoginResult> {
+    const userRepository = AppDataSource.getRepository(User);
+    
+    // 1. Tìm user theo email
+    const user = await userRepository.findOne({ where: { email, is_active: true } });
+    if (!user) {
+      throw new Error('Người dùng không tồn tại hoặc đã bị khóa.');
+    }
+
+    // 2. Kiểm tra mã OTP
+    // (Đảm bảo bạn đã thêm cột temp_otp vào model User như đã bàn)
+    if (!user.temp_otp || user.temp_otp !== code) {
+      throw new Error('Mã xác thực không chính xác.');
+    }
+
+    // 3. Xác thực thành công -> Xóa OTP và tạo session mới
+    user.temp_otp = null; 
+    await userRepository.save(user);
+
+    const sessionRepository = AppDataSource.getRepository(Session);
+    const sessionID = uuidv4();
+    const session = sessionRepository.create({
+      sessionID,
+      userID: String(user.id),
+    });
+    await sessionRepository.save(session);
+
+    // 4. Ký và trả về token chính thức
+    const tokens = await this.signTokensForUser(user, sessionID);
+    const authUser = await this.mapUserToAuthUser(user);
+
+    return {
+      ...tokens,
+      user: authUser,
+    };
   }
 }

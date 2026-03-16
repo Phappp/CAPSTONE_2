@@ -6,7 +6,7 @@ export class BaseController {
     try {
       await handler(req, res, next);
     } catch (error) {
-      console.log("error: ", error);
+      console.log('error: ', error);
       res.status(400).json({
         message: error instanceof Error ? error.message : String(error),
       });

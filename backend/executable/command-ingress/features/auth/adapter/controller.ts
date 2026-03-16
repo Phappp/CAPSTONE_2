@@ -16,13 +16,11 @@ import { HttpRequest } from '../../../types';
 
 
 class AuthController extends BaseController {
-  service: AuthService;
 
-  constructor(service: AuthService) {
+  constructor(private readonly authService: AuthService) {
     super();
-    this.service = service;
   }
-
+  
   async exchangeGoogleToken(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async (req, res, _next) => {
       const exchangeGoogleTokenBody = new ExchangeGoogleTokenBody(req.query);
@@ -33,7 +31,7 @@ class AuthController extends BaseController {
         return;
       }
 
-      const exchangeResult = await this.service.exchangeWithGoogleIDP({
+      const exchangeResult = await this.authService.exchangeWithGoogleIDP({
         idp: 'google',
         code: exchangeGoogleTokenBody.code,
       });
@@ -60,7 +58,7 @@ class AuthController extends BaseController {
         return;
       }
 
-      const result = await this.service.login({
+      const result = await this.authService.login({
         email: loginRequestBody.email,
         password: loginRequestBody.password,
       });
@@ -82,7 +80,7 @@ class AuthController extends BaseController {
         return;
       }
 
-      await this.service.register({
+      await this.authService.register({
         email: body.email,
         password: body.password,
         fullName: body.fullName,
@@ -104,7 +102,7 @@ class AuthController extends BaseController {
         return;
       }
 
-      const result = await this.service.verifyRegistrationOtp(body.email, body.code);
+      const result = await this.authService.verifyRegistrationOtp(body.email, body.code);
 
       res.status(200).json({
         access_token: result.accessToken,
@@ -123,7 +121,7 @@ class AuthController extends BaseController {
         return;
       }
 
-      await this.service.logout(logoutRequestBody.refreshToken);
+      await this.authService.logout(logoutRequestBody.refreshToken);
 
       res.sendStatus(200);
       return;
@@ -140,7 +138,7 @@ class AuthController extends BaseController {
       return;
     }
 
-    const token = await this.service.refreshToken(refreshTokenRequestBody.refreshToken);
+    const token = await this.authService.refreshToken(refreshTokenRequestBody.refreshToken);
 
     res.status(200).json({
       refresh_token: token.refreshToken,
@@ -149,6 +147,23 @@ class AuthController extends BaseController {
 
     return;
   }
+
+  verify2FA = async (req: HttpRequest, res: Response) => {
+    try {
+      const { email, code } = req.body;
+      const result = await this.authService.verify2FA(email, code);
+      return res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error: any) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  };
+
 }
 
 export {

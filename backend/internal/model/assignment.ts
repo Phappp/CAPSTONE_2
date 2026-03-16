@@ -98,6 +98,10 @@ export default class Assignment {
     /** Cấu hình định dạng nộp bài (JSON) (nullable). */
     submission_format: any;
 
+    @Column({ type:'json',nullable:true })
+    /** Cấu hình đính kèm bài tập (JSON) (nullable). */
+    attachments: any;
+
     @CreateDateColumn()
     /** Thời điểm tạo. */
     created_at: Date;
