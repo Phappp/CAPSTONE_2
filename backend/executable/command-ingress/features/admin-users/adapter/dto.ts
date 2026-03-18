@@ -6,6 +6,7 @@ export interface ListUsersDto {
   search?: string;
   joined_from?: string;
   joined_to?: string;
+  include_deleted?: string;
 }
 
 export interface UpdateStatusDto {
@@ -21,5 +22,14 @@ export interface BulkActionDto {
   user_ids: number[];
   action: string;
   role?: string;
+}
+
+export interface ListAuditLogsDto {
+  page?: string;
+  limit?: string;
+  actor_user_id?: string;
+  action?: string;
+  from?: string;
+  to?: string;
 }
 

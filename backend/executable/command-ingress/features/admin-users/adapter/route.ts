@@ -13,6 +13,9 @@ const initAdminUserRoute: (controller: AdminUserController) => express.Router = 
   router.route('/bulk')
     .post(controller.bulkAction.bind(controller));
 
+  router.route('/audit-logs')
+    .get(controller.listAuditLogs.bind(controller));
+
   router.route('/:userId/status')
     .put(controller.updateStatus.bind(controller));
 
@@ -22,8 +25,14 @@ const initAdminUserRoute: (controller: AdminUserController) => express.Router = 
   router.route('/:userId/reset-password')
     .post(controller.resetPassword.bind(controller));
 
+  router.route('/:userId/restore')
+    .post(controller.restoreUser.bind(controller));
+
   router.route('/:userId')
     .delete(controller.softDelete.bind(controller));
+
+  router.route('/:userId/hard-delete')
+    .delete(controller.hardDelete.bind(controller));
 
   return router;
 };

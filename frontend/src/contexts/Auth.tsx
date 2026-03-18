@@ -228,17 +228,20 @@ function redirectByRole(
   user: AuthUser | null,
   navigate: ReturnType<typeof useNavigate>
 ) {
-  const role = user?.primary_role || user?.roles?.[0] || "";
+  const roles = [user?.primary_role, ...(user?.roles ?? [])]
+    .filter(Boolean)
+    .map((r) => String(r).toLowerCase());
+
   // Hỗ trợ cả tên role cũ (student/teacher) và mới (learner/course_manager)
-  if (role === "student" || role === "learner") {
+  if (roles.includes("student") || roles.includes("learner")) {
     navigate("/student/dashboard", { replace: true });
     return;
   }
-  if (role === "teacher" || role === "course_manager") {
+  if (roles.includes("teacher") || roles.includes("course_manager")) {
     navigate("/teacher/dashboard", { replace: true });
     return;
   }
-  if (role === "admin") {
+  if (roles.includes("admin")) {
     navigate("/admin", { replace: true });
     return;
   }
