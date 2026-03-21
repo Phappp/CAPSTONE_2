@@ -7,6 +7,8 @@ import AdminDashboard from "./pages/AdminDashboard";
 import CreateCoursePage from "./pages/CreateCoursePage";
 import TeacherCourseDetailPage from "./pages/TeacherCourseDetailPage";
 import TeacherCourseContentBuilderPage from "./pages/TeacherCourseContentBuilderPage";
+import CoursesCatalogPage from "./pages/CoursesCatalogPage";
+import CoursePublicDetailPage from "./pages/CoursePublicDetailPage";
 import ProfilePage from "./pages/ProfilePage";
 import Authentication from "./router/Authentication";
 
@@ -37,6 +39,23 @@ export default function App() {
         element={
           <Authentication>
             <ProfilePage />
+          </Authentication>
+        }
+      />
+
+      <Route
+        path="/courses"
+        element={
+          <Authentication>
+            <CoursesCatalogPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/courses/:slug"
+        element={
+          <Authentication>
+            <CoursePublicDetailPage />
           </Authentication>
         }
       />

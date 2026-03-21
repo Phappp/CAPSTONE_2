@@ -8,6 +8,7 @@ import Lesson from '../../../../../internal/model/lesson';
 import LessonResource from '../../../../../internal/model/lesson_resource';
 import UserRole from '../../../../../internal/model/user_roles';
 import Role from '../../../../../internal/model/role';
+import User from '../../../../../internal/model/user';
 
 import {
   CourseDashboardStats,
@@ -30,6 +31,15 @@ import {
   UpdateLessonRequest,
   UpdateModuleRequest,
   UpdateCourseRequest,
+  PublishedCourseListQuery,
+  PublishedCourseListResult,
+  PublishedCourseListItem,
+  CourseDetail,
+  MyEnrollmentsQuery,
+  MyEnrollmentsResult,
+  MyEnrollmentListItem,
+  EnrollmentResult,
+  EnrollmentStatus,
 } from '../types';
 
 function normalizeSlug(input: string): string {
@@ -40,6 +50,21 @@ function normalizeSlug(input: string): string {
     .replace(/[^a-z0-9-]/g, '')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
+}
+
+function safeJsonParse<T>(value: any, fallback: T): T {
+  if (value == null) return fallback;
+  if (typeof value === 'string') {
+    const s = value.trim();
+    if (!s) return fallback;
+    try {
+      return JSON.parse(s) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  // Some drivers already return JSON columns as objects/arrays.
+  return value as T;
 }
 
 async function ensureUserIsCourseManager(userId: number) {
@@ -76,7 +101,549 @@ function mapCourseRowToItem(row: any): CourseListItem {
   };
 }
 
+function mapToPublishedCourseListItem(row: any): PublishedCourseListItem {
+  const rawThumb = row.thumbnail_url ?? null;
+  const thumbnail_url = rawThumb ? getSignedDeliveryUrl(rawThumb) : null;
+  
+  return {
+    id: Number(row.id),
+    title: String(row.title),
+    slug: String(row.slug),
+    short_description: row.short_description ?? null,
+    thumbnail_url,
+    level: String(row.level),
+    language: String(row.language),
+    published_at: row.published_at ? new Date(row.published_at).toISOString() : null,
+    learners_count: Number(row.learners_count ?? 0),
+    modules_count: Number(row.modules_count ?? 0),
+    lessons_count: Number(row.lessons_count ?? 0),
+    total_duration_minutes: row.total_duration_minutes ? Number(row.total_duration_minutes) : null,
+    is_enrolled: row.is_enrolled === 1,
+    instructors: safeJsonParse<any[]>(row.instructors, []),
+  };
+}
+
+function mapToMyEnrollmentListItem(row: any): MyEnrollmentListItem {
+  return {
+    id: Number(row.id),
+    course_id: Number(row.course_id),
+    course_title: String(row.course_title),
+    course_slug: String(row.course_slug),
+    course_thumbnail: row.course_thumbnail ? getSignedDeliveryUrl(row.course_thumbnail) : null,
+    course_level: String(row.course_level),
+    enrolled_at: new Date(row.enrolled_at).toISOString(),
+    last_accessed_at: row.last_accessed_at ? new Date(row.last_accessed_at).toISOString() : null,
+    status: row.status as EnrollmentStatus,
+    progress_percent: Number(row.progress_percent),
+    completed_at: row.completed_at ? new Date(row.completed_at).toISOString() : null,
+  };
+}
+
 export class CourseServiceImpl implements CourseService {
+  // Public methods - Course catalog
+  async listPublishedCourses(
+    subjectUserId: number | undefined, 
+    query: PublishedCourseListQuery
+  ): Promise<PublishedCourseListResult> {
+    const courseRepo = AppDataSource.getRepository(Course);
+
+    const page = Number(query.page || 1);
+    const pageSize = Math.min(50, Math.max(1, Number(query.page_size || 12)));
+    const q = query.q ? String(query.q).trim() : '';
+
+    const qb = courseRepo.createQueryBuilder('c');
+    qb.where('c.status = :status', { status: 'published' });
+    qb.andWhere('c.deleted_at IS NULL');
+    
+    if (q) {
+      qb.andWhere('(c.title LIKE :q OR c.short_description LIKE :q)', { q: `%${q}%` });
+    }
+    
+    if (query.level) {
+      qb.andWhere('c.level = :level', { level: query.level });
+    }
+    
+    if (query.language) {
+      qb.andWhere('c.language = :language', { language: query.language });
+    }
+
+    // Add learners count
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(*)', 'cnt')
+        .from(CourseEnrollment, 'ce')
+        .where('ce.course_id = c.id');
+    }, 'learners_count');
+
+    // Add modules count
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(*)', 'cnt')
+        .from(Module, 'm')
+        .where('m.course_id = c.id');
+    }, 'modules_count');
+
+    // Add lessons count
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(*)', 'cnt')
+        .from(Lesson, 'l')
+        .innerJoin(Module, 'm', 'm.id = l.module_id')
+        .where('m.course_id = c.id');
+    }, 'lessons_count');
+
+    // Add total duration
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('SUM(l.duration_minutes)', 'sum')
+        .from(Lesson, 'l')
+        .innerJoin(Module, 'm', 'm.id = l.module_id')
+        .where('m.course_id = c.id');
+    }, 'total_duration_minutes');
+
+    // Add instructors info
+    qb.addSelect((subQb) => {
+      return subQb
+        .select(`
+          JSON_ARRAYAGG(
+            JSON_OBJECT(
+              'id', u.id,
+              'full_name', u.full_name,
+              'avatar_url', u.avatar_url
+            )
+          )
+        `)
+        .from(CourseInstructor, 'ci')
+        .innerJoin(User, 'u', 'u.id = ci.instructor_id')
+        .where('ci.course_id = c.id');
+    }, 'instructors');
+
+    // Check if user is enrolled
+    if (subjectUserId) {
+      qb.addSelect((subQb) => {
+        return subQb
+          .select('COUNT(*)', 'cnt')
+          .from(CourseEnrollment, 'ce')
+          .where('ce.course_id = c.id')
+          .andWhere('ce.user_id = :userId', { userId: subjectUserId });
+      }, 'is_enrolled');
+    }
+
+    const sortBy = query.sort_by || 'created_at';
+    const sortDir = query.sort_dir === 'asc' ? 'asc' : 'desc';
+
+    if (sortBy === 'title') {
+      qb.orderBy('c.title', sortDir.toUpperCase() as any);
+    } else if (sortBy === 'created_at') {
+      qb.orderBy('c.created_at', sortDir.toUpperCase() as any);
+    } else if (sortBy === 'learners_count') {
+      qb.orderBy('learners_count', sortDir.toUpperCase() as any);
+      qb.addOrderBy('c.created_at', 'DESC');
+    } else {
+      qb.orderBy('c.created_at', 'DESC');
+    }
+
+    qb.skip((page - 1) * pageSize).take(pageSize);
+
+    const total = await qb.getCount();
+    const { raw } = await qb.getRawAndEntities();
+
+    const items = raw.map((r: any) => {
+      const row = {
+        id: r.c_id ?? r.id,
+        title: r.c_title ?? r.title,
+        slug: r.c_slug ?? r.slug,
+        short_description: r.c_short_description ?? r.short_description,
+        thumbnail_url: r.c_thumbnail_url ?? r.thumbnail_url,
+        level: r.c_level ?? r.level,
+        language: r.c_language ?? r.language,
+        published_at: r.c_published_at ?? r.published_at,
+        learners_count: r.learners_count,
+        modules_count: r.modules_count,
+        lessons_count: r.lessons_count,
+        total_duration_minutes: r.total_duration_minutes,
+        is_enrolled: r.is_enrolled,
+        instructors: r.instructors,
+      };
+      return mapToPublishedCourseListItem(row);
+    });
+
+    return {
+      items,
+      page,
+      page_size: pageSize,
+      total,
+    };
+  }
+
+  async getPublishedCourseBySlug(subjectUserId: number | undefined, slug: string): Promise<CourseDetail> {
+    const courseRepo = AppDataSource.getRepository(Course);
+
+    const qb = courseRepo.createQueryBuilder('c');
+    qb.where('c.slug = :slug', { slug });
+    qb.andWhere('c.status = :status', { status: 'published' });
+    qb.andWhere('c.deleted_at IS NULL');
+
+    // Add learners count
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(*)', 'cnt')
+        .from(CourseEnrollment, 'ce')
+        .where('ce.course_id = c.id');
+    }, 'learners_count');
+
+    // Add modules count
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(*)', 'cnt')
+        .from(Module, 'm')
+        .where('m.course_id = c.id');
+    }, 'modules_count');
+
+    // Add lessons count
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(*)', 'cnt')
+        .from(Lesson, 'l')
+        .innerJoin(Module, 'm', 'm.id = l.module_id')
+        .where('m.course_id = c.id');
+    }, 'lessons_count');
+
+    // Add total duration
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('SUM(l.duration_minutes)', 'sum')
+        .from(Lesson, 'l')
+        .innerJoin(Module, 'm', 'm.id = l.module_id')
+        .where('m.course_id = c.id');
+    }, 'total_duration_minutes');
+
+    // Add instructors info
+    qb.addSelect((subQb) => {
+      return subQb
+        .select(`
+          JSON_ARRAYAGG(
+            JSON_OBJECT(
+              'id', u.id,
+              'full_name', u.full_name,
+              'avatar_url', u.avatar_url,
+              'is_primary', ci.is_primary
+            )
+          )
+        `)
+        .from(CourseInstructor, 'ci')
+        .innerJoin(User, 'u', 'u.id = ci.instructor_id')
+        .where('ci.course_id = c.id');
+    }, 'instructors');
+
+    // Check if user is enrolled
+    if (subjectUserId) {
+      qb.addSelect((subQb) => {
+        return subQb
+          .select(`
+            JSON_OBJECT(
+              'status', ce.status,
+              'enrolled_at', ce.enrolled_at,
+              'completed_at', ce.completed_at,
+              'progress_percent', ce.progress_percent
+            )
+          `)
+          .from(CourseEnrollment, 'ce')
+          .where('ce.course_id = c.id')
+          .andWhere('ce.user_id = :userId', { userId: subjectUserId });
+      }, 'enrollment');
+    }
+
+    const raw = await qb.getRawOne();
+    if (!raw) throw new Error('Không tìm thấy khóa học.');
+
+    const course: CourseDetail = {
+      id: Number(raw.c_id ?? raw.id),
+      title: String(raw.c_title ?? raw.title),
+      slug: String(raw.c_slug ?? raw.slug),
+      short_description: raw.c_short_description ?? raw.short_description ?? null,
+      full_description: raw.c_full_description ?? raw.full_description ?? null,
+      thumbnail_url: (raw.c_thumbnail_url ?? raw.thumbnail_url) ? getSignedDeliveryUrl(raw.c_thumbnail_url ?? raw.thumbnail_url) : null,
+      level: String(raw.c_level ?? raw.level),
+      language: String(raw.c_language ?? raw.language),
+      learning_objectives: raw.c_learning_objectives ?? raw.learning_objectives ?? null,
+      prerequisites: raw.c_prerequisites ?? raw.prerequisites ?? null,
+      status: (raw.c_status ?? raw.status) as CourseStatus,
+      published_at: (raw.c_published_at ?? raw.published_at) ? new Date(raw.c_published_at ?? raw.published_at).toISOString() : null,
+      created_at: new Date(raw.c_created_at ?? raw.created_at).toISOString(),
+      updated_at: new Date(raw.c_updated_at ?? raw.updated_at).toISOString(),
+      learners_count: Number(raw.learners_count ?? 0),
+      modules_count: Number(raw.modules_count ?? 0),
+      lessons_count: Number(raw.lessons_count ?? 0),
+      total_duration_minutes: raw.total_duration_minutes ? Number(raw.total_duration_minutes) : null,
+      is_enrolled: !!raw.enrollment,
+      enrollment: safeJsonParse<any | null>(raw.enrollment, null),
+      instructors: safeJsonParse<any[]>(raw.instructors, []),
+    };
+
+    // Load modules and lessons for preview
+    const moduleRepo = AppDataSource.getRepository(Module);
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+
+    const modules = await moduleRepo.find({
+      where: { course_id: course.id } as any,
+      order: { order_index: 'ASC', id: 'ASC' } as any,
+    });
+
+    const moduleIds = (modules as any[]).map((m) => m.id);
+    const lessons = moduleIds.length
+      ? await lessonRepo
+          .createQueryBuilder('l')
+          .where('l.module_id IN (:...moduleIds)', { moduleIds })
+          .andWhere('l.is_published = :isPublished', { isPublished: true })
+          .orderBy('l.order_index', 'ASC')
+          .addOrderBy('l.id', 'ASC')
+          .getMany()
+      : [];
+
+    const lessonByModule = new Map<number, CourseLessonItem[]>();
+    for (const l of lessons as any[]) {
+      const arr = lessonByModule.get(l.module_id) || [];
+      arr.push({
+        id: l.id,
+        module_id: l.module_id,
+        title: l.title,
+        description: l.description ?? null,
+        lesson_type: (l.lesson_type || 'text') as LessonType,
+        order_index: l.order_index,
+        is_free_preview: l.is_free_preview,
+        duration_minutes: l.duration_minutes,
+      });
+      lessonByModule.set(l.module_id, arr);
+    }
+
+    course.modules = (modules as any[]).map((m) => ({
+      id: m.id,
+      course_id: m.course_id,
+      title: m.title,
+      description: m.description ?? null,
+      order_index: m.order_index,
+      lessons: lessonByModule.get(m.id) || [],
+    }));
+
+    return course;
+  }
+
+  // Enrollment methods
+  async enrollCourse(subjectUserId: number, courseId: number): Promise<EnrollmentResult> {
+    const courseRepo = AppDataSource.getRepository(Course);
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+
+    // Check if course exists and is published
+    const course = await courseRepo.findOne({ 
+      where: { id: courseId, status: 'published', deleted_at: null as any } 
+    });
+    
+    if (!course) {
+      throw new Error('Khóa học không tồn tại hoặc chưa được xuất bản.');
+    }
+
+    // Check if already enrolled
+    const existingEnrollment = await enrollmentRepo.findOne({
+      where: { user_id: subjectUserId, course_id: courseId } as any,
+    });
+
+    if (existingEnrollment) {
+      throw new Error('Bạn đã đăng ký khóa học này rồi.');
+    }
+
+    // Create enrollment
+    const enrollment = enrollmentRepo.create({
+      user_id: subjectUserId,
+      course_id: courseId,
+      status: 'active',
+      progress_percent: 0,
+      enrolled_at: new Date(),
+      last_accessed_at: new Date(),
+    } as any);
+
+    const saved = await enrollmentRepo.save(enrollment as any);
+
+    return {
+      id: (saved as any).id,
+      course_id: (saved as any).course_id,
+      user_id: (saved as any).user_id,
+      status: (saved as any).status,
+      enrolled_at: new Date((saved as any).enrolled_at).toISOString(),
+      progress_percent: Number((saved as any).progress_percent),
+    };
+  }
+
+  async listMyEnrollments(subjectUserId: number, query: MyEnrollmentsQuery): Promise<MyEnrollmentsResult> {
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+
+    const page = Number(query.page || 1);
+    const pageSize = Math.min(50, Math.max(1, Number(query.page_size || 12)));
+    const status = query.status;
+    const q = query.q ? String(query.q).trim() : '';
+
+    const qb = enrollmentRepo.createQueryBuilder('ce');
+    qb.where('ce.user_id = :userId', { userId: subjectUserId });
+    
+    if (status) {
+      qb.andWhere('ce.status = :status', { status });
+    }
+
+    qb.innerJoinAndSelect('ce.course', 'c');
+    if (q) {
+      qb.andWhere('(c.title LIKE :q OR c.slug LIKE :q)', { q: `%${q}%` });
+    }
+    qb.select([
+      'ce.id',
+      'ce.user_id',
+      'ce.course_id',
+      'ce.status',
+      'ce.enrolled_at',
+      'ce.last_accessed_at',
+      'ce.completed_at',
+      'ce.progress_percent',
+      'c.title',
+      'c.slug',
+      'c.thumbnail_url',
+      'c.level',
+    ]);
+
+    qb.orderBy('ce.last_accessed_at', 'DESC')
+      .addOrderBy('ce.enrolled_at', 'DESC');
+
+    qb.skip((page - 1) * pageSize).take(pageSize);
+
+    const [enrollments, total] = await qb.getManyAndCount();
+
+    const items = (enrollments as any[]).map((e) => ({
+      id: e.id,
+      course_id: e.course_id,
+      course_title: e.course?.title,
+      course_slug: e.course?.slug,
+      course_thumbnail: e.course?.thumbnail_url,
+      course_level: e.course?.level,
+      enrolled_at: e.enrolled_at.toISOString(),
+      last_accessed_at: e.last_accessed_at?.toISOString() || null,
+      status: e.status,
+      progress_percent: Number(e.progress_percent),
+      completed_at: e.completed_at?.toISOString() || null,
+    }));
+
+    return {
+      items,
+      page,
+      page_size: pageSize,
+      total,
+    };
+  }
+
+  async getMyLearningCourse(subjectUserId: number, courseId: number): Promise<CourseDetail> {
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+
+    // Check if user is enrolled
+    const enrollment = await enrollmentRepo.findOne({
+      where: { user_id: subjectUserId, course_id: courseId } as any,
+      relations: ['course'],
+    });
+
+    if (!enrollment) {
+      throw new Error('Bạn chưa đăng ký khóa học này.');
+    }
+
+    const course = (enrollment as any).course;
+    if (!course || (course as any).deleted_at) {
+      throw new Error('Không tìm thấy khóa học.');
+    }
+
+    // Get course detail with full content (all lessons are accessible to enrolled users)
+    const moduleRepo = AppDataSource.getRepository(Module);
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+
+    const modules = await moduleRepo.find({
+      where: { course_id: courseId } as any,
+      order: { order_index: 'ASC', id: 'ASC' } as any,
+    });
+
+    const moduleIds = (modules as any[]).map((m) => m.id);
+    const lessons = moduleIds.length
+      ? await lessonRepo
+          .createQueryBuilder('l')
+          .where('l.module_id IN (:...moduleIds)', { moduleIds })
+          .orderBy('l.order_index', 'ASC')
+          .addOrderBy('l.id', 'ASC')
+          .getMany()
+      : [];
+
+    const lessonByModule = new Map<number, CourseLessonItem[]>();
+    for (const l of lessons as any[]) {
+      const arr = lessonByModule.get(l.module_id) || [];
+      arr.push({
+        id: l.id,
+        module_id: l.module_id,
+        title: l.title,
+        description: l.description ?? null,
+        lesson_type: (l.lesson_type || 'text') as LessonType,
+        order_index: l.order_index,
+        is_free_preview: l.is_free_preview,
+        duration_minutes: l.duration_minutes,
+      });
+      lessonByModule.set(l.module_id, arr);
+    }
+
+    // Get instructors
+    const instructorRepo = AppDataSource.getRepository(CourseInstructor);
+    const instructors = await instructorRepo
+      .createQueryBuilder('ci')
+      .innerJoinAndSelect('ci.instructor', 'u')
+      .where('ci.course_id = :courseId', { courseId })
+      .getMany();
+
+    const courseDetail: CourseDetail = {
+      id: course.id,
+      title: course.title,
+      slug: course.slug,
+      short_description: course.short_description,
+      full_description: course.full_description,
+      thumbnail_url: course.thumbnail_url ? getSignedDeliveryUrl(course.thumbnail_url) : null,
+      level: course.level,
+      language: course.language,
+      learning_objectives: course.learning_objectives,
+      prerequisites: course.prerequisites,
+      status: course.status,
+      published_at: course.published_at?.toISOString() || null,
+      created_at: course.created_at.toISOString(),
+      updated_at: course.updated_at.toISOString(),
+      learners_count: 0, // Will be calculated separately if needed
+      modules_count: modules.length,
+      lessons_count: lessons.length,
+      total_duration_minutes: lessons.reduce((sum, l: any) => sum + (l.duration_minutes || 0), 0),
+      is_enrolled: true,
+      enrollment: {
+        status: (enrollment as any).status,
+        enrolled_at: (enrollment as any).enrolled_at.toISOString(),
+        completed_at: (enrollment as any).completed_at?.toISOString() || null,
+        progress_percent: Number((enrollment as any).progress_percent),
+      },
+      instructors: (instructors as any[]).map((ci) => ({
+        id: ci.instructor.id,
+        full_name: ci.instructor.full_name,
+        avatar_url: ci.instructor.avatar_url,
+        is_primary: ci.is_primary,
+      })),
+      modules: (modules as any[]).map((m) => ({
+        id: m.id,
+        course_id: m.course_id,
+        title: m.title,
+        description: m.description ?? null,
+        order_index: m.order_index,
+        lessons: lessonByModule.get(m.id) || [],
+      })),
+    };
+
+    return courseDetail;
+  }
+
+  // Instructor methods (existing code)
   async createCourse(subjectUserId: number, request: CreateCourseRequest): Promise<{ id: number }> {
     await ensureUserIsCourseManager(subjectUserId);
 
@@ -659,5 +1226,38 @@ export class CourseServiceImpl implements CourseService {
       filename: (resource as any).filename ?? null,
     };
   }
-}
 
+  async createLessonYoutubeResource(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number,
+    request: { youtube_url: string; title?: string | null }
+  ): Promise<{ id: number }> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const moduleRepo = AppDataSource.getRepository(Module);
+    const resourceRepo = AppDataSource.getRepository(LessonResource);
+
+    const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
+    if (!lesson) throw new Error('Không tìm thấy bài học.');
+    const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id, course_id: courseId } as any });
+    if (!mod) throw new Error('Không tìm thấy bài học.');
+
+    const url = String(request.youtube_url || '').trim();
+    if (!url) throw new Error('Vui lòng nhập link YouTube.');
+
+    const entity = resourceRepo.create({
+      lesson_id: lessonId,
+      resource_type: 'video',
+      url,
+      filename: request.title ? String(request.title) : null,
+      mime_type: null,
+      size_bytes: null,
+      preview_url: null,
+    } as any);
+    const saved = await resourceRepo.save(entity as any);
+    return { id: Number((saved as any).id) };
+  }
+}

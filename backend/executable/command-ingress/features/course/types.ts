@@ -30,6 +30,25 @@ export type CourseListQuery = {
   sort_dir?: SortDir;
 };
 
+export type PublishedCourseListQuery = {
+  q?: string;
+  level?: string;
+  language?: string;
+  page?: number;
+  page_size?: number;
+  sort_by?: 'title' | 'created_at' | 'learners_count';
+  sort_dir?: SortDir;
+};
+
+export type EnrollmentStatus = 'active' | 'completed' | 'dropped' | 'expired';
+
+export type MyEnrollmentsQuery = {
+  page?: number;
+  page_size?: number;
+  status?: EnrollmentStatus;
+  q?: string;
+};
+
 export type LessonType = 'video' | 'text' | 'quiz' | 'assignment';
 
 export type CourseLessonItem = {
@@ -39,6 +58,8 @@ export type CourseLessonItem = {
   description: string | null;
   lesson_type: LessonType;
   order_index: number;
+  is_free_preview?: boolean;
+  duration_minutes?: number | null;
 };
 
 export type CourseModuleItem = {
@@ -53,6 +74,83 @@ export type CourseModuleItem = {
 export type CourseContentTree = {
   course_id: number;
   modules: CourseModuleItem[];
+};
+
+export type CourseDetail = {
+  id: number;
+  title: string;
+  slug: string;
+  short_description: string | null;
+  full_description: string | null;
+  thumbnail_url: string | null;
+  level: string;
+  language: string;
+  learning_objectives: string[] | null;
+  prerequisites: string[] | null;
+  status: CourseStatus;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+  learners_count: number;
+  modules_count: number;
+  lessons_count: number;
+  total_duration_minutes?: number | null;
+  is_enrolled?: boolean;
+  enrollment?: {
+    status: EnrollmentStatus;
+    enrolled_at: string;
+    completed_at: string | null;
+    progress_percent: number;
+  } | null;
+  instructors: {
+    id: number;
+    full_name: string;
+    avatar_url: string | null;
+    is_primary: boolean;
+  }[];
+  modules?: CourseModuleItem[];
+};
+
+export type PublishedCourseListItem = {
+  id: number;
+  title: string;
+  slug: string;
+  short_description: string | null;
+  thumbnail_url: string | null;
+  level: string;
+  language: string;
+  published_at: string | null;
+  learners_count: number;
+  modules_count: number;
+  lessons_count: number;
+  total_duration_minutes?: number | null;
+  is_enrolled?: boolean;
+  instructors: {
+    id: number;
+    full_name: string;
+    avatar_url: string | null;
+  }[];
+};
+
+export type MyEnrollmentListItem = {
+  id: number;
+  course_id: number;
+  course_title: string;
+  course_slug: string;
+  course_thumbnail: string | null;
+  course_level: string;
+  enrolled_at: string;
+  last_accessed_at: string | null;
+  status: EnrollmentStatus;
+  progress_percent: number;
+  completed_at: string | null;
+};
+
+export type MyEnrollmentsResult = {
+  items: MyEnrollmentListItem[];
+  page: number;
+  page_size: number;
+  total: number;
 };
 
 export type CreateModuleRequest = {
@@ -125,6 +223,13 @@ export type CourseListResult = {
   total: number;
 };
 
+export type PublishedCourseListResult = {
+  items: PublishedCourseListItem[];
+  page: number;
+  page_size: number;
+  total: number;
+};
+
 export type CourseDashboardStats = {
   total: number;
   published: number;
@@ -132,7 +237,26 @@ export type CourseDashboardStats = {
   archived: number;
 };
 
+export type EnrollmentResult = {
+  id: number;
+  course_id: number;
+  user_id: number;
+  status: EnrollmentStatus;
+  enrolled_at: string;
+  progress_percent: number;
+};
+
 export interface CourseService {
+  // Public methods
+  listPublishedCourses(subjectUserId: number | undefined, query: PublishedCourseListQuery): Promise<PublishedCourseListResult>;
+  getPublishedCourseBySlug(subjectUserId: number | undefined, slug: string): Promise<CourseDetail>;
+
+  // Enrollment methods
+  enrollCourse(subjectUserId: number, courseId: number): Promise<EnrollmentResult>;
+  listMyEnrollments(subjectUserId: number, query: MyEnrollmentsQuery): Promise<MyEnrollmentsResult>;
+  getMyLearningCourse(subjectUserId: number, courseId: number): Promise<CourseDetail>;
+
+  // Instructor methods
   createCourse(subjectUserId: number, request: CreateCourseRequest): Promise<{ id: number }>;
   listMyCourses(subjectUserId: number, query: CourseListQuery): Promise<CourseListResult>;
   getMyCourseDashboardStats(subjectUserId: number): Promise<CourseDashboardStats>;
@@ -171,5 +295,11 @@ export interface CourseService {
     courseId: number,
     resourceId: number
   ): Promise<{ url: string; mime_type: string | null; filename: string | null }>;
-}
 
+  createLessonYoutubeResource(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number,
+    request: { youtube_url: string; title?: string | null }
+  ): Promise<{ id: number }>;
+}

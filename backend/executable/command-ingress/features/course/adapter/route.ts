@@ -6,6 +6,15 @@ import initCourseUploadRoute from './upload';
 const initCourseRoute: (controller: CourseController) => express.Router = (controller) => {
   const router = express.Router();
 
+  // Public routes - Course catalog
+  router.route('/catalog').get(controller.listPublishedCourses.bind(controller));
+  router.route('/catalog/:slug').get(controller.getPublishedCourseBySlug.bind(controller));
+
+  // Enrollment routes
+  router.route('/:id/enroll').post(requireAuthorizedUser, controller.enrollCourse.bind(controller));
+  router.route('/my-enrollments').get(requireAuthorizedUser, controller.listMyEnrollments.bind(controller));
+  router.route('/:id/learning').get(requireAuthorizedUser, controller.getMyLearningCourse.bind(controller));
+
   // Create course
   router.route('/').post(requireAuthorizedUser, controller.createCourse.bind(controller));
 
@@ -23,6 +32,7 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
   router.route('/:id/lessons/:lessonId').patch(requireAuthorizedUser, controller.updateLesson.bind(controller));
   router.route('/:id/lessons/:lessonId').delete(requireAuthorizedUser, controller.deleteLesson.bind(controller));
   router.route('/:id/lessons/:lessonId/resources').get(requireAuthorizedUser, controller.listLessonResources.bind(controller));
+  router.route('/:id/lessons/:lessonId/resources/youtube').post(requireAuthorizedUser, controller.createLessonYoutubeResource.bind(controller));
   router.route('/:id/resources/:resourceId').delete(requireAuthorizedUser, controller.deleteLessonResource.bind(controller));
   router.route('/:id/resources/:resourceId/view').get(requireAuthorizedUser, controller.viewLessonResource.bind(controller));
 
@@ -38,4 +48,3 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
 };
 
 export default initCourseRoute;
-

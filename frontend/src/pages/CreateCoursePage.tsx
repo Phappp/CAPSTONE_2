@@ -4,6 +4,7 @@ import AvatarMenu from "../components/AvatarMenu";
 import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import { getAccessToken } from "../utils/authStorage";
+import "./CreateCoursePage.css";
 
 type Level = "beginner" | "intermediate" | "advanced";
 type Language = "vi" | "en";
@@ -120,7 +121,6 @@ export default function CreateCoursePage() {
   };
 
   const handleSave = async (publish: boolean) => {
-    // publish = false => lưu tạm (draft), true => tạo khóa học (vẫn draft theo BE)
     setIsSubmitting(true);
     setError(null);
     try {
@@ -165,9 +165,7 @@ export default function CreateCoursePage() {
       const data = await res.json().catch(() => ({}));
       const courseId = data?.id;
 
-      // Hiện tại: sau khi tạo -> quay về dashboard quản lý khóa học
       if (publish) navigate("/teacher/dashboard");
-      // TODO: nếu cần, có thể điều hướng qua trang edit/detail theo courseId
     } catch (e: any) {
       setError(e.message || "Đã xảy ra lỗi.");
     } finally {
@@ -202,9 +200,8 @@ export default function CreateCoursePage() {
           return (
             <div
               key={label}
-              className={`wizard-step ${isActive ? "active" : ""} ${
-                isDone ? "done" : ""
-              }`}
+              className={`wizard-step ${isActive ? "active" : ""} ${isDone ? "done" : ""
+                }`}
             >
               <div className="wizard-step-circle">{current}</div>
               <div className="wizard-step-label">{label}</div>
@@ -219,7 +216,7 @@ export default function CreateCoursePage() {
     <>
       <div className="form-group">
         <label className="form-label">
-          Tên khóa học <span style={{ color: "#e11d48" }}>*</span>
+          Tên khóa học <span className="required-star">*</span>
         </label>
         <input
           className="form-input"
@@ -231,7 +228,7 @@ export default function CreateCoursePage() {
 
       <div className="form-group">
         <label className="form-label">
-          Mô tả ngắn <span style={{ color: "#e11d48" }}>*</span>
+          Mô tả ngắn <span className="required-star">*</span>
         </label>
         <textarea
           className="form-input"
@@ -241,15 +238,7 @@ export default function CreateCoursePage() {
           value={payload.short_description}
           onChange={(e) => handleBasicChange("short_description", e.target.value)}
         />
-        <div
-          style={{
-            fontSize: "0.8rem",
-            color:
-              payload.short_description.length > 200 ? "#b91c1c" : "#6b7280",
-            marginTop: "0.25rem",
-            textAlign: "right",
-          }}
-        >
+        <div className="character-counter">
           {payload.short_description.length}/200
         </div>
       </div>
@@ -269,13 +258,7 @@ export default function CreateCoursePage() {
         </select>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "1rem",
-        }}
-      >
+      <div className="two-column-grid">
         <div className="form-group">
           <label className="form-label">Cấp độ</label>
           <select
@@ -322,10 +305,7 @@ export default function CreateCoursePage() {
       <div className="form-group">
         <label className="form-label">Mục tiêu học tập</label>
         {payload.learning_objectives.map((item, idx) => (
-          <div
-            key={idx}
-            style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}
-          >
+          <div key={idx} className="array-item">
             <input
               className="form-input"
               placeholder="Ví dụ: Hiểu cú pháp Python cơ bản"
@@ -355,10 +335,7 @@ export default function CreateCoursePage() {
       <div className="form-group">
         <label className="form-label">Yêu cầu tiên quyết</label>
         {payload.prerequisites.map((item, idx) => (
-          <div
-            key={idx}
-            style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}
-          >
+          <div key={idx} className="array-item">
             <input
               className="form-input"
               placeholder="Ví dụ: Không yêu cầu kiến thức lập trình"
@@ -391,7 +368,7 @@ export default function CreateCoursePage() {
     <>
       <div className="form-group">
         <label className="form-label">Ảnh bìa khóa học</label>
-        <p style={{ fontSize: "0.8rem", color: "#6b7280", marginBottom: "0.5rem" }}>
+        <p className="form-hint">
           Khuyến nghị kích thước 1280x720, dung lượng &lt; 2MB.
         </p>
         <input
@@ -418,13 +395,7 @@ export default function CreateCoursePage() {
 
   const renderStep4 = () => (
     <>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1.2fr 1fr 1fr",
-          gap: "1rem",
-        }}
-      >
+      <div className="three-column-grid">
         <div className="form-group">
           <label className="form-label">Giá khóa học (VNĐ)</label>
           <input
@@ -511,15 +482,7 @@ export default function CreateCoursePage() {
 
   return (
     <div className="dashboard-page">
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "1.5rem",
-          gap: "1rem",
-        }}
-      >
+      <div className="page-header">
         <div>
           <h1 className="dashboard-title">Tạo khóa học mới</h1>
           <p className="dashboard-subtitle">
@@ -572,7 +535,6 @@ export default function CreateCoursePage() {
               <button
                 type="button"
                 className="primary-button"
-                style={{ width: "auto", minWidth: "140px" }}
                 onClick={() => setStep((s) => Math.min(maxStep, s + 1))}
                 disabled={isSubmitting || (step === 1 && !canGoNextFromStep1)}
               >
@@ -584,7 +546,6 @@ export default function CreateCoursePage() {
               <button
                 type="button"
                 className="primary-button"
-                style={{ width: "auto", minWidth: "160px" }}
                 onClick={() => handleSave(true)}
                 disabled={isSubmitting || !canGoNextFromStep1}
               >
@@ -597,4 +558,3 @@ export default function CreateCoursePage() {
     </div>
   );
 }
-
