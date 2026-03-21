@@ -1,4 +1,4 @@
-import { Length, validate } from 'class-validator';
+import { Length, validate, IsOptional, IsNumber, Min, IsEnum } from 'class-validator';
 import { ValidationResult } from '../../../shared/validation';
 import { CourseSortBy, CourseStatus, LessonType, SortDir } from '../types';
 
@@ -95,6 +95,27 @@ export class ListMyCoursesQuery extends RequestDto {
   }
 }
 
+export class ListPublishedCoursesQuery extends RequestDto {
+  q?: string;
+  level?: string;
+  language?: string;
+  page?: number;
+  page_size?: number;
+  sort_by?: 'title' | 'created_at' | 'learners_count';
+  sort_dir?: SortDir;
+
+  constructor(query: any) {
+    super();
+    if (query?.q != null) this.q = String(query.q);
+    if (query?.level != null) this.level = String(query.level);
+    if (query?.language != null) this.language = String(query.language);
+    if (query?.page != null) this.page = Number(query.page);
+    if (query?.page_size != null) this.page_size = Number(query.page_size);
+    if (query?.sort_by != null) this.sort_by = String(query.sort_by) as any;
+    if (query?.sort_dir != null) this.sort_dir = String(query.sort_dir).toLowerCase() as any;
+  }
+}
+
 export class SetCourseStatusBody extends RequestDto {
   @Length(1, 20)
   status: CourseStatus;
@@ -175,3 +196,14 @@ export class ReorderContentBody extends RequestDto {
   }
 }
 
+export class CreateLessonYoutubeResourceBody extends RequestDto {
+  @Length(5, 500)
+  youtube_url: string;
+  title?: string | null;
+
+  constructor(body: any) {
+    super();
+    this.youtube_url = String(body?.youtube_url || '');
+    this.title = body?.title != null ? String(body.title) : null;
+  }
+}

@@ -25,6 +25,8 @@ export const COURSES_API = {
     `${COURSES_API_BASE}/${id}/lessons/${lessonId}`,
   listLessonResources: (id: number | string, lessonId: number | string) =>
     `${COURSES_API_BASE}/${id}/lessons/${lessonId}/resources`,
+  createYoutubeLessonResource: (id: number | string, lessonId: number | string) =>
+    `${COURSES_API_BASE}/${id}/lessons/${lessonId}/resources/youtube`,
   deleteLessonResource: (id: number | string, resourceId: number | string) =>
     `${COURSES_API_BASE}/${id}/resources/${resourceId}`,
   viewLessonResource: (courseId: number | string, resourceId: number | string) =>
@@ -36,5 +38,13 @@ export const COURSES_API = {
   lessonQuiz: (id: number | string, lessonId: number | string) =>
     `${COURSES_API_BASE}/${id}/lessons/${lessonId}/quiz`,
   uploadCourseThumbnail: () => `${COURSES_API_BASE}/thumbnails/upload`,
+   // NEW: Catalog & Enrollment endpoints
+  catalog: `${COURSES_API_BASE}/catalog`,
+  catalogDetail: (slug: string) => `${COURSES_API_BASE}/catalog/${slug}`,
+  enroll: (id: number | string) => `${COURSES_API_BASE}/${id}/enroll`,
+  enrollmentStatus: (id: number | string) => `${COURSES_API_BASE}/${id}/enrollment-status`,
+  myEnrollments: `${COURSES_API_BASE}/my-enrollments`,
+  // Backward-compatible alias (avoid breaking older code paths)
+  myEnrolled: `${COURSES_API_BASE}/my-enrollments`,
 } as const;
 

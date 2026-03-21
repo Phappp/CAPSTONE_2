@@ -1,0 +1,60 @@
+/* Radio Group */
+.radio-group {
+    display: flex;
+    gap: 1rem;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+
+/* OTP Form */
+.otp-form {
+    margin-top: 1.5rem;
+}
+
+.otp-input-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.otp-input {
+    width: 2.5rem;
+    text-align: center;
+}
+
+.otp-hint {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: #607489;
+}
+
+/* Success Box */
+.success-box {
+    color: #256029;
+    background: #edf7ed;
+    border: 1px solid rgba(76, 175, 80, 0.3);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin: 12px 0;
+    font-size: 0.85rem;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .otp-input-group {
+        gap: 0.25rem;
+    }
+
+    .otp-input {
+        width: 2rem;
+    }
+
+    .radio-group {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}

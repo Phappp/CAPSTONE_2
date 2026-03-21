@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { useAuth } from "../contexts/Auth";
 import { useNavigate } from "react-router-dom";
+import "./LoginPage.css";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -78,7 +79,6 @@ export default function LoginPage() {
               type="button"
               className="link-button"
               onClick={() => {
-                // TODO: điều hướng sang màn hình "Quên mật khẩu" khi có
                 alert("Chức năng quên mật khẩu sẽ được triển khai sau.");
               }}
             >
@@ -97,14 +97,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div
-          style={{
-            marginTop: "0.9rem",
-            fontSize: "0.85rem",
-            textAlign: "center",
-            color: "#607489",
-          }}
-        >
+        <div className="auth-redirect">
           Chưa có tài khoản?{" "}
           <button
             type="button"
@@ -118,5 +111,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
-

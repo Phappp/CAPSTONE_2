@@ -1,9 +1,11 @@
+// ProfilePage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AvatarMenu from "../components/AvatarMenu";
 import { url } from "../baseUrl";
 import { PROFILE_API } from "../api/profile";
 import { useAuth } from "../contexts/Auth";
+import "./ProfilePage.css"; // Import CSS file
 
 type ProfileTab = "info" | "password" | "security";
 
@@ -356,46 +358,21 @@ export default function ProfilePage() {
   );
 
   const renderAvatarSection = () => (
-    <div
-      style={{
-        display: "flex",
-        gap: "1.5rem",
-        alignItems: "center",
-        marginBottom: "1.5rem",
-      }}
-    >
-      <div
-        style={{
-          width: 96,
-          height: 96,
-          borderRadius: "50%",
-          overflow: "hidden",
-          border: "3px solid rgba(40,140,200,0.3)",
-          background:
-            "linear-gradient(135deg, rgba(40,140,200,0.95), rgba(110,180,110,0.9))",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: "2rem",
-          color: "#ffffff",
-          fontWeight: 600,
-        }}
-      >
+    <div className="profile-avatar-container">
+      <div className="profile-avatar-wrapper">
         {avatarPreview ? (
           <img
             src={avatarPreview}
             alt="Avatar"
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            className="profile-avatar-img"
           />
         ) : (
           (profile?.full_name?.[0] || profile?.email?.[0] || "U").toUpperCase()
         )}
       </div>
-      <div>
-        <div style={{ marginBottom: "0.5rem", fontWeight: 500 }}>
-          Ảnh đại diện
-        </div>
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+      <div className="profile-avatar-info">
+        <div className="profile-avatar-label">Ảnh đại diện</div>
+        <div className="profile-avatar-actions">
           <label
             className="primary-button"
             style={{
@@ -433,13 +410,7 @@ export default function ProfilePage() {
             {avatarDeleting ? "Đang xóa..." : "Xóa ảnh"}
           </button>
         </div>
-        <div
-          style={{
-            marginTop: "0.5rem",
-            fontSize: "0.8rem",
-            color: "#6b7280",
-          }}
-        >
+        <div className="profile-avatar-hint">
           Hỗ trợ JPEG, PNG, GIF. Dung lượng tối đa 5MB.
         </div>
       </div>
@@ -450,13 +421,7 @@ export default function ProfilePage() {
     <div className="wizard-body">
       {renderAvatarSection()}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1.2fr)",
-          gap: "2rem",
-        }}
-      >
+      <div className="profile-two-column">
         <div>
           <div className="form-group">
             <label className="form-label">Họ và tên</label>
@@ -502,51 +467,21 @@ export default function ProfilePage() {
         </div>
 
         <div>
-          <div
-            style={{
-              padding: "1rem 1.25rem",
-              borderRadius: 16,
-              background:
-                "radial-gradient(circle at top left, rgba(40,140,200,0.18), transparent 60%), #ffffff",
-              boxShadow:
-                "0 18px 45px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15,23,42,0.03)",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "0.95rem",
-                fontWeight: 600,
-                marginBottom: "0.5rem",
-              }}
-            >
-              Thông tin tài khoản
-            </div>
-            <div
-              style={{
-                fontSize: "0.85rem",
-                color: "#6b7280",
-                marginBottom: "0.75rem",
-              }}
-            >
+          <div className="profile-info-card">
+            <div className="profile-info-card-title">Thông tin tài khoản</div>
+            <div className="profile-info-card-subtitle">
               Quản lý các thông tin cơ bản của hồ sơ cá nhân.
             </div>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-                fontSize: "0.85rem",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ color: "#6b7280" }}>Ngày tham gia</span>
-                <span style={{ fontWeight: 500 }}>
+            <div className="profile-info-detail">
+              <div className="profile-info-row">
+                <span className="profile-info-label">Ngày tham gia</span>
+                <span className="profile-info-value">
                   {formattedJoinedAt || "-"}
                 </span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ color: "#6b7280" }}>Vai trò</span>
-                <span style={{ fontWeight: 500 }}>
+              <div className="profile-info-row">
+                <span className="profile-info-label">Vai trò</span>
+                <span className="profile-info-value">
                   {profile?.roles?.join(", ") || "Người dùng"}
                 </span>
               </div>
@@ -554,52 +489,30 @@ export default function ProfilePage() {
           </div>
 
           {profile?.statistics && (
-            <div
-              style={{
-                marginTop: "1rem",
-                padding: "1rem 1.25rem",
-                borderRadius: 16,
-                background: "#f9fafb",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "0.95rem",
-                  fontWeight: 600,
-                  marginBottom: "0.75rem",
-                }}
-              >
-                Thống kê học tập
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                  gap: "0.75rem",
-                  fontSize: "0.85rem",
-                }}
-              >
+            <div className="profile-stats-card">
+              <div className="profile-stats-title">Thống kê học tập</div>
+              <div className="profile-stats-grid">
                 <div>
-                  <div style={{ color: "#6b7280" }}>Khóa đã đăng ký</div>
-                  <div style={{ fontWeight: 600 }}>
+                  <div className="profile-stat-label">Khóa đã đăng ký</div>
+                  <div className="profile-stat-value">
                     {profile.statistics.courses_enrolled}
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: "#6b7280" }}>Khóa đã hoàn thành</div>
-                  <div style={{ fontWeight: 600 }}>
+                  <div className="profile-stat-label">Khóa đã hoàn thành</div>
+                  <div className="profile-stat-value">
                     {profile.statistics.courses_completed}
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: "#6b7280" }}>Bài nộp</div>
-                  <div style={{ fontWeight: 600 }}>
+                  <div className="profile-stat-label">Bài nộp</div>
+                  <div className="profile-stat-value">
                     {profile.statistics.assignments_submitted}
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: "#6b7280" }}>Điểm trung bình</div>
-                  <div style={{ fontWeight: 600 }}>
+                  <div className="profile-stat-label">Điểm trung bình</div>
+                  <div className="profile-stat-value">
                     {profile.statistics.average_score}
                   </div>
                 </div>
@@ -645,11 +558,7 @@ export default function ProfilePage() {
 
   const renderPasswordTab = () => (
     <div className="wizard-body">
-      <div
-        style={{
-          maxWidth: 520,
-        }}
-      >
+      <div className="profile-password-container">
         <div className="form-group">
           <label className="form-label">Mật khẩu hiện tại</label>
           <input
@@ -684,24 +593,12 @@ export default function ProfilePage() {
         {newPassword &&
           confirmPassword &&
           newPassword !== confirmPassword && (
-            <div
-              style={{
-                fontSize: "0.8rem",
-                color: "#b91c1c",
-                marginBottom: "0.75rem",
-              }}
-            >
+            <div className="profile-password-error">
               Mật khẩu mới và xác nhận không khớp.
             </div>
           )}
 
-        <div
-          style={{
-            fontSize: "0.8rem",
-            color: "#6b7280",
-            marginBottom: "1.25rem",
-          }}
-        >
+        <div className="profile-password-hint">
           * Chỉ tạo UI - chức năng đổi mật khẩu sẽ được kết nối với API sau.
         </div>
 
@@ -724,230 +621,82 @@ export default function ProfilePage() {
 
   const renderSecurityTab = () => (
     <div className="wizard-body">
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr)",
-          gap: "2rem",
-        }}
-      >
+      <div className="profile-security-two-column">
         <div>
-          <div
-            style={{
-              marginBottom: "1.25rem",
-              fontSize: "0.95rem",
-              fontWeight: 600,
-            }}
-          >
-            Cài đặt bảo mật
-          </div>
+          <div className="profile-security-section-title">Cài đặt bảo mật</div>
 
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "1rem",
-            }}
-          >
-            <div
-              style={{
-                padding: "0.75rem 1rem",
-                borderRadius: 12,
-                border: "1px solid #e5e7eb",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "1rem",
-              }}
-            >
+          <div className="profile-security-settings">
+            <div className="profile-security-item">
               <div>
-                <div style={{ fontSize: "0.9rem", fontWeight: 500 }}>
+                <div className="profile-security-item-title">
                   Xác thực hai lớp (2FA)
                 </div>
-                <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
+                <div className="profile-security-item-desc">
                   Thêm một lớp bảo mật khi đăng nhập bằng mã OTP.
                 </div>
               </div>
-              <label
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  cursor: "pointer",
-                }}
-              >
+              <label className="profile-toggle">
                 <input
                   type="checkbox"
                   checked={twoFactorEnabled}
                   onChange={(e) => setTwoFactorEnabled(e.target.checked)}
-                  style={{ display: "none" }}
+                  className="profile-toggle-input"
                 />
-                <div
-                  style={{
-                    width: 42,
-                    height: 22,
-                    borderRadius: 999,
-                    background: twoFactorEnabled ? "#16a34a" : "#d1d5db",
-                    position: "relative",
-                    transition: "all 0.2s ease",
-                  }}
-                >
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: 3,
-                      left: twoFactorEnabled ? 22 : 3,
-                      width: 16,
-                      height: 16,
-                      borderRadius: "50%",
-                      background: "#ffffff",
-                      boxShadow: "0 1px 3px rgba(15, 23, 42, 0.3)",
-                      transition: "all 0.2s ease",
-                    }}
-                  />
+                <div className={`profile-toggle-slider ${twoFactorEnabled ? "active" : ""}`}>
+                  <div className={`profile-toggle-knob ${twoFactorEnabled ? "right" : "left"}`} />
                 </div>
               </label>
             </div>
 
-            <div
-              style={{
-                padding: "0.75rem 1rem",
-                borderRadius: 12,
-                border: "1px solid #e5e7eb",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "1rem",
-              }}
-            >
+            <div className="profile-security-item">
               <div>
-                <div style={{ fontSize: "0.9rem", fontWeight: 500 }}>
+                <div className="profile-security-item-title">
                   Thông báo đăng nhập mới
                 </div>
-                <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                  Gửi email khi tài khoản đăng nhập trên thiết bị hoặc vị trí
-                  lạ.
+                <div className="profile-security-item-desc">
+                  Gửi email khi tài khoản đăng nhập trên thiết bị hoặc vị trí lạ.
                 </div>
               </div>
-              <label
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  cursor: "pointer",
-                }}
-              >
+              <label className="profile-toggle">
                 <input
                   type="checkbox"
                   checked={loginNotification}
                   onChange={(e) => setLoginNotification(e.target.checked)}
-                  style={{ display: "none" }}
+                  className="profile-toggle-input"
                 />
-                <div
-                  style={{
-                    width: 42,
-                    height: 22,
-                    borderRadius: 999,
-                    background: loginNotification ? "#16a34a" : "#d1d5db",
-                    position: "relative",
-                    transition: "all 0.2s ease",
-                  }}
-                >
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: 3,
-                      left: loginNotification ? 22 : 3,
-                      width: 16,
-                      height: 16,
-                      borderRadius: "50%",
-                      background: "#ffffff",
-                      boxShadow: "0 1px 3px rgba(15, 23, 42, 0.3)",
-                      transition: "all 0.2s ease",
-                    }}
-                  />
+                <div className={`profile-toggle-slider ${loginNotification ? "active" : ""}`}>
+                  <div className={`profile-toggle-knob ${loginNotification ? "right" : "left"}`} />
                 </div>
               </label>
             </div>
 
-            <div
-              style={{
-                padding: "0.75rem 1rem",
-                borderRadius: 12,
-                border: "1px solid #e5e7eb",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "1rem",
-              }}
-            >
+            <div className="profile-security-item">
               <div>
-                <div style={{ fontSize: "0.9rem", fontWeight: 500 }}>
+                <div className="profile-security-item-title">
                   Tin cậy thiết bị này
                 </div>
-                <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
+                <div className="profile-security-item-desc">
                   Bỏ qua một số bước xác minh trên thiết bị hiện tại.
                 </div>
               </div>
-              <label
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  cursor: "pointer",
-                }}
-              >
+              <label className="profile-toggle">
                 <input
                   type="checkbox"
                   checked={deviceTrust}
                   onChange={(e) => setDeviceTrust(e.target.checked)}
-                  style={{ display: "none" }}
+                  className="profile-toggle-input"
                 />
-                <div
-                  style={{
-                    width: 42,
-                    height: 22,
-                    borderRadius: 999,
-                    background: deviceTrust ? "#16a34a" : "#d1d5db",
-                    position: "relative",
-                    transition: "all 0.2s ease",
-                  }}
-                >
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: 3,
-                      left: deviceTrust ? 22 : 3,
-                      width: 16,
-                      height: 16,
-                      borderRadius: "50%",
-                      background: "#ffffff",
-                      boxShadow: "0 1px 3px rgba(15, 23, 42, 0.3)",
-                      transition: "all 0.2s ease",
-                    }}
-                  />
+                <div className={`profile-toggle-slider ${deviceTrust ? "active" : ""}`}>
+                  <div className={`profile-toggle-knob ${deviceTrust ? "right" : "left"}`} />
                 </div>
               </label>
             </div>
           </div>
         </div>
 
-        <div
-          style={{
-            padding: "1rem 1.25rem",
-            borderRadius: 16,
-            background: "#f9fafb",
-            fontSize: "0.85rem",
-            color: "#4b5563",
-          }}
-        >
-          <div
-            style={{
-              fontSize: "0.95rem",
-              fontWeight: 600,
-              marginBottom: "0.75rem",
-            }}
-          >
-            Gợi ý bảo mật
-          </div>
-          <ul style={{ paddingLeft: "1.1rem", margin: 0, display: "grid", gap: "0.25rem" }}>
+        <div className="profile-security-tips">
+          <div className="profile-security-tips-title">Gợi ý bảo mật</div>
+          <ul className="profile-security-tips-list">
             <li>Không chia sẻ mật khẩu cho bất kỳ ai.</li>
             <li>Sử dụng mật khẩu mạnh, có chữ hoa, chữ thường, số và ký tự đặc biệt.</li>
             <li>Kích hoạt 2FA để bảo vệ tài khoản tốt hơn.</li>
@@ -974,71 +723,21 @@ export default function ProfilePage() {
   const renderCropperModal = () => {
     if (!showCropper || !avatarPreview) return null;
     return (
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(15,23,42,0.55)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 40,
-        }}
-        onClick={() => setShowCropper(false)}
-      >
-        <div
-          style={{
-            width: "min(420px, 90vw)",
-            background: "#ffffff",
-            borderRadius: 16,
-            padding: "1.25rem 1.5rem",
-            boxShadow:
-              "0 20px 50px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(15,23,42,0.06)",
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div
-            style={{
-              fontSize: "0.95rem",
-              fontWeight: 600,
-              marginBottom: "0.75rem",
-            }}
-          >
-            Cắt ảnh đại diện
-          </div>
-          <div
-            style={{
-              fontSize: "0.8rem",
-              color: "#6b7280",
-              marginBottom: "0.75rem",
-            }}
-          >
+      <div className="profile-cropper-modal-overlay" onClick={() => setShowCropper(false)}>
+        <div className="profile-cropper-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="profile-cropper-title">Cắt ảnh đại diện</div>
+          <div className="profile-cropper-hint">
             (Prototype) Tính năng crop chi tiết sẽ được bổ sung sau. Hiện tại
             ảnh sẽ được sử dụng như kích thước gốc.
           </div>
-          <div
-            style={{
-              width: "100%",
-              aspectRatio: "1 / 1",
-              borderRadius: 12,
-              overflow: "hidden",
-              border: "1px solid #e5e7eb",
-              marginBottom: "1rem",
-            }}
-          >
+          <div className="profile-cropper-preview">
             <img
               src={avatarPreview}
               alt="Avatar preview"
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
           </div>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: "0.75rem",
-            }}
-          >
+          <div className="profile-cropper-actions">
             <button
               type="button"
               className="secondary-button"
@@ -1096,14 +795,7 @@ export default function ProfilePage() {
         {renderTabHeader()}
 
         {loading ? (
-          <div
-            style={{
-              padding: "2rem 1.5rem",
-              textAlign: "center",
-              color: "#6b7280",
-              fontSize: "0.9rem",
-            }}
-          >
+          <div className="profile-loading">
             Đang tải thông tin hồ sơ...
           </div>
         ) : (
@@ -1116,17 +808,7 @@ export default function ProfilePage() {
           </div>
         )}
         {successMessage && (
-          <div
-            style={{
-              marginTop: "1rem",
-              padding: "0.75rem 1rem",
-              borderRadius: 12,
-              background: "rgba(34,197,94,0.08)",
-              color: "#166534",
-              fontSize: "0.85rem",
-              border: "1px solid rgba(34,197,94,0.35)",
-            }}
-          >
+          <div className="profile-success-message">
             {successMessage}
           </div>
         )}
@@ -1136,4 +818,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-

@@ -7,8 +7,10 @@ import { CourseService, CourseStatus } from '../types';
 import {
   CreateCourseBody,
   CreateLessonBody,
+  CreateLessonYoutubeResourceBody,
   CreateModuleBody,
   ListMyCoursesQuery,
+  ListPublishedCoursesQuery,
   ReorderContentBody,
   SetCourseStatusBody,
   UpdateCourseBody,
@@ -24,6 +26,73 @@ export class CourseController extends BaseController {
     this.service = service;
   }
 
+  // Public routes - Course catalog
+  async listPublishedCourses(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const query = new ListPublishedCoursesQuery(req.query);
+      const subjectRaw = (req as any)?.getSubject?.();
+      const uid = subjectRaw != null ? Number(subjectRaw) : undefined;
+      const result = await this.service.listPublishedCourses(uid, {
+        q: query.q,
+        level: query.level,
+        language: query.language,
+        page: query.page,
+        page_size: query.page_size,
+        sort_by: query.sort_by,
+        sort_dir: query.sort_dir,
+      });
+      res.status(200).json(result);
+    });
+  }
+
+  async getPublishedCourseBySlug(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const slug = req.params.slug;
+      const subjectRaw = (req as any)?.getSubject?.();
+      const uid = subjectRaw != null ? Number(subjectRaw) : undefined;
+      const course = await this.service.getPublishedCourseBySlug(uid, slug);
+      res.status(200).json(course);
+    });
+  }
+
+  // Enrollment routes
+  async enrollCourse(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const enrollment = await this.service.enrollCourse(uid, courseId);
+      res.status(201).json(enrollment);
+    });
+  }
+
+  async listMyEnrollments(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const page = req.query.page ? Number(req.query.page) : 1;
+      const page_size = req.query.page_size ? Number(req.query.page_size) : 12;
+      const status = req.query.status as string;
+      const q = req.query.q != null ? String(req.query.q) : undefined;
+
+      const result = await this.service.listMyEnrollments(uid, {
+        page,
+        page_size,
+        status: status as any,
+        q,
+      });
+      res.status(200).json(result);
+    });
+  }
+
+  async getMyLearningCourse(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const course = await this.service.getMyLearningCourse(uid, courseId);
+      res.status(200).json(course);
+    });
+  }
+
+  // Instructor routes
   async createCourse(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
       const body = new CreateCourseBody(req.body);
@@ -208,6 +277,22 @@ export class CourseController extends BaseController {
     });
   }
 
+  async createLessonYoutubeResource(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const body = new CreateLessonYoutubeResourceBody(req.body);
+      const validateResult = await body.validate();
+      if (!validateResult.ok) {
+        responseValidationError(res, validateResult.errors[0]);
+        return;
+      }
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const result = await this.service.createLessonYoutubeResource(uid, courseId, lessonId, body as any);
+      res.status(201).json({ id: result.id });
+    });
+  }
+
   async deleteLessonResource(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
       const uid = Number(req.getSubject());
@@ -250,4 +335,3 @@ export class CourseController extends BaseController {
     });
   }
 }
-

@@ -5,6 +5,7 @@ import {
   apiVerifyRegistrationOtp,
 } from "../services/authClient";
 import { MESSAGES } from "../constants/messages";
+import "./RegisterPage.css";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -60,7 +61,6 @@ export default function RegisterPage() {
       setSuccess(
         "Kích hoạt tài khoản thành công. Bạn có thể đăng nhập bằng email và mật khẩu."
       );
-      // Sau khi xác thực thành công, điều hướng về trang đăng nhập
       setTimeout(() => {
         navigate("/");
       }, 1500);
@@ -151,8 +151,8 @@ export default function RegisterPage() {
 
             <div className="form-group">
               <label className="form-label">Vai trò</label>
-              <div style={{ display: "flex", gap: "1rem" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div className="radio-group">
+                <label className="radio-label">
                   <input
                     type="radio"
                     name="role"
@@ -162,7 +162,7 @@ export default function RegisterPage() {
                   />
                   <span>Learner</span>
                 </label>
-                <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <label className="radio-label">
                   <input
                     type="radio"
                     name="role"
@@ -188,12 +188,12 @@ export default function RegisterPage() {
         )}
 
         {isOtpStep && (
-          <form onSubmit={handleVerifyOtp} style={{ marginTop: "1.5rem" }}>
+          <form onSubmit={handleVerifyOtp} className="otp-form">
             <div className="form-group">
               <label htmlFor="otp" className="form-label">
                 Mã OTP
               </label>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
+              <div className="otp-input-group">
                 {otpDigits.map((digit, idx) => (
                   <input
                     key={idx}
@@ -204,27 +204,19 @@ export default function RegisterPage() {
                     value={digit}
                     onChange={(e) => handleOtpChange(idx, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                    className="form-input"
-                    style={{ width: "2.5rem", textAlign: "center" }}
+                    className="form-input otp-input"
                     required
                   />
                 ))}
               </div>
-              <p style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "#607489" }}>
+              <p className="otp-hint">
                 Nhập mã OTP 6 chữ số được gửi tới email của bạn.
               </p>
             </div>
 
             {error && <div className="error-box">{error}</div>}
             {success && (
-              <div
-                className="error-box"
-                style={{
-                  color: "#256029",
-                  background: "#edf7ed",
-                  borderColor: "rgba(76, 175, 80, 0.3)",
-                }}
-              >
+              <div className="success-box">
                 {success}
               </div>
             )}
@@ -239,14 +231,7 @@ export default function RegisterPage() {
           </form>
         )}
 
-        <div
-          style={{
-            marginTop: "0.9rem",
-            fontSize: "0.85rem",
-            textAlign: "center",
-            color: "#607489",
-          }}
-        >
+        <div className="auth-redirect">
           Đã có tài khoản?{" "}
           <button
             type="button"
@@ -260,5 +245,3 @@ export default function RegisterPage() {
     </div>
   );
 }
-
-
