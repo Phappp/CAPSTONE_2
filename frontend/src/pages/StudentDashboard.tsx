@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AvatarMenu from '../components/AvatarMenu';
 import { COURSES_API } from '../api/courses';
 import { url } from '../baseUrl';
 import { getAccessToken } from '../utils/authStorage';
+import { useAuth } from '../contexts/Auth';
 import './StudentDashboard.css';
 import {
   Clock,
@@ -16,7 +17,10 @@ import {
   TrendingUp,
   Loader2,
   AlertCircle,
-  Sparkles
+  Sparkles,
+  Users,
+  Layers3,
+  ListChecks
 } from 'lucide-react';
 
 // Types
@@ -32,6 +36,9 @@ interface Course {
   status: 'active' | 'completed' | 'dropped' | 'expired';
   progress_percent: number;
   completed_at: string | null;
+  learners_count?: number;
+  modules_count?: number;
+  lessons_count?: number;
 }
 
 interface SuggestedCourse {
@@ -42,6 +49,9 @@ interface SuggestedCourse {
   thumbnail_url: string | null;
   level: string;
   is_enrolled?: boolean;
+  learners_count?: number;
+  modules_count?: number;
+  lessons_count?: number;
 }
 
 interface ApiResponse {
@@ -67,6 +77,8 @@ interface Stats {
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const displayName = user?.full_name?.trim() || user?.email || 'bạn';
 
   // States cho khóa học của tôi
   const [courses, setCourses] = useState<Course[]>([]);
@@ -158,7 +170,8 @@ export default function StudentDashboard() {
       });
       const data = (await res.json().catch(() => ({}))) as Partial<CatalogResponse> & { message?: string };
       if (!res.ok) throw new Error(data?.message || 'Không thể tải gợi ý khóa học');
-      setSuggested(Array.isArray(data.items) ? (data.items as SuggestedCourse[]) : []);
+      const items = Array.isArray(data.items) ? (data.items as SuggestedCourse[]) : [];
+      setSuggested(items.filter((course) => !course.is_enrolled));
     } catch (err: any) {
       setSuggestedError(err?.message || 'Không thể tải gợi ý khóa học');
       setSuggested([]);
@@ -224,6 +237,22 @@ export default function StudentDashboard() {
     });
   };
 
+  const toDisplayCount = (value?: number) => {
+    if (typeof value !== 'number' || Number.isNaN(value)) return '--';
+    return String(value);
+  };
+
+  const visibleSuggested = useMemo(() => {
+    const enrolledIds = new Set(courses.map((c) => c.course_id));
+    const enrolledSlugs = new Set(courses.map((c) => c.course_slug));
+    return suggested.filter((course) => {
+      if (course.is_enrolled) return false;
+      if (enrolledIds.has(course.id)) return false;
+      if (enrolledSlugs.has(course.slug)) return false;
+      return true;
+    });
+  }, [suggested, courses]);
+
   return (
     <div className="studentDash">
       {/* Header */}
@@ -242,7 +271,7 @@ export default function StudentDashboard() {
       <div className="studentDash__container studentDash__content">
         {/* Welcome Section */}
         <div className="studentDash__hero">
-          <h2 className="studentDash__heroTitle">Khóa học của tôi</h2>
+          <h2 className="studentDash__heroTitle">Xin chào, {displayName}</h2>
           <p className="studentDash__heroDesc">Quản lý và theo dõi tiến độ học tập của bạn</p>
         </div>
 
@@ -437,18 +466,20 @@ export default function StudentDashboard() {
                           </div>
                         </div>
 
-                        {/* Meta info */}
-                        <div className="courseCard__meta">
-                          <div className="metaItem">
-                            <Clock width={16} height={16} />
-                            <span>Đăng ký: {formatDate(course.enrolled_at)}</span>
+                        {/* Course stats */}
+                        <div className="courseCard__quickStats">
+                          <div className="quickStat">
+                            <Users size={14} />
+                            <span>{toDisplayCount(course.learners_count)}</span>
                           </div>
-                          {course.last_accessed_at && (
-                            <div className="metaItem">
-                              <PlayCircle width={16} height={16} />
-                              <span>Học gần nhất: {formatDate(course.last_accessed_at)}</span>
-                            </div>
-                          )}
+                          <div className="quickStat">
+                            <Layers3 size={14} />
+                            <span>{toDisplayCount(course.modules_count)}</span>
+                          </div>
+                          <div className="quickStat">
+                            <ListChecks size={14} />
+                            <span>{toDisplayCount(course.lessons_count)}</span>
+                          </div>
                         </div>
 
                         {/* Actions */}
@@ -511,7 +542,7 @@ export default function StudentDashboard() {
         </div>
 
         {/* PHẦN 2: GỢI Ý KHÓA HỌC - RIÊNG BIỆT */}
-        {!suggestedLoading && !suggestedError && suggested.length > 0 && (
+        {!suggestedLoading && !suggestedError && visibleSuggested.length > 0 && (
           <div className="studentDash__suggested">
             <div className="studentDash__suggestedHeader">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -549,7 +580,7 @@ export default function StudentDashboard() {
               </div>
             ) : (
               <div className="studentDash__grid">
-                {suggested.map((course) => {
+                {visibleSuggested.map((course) => {
                   const level = getLevelBadge(course.level);
                   return (
                     <div key={course.id} className="courseCard">
@@ -567,18 +598,19 @@ export default function StudentDashboard() {
                       </div>
                       <div className="courseCard__body">
                         <h3 className="courseCard__title">{course.title}</h3>
-                        <div style={{
-                          color: '#6b7280',
-                          fontSize: 13,
-                          marginBottom: 14,
-                          lineHeight: 1.4,
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                          minHeight: '36px'
-                        }}>
-                          {course.short_description || 'Chưa có mô tả'}
+                        <div className="courseCard__quickStats">
+                          <div className="quickStat">
+                            <Users size={14} />
+                            <span>{toDisplayCount(course.learners_count)}</span>
+                          </div>
+                          <div className="quickStat">
+                            <Layers3 size={14} />
+                            <span>{toDisplayCount(course.modules_count)}</span>
+                          </div>
+                          <div className="quickStat">
+                            <ListChecks size={14} />
+                            <span>{toDisplayCount(course.lessons_count)}</span>
+                          </div>
                         </div>
                         <div className="courseCard__actions">
                           <button

@@ -7,6 +7,7 @@ export interface Profile {
     bio: string | null;
     created_at: string;
     roles: string[];
+    primary_role?: string | null;
     statistics?: {
       courses_enrolled: number;
       courses_completed: number;

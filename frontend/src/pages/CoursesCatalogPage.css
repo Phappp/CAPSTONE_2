@@ -34,14 +34,15 @@
 
 .catalog__title {
   margin: 0;
-  font-size: 28px;
-  font-weight: 900;
-  letter-spacing: -0.02em;
+  font-size: var(--text-hero-title-size);
+  font-weight: var(--text-hero-title-weight);
+  letter-spacing: var(--text-hero-title-tracking);
 }
 
 .catalog__subtitle {
   margin: 6px 0 0 0;
-  color: #6b7280;
+  color: var(--text-subtitle-color);
+  font-size: var(--text-subtitle-size);
 }
 
 .catalog__filters {
@@ -64,7 +65,7 @@
   border: 1px solid #d1d5db;
   border-radius: 12px;
   padding: 10px 12px;
-  font-size: 14px;
+  font-size: var(--text-subtitle-size);
   outline: none;
   background: #fff;
 }
@@ -88,8 +89,8 @@
   border: 1px solid transparent;
   border-radius: 12px;
   padding: 10px 14px;
-  font-size: 14px;
-  font-weight: 800;
+  font-size: var(--text-subtitle-size);
+  font-weight: 700;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -170,8 +171,8 @@
 
 .card__title {
   margin: 0 0 8px 0;
-  font-size: 16px;
-  font-weight: 900;
+  font-size: var(--text-card-title-size);
+  font-weight: 700;
   line-height: 1.25;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -181,8 +182,8 @@
 
 .card__desc {
   margin: 0 0 10px 0;
-  color: #6b7280;
-  font-size: 13px;
+  color: var(--text-subtitle-color);
+  font-size: var(--text-caption-size);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -224,8 +225,8 @@
 }
 
 .muted {
-  color: #6b7280;
-  font-size: 13px;
+  color: var(--text-subtitle-color);
+  font-size: var(--text-caption-size);
 }
 
 .errorBox {

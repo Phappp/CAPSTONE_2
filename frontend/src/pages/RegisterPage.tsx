@@ -1,27 +1,35 @@
-import { FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { FormEvent, useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   apiRegister,
   apiVerifyRegistrationOtp,
 } from "../services/authClient";
+import GoogleLoginButton from "../components/GoogleLoginButton";
 import { MESSAGES } from "../constants/messages";
 import "./RegisterPage.css";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"learner" | "course_manager">("learner");
-  const [otpDigits, setOtpDigits] = useState<string[]>(
-    Array(6).fill("")
-  );
+  const [otpDigits, setOtpDigits] = useState<string[]>(Array(6).fill(""));
   const [isOtpStep, setIsOtpStep] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const otp = otpDigits.join("");
+
+  // Xử lý lỗi từ redirect Google
+  useEffect(() => {
+    const errorMsg = searchParams.get("error");
+    if (errorMsg) {
+      setError(decodeURIComponent(errorMsg));
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -94,6 +102,10 @@ export default function RegisterPage() {
     }
   };
 
+  const handleGoogleError = (errorMsg: string) => {
+    setError(errorMsg);
+  };
+
   return (
     <div className="auth-layout">
       <div className="auth-card">
@@ -160,7 +172,7 @@ export default function RegisterPage() {
                     checked={role === "learner"}
                     onChange={() => setRole("learner")}
                   />
-                  <span>Learner</span>
+                  <span>Học viên</span>
                 </label>
                 <label className="radio-label">
                   <input
@@ -170,7 +182,7 @@ export default function RegisterPage() {
                     checked={role === "course_manager"}
                     onChange={() => setRole("course_manager")}
                   />
-                  <span>Creater</span>
+                  <span>Giảng viên</span>
                 </label>
               </div>
             </div>
@@ -184,6 +196,15 @@ export default function RegisterPage() {
             >
               {loading ? "Đang đăng ký..." : "Đăng ký"}
             </button>
+
+            <div className="auth-divider">
+              <span>Hoặc đăng ký với</span>
+            </div>
+
+            <GoogleLoginButton
+              onError={handleGoogleError}
+              text="Đăng ký với Google"
+            />
           </form>
         )}
 
