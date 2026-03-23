@@ -5,6 +5,7 @@ import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import { getAccessToken } from "../utils/authStorage";
 import CourseContentTreeEditor from "../components/CourseContentTreeEditor";
+import "./TeacherCourseDetailPage.css";
 
 type CourseStatus = "draft" | "published" | "archived";
 
@@ -180,40 +181,37 @@ export default function TeacherCourseDetailPage() {
     }
   };
 
+  const getStatusClassName = (status: CourseStatus) => {
+    switch (status) {
+      case "published":
+        return "course-status-published";
+      case "draft":
+        return "course-status-draft";
+      case "archived":
+        return "course-status-archived";
+      default:
+        return "";
+    }
+  };
+
   return (
     <div className="dashboard-page">
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "1.5rem",
-          gap: "1.5rem",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: 1, minWidth: 0 }}>
+      <div className="course-detail-header">
+        <div className="course-detail-header-left">
           <button
             type="button"
-            className="secondary-button"
-            style={{ width: "auto" }}
+            className="secondary-button back-button"
             onClick={() => navigate("/teacher/dashboard")}
           >
             ← Quay lại
           </button>
-          <div style={{ minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: "1.9rem",
-                fontWeight: 900,
-                lineHeight: 1.1,
-                letterSpacing: "-0.03em",
-              }}
-            >
+          <div className="course-detail-info">
+            <div className="course-detail-title">
               {course ? course.title : "Chi tiết khóa học"}
             </div>
-            <div style={{ marginTop: "0.3rem", fontSize: "0.95rem", color: "#6b7280" }}>
+            <div className="course-detail-slug">
               {course ? (
-                <span style={{ fontFamily: "monospace" }}>{course.slug}</span>
+                <span className="course-detail-slug-text">{course.slug}</span>
               ) : (
                 "Đang tải..."
               )}
@@ -223,51 +221,18 @@ export default function TeacherCourseDetailPage() {
         <AvatarMenu />
       </div>
 
-      <div className="wizard-card" style={{ padding: "1rem" }}>
+      <div className="wizard-card course-detail-main-card">
         {saveSuccessOpen && (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(15, 23, 42, 0.45)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "1rem",
-              zIndex: 50,
-            }}
-            role="dialog"
-            aria-modal="true"
-          >
-            <div
-              style={{
-                width: "min(520px, 100%)",
-                background: "white",
-                borderRadius: 14,
-                border: "1px solid #e5e7eb",
-                padding: "1rem",
-                boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
-              }}
-            >
-              <div style={{ fontSize: "1.05rem", fontWeight: 800 }}>
-                Lưu thay đổi thành công
-              </div>
-              <div style={{ color: "#6b7280", marginTop: "0.35rem", fontSize: "0.92rem" }}>
+          <div className="save-success-modal-overlay" role="dialog" aria-modal="true">
+            <div className="save-success-modal">
+              <div className="save-success-modal-title">Lưu thay đổi thành công</div>
+              <div className="save-success-modal-message">
                 Bạn muốn quay trở về danh sách khóa học hay tiếp tục ở lại trang này?
               </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "0.5rem",
-                  marginTop: "1rem",
-                }}
-              >
+              <div className="save-success-modal-actions">
                 <button
                   type="button"
                   className="secondary-button"
-                  style={{ width: "auto" }}
                   onClick={() => {
                     setSaveSuccessOpen(false);
                     navigate("/teacher/dashboard");
@@ -278,7 +243,6 @@ export default function TeacherCourseDetailPage() {
                 <button
                   type="button"
                   className="primary-button"
-                  style={{ width: "auto", minWidth: 88 }}
                   onClick={() => setSaveSuccessOpen(false)}
                 >
                   OK
@@ -291,70 +255,29 @@ export default function TeacherCourseDetailPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
           <div>
             {course ? (
-              <span
-                style={{
-                  fontSize: "0.8rem",
-                  padding: "0.2rem 0.65rem",
-                  borderRadius: "999px",
-                  background:
-                    course.status === "published"
-                      ? "#dcfce7"
-                      : course.status === "draft"
-                      ? "#fef3c7"
-                      : "#e5e7eb",
-                  color:
-                    course.status === "published"
-                      ? "#166534"
-                      : course.status === "draft"
-                      ? "#92400e"
-                      : "#374151",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                }}
-              >
+              <span className={`course-status-badge ${getStatusClassName(course.status)}`}>
                 {course.status === "published"
                   ? "Đã xuất bản"
                   : course.status === "draft"
-                  ? "Bản nháp"
-                  : "Đã lưu trữ"}
+                    ? "Bản nháp"
+                    : "Đã lưu trữ"}
               </span>
             ) : null}
           </div>
-          <div style={{ position: "relative" }}>
+          <div className="course-actions-menu">
             <button
               type="button"
               className="secondary-button"
-              style={{ width: "auto" }}
               onClick={() => setOpenStatusMenu((v) => !v)}
               disabled={loading}
             >
               <span className="material-symbols-outlined">more_vert</span>
             </button>
             {openStatusMenu ? (
-              <div
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: "100%",
-                  marginTop: 4,
-                  background: "white",
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  boxShadow: "0 10px 20px rgba(15,23,42,0.12)",
-                  padding: "0.35rem 0",
-                  minWidth: 180,
-                  zIndex: 20,
-                }}
-              >
+              <div className="course-actions-dropdown">
                 <button
                   type="button"
-                  className="link-button"
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "0.25rem 0.75rem",
-                    fontWeight: selectedStatus === "draft" ? 700 : 400,
-                  }}
+                  className={`course-action-item ${selectedStatus === "draft" ? "active" : ""}`}
                   onClick={() => {
                     setSelectedStatus("draft");
                     setOpenStatusMenu(false);
@@ -366,13 +289,7 @@ export default function TeacherCourseDetailPage() {
                 {course?.status !== "archived" ? (
                   <button
                     type="button"
-                    className="link-button"
-                    style={{
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "0.25rem 0.75rem",
-                      fontWeight: selectedStatus === "published" ? 700 : 400,
-                    }}
+                    className={`course-action-item ${selectedStatus === "published" ? "active" : ""}`}
                     onClick={() => {
                       setSelectedStatus("published");
                       setOpenStatusMenu(false);
@@ -384,13 +301,7 @@ export default function TeacherCourseDetailPage() {
                 ) : null}
                 <button
                   type="button"
-                  className="link-button"
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "0.25rem 0.75rem",
-                    fontWeight: selectedStatus === "archived" ? 700 : 400,
-                  }}
+                  className={`course-action-item ${selectedStatus === "archived" ? "active" : ""}`}
                   onClick={() => {
                     setSelectedStatus("archived");
                     setOpenStatusMenu(false);
@@ -399,16 +310,10 @@ export default function TeacherCourseDetailPage() {
                 >
                   {course?.status === "archived" ? "Đang lưu trữ" : "Đặt thành lưu trữ"}
                 </button>
-                <div style={{ borderTop: "1px solid #e5e7eb", margin: "0.25rem 0" }} />
+                <div className="course-action-divider" />
                 <button
                   type="button"
-                  className="link-button"
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "0.25rem 0.75rem",
-                    color: "#b91c1c",
-                  }}
+                  className="course-action-item course-action-danger"
                   onClick={() => {
                     setOpenStatusMenu(false);
                     del();
@@ -424,14 +329,7 @@ export default function TeacherCourseDetailPage() {
 
         {error && <div className="error-box" style={{ marginTop: "0.75rem" }}>{error}</div>}
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1.5fr 1fr",
-            gap: "1rem",
-            marginTop: "1rem",
-          }}
-        >
+        <div className="course-detail-two-column">
           <div>
             <div className="form-group">
               <label className="form-label">Tên khóa học</label>
@@ -482,32 +380,19 @@ export default function TeacherCourseDetailPage() {
             </div>
             <div className="form-group">
               <label className="form-label">Ảnh khóa học</label>
-              <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-                <div
-                  style={{
-                    width: 120,
-                    height: 68,
-                    borderRadius: 12,
-                    background: "#f3f4f6",
-                    border: "1px dashed #d1d5db",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    overflow: "hidden",
-                    flexShrink: 0,
-                  }}
-                >
+              <div className="course-thumbnail-container">
+                <div className="course-thumbnail-preview">
                   {form.thumbnail_url ? (
                     <img
                       src={form.thumbnail_url}
                       alt="Course thumbnail"
-                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                      className="course-thumbnail-img"
                     />
                   ) : (
-                    <span style={{ fontSize: "0.8rem", color: "#9ca3af" }}>Chưa có ảnh</span>
+                    <span className="course-thumbnail-placeholder">Chưa có ảnh</span>
                   )}
                 </div>
-                <div style={{ flex: 1, minWidth: 0, display: "grid", gap: "0.35rem" }}>
+                <div className="course-thumbnail-input-group">
                   <input
                     className="form-input"
                     placeholder="Đường dẫn ảnh (tùy chọn)"
@@ -515,8 +400,8 @@ export default function TeacherCourseDetailPage() {
                     onChange={(e) => setForm((p) => ({ ...p, thumbnail_url: e.target.value }))}
                     disabled={loading}
                   />
-                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                    <label className="secondary-button" style={{ width: "auto", cursor: "pointer" }}>
+                  <div className="course-thumbnail-actions">
+                    <label className="secondary-button" style={{ cursor: "pointer" }}>
                       Chọn ảnh từ máy
                       <input
                         type="file"
@@ -547,15 +432,13 @@ export default function TeacherCourseDetailPage() {
                               setForm((p) => ({ ...p, thumbnail_url: thumbUrl }));
                             }
                           } catch (err) {
-                            // Giữ nguyên form, chỉ log nhẹ qua console
-                            // eslint-disable-next-line no-console
                             console.error(err);
                           }
                         }}
                         disabled={loading}
                       />
                     </label>
-                    <span style={{ fontSize: "0.8rem", color: "#6b7280" }}>
+                    <span className="course-thumbnail-hint">
                       Ảnh tỉ lệ 16:9 sẽ hiển thị đẹp nhất.
                     </span>
                   </div>
@@ -566,7 +449,7 @@ export default function TeacherCourseDetailPage() {
         </div>
 
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1rem" }}>
-          <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+          <div className="course-stats">
             {course ? (
               <>
                 Học viên: <b>{course.learners_count}</b> · Chương: <b>{course.modules_count}</b> ·
@@ -578,7 +461,7 @@ export default function TeacherCourseDetailPage() {
             <button
               type="button"
               className="primary-button"
-              style={{ width: "auto", minWidth: "140px" }}
+              style={{ minWidth: "140px" }}
               onClick={save}
               disabled={loading || !isDirty}
             >
@@ -588,15 +471,12 @@ export default function TeacherCourseDetailPage() {
         </div>
       </div>
 
-      <div className="wizard-card" style={{ padding: "1rem", marginTop: "1rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: "1.05rem" }}>Nội dung khóa học</div>
-          </div>
+      <div className="wizard-card content-editor-card">
+        <div className="content-editor-header">
+          <div className="content-editor-title">Nội dung khóa học</div>
         </div>
         <CourseContentTreeEditor courseId={courseId} embedded />
       </div>
     </div>
   );
 }
-

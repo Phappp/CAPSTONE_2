@@ -507,27 +507,66 @@ export class CourseServiceImpl implements CourseService {
       'c.thumbnail_url',
       'c.level',
     ]);
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(*)')
+        .from(CourseEnrollment, 'ce2')
+        .where('ce2.course_id = c.id');
+    }, 'learners_count');
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(*)')
+        .from(Module, 'm')
+        .where('m.course_id = c.id');
+    }, 'modules_count');
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(*)')
+        .from(Lesson, 'l')
+        .innerJoin(Module, 'm', 'm.id = l.module_id')
+        .where('m.course_id = c.id');
+    }, 'lessons_count');
 
     qb.orderBy('ce.last_accessed_at', 'DESC')
       .addOrderBy('ce.enrolled_at', 'DESC');
 
     qb.skip((page - 1) * pageSize).take(pageSize);
 
-    const [enrollments, total] = await qb.getManyAndCount();
+    const [entities, total] = await qb.getManyAndCount();
+    const rawRows = await qb.getRawMany();
+    const countByEnrollmentId = new Map<number, {
+      learners_count: number;
+      modules_count: number;
+      lessons_count: number;
+    }>();
+    for (const row of rawRows as any[]) {
+      const enrollmentId = Number(row.ce_id);
+      countByEnrollmentId.set(enrollmentId, {
+        learners_count: Number(row.learners_count ?? 0),
+        modules_count: Number(row.modules_count ?? 0),
+        lessons_count: Number(row.lessons_count ?? 0),
+      });
+    }
 
-    const items = (enrollments as any[]).map((e) => ({
-      id: e.id,
-      course_id: e.course_id,
-      course_title: e.course?.title,
-      course_slug: e.course?.slug,
-      course_thumbnail: e.course?.thumbnail_url,
-      course_level: e.course?.level,
-      enrolled_at: e.enrolled_at.toISOString(),
-      last_accessed_at: e.last_accessed_at?.toISOString() || null,
-      status: e.status,
-      progress_percent: Number(e.progress_percent),
-      completed_at: e.completed_at?.toISOString() || null,
-    }));
+    const items = (entities as any[]).map((e) => {
+      const counts = countByEnrollmentId.get(Number(e.id));
+      return {
+        id: e.id,
+        course_id: e.course_id,
+        course_title: e.course?.title,
+        course_slug: e.course?.slug,
+        course_thumbnail: e.course?.thumbnail_url,
+        course_level: e.course?.level,
+        enrolled_at: e.enrolled_at.toISOString(),
+        last_accessed_at: e.last_accessed_at?.toISOString() || null,
+        status: e.status,
+        progress_percent: Number(e.progress_percent),
+        completed_at: e.completed_at?.toISOString() || null,
+        learners_count: counts?.learners_count ?? 0,
+        modules_count: counts?.modules_count ?? 0,
+        lessons_count: counts?.lessons_count ?? 0,
+      };
+    });
 
     return {
       items,

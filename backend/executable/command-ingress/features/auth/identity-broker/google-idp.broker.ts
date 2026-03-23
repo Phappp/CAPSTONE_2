@@ -46,33 +46,51 @@ class GoogleIdentityBroker {
       grant_type: 'authorization_code',
     };
 
-    const res = await axios.post(url, qs.stringify(values), {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    });
+    console.log('Exchange code with Google:', { url, redirect_uri: this.redirectURL });
 
-    return {
-      accessToken: res.data.access_token,
-      idToken: res.data.id_token,
-    };
+    try {
+      const res = await axios.post(url, qs.stringify(values), {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      });
+
+      console.log('Google token response:', {
+        hasAccessToken: !!res.data.access_token,
+        hasIdToken: !!res.data.id_token
+      });
+
+      return {
+        accessToken: res.data.access_token,
+        idToken: res.data.id_token,
+      };
+    } catch (error: any) {
+      console.error('Google token exchange failed:', {
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      throw error;
+    }
   }
 
-  async fetchProfile(data: {
-    idToken: string;
-    accessToken: string;
-  }): Promise<any> {
-    const res = await axios
-    .get(
-      `https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${data.accessToken}`,
-      {
-        headers: {
-          Authorization: `Bearer ${data.idToken}`,
-        },
-      }
-    );
+  async fetchProfile(data: { idToken: string; accessToken: string }): Promise<any> {
+    console.log('Fetching Google profile...');
+    try {
+      const res = await axios.get(
+        `https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${data.accessToken}`,
+        {
+          headers: {
+            Authorization: `Bearer ${data.idToken}`,
+          },
+        }
+      );
 
-    return res.data;
+      console.log('Google profile fetched:', { email: res.data.email, name: res.data.name });
+      return res.data;
+    } catch (error: any) {
+      console.error('Failed to fetch profile:', error.response?.data);
+      throw error;
+    }
   }
 };
 

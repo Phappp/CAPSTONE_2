@@ -12,7 +12,39 @@ type UserRow = {
   created_at: Date | string;
 };
 
+type UserRoleRow = {
+  role_name: string;
+};
+
+function getPrimaryRole(roles: string[]): string | null {
+  if (!roles.length) return null;
+
+  const priority = ["admin", "course_manager", "teacher", "learner", "student"];
+  for (const role of priority) {
+    if (roles.includes(role)) return role;
+  }
+
+  return roles[0] ?? null;
+}
+
 export class MysqlProfileRepository implements ProfileRepository {
+  private async getUserRoles(userId: number): Promise<string[]> {
+    const roleRows = (await AppDataSource.query(
+      `
+      SELECT r.name AS role_name
+      FROM user_roles ur
+      INNER JOIN roles r ON r.id = ur.role_id
+      WHERE ur.user_id = ?
+      `,
+      [userId]
+    )) as UserRoleRow[];
+
+    return roleRows
+      .map((row) => String(row.role_name || "").trim().toLowerCase())
+      .filter((name) => !!name)
+      .filter((name, index, arr) => arr.indexOf(name) === index);
+  }
+
   async findByUserId(userId: number): Promise<Profile | null> {
     const rows = (await AppDataSource.query(
       `
@@ -34,6 +66,8 @@ export class MysqlProfileRepository implements ProfileRepository {
     if (!rows.length) return null;
 
     const row = rows[0];
+    const roles = await this.getUserRoles(userId);
+    const primaryRole = getPrimaryRole(roles);
 
     return {
       id: row.id,
@@ -46,7 +80,8 @@ export class MysqlProfileRepository implements ProfileRepository {
         row.created_at instanceof Date
           ? row.created_at.toISOString()
           : String(row.created_at),
-      roles: [],
+      roles,
+      primary_role: primaryRole,
     };
   }
   
@@ -89,6 +124,8 @@ export class MysqlProfileRepository implements ProfileRepository {
     if (!rows.length) return null;
 
     const row = rows[0];
+    const roles = await this.getUserRoles(row.id);
+    const primaryRole = getPrimaryRole(roles);
 
     return {
       id: row.id,
@@ -101,7 +138,8 @@ export class MysqlProfileRepository implements ProfileRepository {
         row.created_at instanceof Date
           ? row.created_at.toISOString()
           : String(row.created_at),
-      roles: [],
+      roles,
+      primary_role: primaryRole,
     };
   }
 

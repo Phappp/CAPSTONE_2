@@ -73,13 +73,14 @@
 
 .course-title {
     margin: 0;
-    font-size: 28px;
-    font-weight: 900;
-    letter-spacing: -0.02em;
+    font-size: var(--text-hero-title-size);
+    font-weight: var(--text-hero-title-weight);
+    letter-spacing: var(--text-hero-title-tracking);
 }
 
 .course-short-description {
-    color: #6b7280;
+    color: var(--text-subtitle-color);
+    font-size: var(--text-subtitle-size);
     margin-top: 6px;
 }
 
@@ -172,7 +173,7 @@
     }
 
     .course-title {
-        font-size: 24px;
+        font-size: 1.5rem;
     }
 
     .course-thumbnail {
@@ -186,7 +187,7 @@
 
 @media (max-width: 480px) {
     .course-title {
-        font-size: 20px;
+        font-size: 1.35rem;
     }
 
     .course-thumbnail {
@@ -194,13 +195,13 @@
     }
 
     .course-stats {
-        font-size: 14px;
+        font-size: var(--text-subtitle-size);
     }
 
     .enroll-button,
     .dashboard-button,
     .back-button {
         padding: 8px 12px;
-        font-size: 14px;
+        font-size: var(--text-subtitle-size);
     }
 }

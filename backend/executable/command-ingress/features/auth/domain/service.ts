@@ -86,20 +86,32 @@ export class AuthServiceImpl implements AuthService {
     return jwt.verify(token, secret);
   }
 
-  async createUserIfNotExists(userProfile: any): Promise<any> {
+  async createUserIfNotExists(userProfile: any): Promise<User> {
     const userRepository = AppDataSource.getRepository(User);
+
+    if (!userProfile.email) {
+      throw new Error('Email không được cung cấp từ Google');
+    }
+
     let user = await userRepository.findOne({ where: { email: userProfile.email } });
+
     if (!user) {
       user = userRepository.create({
         email: userProfile.email,
-        full_name: userProfile.name ?? '',
-        avatar_url: userProfile.picture ?? '',
-        // Đăng nhập Google nên không dùng password cục bộ; set tạm chuỗi rỗng
-        password_hash: '',
+        full_name: userProfile.name ?? userProfile.email.split('@')[0] ?? '',
+        avatar_url: userProfile.picture ?? null,
+        password_hash: '', // Google login không dùng password
         is_active: true,
+        email_verified_at: new Date(), // Email đã được Google xác thực
       });
 
       await userRepository.save(user);
+    } else {
+      // Cập nhật avatar nếu user đã tồn tại nhưng chưa có avatar
+      if (!user.avatar_url && userProfile.picture) {
+        user.avatar_url = userProfile.picture;
+        await userRepository.save(user);
+      }
     }
 
     return user;
@@ -370,10 +382,52 @@ export class AuthServiceImpl implements AuthService {
       accessToken: googleToken.accessToken,
     });
 
+    // Kiểm tra email có tồn tại không
+    if (!userProfile.email) {
+      throw new Error('Không thể lấy email từ Google. Vui lòng đảm bảo bạn đã cấp quyền email.');
+    }
+
     const user = await this.createUserIfNotExists(userProfile);
+
+    // === THÊM: Gán role mặc định cho user đăng nhập Google ===
+    const userRoleRepository = AppDataSource.getRepository(UserRole);
+    const roleRepository = AppDataSource.getRepository(Role);
+
+    // Kiểm tra user đã có role chưa
+    const existingRoles = await userRoleRepository.find({
+      where: { user_id: user.id }
+    });
+
+    if (existingRoles.length === 0) {
+      // Tìm role 'learner' hoặc 'student' mặc định
+      let defaultRole = await roleRepository.findOne({
+        where: [{ name: 'learner' }, { name: 'student' }]
+      });
+
+      if (!defaultRole) {
+        // Tạo role mới nếu chưa tồn tại
+        defaultRole = roleRepository.create({
+          name: 'learner',
+          description: 'Default role for Google login users'
+        });
+        await roleRepository.save(defaultRole);
+      }
+
+      // Gán role cho user
+      const userRole = userRoleRepository.create({
+        user_id: user.id,
+        role_id: defaultRole.id
+      });
+      await userRoleRepository.save(userRole);
+    }
+    // === KẾT THÚC THÊM ===
+
     const sessionRepository = AppDataSource.getRepository(Session);
     const sessionID = uuidv4();
-    const session = sessionRepository.create({ sessionID: sessionID, userID: String(user.id) });
+    const session = sessionRepository.create({
+      sessionID: sessionID,
+      userID: String(user.id)
+    });
     await sessionRepository.save(session);
 
     const tokens = await this.signTokensForUser(user, sessionID);
@@ -424,7 +478,7 @@ export class AuthServiceImpl implements AuthService {
   }
   async verify2FA(email: string, code: string): Promise<LoginResult> {
     const userRepository = AppDataSource.getRepository(User);
-    
+
     // 1. Tìm user theo email
     const user = await userRepository.findOne({ where: { email, is_active: true } });
     if (!user) {
@@ -438,7 +492,7 @@ export class AuthServiceImpl implements AuthService {
     }
 
     // 3. Xác thực thành công -> Xóa OTP và tạo session mới
-    user.temp_otp = null; 
+    user.temp_otp = null;
     await userRepository.save(user);
 
     const sessionRepository = AppDataSource.getRepository(Session);

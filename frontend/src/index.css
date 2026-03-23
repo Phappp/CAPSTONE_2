@@ -12,6 +12,25 @@
   --accent: #6eb46e;
   --bg-page: #f3f7fb;
   --text-main: #1f2933;
+
+  /* Kiểu chữ — đồng bộ với dashboard / khóa học giảng viên */
+  --font-sans: "Poppins", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Code", "Consolas",
+    Menlo, Monaco, monospace;
+
+  /* Thang tiêu đề / phụ đề (rem) */
+  --text-page-title-size: 1.5rem;
+  --text-page-title-weight: 700;
+  --text-hero-title-size: 1.9rem;
+  --text-hero-title-weight: 900;
+  --text-hero-title-tracking: -0.03em;
+  --text-subtitle-color: #6b7280;
+  --text-subtitle-size: 0.875rem;
+  --text-body-size: 0.9375rem; /* ~15px, gần 0.95rem của form */
+  --text-caption-size: 0.8125rem; /* ~13px */
+  --text-small-size: 0.75rem; /* ~12px */
+  --text-card-title-size: 1rem;
 }
 
 html,
@@ -21,10 +40,19 @@ body,
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-  line-height: 1.6;
-  letter-spacing: -0.01em;
+  font-family: var(--font-sans);
+  font-size: var(--text-body-size);
+  background: radial-gradient(circle at top, #e6f4ff 0, var(--bg-page) 55%);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
 }
 
 .auth-layout {
@@ -176,15 +204,16 @@ body {
 }
 
 .dashboard-title {
-  font-size: 1.8rem;
-  font-weight: 600;
-  color: var(--primary);
-  margin-bottom: 0.5rem;
+  font-size: var(--text-page-title-size);
+  font-weight: var(--text-page-title-weight);
+  color: var(--text-main);
+  margin-bottom: 0.25rem;
+  letter-spacing: -0.01em;
 }
 
 .dashboard-subtitle {
-  font-size: 0.95rem;
-  color: #607489;
+  font-size: var(--text-subtitle-size);
+  color: var(--text-subtitle-color);
 }
 
 .wizard-card {
