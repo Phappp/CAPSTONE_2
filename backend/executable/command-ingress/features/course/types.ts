@@ -204,9 +204,12 @@ export type CourseListItem = {
   title: string;
   slug: string;
   short_description: string | null;
+  full_description?: string | null;
   thumbnail_url: string | null;
   level: string;
   language: string;
+  learning_objectives?: string[] | null;
+  prerequisites?: string[] | null;
   status: CourseStatus;
   published_at: string | null;
   created_at: string;
@@ -301,6 +304,14 @@ export type CourseLearnerProgressResult = {
   total: number;
 };
 
+export type CoursePrerequisiteOption = {
+  id: number;
+  title: string;
+  slug: string;
+  selectable: boolean;
+  reason?: string | null;
+};
+
 export interface CourseService {
   // Public methods
   listPublishedCourses(subjectUserId: number | undefined, query: PublishedCourseListQuery): Promise<PublishedCourseListResult>;
@@ -319,6 +330,7 @@ export interface CourseService {
   listMyCourses(subjectUserId: number, query: CourseListQuery): Promise<CourseListResult>;
   getMyCourseDashboardStats(subjectUserId: number): Promise<CourseDashboardStats>;
   getMyCourseDetail(subjectUserId: number, courseId: number): Promise<CourseListItem>;
+  listMyCoursePrerequisiteOptions(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteOption[]>;
   updateMyCourse(subjectUserId: number, courseId: number, request: UpdateCourseRequest): Promise<void>;
   setMyCourseStatus(subjectUserId: number, courseId: number, status: CourseStatus): Promise<void>;
   softDeleteMyCourse(subjectUserId: number, courseId: number): Promise<void>;

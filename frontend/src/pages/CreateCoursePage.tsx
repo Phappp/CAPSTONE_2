@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AvatarMenu from "../components/AvatarMenu";
 import { url } from "../baseUrl";
@@ -25,6 +25,12 @@ interface CreateCoursePayload {
   thumbnail_url?: string | null;
 }
 
+type CourseOption = {
+  id: number;
+  title: string;
+  slug: string;
+};
+
 const DEFAULT_PAYLOAD: CreateCoursePayload = {
   title: "",
   short_description: "",
@@ -47,10 +53,19 @@ export default function CreateCoursePage() {
   const [error, setError] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [payload, setPayload] = useState<CreateCoursePayload>(DEFAULT_PAYLOAD);
+  const [prerequisiteOptions, setPrerequisiteOptions] = useState<CourseOption[]>([]);
 
   const navigate = useNavigate();
 
   const maxStep = 4;
+
+  const selectedPrerequisiteIds = useMemo(() => {
+    return new Set(
+      (payload.prerequisites || [])
+        .map((x) => Number(String(x).trim()))
+        .filter((n) => Number.isInteger(n) && n > 0)
+    );
+  }, [payload.prerequisites]);
 
   const handleBasicChange = (field: keyof CreateCoursePayload, value: any) => {
     setPayload((prev) => ({ ...prev, [field]: value }));
@@ -88,6 +103,39 @@ export default function CreateCoursePage() {
     payload.short_description.trim().length > 0 &&
     payload.short_description.trim().length <= 200;
 
+  useEffect(() => {
+    const fetchPrerequisiteOptions = async () => {
+      try {
+        const token = getAccessToken();
+        const params = new URLSearchParams();
+        params.set("page", "1");
+        params.set("page_size", "100");
+        params.set("sort_by", "title");
+        params.set("sort_dir", "asc");
+        const res = await fetch(`${url}${COURSES_API.catalog}?${params.toString()}`, {
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        const data = (await res.json().catch(() => ({}))) as { items?: CourseOption[] };
+        if (!res.ok) return;
+        const items = Array.isArray(data.items) ? data.items : [];
+        setPrerequisiteOptions(items.map((x) => ({ id: Number(x.id), title: String(x.title), slug: String(x.slug) })));
+      } catch {
+        // ignore loading errors for optional field
+      }
+    };
+    void fetchPrerequisiteOptions();
+  }, []);
+
+  const toAbsoluteThumbnailUrl = (input: string): string => {
+    const value = String(input || "").trim();
+    if (!value) return "";
+    if (value.startsWith("http://") || value.startsWith("https://")) return value;
+    return `${url}${value}`;
+  };
+
   const handleImageChange = async (file: File | null) => {
     if (!file) {
       setImagePreview(null);
@@ -112,8 +160,9 @@ export default function CreateCoursePage() {
 
       const imageUrl = data?.url as string | undefined;
       if (imageUrl) {
-        setImagePreview(`${url}${imageUrl}`);
-        handleBasicChange("thumbnail_url", `${url}${imageUrl}`);
+        const absoluteUrl = toAbsoluteThumbnailUrl(imageUrl);
+        setImagePreview(absoluteUrl);
+        handleBasicChange("thumbnail_url", absoluteUrl);
       }
     } catch (e: any) {
       setError(e?.message || "Upload ảnh thất bại.");
@@ -164,8 +213,11 @@ export default function CreateCoursePage() {
 
       const data = await res.json().catch(() => ({}));
       const courseId = data?.id;
+      if (!courseId) {
+        throw new Error("Không thể tạo khóa học: thiếu course id trả về từ server.");
+      }
 
-      if (publish) navigate("/teacher/dashboard");
+      navigate(`/teacher/courses/${courseId}`);
     } catch (e: any) {
       setError(e.message || "Đã xảy ra lỗi.");
     } finally {
@@ -334,32 +386,37 @@ export default function CreateCoursePage() {
 
       <div className="form-group">
         <label className="form-label">Yêu cầu tiên quyết</label>
-        {payload.prerequisites.map((item, idx) => (
-          <div key={idx} className="array-item">
-            <input
-              className="form-input"
-              placeholder="Ví dụ: Không yêu cầu kiến thức lập trình"
-              value={item}
-              onChange={(e) =>
-                handleArrayChange("prerequisites", idx, e.target.value)
-              }
-            />
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => handleRemoveArrayItem("prerequisites", idx)}
-            >
-              Xóa
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          className="link-button"
-          onClick={() => handleAddArrayItem("prerequisites")}
-        >
-          + Thêm yêu cầu
-        </button>
+        <p className="form-hint">Chọn các khóa học cần hoàn tất trước khi được đăng ký khóa này.</p>
+        <div style={{ display: "grid", gap: "0.5rem", maxHeight: 220, overflow: "auto", border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }}>
+          {prerequisiteOptions.length ? (
+            prerequisiteOptions.map((c) => {
+              const checked = selectedPrerequisiteIds.has(c.id);
+              return (
+                <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      setPayload((prev) => {
+                        const set = new Set(
+                          (prev.prerequisites || [])
+                            .map((x) => Number(String(x).trim()))
+                            .filter((n) => Number.isInteger(n) && n > 0)
+                        );
+                        if (e.target.checked) set.add(c.id);
+                        else set.delete(c.id);
+                        return { ...prev, prerequisites: Array.from(set).map(String) };
+                      });
+                    }}
+                  />
+                  <span style={{ fontWeight: 700 }}>{c.title}</span>
+                </label>
+              );
+            })
+          ) : (
+            <div style={{ color: "#6b7280" }}>Chưa có khóa học để chọn.</div>
+          )}
+        </div>
       </div>
     </>
   );

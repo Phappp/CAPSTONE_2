@@ -1,5 +1,5 @@
 import AvatarMenu from "../components/AvatarMenu";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
@@ -9,6 +9,7 @@ import "./TeacherDashboard.css";
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const TAB_STORAGE_KEY = "teacher_courses_tab";
   const SORT_STORAGE_KEY = "teacher_courses_sort";
   const [openMenuCourseId, setOpenMenuCourseId] = useState<number | null>(null);
@@ -71,7 +72,20 @@ export default function TeacherDashboard() {
   } | null>(null);
 
   type TeacherSection = "dashboard" | "course" | "quizz" | "assignment";
-  const [section, setSection] = useState<TeacherSection>("dashboard");
+  const [section, setSection] = useState<TeacherSection>(() => {
+    const p = new URLSearchParams(location.search);
+    const s = p.get("section");
+    if (s === "course" || s === "quizz" || s === "assignment" || s === "dashboard") return s;
+    return "dashboard";
+  });
+
+  useEffect(() => {
+    const p = new URLSearchParams(location.search);
+    const s = p.get("section");
+    if (s === "course" || s === "quizz" || s === "assignment" || s === "dashboard") {
+      setSection(s);
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (section === "dashboard") {

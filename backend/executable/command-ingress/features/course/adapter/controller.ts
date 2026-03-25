@@ -178,6 +178,15 @@ export class CourseController extends BaseController {
     });
   }
 
+  async listMyCoursePrerequisiteOptions(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const items = await this.service.listMyCoursePrerequisiteOptions(uid, courseId);
+      res.status(200).json({ items });
+    });
+  }
+
   async updateMyCourse(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
       const body = new UpdateCourseBody(req.body);

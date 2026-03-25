@@ -49,6 +49,7 @@ import {
   CourseCompletionRules,
   UpdateCourseCompletionRulesRequest,
   CourseLearnerProgressResult,
+  CoursePrerequisiteOption,
 } from '../types';
 
 function normalizeSlug(input: string): string {
@@ -101,9 +102,12 @@ function mapCourseRowToItem(row: any): CourseListItem {
     title: String(row.title),
     slug: String(row.slug),
     short_description: row.short_description ?? null,
+    full_description: row.full_description ?? null,
     thumbnail_url,
     level: String(row.level),
     language: String(row.language),
+    learning_objectives: safeJsonParse<string[] | null>(row.learning_objectives ?? null, null),
+    prerequisites: safeJsonParse<string[] | null>(row.prerequisites ?? null, null),
     status: row.status as CourseStatus,
     published_at: row.published_at ? new Date(row.published_at).toISOString() : null,
     created_at: new Date(row.created_at).toISOString(),
@@ -131,7 +135,8 @@ function mapToPublishedCourseListItem(row: any): PublishedCourseListItem {
     modules_count: Number(row.modules_count ?? 0),
     lessons_count: Number(row.lessons_count ?? 0),
     total_duration_minutes: row.total_duration_minutes ? Number(row.total_duration_minutes) : null,
-    is_enrolled: row.is_enrolled === 1,
+    // COUNT(*) from SQL drivers thường trả về string ("0"/"1"), nên ép kiểu số.
+    is_enrolled: Number(row.is_enrolled ?? 0) > 0,
     instructors: safeJsonParse<any[]>(row.instructors, []),
   };
 }
@@ -152,7 +157,81 @@ function mapToMyEnrollmentListItem(row: any): MyEnrollmentListItem {
   };
 }
 
+function parsePrerequisiteCourseIds(prerequisites: unknown): number[] {
+  if (!Array.isArray(prerequisites)) return [];
+  const ids = prerequisites
+    .map((x) => Number(String(x).trim()))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  return Array.from(new Set(ids));
+}
+
 export class CourseServiceImpl implements CourseService {
+  private async validatePrerequisiteGraph(courseId: number, prerequisiteIds: number[]): Promise<void> {
+    const uniquePrerequisiteIds = Array.from(
+      new Set(prerequisiteIds.filter((id) => Number.isInteger(id) && id > 0))
+    );
+    if (!uniquePrerequisiteIds.length) return;
+
+    if (uniquePrerequisiteIds.includes(courseId)) {
+      throw new Error('Không thể đặt khóa học làm tiên quyết của chính nó.');
+    }
+
+    const courseRepo = AppDataSource.getRepository(Course);
+    const prerequisiteCourses = await courseRepo.findByIds(uniquePrerequisiteIds as any);
+    const existingIds = new Set<number>((prerequisiteCourses as any[]).map((c) => Number(c.id)));
+    const missingIds = uniquePrerequisiteIds.filter((id) => !existingIds.has(id));
+    if (missingIds.length) {
+      throw new Error(`Không tìm thấy khóa học tiên quyết: ${missingIds.join(', ')}.`);
+    }
+
+    for (const c of prerequisiteCourses as any[]) {
+      const deps = parsePrerequisiteCourseIds(c.prerequisites);
+      if (deps.includes(courseId)) {
+        throw new Error(`Quan hệ tiên quyết không hợp lệ với khóa học "${c.title}" (không được đặt ngược).`);
+      }
+    }
+
+    const cache = new Map<number, number[]>();
+    const getDeps = async (id: number): Promise<number[]> => {
+      if (cache.has(id)) return cache.get(id)!;
+      const c = await courseRepo.findOne({ where: { id, deleted_at: null as any } as any });
+      const deps = c ? parsePrerequisiteCourseIds((c as any).prerequisites) : [];
+      cache.set(id, deps);
+      return deps;
+    };
+
+    for (const start of uniquePrerequisiteIds) {
+      const stack: number[] = [start];
+      const visited = new Set<number>();
+      while (stack.length) {
+        const node = stack.pop()!;
+        if (node === courseId) {
+          throw new Error('Quan hệ khóa học tiên quyết bị xoay vòng. Vui lòng kiểm tra lại.');
+        }
+        if (visited.has(node)) continue;
+        visited.add(node);
+        const deps = await getDeps(node);
+        for (const dep of deps) {
+          if (!visited.has(dep)) stack.push(dep);
+        }
+      }
+    }
+  }
+
+  private async validatePrerequisiteIdsExist(prerequisiteIds: number[]): Promise<void> {
+    const uniquePrerequisiteIds = Array.from(
+      new Set(prerequisiteIds.filter((id) => Number.isInteger(id) && id > 0))
+    );
+    if (!uniquePrerequisiteIds.length) return;
+    const courseRepo = AppDataSource.getRepository(Course);
+    const prerequisiteCourses = await courseRepo.findByIds(uniquePrerequisiteIds as any);
+    const existingIds = new Set<number>((prerequisiteCourses as any[]).map((c) => Number(c.id)));
+    const missingIds = uniquePrerequisiteIds.filter((id) => !existingIds.has(id));
+    if (missingIds.length) {
+      throw new Error(`Không tìm thấy khóa học tiên quyết: ${missingIds.join(', ')}.`);
+    }
+  }
+
   // Public methods - Course catalog
   async listPublishedCourses(
     subjectUserId: number | undefined, 
@@ -454,6 +533,26 @@ export class CourseServiceImpl implements CourseService {
     
     if (!course) {
       throw new Error('Khóa học không tồn tại hoặc chưa được xuất bản.');
+    }
+
+    // Check prerequisite courses: learner must complete all prerequisite courses first.
+    const prerequisiteIds = parsePrerequisiteCourseIds((course as any).prerequisites);
+    if (prerequisiteIds.length) {
+      const prerequisiteEnrollments = await enrollmentRepo.find({
+        where: { user_id: subjectUserId } as any,
+      });
+      const completedSet = new Set<number>(
+        (prerequisiteEnrollments as any[])
+          .filter((e) => String((e as any).status) === 'completed')
+          .map((e) => Number((e as any).course_id))
+      );
+      const missingIds = prerequisiteIds.filter((id) => !completedSet.has(id));
+      if (missingIds.length) {
+        const prerequisiteCourses = await courseRepo.findByIds(missingIds as any);
+        const names = (prerequisiteCourses as any[]).map((c) => String(c.title)).filter(Boolean);
+        const missingText = names.length ? names.join(', ') : missingIds.map(String).join(', ');
+        throw new Error(`Bạn cần hoàn tất khóa học tiên quyết trước khi đăng ký: ${missingText}.`);
+      }
     }
 
     // Check if already enrolled
@@ -1085,6 +1184,9 @@ export class CourseServiceImpl implements CourseService {
       slug = `${baseSlug}-${counter}`;
     }
 
+    const prerequisiteIds = parsePrerequisiteCourseIds(request.prerequisites);
+    await this.validatePrerequisiteIdsExist(prerequisiteIds);
+
     const course = courseRepo.create({
       title: request.title,
       slug,
@@ -1092,7 +1194,7 @@ export class CourseServiceImpl implements CourseService {
       full_description: request.full_description ?? null,
       thumbnail_url: request.thumbnail_url ?? null,
       learning_objectives: request.learning_objectives ?? null,
-      prerequisites: request.prerequisites ?? null,
+      prerequisites: prerequisiteIds.length ? prerequisiteIds.map(String) : null,
       level: request.level ?? 'beginner',
       language: request.language ?? 'vi',
       status: 'draft',
@@ -1241,9 +1343,12 @@ export class CourseServiceImpl implements CourseService {
       title: raw.c_title ?? raw.title,
       slug: raw.c_slug ?? raw.slug,
       short_description: raw.c_short_description ?? raw.short_description,
+      full_description: raw.c_full_description ?? raw.full_description,
       thumbnail_url: raw.c_thumbnail_url ?? raw.thumbnail_url,
       level: raw.c_level ?? raw.level,
       language: raw.c_language ?? raw.language,
+      learning_objectives: raw.c_learning_objectives ?? raw.learning_objectives,
+      prerequisites: raw.c_prerequisites ?? raw.prerequisites,
       status: raw.c_status ?? raw.status,
       published_at: raw.c_published_at ?? raw.published_at,
       created_at: raw.c_created_at ?? raw.created_at,
@@ -1253,6 +1358,47 @@ export class CourseServiceImpl implements CourseService {
       lessons_count: raw.lessons_count,
     };
     return mapCourseRowToItem(row);
+  }
+
+  async listMyCoursePrerequisiteOptions(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteOption[]> {
+    await ensureUserIsCourseManager(subjectUserId);
+    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    const selectedSet = new Set<number>(parsePrerequisiteCourseIds((ownCourse as any).prerequisites));
+    const courseRepo = AppDataSource.getRepository(Course);
+
+    const candidates = await courseRepo
+      .createQueryBuilder('c')
+      .where('c.deleted_at IS NULL')
+      .andWhere('c.id <> :courseId', { courseId })
+      .andWhere('(c.status = :published OR c.created_by = :uid)', { published: 'published', uid: subjectUserId })
+      .orderBy('c.title', 'ASC')
+      .addOrderBy('c.id', 'ASC')
+      .getMany();
+
+    const items = await Promise.all(
+      (candidates as any[]).map(async (c) => {
+        const id = Number(c.id);
+        const title = String(c.title || '');
+        const slug = String(c.slug || '');
+        if (selectedSet.has(id)) {
+          return { id, title, slug, selectable: true, reason: null };
+        }
+        try {
+          await this.validatePrerequisiteGraph(courseId, [id]);
+          return { id, title, slug, selectable: true, reason: null };
+        } catch (e: any) {
+          return {
+            id,
+            title,
+            slug,
+            selectable: false,
+            reason: e?.message ? String(e.message) : 'Không thể chọn làm tiên quyết.',
+          };
+        }
+      })
+    );
+
+    return items;
   }
 
   async updateMyCourse(subjectUserId: number, courseId: number, request: UpdateCourseRequest): Promise<void> {
@@ -1269,7 +1415,11 @@ export class CourseServiceImpl implements CourseService {
     if ('full_description' in request) course.full_description = request.full_description ?? null;
     if ('thumbnail_url' in request) course.thumbnail_url = request.thumbnail_url ?? null;
     if ('learning_objectives' in request) course.learning_objectives = request.learning_objectives ?? null;
-    if ('prerequisites' in request) course.prerequisites = request.prerequisites ?? null;
+    if ('prerequisites' in request) {
+      const prerequisiteIds = parsePrerequisiteCourseIds(request.prerequisites);
+      await this.validatePrerequisiteGraph(courseId, prerequisiteIds);
+      course.prerequisites = prerequisiteIds.length ? prerequisiteIds.map(String) : null;
+    }
     if ('level' in request && request.level) course.level = request.level;
     if ('language' in request && request.language) course.language = request.language;
 

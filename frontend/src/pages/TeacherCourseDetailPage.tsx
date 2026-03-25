@@ -14,9 +14,12 @@ type CourseDetail = {
   title: string;
   slug: string;
   short_description: string | null;
+  full_description?: string | null;
   thumbnail_url: string | null;
   level: string;
   language: string;
+  learning_objectives?: string[] | string | null;
+  prerequisites?: string[] | string | null;
   status: CourseStatus;
   published_at: string | null;
   created_at: string;
@@ -55,6 +58,14 @@ type LearnerProgressResult = {
   total: number;
 };
 
+type CourseOption = {
+  id: number;
+  title: string;
+  slug: string;
+  selectable?: boolean;
+  reason?: string | null;
+};
+
 export default function TeacherCourseDetailPage() {
   const navigate = useNavigate();
   const params = useParams();
@@ -73,6 +84,8 @@ export default function TeacherCourseDetailPage() {
     level: "beginner",
     language: "vi",
     thumbnail_url: "",
+    learning_objectives: [""] as string[],
+    prerequisites: [""] as string[],
   });
   const [initialForm, setInitialForm] = useState<null | {
     title: string;
@@ -81,6 +94,8 @@ export default function TeacherCourseDetailPage() {
     level: string;
     language: string;
     thumbnail_url: string;
+    learning_objectives: string[];
+    prerequisites: string[];
     status: CourseStatus;
   }>(null);
   const [openStatusMenu, setOpenStatusMenu] = useState(false);
@@ -99,6 +114,8 @@ export default function TeacherCourseDetailPage() {
   const [learnerPage, setLearnerPage] = useState(1);
   const [learnerPageSize] = useState(20);
   const [learnerResult, setLearnerResult] = useState<LearnerProgressResult | null>(null);
+  const [prerequisiteOptions, setPrerequisiteOptions] = useState<CourseOption[]>([]);
+  const [legacyPrerequisites, setLegacyPrerequisites] = useState<string[]>([]);
 
   const isDirty = useMemo(() => {
     if (!initialForm) return false;
@@ -109,9 +126,96 @@ export default function TeacherCourseDetailPage() {
       form.level !== initialForm.level ||
       form.language !== initialForm.language ||
       form.thumbnail_url !== initialForm.thumbnail_url ||
+      JSON.stringify(form.learning_objectives) !== JSON.stringify(initialForm.learning_objectives) ||
+      JSON.stringify(form.prerequisites) !== JSON.stringify(initialForm.prerequisites) ||
       selectedStatus !== initialForm.status
     );
   }, [form, initialForm, selectedStatus]);
+
+  const normalizeStringArray = (value: unknown): string[] => {
+    if (Array.isArray(value)) {
+      const arr = value.map((x) => String(x).trim()).filter(Boolean);
+      return arr.length ? arr : [""];
+    }
+    if (typeof value === "string") {
+      const s = value.trim();
+      if (!s) return [""];
+      try {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed)) {
+          const arr = parsed.map((x) => String(x).trim()).filter(Boolean);
+          return arr.length ? arr : [""];
+        }
+      } catch {
+        // ignore and try splitting plain text
+      }
+      const arr = s
+        .split(/\r?\n|•|\u2022|-/g)
+        .map((x) => x.trim())
+        .filter(Boolean);
+      return arr.length ? arr : [""];
+    }
+    return [""];
+  };
+
+  const selectedPrerequisiteIds = useMemo(() => {
+    return new Set(
+      (form.prerequisites || [])
+        .map((x) => Number(String(x).trim()))
+        .filter((n) => Number.isInteger(n) && n > 0)
+    );
+  }, [form.prerequisites]);
+
+  const reconcilePrerequisitesToIds = (rawList: string[], options: CourseOption[]) => {
+    const byTitle = new Map<string, number>();
+    for (const o of options) {
+      const key = String(o.title || "").trim().toLowerCase().replace(/\s+/g, " ");
+      if (key) byTitle.set(key, o.id);
+    }
+    const ids: number[] = [];
+    const leftovers: string[] = [];
+    for (const raw of rawList) {
+      const s = String(raw || "").trim();
+      if (!s) continue;
+      const n = Number(s);
+      if (Number.isInteger(n) && n > 0) {
+        ids.push(n);
+        continue;
+      }
+      const m = s.match(/^kh[oó]a h[oọ]c\s*#\s*(\d+)$/i);
+      if (m) {
+        const mid = Number(m[1]);
+        if (Number.isInteger(mid) && mid > 0) {
+          ids.push(mid);
+          continue;
+        }
+      }
+      const titleKey = s.toLowerCase().replace(/\s+/g, " ");
+      const mappedId = byTitle.get(titleKey);
+      if (mappedId) ids.push(mappedId);
+      else leftovers.push(s);
+    }
+    return {
+      ids: Array.from(new Set(ids)),
+      leftovers: Array.from(new Set(leftovers)),
+    };
+  };
+
+  useEffect(() => {
+    if (!selectedPrerequisiteIds.size) return;
+    setPrerequisiteOptions((prev) => {
+      const map = new Map<number, CourseOption>(prev.map((x) => [x.id, x]));
+      let changed = false;
+      for (const id of selectedPrerequisiteIds) {
+        if (!map.has(id) && id !== courseId) {
+          map.set(id, { id, title: `Khóa học #${id}`, slug: "" });
+          changed = true;
+        }
+      }
+      if (!changed) return prev;
+      return Array.from(map.values()).sort((a, b) => a.title.localeCompare(b.title, "vi"));
+    });
+  }, [selectedPrerequisiteIds, courseId]);
 
   const fetchDetail = async () => {
     const res = await fetch(`${url}${COURSES_API.detail(courseId)}`, {
@@ -130,6 +234,8 @@ export default function TeacherCourseDetailPage() {
       level: data.level ?? "beginner",
       language: data.language ?? "vi",
       thumbnail_url: data.thumbnail_url ?? "",
+      learning_objectives: normalizeStringArray(data.learning_objectives),
+      prerequisites: normalizeStringArray(data.prerequisites),
     };
     setForm(nextForm);
     const nextStatus = (data.status ?? "draft") as CourseStatus;
@@ -164,6 +270,45 @@ export default function TeacherCourseDetailPage() {
       setRulesLoading(false);
     }
   };
+
+  const fetchPrerequisiteOptions = async () => {
+    try {
+      const res = await fetch(`${url}${COURSES_API.prerequisiteOptions(courseId)}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const json = (await res.json().catch(() => ({}))) as { items?: any[] };
+      if (!res.ok) return;
+      const items = Array.isArray(json.items) ? json.items : [];
+      setPrerequisiteOptions(
+        items
+          .map((x) => ({
+            id: Number((x as any)?.id),
+            title: String((x as any)?.title || ""),
+            slug: String((x as any)?.slug || ""),
+            selectable: Boolean((x as any)?.selectable),
+            reason: (x as any)?.reason ? String((x as any).reason) : null,
+          }))
+          .filter((x) => Number.isInteger(x.id) && x.id > 0)
+      );
+    } catch {
+      // ignore optional UI fetch errors
+    }
+  };
+
+  useEffect(() => {
+    if (!prerequisiteOptions.length) return;
+    const raw = (form.prerequisites || []).map((x) => String(x).trim()).filter(Boolean);
+    const { ids, leftovers } = reconcilePrerequisitesToIds(raw, prerequisiteOptions);
+    const next = ids.map(String);
+    setLegacyPrerequisites(leftovers);
+    if (JSON.stringify(next) === JSON.stringify(raw)) return;
+    setForm((p) => ({ ...p, prerequisites: next }));
+    if (initialForm) setInitialForm((p) => (p ? { ...p, prerequisites: next } : p));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prerequisiteOptions]);
 
   const saveCompletionRules = async () => {
     if (!courseId || Number.isNaN(courseId)) return;
@@ -236,6 +381,7 @@ export default function TeacherCourseDetailPage() {
       .catch((e: any) => setError(e?.message || "Đã xảy ra lỗi."))
       .finally(() => setLoading(false));
     void fetchCompletionRules();
+    void fetchPrerequisiteOptions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
 
@@ -255,8 +401,11 @@ export default function TeacherCourseDetailPage() {
       const payload: Record<string, unknown> = {
         title: form.title,
         short_description: form.short_description,
+        full_description: form.full_description,
         level: form.level,
         language: form.language,
+        learning_objectives: form.learning_objectives.map((x) => x.trim()).filter(Boolean),
+        prerequisites: Array.from(selectedPrerequisiteIds).map(String),
       };
       if (initialForm && form.thumbnail_url !== initialForm.thumbnail_url) {
         payload.thumbnail_url = form.thumbnail_url || null;
@@ -292,6 +441,30 @@ export default function TeacherCourseDetailPage() {
 
       await fetchDetail();
       setSaveSuccessOpen(true);
+    } catch (e: any) {
+      setError(e?.message || "Đã xảy ra lỗi.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setStatusNow = async (nextStatus: CourseStatus) => {
+    if (!courseId || Number.isNaN(courseId)) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${url}${COURSES_API.setStatus(courseId)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as any)?.message || "Không thể cập nhật trạng thái.");
+      await fetchDetail();
+      setSelectedStatus(nextStatus);
     } catch (e: any) {
       setError(e?.message || "Đã xảy ra lỗi.");
     } finally {
@@ -342,7 +515,7 @@ export default function TeacherCourseDetailPage() {
           <button
             type="button"
             className="secondary-button back-button"
-            onClick={() => navigate("/teacher/dashboard")}
+            onClick={() => navigate("/teacher/dashboard?section=course")}
           >
             ← Quay lại
           </button>
@@ -376,7 +549,7 @@ export default function TeacherCourseDetailPage() {
                   className="secondary-button"
                   onClick={() => {
                     setSaveSuccessOpen(false);
-                    navigate("/teacher/dashboard");
+                    navigate("/teacher/dashboard?section=course");
                   }}
                 >
                   Quay trở về
@@ -420,8 +593,8 @@ export default function TeacherCourseDetailPage() {
                   type="button"
                   className={`course-action-item ${selectedStatus === "draft" ? "active" : ""}`}
                   onClick={() => {
-                    setSelectedStatus("draft");
                     setOpenStatusMenu(false);
+                    void setStatusNow("draft");
                   }}
                   disabled={loading}
                 >
@@ -432,8 +605,8 @@ export default function TeacherCourseDetailPage() {
                     type="button"
                     className={`course-action-item ${selectedStatus === "published" ? "active" : ""}`}
                     onClick={() => {
-                      setSelectedStatus("published");
                       setOpenStatusMenu(false);
+                      void setStatusNow("published");
                     }}
                     disabled={loading}
                   >
@@ -444,8 +617,8 @@ export default function TeacherCourseDetailPage() {
                   type="button"
                   className={`course-action-item ${selectedStatus === "archived" ? "active" : ""}`}
                   onClick={() => {
-                    setSelectedStatus("archived");
                     setOpenStatusMenu(false);
+                    void setStatusNow("archived");
                   }}
                   disabled={loading}
                 >
@@ -490,6 +663,124 @@ export default function TeacherCourseDetailPage() {
                 onChange={(e) => setForm((p) => ({ ...p, short_description: e.target.value }))}
                 disabled={loading}
               />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Mô tả đầy đủ</label>
+              <textarea
+                className="form-input"
+                rows={8}
+                value={form.full_description}
+                onChange={(e) => setForm((p) => ({ ...p, full_description: e.target.value }))}
+                disabled={loading}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Mục tiêu học tập</label>
+              {form.learning_objectives.map((item, idx) => (
+                <div key={`obj-${idx}`} style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                  <input
+                    className="form-input"
+                    placeholder="Ví dụ: Hiểu cú pháp Python cơ bản"
+                    value={item}
+                    onChange={(e) =>
+                      setForm((p) => {
+                        const copy = [...p.learning_objectives];
+                        copy[idx] = e.target.value;
+                        return { ...p, learning_objectives: copy };
+                      })
+                    }
+                    disabled={loading}
+                  />
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() =>
+                      setForm((p) => {
+                        const copy = [...p.learning_objectives];
+                        copy.splice(idx, 1);
+                        return { ...p, learning_objectives: copy.length ? copy : [""] };
+                      })
+                    }
+                    disabled={loading}
+                  >
+                    Xóa
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() =>
+                  setForm((p) => ({
+                    ...p,
+                    learning_objectives: [...p.learning_objectives, ""],
+                  }))
+                }
+                disabled={loading}
+              >
+                + Thêm mục tiêu
+              </button>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Yêu cầu tiên quyết</label>
+              <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 8 }}>
+                Học viên phải hoàn tất các khóa bên dưới trước khi đăng ký khóa này.
+              </div>
+              <div style={{ display: "grid", gap: "0.5rem", maxHeight: 220, overflow: "auto", border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }}>
+                {prerequisiteOptions.length ? (
+                  prerequisiteOptions.map((c) => {
+                    const checked = selectedPrerequisiteIds.has(c.id);
+                    return (
+                      <label
+                        key={c.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 8,
+                          border: checked ? "1px solid #86efac" : "1px solid #e5e7eb",
+                          background: checked ? "#f0fdf4" : "#fff",
+                          borderRadius: 10,
+                          padding: "8px 10px",
+                        }}
+                      >
+                        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={loading || (!checked && c.selectable === false)}
+                          onChange={(e) => {
+                            setForm((p) => {
+                              const set = new Set(
+                                (p.prerequisites || [])
+                                  .map((x) => Number(String(x).trim()))
+                                  .filter((n) => Number.isInteger(n) && n > 0)
+                              );
+                              if (e.target.checked) set.add(c.id);
+                              else set.delete(c.id);
+                              return { ...p, prerequisites: Array.from(set).map(String) };
+                            });
+                          }}
+                        />
+                        <span style={{ fontWeight: 700 }}>{c.title}</span>
+                        </span>
+                        {checked ? (
+                          <span style={{ color: "#15803d", fontWeight: 800, fontSize: 12 }}>✓ Đã chọn</span>
+                        ) : c.selectable === false ? (
+                          <span style={{ color: "#b91c1c", fontWeight: 800, fontSize: 12 }} title={c.reason || ""}>Không khả dụng</span>
+                        ) : null}
+                      </label>
+                    );
+                  })
+                ) : (
+                  <div style={{ color: "#6b7280" }}>Chưa có khóa học để chọn.</div>
+                )}
+              </div>
+              {legacyPrerequisites.length ? (
+                <div style={{ marginTop: 8, color: "#92400e", fontSize: 12 }}>
+                  Không map được một số điều kiện cũ: {legacyPrerequisites.join(", ")}
+                </div>
+              ) : null}
             </div>
           </div>
 

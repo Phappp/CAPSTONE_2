@@ -7,6 +7,7 @@ export const COURSES_API = {
   myStats: `${COURSES_API_BASE}/my/stats`,
   myList: `${COURSES_API_BASE}/my`,
   detail: (id: number | string) => `${COURSES_API_BASE}/${id}`,
+  prerequisiteOptions: (id: number | string) => `${COURSES_API_BASE}/${id}/prerequisite-options`,
   update: (id: number | string) => `${COURSES_API_BASE}/${id}`,
   setStatus: (id: number | string) => `${COURSES_API_BASE}/${id}/status`,
   softDelete: (id: number | string) => `${COURSES_API_BASE}/${id}`,

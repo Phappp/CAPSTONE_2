@@ -28,4 +28,26 @@ const requireAuthorizedUser = (req: HttpRequest, res: Response, next: NextFuncti
   }
 };
 
+/**
+ * Optional auth middleware:
+ * - If Authorization header is present and valid -> attach req.getSubject()
+ * - If missing/invalid -> continue as unauthenticated (public route)
+ */
+export const optionalAuthorizedUser = (req: HttpRequest, _res: Response, next: NextFunction) => {
+  try {
+    const bearerToken = req.headers['authorization'];
+    const jwtToken = bearerToken?.split(' ')[1];
+    if (!jwtToken) return next();
+
+    const payload = jwt.verify(jwtToken, env.JWT_SECRET) as jwt.JwtPayload;
+    if (!payload?.sub) return next();
+
+    req.getSubject = () => String(payload.sub);
+    next();
+  } catch {
+    // Invalid token should not break public routes
+    next();
+  }
+};
+
 export default requireAuthorizedUser;
