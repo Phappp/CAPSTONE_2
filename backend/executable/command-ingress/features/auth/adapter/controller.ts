@@ -74,9 +74,23 @@ class AuthController extends BaseController {
         return;
       }
 
+      const rawIp =
+        req.headers['x-forwarded-for']?.toString().split(',')[0] ||
+        req.socket.remoteAddress;
+
+      const ip =
+        rawIp === '::1' || rawIp === '127.0.0.1'
+          ? '8.8.8.8'
+          : rawIp;
+
+      const userAgent =
+        req.headers['user-agent'] || 'Unknown device';
+
       const result = await this.authService.login({
         email: loginRequestBody.email,
         password: loginRequestBody.password,
+        ip,
+        userAgent
       });
 
       res.status(200).json({

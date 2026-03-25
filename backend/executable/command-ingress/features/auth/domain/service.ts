@@ -167,12 +167,10 @@ export class AuthServiceImpl implements AuthService {
 
     // Gửi email OTP
     try {
-      const { sendMail } = await import('../../../../../lib/mailer');
-      await sendMail(
-        request.email,
-        'Mã xác thực đăng ký tài khoản',
-        `Mã OTP của bạn là: ${code}. Mã có hiệu lực trong 10 phút.`
-      );
+      const { sendOtpEmail } = await import('../../../../../lib/email/service');
+
+      await sendOtpEmail(request.email, code);
+
     } catch (e) {
       console.log('Send OTP email error:', e);
     }
@@ -278,6 +276,7 @@ export class AuthServiceImpl implements AuthService {
   async login(request: LoginRequest): Promise<LoginResult> {
     const userRepository = AppDataSource.getRepository(User);
     const now = new Date();
+    const { ip, userAgent } = request;
 
     const user = await userRepository.findOne({ where: { email: request.email } });
     if (!user || !user.password_hash) {
@@ -319,12 +318,17 @@ export class AuthServiceImpl implements AuthService {
     // 1. Kiểm tra Thông báo đăng nhập mới
     if (user.notify_new_login) {
       try {
-        const { sendMail } = await import('../../../../../lib/mailer');
-        await sendMail(
+        const { sendLoginWarningEmail } = await import('../../../../../lib/email/service');
+        const { parseUserAgent } = await import('../../../../../lib/device');
+
+        const deviceName = parseUserAgent(userAgent);
+
+        await sendLoginWarningEmail(
           user.email,
-          'Cảnh báo đăng nhập mới - MindBridge',
-          `Tài khoản của bạn vừa được đăng nhập vào lúc ${now.toLocaleString('vi-VN')}.`
+          ip,
+          deviceName
         );
+
       } catch (e) {
         console.log('Notification email error:', e);
       }
