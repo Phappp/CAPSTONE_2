@@ -8,12 +8,14 @@ function resolvePrimaryRole(primaryRole?: string | null, roles?: string[]) {
     const list = (roles ?? [])
         .map((r) => String(r).trim().toLowerCase())
         .filter(Boolean);
-    if (normalizedPrimaryRole) return normalizedPrimaryRole;
+    // Ưu tiên suy ra role từ danh sách roles (tránh trường hợp primary_role bị lệch)
     if (list.includes("admin")) return "admin";
     if (list.includes("course_manager")) return "course_manager";
     if (list.includes("teacher")) return "teacher";
     if (list.includes("learner")) return "learner";
     if (list.includes("student")) return "student";
+    // Fallback về primary_role từ API (nếu có)
+    if (normalizedPrimaryRole) return normalizedPrimaryRole;
     return list[0] || "learner";
 }
 
@@ -76,6 +78,8 @@ export default function OAuthRedirectPage() {
                         const role = resolvePrimaryRole(resolvedUser.primary_role, resolvedUser.roles);
                         if (role === "teacher" || role === "course_manager") {
                             navigate("/teacher/dashboard", { replace: true });
+                        } else if (role === "admin") {
+                            navigate("/admin", { replace: true });
                         } else {
                             navigate("/student/dashboard", { replace: true });
                         }

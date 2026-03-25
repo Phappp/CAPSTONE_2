@@ -18,6 +18,7 @@ async function start() {
     //     // Im lặng bỏ qua lỗi sync khi khởi động server (ví dụ bảng đã tồn tại).
     //     // Nếu muốn xem lỗi chi tiết, hãy chạy: npm run db:sync
     // }
+    // Chỉ đồng bộ khi bật flag DATABASE_SYNC
     if (env.DATABASE_SYNC) {
         await syncDatabase();
     }
