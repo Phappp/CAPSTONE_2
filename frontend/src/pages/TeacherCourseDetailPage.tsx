@@ -5,6 +5,7 @@ import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import { getAccessToken } from "../utils/authStorage";
 import CourseContentTreeEditor from "../components/CourseContentTreeEditor";
+import PrerequisiteGraph, { type PrerequisiteGraphData } from "../components/PrerequisiteGraph";
 import "./TeacherCourseDetailPage.css";
 
 type CourseStatus = "draft" | "published" | "archived";
@@ -116,6 +117,8 @@ export default function TeacherCourseDetailPage() {
   const [learnerResult, setLearnerResult] = useState<LearnerProgressResult | null>(null);
   const [prerequisiteOptions, setPrerequisiteOptions] = useState<CourseOption[]>([]);
   const [legacyPrerequisites, setLegacyPrerequisites] = useState<string[]>([]);
+  const [prerequisiteGraph, setPrerequisiteGraph] = useState<PrerequisiteGraphData | null>(null);
+  const [graphModalOpen, setGraphModalOpen] = useState(false);
 
   const isDirty = useMemo(() => {
     if (!initialForm) return false;
@@ -298,6 +301,22 @@ export default function TeacherCourseDetailPage() {
     }
   };
 
+  const fetchPrerequisiteGraph = async () => {
+    try {
+      const res = await fetch(`${url}${COURSES_API.prerequisiteGraph(courseId)}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const json = (await res.json().catch(() => null)) as PrerequisiteGraphData | null;
+      if (!res.ok || !json) return;
+      setPrerequisiteGraph(json);
+    } catch {
+      // ignore graph errors
+    }
+  };
+
   useEffect(() => {
     if (!prerequisiteOptions.length) return;
     const raw = (form.prerequisites || []).map((x) => String(x).trim()).filter(Boolean);
@@ -382,6 +401,7 @@ export default function TeacherCourseDetailPage() {
       .finally(() => setLoading(false));
     void fetchCompletionRules();
     void fetchPrerequisiteOptions();
+    void fetchPrerequisiteGraph();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
 
@@ -440,6 +460,7 @@ export default function TeacherCourseDetailPage() {
       }
 
       await fetchDetail();
+      await fetchPrerequisiteGraph();
       setSaveSuccessOpen(true);
     } catch (e: any) {
       setError(e?.message || "Đã xảy ra lỗi.");
@@ -464,6 +485,7 @@ export default function TeacherCourseDetailPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as any)?.message || "Không thể cập nhật trạng thái.");
       await fetchDetail();
+      await fetchPrerequisiteGraph();
       setSelectedStatus(nextStatus);
     } catch (e: any) {
       setError(e?.message || "Đã xảy ra lỗi.");
@@ -578,6 +600,15 @@ export default function TeacherCourseDetailPage() {
               </span>
             ) : null}
           </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setGraphModalOpen(true)}
+              disabled={loading}
+            >
+              Xem sơ đồ tiên quyết
+            </button>
           <div className="course-actions-menu">
             <button
               type="button"
@@ -638,6 +669,7 @@ export default function TeacherCourseDetailPage() {
                 </button>
               </div>
             ) : null}
+          </div>
           </div>
         </div>
 
@@ -909,6 +941,29 @@ export default function TeacherCourseDetailPage() {
         </div>
         <CourseContentTreeEditor courseId={courseId} embedded />
       </div>
+
+      {graphModalOpen ? (
+        <div className="save-success-modal-overlay" role="dialog" aria-modal="true">
+          <div className="save-success-modal" style={{ width: "min(1200px, 96vw)" }}>
+            <div className="save-success-modal-title">Sơ đồ tiên quyết</div>
+            <div style={{ maxHeight: "70vh", overflow: "auto", marginTop: 8 }}>
+              <PrerequisiteGraph
+                data={prerequisiteGraph}
+                showCompletionStatus={false}
+                onOpenCourse={(s) => {
+                  if (!s) return;
+                  window.open(`/courses/${s}`, "_blank");
+                }}
+              />
+            </div>
+            <div className="save-success-modal-actions">
+              <button type="button" className="primary-button" onClick={() => setGraphModalOpen(false)}>
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="wizard-card content-editor-card">
         <div className="content-editor-header">

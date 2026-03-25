@@ -10,6 +10,7 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
   // Public routes - Course catalog
   router.route('/catalog').get(optionalAuthorizedUser, controller.listPublishedCourses.bind(controller));
   router.route('/catalog/:slug').get(optionalAuthorizedUser, controller.getPublishedCourseBySlug.bind(controller));
+  router.route('/catalog/:slug/prerequisite-graph').get(optionalAuthorizedUser, controller.getPublishedCoursePrerequisiteGraphBySlug.bind(controller));
 
   // Enrollment routes
   router.route('/:id/enroll').post(requireAuthorizedUser, controller.enrollCourse.bind(controller));
@@ -47,6 +48,7 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
 
   // Course actions
   router.route('/:id').get(requireAuthorizedUser, controller.getMyCourseDetail.bind(controller));
+  router.route('/:id/prerequisite-graph').get(requireAuthorizedUser, controller.getMyCoursePrerequisiteGraph.bind(controller));
   router.route('/:id/prerequisite-options').get(requireAuthorizedUser, controller.listMyCoursePrerequisiteOptions.bind(controller));
   router.route('/:id').patch(requireAuthorizedUser, controller.updateMyCourse.bind(controller));
   router.route('/:id/status').patch(requireAuthorizedUser, controller.setMyCourseStatus.bind(controller));

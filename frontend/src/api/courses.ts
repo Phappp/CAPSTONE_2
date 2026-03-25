@@ -7,6 +7,7 @@ export const COURSES_API = {
   myStats: `${COURSES_API_BASE}/my/stats`,
   myList: `${COURSES_API_BASE}/my`,
   detail: (id: number | string) => `${COURSES_API_BASE}/${id}`,
+  prerequisiteGraph: (id: number | string) => `${COURSES_API_BASE}/${id}/prerequisite-graph`,
   prerequisiteOptions: (id: number | string) => `${COURSES_API_BASE}/${id}/prerequisite-options`,
   update: (id: number | string) => `${COURSES_API_BASE}/${id}`,
   setStatus: (id: number | string) => `${COURSES_API_BASE}/${id}/status`,
@@ -50,6 +51,7 @@ export const COURSES_API = {
    // NEW: Catalog & Enrollment endpoints
   catalog: `${COURSES_API_BASE}/catalog`,
   catalogDetail: (slug: string) => `${COURSES_API_BASE}/catalog/${slug}`,
+  catalogPrerequisiteGraph: (slug: string) => `${COURSES_API_BASE}/catalog/${slug}/prerequisite-graph`,
   enroll: (id: number | string) => `${COURSES_API_BASE}/${id}/enroll`,
   enrollmentStatus: (id: number | string) => `${COURSES_API_BASE}/${id}/enrollment-status`,
   myEnrollments: `${COURSES_API_BASE}/my-enrollments`,

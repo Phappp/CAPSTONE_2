@@ -50,6 +50,9 @@ import {
   UpdateCourseCompletionRulesRequest,
   CourseLearnerProgressResult,
   CoursePrerequisiteOption,
+  CoursePrerequisiteGraph,
+  CoursePrerequisiteGraphNode,
+  CoursePrerequisiteGraphEdge,
 } from '../types';
 
 function normalizeSlug(input: string): string {
@@ -137,6 +140,7 @@ function mapToPublishedCourseListItem(row: any): PublishedCourseListItem {
     total_duration_minutes: row.total_duration_minutes ? Number(row.total_duration_minutes) : null,
     // COUNT(*) from SQL drivers thường trả về string ("0"/"1"), nên ép kiểu số.
     is_enrolled: Number(row.is_enrolled ?? 0) > 0,
+    can_enroll: row.can_enroll == null ? true : Boolean(row.can_enroll),
     instructors: safeJsonParse<any[]>(row.instructors, []),
   };
 }
@@ -166,6 +170,106 @@ function parsePrerequisiteCourseIds(prerequisites: unknown): number[] {
 }
 
 export class CourseServiceImpl implements CourseService {
+  private async buildPrerequisiteGraph(
+    rootCourse: any,
+    subjectUserId: number | undefined,
+    scope: 'published' | 'published_or_own' = 'published'
+  ): Promise<CoursePrerequisiteGraph> {
+    const courseRepo = AppDataSource.getRepository(Course);
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    const rootId = Number(rootCourse.id);
+    const qb = courseRepo
+      .createQueryBuilder('c')
+      .where('c.deleted_at IS NULL');
+    if (scope === 'published_or_own' && subjectUserId) {
+      qb.andWhere('(c.status = :published OR c.created_by = :uid OR c.id = :rootId)', {
+        published: 'published',
+        uid: subjectUserId,
+        rootId,
+      });
+    } else {
+      qb.andWhere('(c.status = :published OR c.id = :rootId)', {
+        published: 'published',
+        rootId,
+      });
+    }
+    const courses = await qb.getMany();
+    const courseById = new Map<number, any>();
+    for (const c of courses as any[]) courseById.set(Number(c.id), c);
+    if (!courseById.has(rootId)) courseById.set(rootId, rootCourse);
+
+    const edges: CoursePrerequisiteGraphEdge[] = [];
+    const undirected = new Map<number, Set<number>>();
+    const addUndirected = (a: number, b: number) => {
+      const sa = undirected.get(a) || new Set<number>();
+      sa.add(b);
+      undirected.set(a, sa);
+      const sb = undirected.get(b) || new Set<number>();
+      sb.add(a);
+      undirected.set(b, sb);
+    };
+
+    for (const [cid, c] of courseById.entries()) {
+      const prereqIds = parsePrerequisiteCourseIds(c.prerequisites);
+      for (const pid of prereqIds) {
+        if (!courseById.has(pid) || pid === cid) continue;
+        edges.push({ from_course_id: pid, to_course_id: cid });
+        addUndirected(pid, cid);
+      }
+    }
+
+    const componentIds = new Set<number>();
+    const queue: number[] = [rootId];
+    while (queue.length) {
+      const id = queue.shift()!;
+      if (componentIds.has(id)) continue;
+      componentIds.add(id);
+      const adj = undirected.get(id);
+      if (!adj) continue;
+      for (const n of adj) if (!componentIds.has(n)) queue.push(n);
+    }
+
+    const nodesById = new Map<number, CoursePrerequisiteGraphNode>();
+    for (const id of componentIds) {
+      const c = courseById.get(id);
+      if (!c) continue;
+      nodesById.set(id, {
+        id,
+        title: String(c.title || ''),
+        slug: String(c.slug || ''),
+        thumbnail_url: c.thumbnail_url ? getSignedDeliveryUrl(c.thumbnail_url) : null,
+        level: String(c.level || ''),
+        is_current: id === rootId,
+        is_completed: false,
+      });
+    }
+    const filteredEdges = edges.filter(
+      (e) => componentIds.has(e.from_course_id) && componentIds.has(e.to_course_id)
+    );
+
+    if (subjectUserId) {
+      const nodeIds = Array.from(nodesById.keys());
+      if (nodeIds.length) {
+        const enrollments = await enrollmentRepo.find({ where: { user_id: subjectUserId } as any });
+        const completedSet = new Set<number>(
+          (enrollments as any[])
+            .filter((e) => String((e as any).status) === 'completed')
+            .map((e) => Number((e as any).course_id))
+        );
+        for (const id of nodeIds) {
+          const n = nodesById.get(id);
+          if (n) n.is_completed = completedSet.has(id);
+        }
+      }
+    }
+
+    return {
+      root_course_id: rootId,
+      nodes: Array.from(nodesById.values()),
+      edges: filteredEdges,
+    };
+  }
+
   private async validatePrerequisiteGraph(courseId: number, prerequisiteIds: number[]): Promise<void> {
     const uniquePrerequisiteIds = Array.from(
       new Set(prerequisiteIds.filter((id) => Number.isInteger(id) && id > 0))
@@ -340,7 +444,20 @@ export class CourseServiceImpl implements CourseService {
     const total = await qb.getCount();
     const { raw } = await qb.getRawAndEntities();
 
+    let completedSet = new Set<number>();
+    if (subjectUserId) {
+      const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+      const enrollments = await enrollmentRepo.find({ where: { user_id: subjectUserId } as any });
+      completedSet = new Set<number>(
+        (enrollments as any[])
+          .filter((e) => String((e as any).status) === 'completed')
+          .map((e) => Number((e as any).course_id))
+      );
+    }
+
     const items = raw.map((r: any) => {
+      const prerequisiteIds = parsePrerequisiteCourseIds(r.c_prerequisites ?? r.prerequisites);
+      const canEnrollByPrerequisite = prerequisiteIds.every((id) => completedSet.has(id));
       const row = {
         id: r.c_id ?? r.id,
         title: r.c_title ?? r.title,
@@ -355,6 +472,7 @@ export class CourseServiceImpl implements CourseService {
         lessons_count: r.lessons_count,
         total_duration_minutes: r.total_duration_minutes,
         is_enrolled: r.is_enrolled,
+        can_enroll: subjectUserId ? canEnrollByPrerequisite : true,
         instructors: r.instructors,
       };
       return mapToPublishedCourseListItem(row);
@@ -519,6 +637,18 @@ export class CourseServiceImpl implements CourseService {
     }));
 
     return course;
+  }
+
+  async getPublishedCoursePrerequisiteGraphBySlug(
+    subjectUserId: number | undefined,
+    slug: string
+  ): Promise<CoursePrerequisiteGraph> {
+    const courseRepo = AppDataSource.getRepository(Course);
+    const root = await courseRepo.findOne({
+      where: { slug, status: 'published' as any, deleted_at: null as any } as any,
+    });
+    if (!root) throw new Error('Không tìm thấy khóa học.');
+    return this.buildPrerequisiteGraph(root as any, subjectUserId, 'published');
   }
 
   // Enrollment methods
@@ -1358,6 +1488,12 @@ export class CourseServiceImpl implements CourseService {
       lessons_count: raw.lessons_count,
     };
     return mapCourseRowToItem(row);
+  }
+
+  async getMyCoursePrerequisiteGraph(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteGraph> {
+    await ensureUserIsCourseManager(subjectUserId);
+    const root = await this.ensureOwnCourse(subjectUserId, courseId);
+    return this.buildPrerequisiteGraph(root as any, subjectUserId, 'published_or_own');
   }
 
   async listMyCoursePrerequisiteOptions(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteOption[]> {

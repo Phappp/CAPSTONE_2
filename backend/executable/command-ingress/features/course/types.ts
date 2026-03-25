@@ -125,6 +125,7 @@ export type PublishedCourseListItem = {
   lessons_count: number;
   total_duration_minutes?: number | null;
   is_enrolled?: boolean;
+  can_enroll?: boolean;
   instructors: {
     id: number;
     full_name: string;
@@ -312,10 +313,32 @@ export type CoursePrerequisiteOption = {
   reason?: string | null;
 };
 
+export type CoursePrerequisiteGraphNode = {
+  id: number;
+  title: string;
+  slug: string;
+  thumbnail_url: string | null;
+  level: string;
+  is_current: boolean;
+  is_completed: boolean;
+};
+
+export type CoursePrerequisiteGraphEdge = {
+  from_course_id: number;
+  to_course_id: number;
+};
+
+export type CoursePrerequisiteGraph = {
+  root_course_id: number;
+  nodes: CoursePrerequisiteGraphNode[];
+  edges: CoursePrerequisiteGraphEdge[];
+};
+
 export interface CourseService {
   // Public methods
   listPublishedCourses(subjectUserId: number | undefined, query: PublishedCourseListQuery): Promise<PublishedCourseListResult>;
   getPublishedCourseBySlug(subjectUserId: number | undefined, slug: string): Promise<CourseDetail>;
+  getPublishedCoursePrerequisiteGraphBySlug(subjectUserId: number | undefined, slug: string): Promise<CoursePrerequisiteGraph>;
 
   // Enrollment methods
   enrollCourse(subjectUserId: number, courseId: number): Promise<EnrollmentResult>;
@@ -330,6 +353,7 @@ export interface CourseService {
   listMyCourses(subjectUserId: number, query: CourseListQuery): Promise<CourseListResult>;
   getMyCourseDashboardStats(subjectUserId: number): Promise<CourseDashboardStats>;
   getMyCourseDetail(subjectUserId: number, courseId: number): Promise<CourseListItem>;
+  getMyCoursePrerequisiteGraph(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteGraph>;
   listMyCoursePrerequisiteOptions(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteOption[]>;
   updateMyCourse(subjectUserId: number, courseId: number, request: UpdateCourseRequest): Promise<void>;
   setMyCourseStatus(subjectUserId: number, courseId: number, status: CourseStatus): Promise<void>;

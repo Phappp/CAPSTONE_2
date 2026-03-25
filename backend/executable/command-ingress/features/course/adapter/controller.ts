@@ -57,6 +57,16 @@ export class CourseController extends BaseController {
     });
   }
 
+  async getPublishedCoursePrerequisiteGraphBySlug(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const slug = req.params.slug;
+      const subjectRaw = (req as any)?.getSubject?.();
+      const uid = subjectRaw != null ? Number(subjectRaw) : undefined;
+      const graph = await this.service.getPublishedCoursePrerequisiteGraphBySlug(uid, slug);
+      res.status(200).json(graph);
+    });
+  }
+
   // Enrollment routes
   async enrollCourse(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
@@ -175,6 +185,15 @@ export class CourseController extends BaseController {
       const courseId = Number(req.params.id);
       const course = await this.service.getMyCourseDetail(uid, courseId);
       res.status(200).json(course);
+    });
+  }
+
+  async getMyCoursePrerequisiteGraph(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const graph = await this.service.getMyCoursePrerequisiteGraph(uid, courseId);
+      res.status(200).json(graph);
     });
   }
 

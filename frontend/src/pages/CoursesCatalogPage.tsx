@@ -20,6 +20,7 @@ type PublishedCourse = {
   lessons_count: number;
   total_duration_minutes?: number | null;
   is_enrolled?: boolean;
+  can_enroll?: boolean;
 };
 
 type CatalogResponse = {
@@ -197,12 +198,17 @@ export default function CoursesCatalogPage() {
                       type="button"
                       className="btn btn--primary"
                       onClick={() => enroll(c.id)}
-                      disabled={loading}
+                      disabled={loading || c.can_enroll === false}
                       title="Đăng ký khóa học"
                     >
-                      Đăng ký
+                      {c.can_enroll === false ? "Chưa đủ điều kiện" : "Đăng ký"}
                     </button>
                   </div>
+                  {c.can_enroll === false ? (
+                    <div style={{ marginTop: 8, color: "#b91c1c", fontWeight: 700, fontSize: 13 }}>
+                      Cần hoàn tất khóa tiên quyết trước khi đăng ký.
+                    </div>
+                  ) : null}
                 </div>
               </div>
             );

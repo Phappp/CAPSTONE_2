@@ -4,6 +4,7 @@ import AvatarMenu from "../components/AvatarMenu";
 import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import { getAccessToken } from "../utils/authStorage";
+import PrerequisiteGraph, { type PrerequisiteGraphData } from "../components/PrerequisiteGraph";
 import "./CoursePublicDetailPage.css";
 
 type CourseDetail = {
@@ -78,6 +79,8 @@ export default function CoursePublicDetailPage() {
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [prerequisiteCatalog, setPrerequisiteCatalog] = useState<PrerequisiteCourseOption[]>([]);
   const [myEnrollmentStatusByCourseId, setMyEnrollmentStatusByCourseId] = useState<Record<number, string>>({});
+  const [prerequisiteGraph, setPrerequisiteGraph] = useState<PrerequisiteGraphData | null>(null);
+  const [graphModalOpen, setGraphModalOpen] = useState(false);
 
   const fetchDetail = async () => {
     const res = await fetch(`${url}${COURSES_API.catalogDetail(slug)}`, {
@@ -143,6 +146,18 @@ export default function CoursePublicDetailPage() {
     setMyEnrollmentStatusByCourseId(next);
   };
 
+  const fetchPrerequisiteGraph = async () => {
+    const res = await fetch(`${url}${COURSES_API.catalogPrerequisiteGraph(slug)}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    const json = (await res.json().catch(() => null)) as PrerequisiteGraphData | null;
+    if (!res.ok || !json) return;
+    setPrerequisiteGraph(json);
+  };
+
   const prerequisiteItems = useMemo(() => {
     const raw = toStringList(course?.prerequisites);
     if (!raw.length) return [];
@@ -166,6 +181,10 @@ export default function CoursePublicDetailPage() {
       return { id: 0, label: value, slug: "", thumbnail_url: null, isLinkedCourse: false, status: "", isCompleted: false };
     });
   }, [course?.prerequisites, prerequisiteCatalog, myEnrollmentStatusByCourseId]);
+
+  const hasUnfinishedPrerequisites = useMemo(() => {
+    return prerequisiteItems.some((x) => x.isLinkedCourse && !x.isCompleted);
+  }, [prerequisiteItems]);
 
   const enroll = async () => {
     if (!course) return;
@@ -203,6 +222,7 @@ export default function CoursePublicDetailPage() {
       .finally(() => setLoading(false));
     void fetchPrerequisiteCatalog();
     void fetchMyEnrollmentStatus();
+    void fetchPrerequisiteGraph();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
@@ -264,10 +284,14 @@ export default function CoursePublicDetailPage() {
                 <button
                   type="button"
                   onClick={enroll}
-                  disabled={loading || !!course.is_enrolled}
+                  disabled={loading || !!course.is_enrolled || hasUnfinishedPrerequisites}
                   className={`enroll-button ${course.is_enrolled ? "enrolled" : ""}`}
                 >
-                  {course.is_enrolled ? "Đã đăng ký" : "Đăng ký"}
+                  {course.is_enrolled
+                    ? "Đã đăng ký"
+                    : hasUnfinishedPrerequisites
+                      ? "Chưa đủ điều kiện"
+                      : "Đăng ký"}
                 </button>
                 <button
                   type="button"
@@ -278,6 +302,11 @@ export default function CoursePublicDetailPage() {
                   Về Dashboard
                 </button>
               </div>
+              {hasUnfinishedPrerequisites ? (
+                <div style={{ marginTop: 8, color: "#b91c1c", fontWeight: 700 }}>
+                  Bạn cần hoàn thành các khóa tiên quyết trước khi đăng ký.
+                </div>
+              ) : null}
 
               {Array.isArray(course.instructors) && course.instructors.length ? (
                 <div className="course-full-description">
@@ -342,6 +371,13 @@ export default function CoursePublicDetailPage() {
                 </div>
               ) : null}
 
+              <div className="course-full-description">
+                <h3 style={{ margin: "16px 0 8px 0" }}>Sơ đồ tiên quyết</h3>
+                <button type="button" className="dashboard-button" onClick={() => setGraphModalOpen(true)}>
+                  Xem sơ đồ tiên quyết
+                </button>
+              </div>
+
               {course.full_description ? (
                 <div className="course-full-description">
                   <h3 style={{ margin: "16px 0 8px 0" }}>Mô tả chi tiết</h3>
@@ -385,6 +421,21 @@ export default function CoursePublicDetailPage() {
           </div>
         )}
       </div>
+      {graphModalOpen ? (
+        <div className="save-success-modal-overlay" role="dialog" aria-modal="true">
+          <div className="save-success-modal" style={{ width: "min(1200px, 96vw)" }}>
+            <div className="save-success-modal-title">Sơ đồ tiên quyết</div>
+            <div style={{ maxHeight: "70vh", overflow: "auto", marginTop: 8 }}>
+              <PrerequisiteGraph data={prerequisiteGraph} onOpenCourse={(s) => navigate(`/courses/${s}`)} />
+            </div>
+            <div className="save-success-modal-actions">
+              <button type="button" className="primary-button" onClick={() => setGraphModalOpen(false)}>
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
