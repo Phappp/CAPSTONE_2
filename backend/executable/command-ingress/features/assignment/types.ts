@@ -1,6 +1,6 @@
-export type AssignmentFormat = 'pdf' | 'docx' | 'doc' | 'jpg' | 'jpeg' | 'png' | 'zip' | 'rar' | '7z';
+export type AssignmentFormat = '.pdf' | '.docx' | '.doc' | '.jpg' | '.jpeg' | '.png' | '.zip' | '.rar' | '.7z';
 
-export type AssignmentAtachment = {
+export type AssignmentAttachment = {
     file_name: string;
     file_path: string;
 };
@@ -8,7 +8,7 @@ export type AssignmentAtachment = {
 export type CreateAssignmentRequest = {
     title: string;
     description: string | null;
-    attachments?: AssignmentAtachment[] | null;
+    attachments?: AssignmentAttachment[] | null;
     max_score: number;
     passing_score?: number | null;
     due_date: string;

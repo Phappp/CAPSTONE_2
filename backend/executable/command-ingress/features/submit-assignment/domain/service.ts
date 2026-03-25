@@ -7,6 +7,7 @@ import SubmissionText from '../../../../../internal/model/submission_text';
 import SubmissionAttachment from '../../../../../internal/model/submission_attachment';
 import { SubmitAssignmentBody } from '../adapter/dto';
 import { SubmissionService } from '../types';
+import { FileService } from '../../../utils/file.service';
 
 export class SubmissionServiceImpl implements SubmissionService {
     private dataSource: DataSource;
@@ -20,14 +21,16 @@ export class SubmissionServiceImpl implements SubmissionService {
         await queryRunner.connect();
         await queryRunner.startTransaction();
 
+        let savedPaths: string[] = [];
+
         try {
-            // Kiểm tra bài tập tồn tại
+            // 1. Kiểm tra bài tập tồn tại
             const assignment = await queryRunner.manager.findOne(Assignment, {
                 where: { id: req.assignment_id }
             });
             if (!assignment) throw new Error('NOT_FOUND_ASSIGNMENT');
 
-            // Logic Nộp lại (Resubmission)
+            // 2. Logic Nộp lại
             const previousSubmissionsCount = await queryRunner.manager.count(Submission, {
                 where: { assignment_id: req.assignment_id, user_id: req.user_id }
             });
@@ -39,7 +42,7 @@ export class SubmissionServiceImpl implements SubmissionService {
                 }
             }
 
-            // Logic Nộp muộn (Late Submission)
+            // 3. Logic Nộp muộn
             const now = new Date();
             let isLate = false;
             
@@ -52,7 +55,7 @@ export class SubmissionServiceImpl implements SubmissionService {
                 isLate = true;
             }
 
-            // Lưu bản ghi Submission gốc
+            // 4. Lưu bản ghi Submission gốc
             const newSubmission = queryRunner.manager.create(Submission, {
                 assignment_id: req.assignment_id,
                 user_id: req.user_id,
@@ -62,7 +65,7 @@ export class SubmissionServiceImpl implements SubmissionService {
             });
             const savedSubmission = await queryRunner.manager.save(newSubmission);
 
-            // Lưu Text Submission
+            // 5. Lưu Text Submission
             if (req.text_submission && req.text_submission.trim() !== '') {
                 const submissionText = queryRunner.manager.create(SubmissionText, {
                     submission_id: savedSubmission.id,
@@ -71,19 +74,28 @@ export class SubmissionServiceImpl implements SubmissionService {
                 await queryRunner.manager.save(submissionText);
             }
 
-            // Lưu mảng Files 
-            const savedFiles = [];
+            // 6. Xử lý lưu mảng Files bằng FileService
+            const filesData = [];
+            
             if (req.files && req.files.length > 0) {
-                for (const file of req.files) {
+                // Service thực hiện lưu file và lấy lại mảng đường dẫn
+                savedPaths = await FileService.saveFiles(req.files);
+
+                for (let i = 0; i < savedPaths.length; i++) {
+                    const file = req.files[i];
+                    const absPath = savedPaths[i];
+                    const urlPath = FileService.toClientPath(absPath);
+                    
                     const attachment = queryRunner.manager.create(SubmissionAttachment, {
                         submission_id: savedSubmission.id,
                         file_name: file.originalname,
-                        file_path: `/uploads/submissions/${file.filename}`, 
+                        file_path: urlPath,
                         file_size: file.size,
                         mime_type: file.mimetype
                     });
                     await queryRunner.manager.save(attachment);
-                    savedFiles.push({
+
+                    filesData.push({
                         file_name: attachment.file_name,
                         file_path: attachment.file_path,
                         file_size: attachment.file_size
@@ -93,19 +105,24 @@ export class SubmissionServiceImpl implements SubmissionService {
 
             await queryRunner.commitTransaction();
 
-            // Trả về đúng format tài liệu
             return {
                 submission_id: savedSubmission.id,
                 assignment_id: savedSubmission.assignment_id,
                 submitted_at: savedSubmission.submitted_at,
                 is_late: savedSubmission.is_late,
                 resubmission_count: savedSubmission.resubmission_count,
-                files: savedFiles,
+                files: filesData,
                 status: savedSubmission.status
             };
 
         } catch (error) {
-            await queryRunner.rollbackTransaction(); 
+            await queryRunner.rollbackTransaction();
+            
+            // Nếu có lỗi xảy ra, xóa toàn bộ các file vừa được FileService tạo ra
+            if (savedPaths.length > 0) {
+                await FileService.deleteFiles(savedPaths);
+            }
+            
             throw error;
         } finally {
             await queryRunner.release(); 
