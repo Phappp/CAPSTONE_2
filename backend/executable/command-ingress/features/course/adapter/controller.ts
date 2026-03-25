@@ -10,6 +10,7 @@ import {
   CreateLessonYoutubeResourceBody,
   CreateModuleBody,
   LearnerLessonProgressBody,
+  UpdateCourseCompletionRulesBody,
   ListMyCoursesQuery,
   ListPublishedCoursesQuery,
   ReorderContentBody,
@@ -217,6 +218,42 @@ export class CourseController extends BaseController {
       const courseId = Number(req.params.id);
       const tree = await this.service.getMyCourseContentTree(uid, courseId);
       res.status(200).json(tree);
+    });
+  }
+
+  async getMyCourseCompletionRules(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const rules = await this.service.getMyCourseCompletionRules(uid, courseId);
+      res.status(200).json(rules);
+    });
+  }
+
+  async updateMyCourseCompletionRules(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const body = new UpdateCourseCompletionRulesBody(req.body);
+      const validateResult = await body.validate();
+      if (!validateResult.ok) {
+        responseValidationError(res, validateResult.errors[0]);
+        return;
+      }
+      const rules = await this.service.updateMyCourseCompletionRules(uid, courseId, body);
+      res.status(200).json(rules);
+    });
+  }
+
+  async listMyCourseLearnerProgress(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const page = req.query.page ? Number(req.query.page) : 1;
+      const page_size = req.query.page_size ? Number(req.query.page_size) : 20;
+      const q = req.query.q != null ? String(req.query.q) : undefined;
+      const result = await this.service.listMyCourseLearnerProgress(uid, courseId, { page, page_size, q });
+      res.status(200).json(result);
     });
   }
 

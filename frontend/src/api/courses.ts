@@ -16,6 +16,9 @@ export const COURSES_API = {
   progress: (id: number | string) => `${COURSES_API_BASE}/${id}/progress`,
   lessonHeartbeat: (id: number | string, lessonId: number | string) => `${COURSES_API_BASE}/${id}/lessons/${lessonId}/progress`,
   completeLesson: (id: number | string, lessonId: number | string) => `${COURSES_API_BASE}/${id}/lessons/${lessonId}/complete`,
+  // Course manager: completion rules + learner tracking
+  completionRules: (id: number | string) => `${COURSES_API_BASE}/${id}/completion-rules`,
+  learnersProgress: (id: number | string) => `${COURSES_API_BASE}/${id}/learners/progress`,
   reorderContent: (id: number | string) => `${COURSES_API_BASE}/${id}/content/reorder`,
   createModule: (id: number | string) => `${COURSES_API_BASE}/${id}/modules`,
   updateModule: (id: number | string, moduleId: number | string) =>

@@ -1,4 +1,4 @@
-import { Length, validate, IsOptional, IsNumber, Min, IsEnum } from 'class-validator';
+import { Length, validate, IsOptional, IsNumber, Min, IsEnum, Max } from 'class-validator';
 import { ValidationResult } from '../../../shared/validation';
 import { CourseSortBy, CourseStatus, LessonType, SortDir } from '../types';
 
@@ -216,5 +216,30 @@ export class LearnerLessonProgressBody extends RequestDto {
   constructor(body: any) {
     super();
     this.delta_seconds = Number(body?.delta_seconds);
+  }
+}
+
+export class UpdateCourseCompletionRulesBody extends RequestDto {
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  video_min_seconds?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  video_min_percent?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  text_min_seconds?: number;
+
+  constructor(body: any) {
+    super();
+    if (body?.video_min_seconds != null) this.video_min_seconds = Number(body.video_min_seconds);
+    if (body?.video_min_percent != null) this.video_min_percent = Number(body.video_min_percent);
+    if (body?.text_min_seconds != null) this.text_min_seconds = Number(body.text_min_seconds);
   }
 }

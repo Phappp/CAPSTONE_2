@@ -26,6 +26,35 @@ type CourseDetail = {
   lessons_count: number;
 };
 
+type CompletionRules = {
+  course_id: number;
+  video_min_seconds: number;
+  video_min_percent: number;
+  text_min_seconds: number;
+};
+
+type LearnerProgressItem = {
+  user_id: number;
+  full_name: string;
+  email: string;
+  status: string;
+  enrolled_at: string;
+  last_accessed_at: string | null;
+  completed_at: string | null;
+  progress_percent: number;
+  completed_lessons: number;
+  time_spent_seconds: number;
+};
+
+type LearnerProgressResult = {
+  course_id: number;
+  total_lessons: number;
+  items: LearnerProgressItem[];
+  page: number;
+  page_size: number;
+  total: number;
+};
+
 export default function TeacherCourseDetailPage() {
   const navigate = useNavigate();
   const params = useParams();
@@ -55,6 +84,21 @@ export default function TeacherCourseDetailPage() {
     status: CourseStatus;
   }>(null);
   const [openStatusMenu, setOpenStatusMenu] = useState(false);
+  const [rulesLoading, setRulesLoading] = useState(false);
+  const [rulesError, setRulesError] = useState<string | null>(null);
+  const [rules, setRules] = useState<CompletionRules | null>(null);
+  const [rulesDraft, setRulesDraft] = useState<{ video_min_seconds: string; video_min_percent: string; text_min_seconds: string }>({
+    video_min_seconds: "60",
+    video_min_percent: "0.7",
+    text_min_seconds: "30",
+  });
+
+  const [learnerLoading, setLearnerLoading] = useState(false);
+  const [learnerError, setLearnerError] = useState<string | null>(null);
+  const [learnerQ, setLearnerQ] = useState("");
+  const [learnerPage, setLearnerPage] = useState(1);
+  const [learnerPageSize] = useState(20);
+  const [learnerResult, setLearnerResult] = useState<LearnerProgressResult | null>(null);
 
   const isDirty = useMemo(() => {
     if (!initialForm) return false;
@@ -93,6 +137,94 @@ export default function TeacherCourseDetailPage() {
     setInitialForm({ ...nextForm, status: nextStatus });
   };
 
+  const fetchCompletionRules = async () => {
+    if (!courseId || Number.isNaN(courseId)) return;
+    setRulesLoading(true);
+    setRulesError(null);
+    try {
+      const res = await fetch(`${url}${COURSES_API.completionRules(courseId)}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const data = (await res.json().catch(() => ({}))) as Partial<CompletionRules> & { message?: string };
+      if (!res.ok) throw new Error(data?.message || "Không thể tải quy tắc hoàn thành.");
+      const next = data as CompletionRules;
+      setRules(next);
+      setRulesDraft({
+        video_min_seconds: String(next.video_min_seconds ?? 60),
+        video_min_percent: String(next.video_min_percent ?? 0.7),
+        text_min_seconds: String(next.text_min_seconds ?? 30),
+      });
+    } catch (e: any) {
+      setRulesError(e?.message || "Không thể tải quy tắc hoàn thành.");
+      setRules(null);
+    } finally {
+      setRulesLoading(false);
+    }
+  };
+
+  const saveCompletionRules = async () => {
+    if (!courseId || Number.isNaN(courseId)) return;
+    setRulesLoading(true);
+    setRulesError(null);
+    try {
+      const payload: Record<string, number> = {};
+      const vms = Number(rulesDraft.video_min_seconds);
+      const vmp = Number(rulesDraft.video_min_percent);
+      const tms = Number(rulesDraft.text_min_seconds);
+      if (Number.isFinite(vms)) payload.video_min_seconds = vms;
+      if (Number.isFinite(vmp)) payload.video_min_percent = vmp;
+      if (Number.isFinite(tms)) payload.text_min_seconds = tms;
+
+      const res = await fetch(`${url}${COURSES_API.completionRules(courseId)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = (await res.json().catch(() => ({}))) as Partial<CompletionRules> & { message?: string };
+      if (!res.ok) throw new Error(data?.message || "Không thể lưu quy tắc hoàn thành.");
+      setRules(data as CompletionRules);
+    } catch (e: any) {
+      setRulesError(e?.message || "Không thể lưu quy tắc hoàn thành.");
+    } finally {
+      setRulesLoading(false);
+    }
+  };
+
+  const fetchLearnerProgress = async (opts?: { page?: number; q?: string }) => {
+    if (!courseId || Number.isNaN(courseId)) return;
+    const page = opts?.page ?? learnerPage;
+    const q = opts?.q ?? learnerQ;
+    setLearnerLoading(true);
+    setLearnerError(null);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("page_size", String(learnerPageSize));
+      if (q.trim()) params.set("q", q.trim());
+
+      const res = await fetch(`${url}${COURSES_API.learnersProgress(courseId)}?${params.toString()}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const data = (await res.json().catch(() => ({}))) as Partial<LearnerProgressResult> & { message?: string };
+      if (!res.ok) throw new Error(data?.message || "Không thể tải tiến độ học viên.");
+      setLearnerResult(data as LearnerProgressResult);
+    } catch (e: any) {
+      setLearnerError(e?.message || "Không thể tải tiến độ học viên.");
+      setLearnerResult(null);
+    } finally {
+      setLearnerLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!courseId || Number.isNaN(courseId)) {
       navigate("/teacher/dashboard");
@@ -103,8 +235,17 @@ export default function TeacherCourseDetailPage() {
     fetchDetail()
       .catch((e: any) => setError(e?.message || "Đã xảy ra lỗi."))
       .finally(() => setLoading(false));
+    void fetchCompletionRules();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void fetchLearnerProgress({ page: learnerPage, q: learnerQ });
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [learnerPage, learnerQ, courseId]);
 
   const save = async () => {
     setLoading(true);
@@ -476,6 +617,165 @@ export default function TeacherCourseDetailPage() {
           <div className="content-editor-title">Nội dung khóa học</div>
         </div>
         <CourseContentTreeEditor courseId={courseId} embedded />
+      </div>
+
+      <div className="wizard-card content-editor-card">
+        <div className="content-editor-header">
+          <div className="content-editor-title">Quy tắc hoàn thành (Time-based)</div>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button type="button" className="secondary-button" onClick={fetchCompletionRules} disabled={rulesLoading}>
+              Tải lại
+            </button>
+            <button type="button" className="primary-button" onClick={saveCompletionRules} disabled={rulesLoading}>
+              Lưu quy tắc
+            </button>
+          </div>
+        </div>
+
+        {rulesError ? <div className="error-box" style={{ marginTop: "0.75rem" }}>{rulesError}</div> : null}
+
+        <div className="course-detail-two-column" style={{ marginTop: "0.75rem" }}>
+          <div>
+            <div className="form-group">
+              <label className="form-label">Video: tối thiểu (giây)</label>
+              <input
+                className="form-input"
+                inputMode="numeric"
+                value={rulesDraft.video_min_seconds}
+                onChange={(e) => setRulesDraft((p) => ({ ...p, video_min_seconds: e.target.value }))}
+                disabled={rulesLoading}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Video: tối thiểu (% thời lượng, 0..1)</label>
+              <input
+                className="form-input"
+                inputMode="decimal"
+                value={rulesDraft.video_min_percent}
+                onChange={(e) => setRulesDraft((p) => ({ ...p, video_min_percent: e.target.value }))}
+                disabled={rulesLoading}
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="form-group">
+              <label className="form-label">Text: tối thiểu (giây)</label>
+              <input
+                className="form-input"
+                inputMode="numeric"
+                value={rulesDraft.text_min_seconds}
+                onChange={(e) => setRulesDraft((p) => ({ ...p, text_min_seconds: e.target.value }))}
+                disabled={rulesLoading}
+              />
+            </div>
+            <div className="course-stats">
+              Đang áp dụng:{" "}
+              {rules ? (
+                <>
+                  Video ≥ <b>{rules.video_min_seconds}s</b> hoặc ≥ <b>{rules.video_min_percent}</b> · Text ≥ <b>{rules.text_min_seconds}s</b>
+                </>
+              ) : (
+                <span>--</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="wizard-card content-editor-card">
+        <div className="content-editor-header">
+          <div className="content-editor-title">Tiến độ học viên</div>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+            <input
+              className="form-input"
+              style={{ width: 280, maxWidth: "70vw" }}
+              placeholder="Tìm theo tên/email..."
+              value={learnerQ}
+              onChange={(e) => {
+                setLearnerPage(1);
+                setLearnerQ(e.target.value);
+              }}
+              disabled={learnerLoading}
+            />
+            <button type="button" className="secondary-button" onClick={() => fetchLearnerProgress()} disabled={learnerLoading}>
+              Tải lại
+            </button>
+          </div>
+        </div>
+
+        {learnerError ? <div className="error-box" style={{ marginTop: "0.75rem" }}>{learnerError}</div> : null}
+
+        <div className="teacherLearnersTableWrap" style={{ marginTop: "0.75rem" }}>
+          <table className="teacherLearnersTable">
+            <thead>
+              <tr>
+                <th>Học viên</th>
+                <th>Tiến độ</th>
+                <th>Hoàn thành</th>
+                <th>Thời gian</th>
+                <th>Trạng thái</th>
+                <th>Lần truy cập</th>
+              </tr>
+            </thead>
+            <tbody>
+              {learnerLoading ? (
+                <tr>
+                  <td colSpan={6} style={{ padding: 12, color: "#6b7280", fontWeight: 800 }}>Đang tải...</td>
+                </tr>
+              ) : learnerResult?.items?.length ? (
+                learnerResult.items.map((it) => (
+                  <tr key={it.user_id}>
+                    <td>
+                      <div style={{ fontWeight: 900 }}>{it.full_name}</div>
+                      <div style={{ color: "#6b7280", fontSize: 13 }}>{it.email}</div>
+                    </td>
+                    <td style={{ fontWeight: 900 }}>{Number(it.progress_percent ?? 0)}%</td>
+                    <td>
+                      {it.completed_lessons}/{learnerResult.total_lessons}
+                    </td>
+                    <td>{Math.round(Number(it.time_spent_seconds ?? 0) / 60)} phút</td>
+                    <td>{it.status}</td>
+                    <td style={{ color: "#6b7280", fontSize: 13 }}>{it.last_accessed_at ? new Date(it.last_accessed_at).toLocaleString("vi-VN") : "--"}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} style={{ padding: 12, color: "#6b7280", fontWeight: 800 }}>Chưa có dữ liệu.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {learnerResult ? (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <div className="course-stats">
+              Tổng: <b>{learnerResult.total}</b>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setLearnerPage((p) => Math.max(1, p - 1))}
+                disabled={learnerLoading || learnerPage <= 1}
+              >
+                Trước
+              </button>
+              <span className="course-stats">
+                Trang <b>{learnerResult.page}</b>
+              </span>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setLearnerPage((p) => p + 1)}
+                disabled={learnerLoading || learnerResult.items.length < learnerResult.page_size}
+              >
+                Sau
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

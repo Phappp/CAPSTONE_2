@@ -8,6 +8,7 @@ import Lesson from '../../../../../internal/model/lesson';
 import LessonResource from '../../../../../internal/model/lesson_resource';
 import LessonCompletion from '../../../../../internal/model/lesson_completion';
 import LessonProgress from '../../../../../internal/model/lesson_progress';
+import CourseCompletionRequirement from '../../../../../internal/model/course_completion_requirements';
 import UserRole from '../../../../../internal/model/user_roles';
 import Role from '../../../../../internal/model/role';
 import User from '../../../../../internal/model/user';
@@ -45,6 +46,9 @@ import {
   CourseProgressResult,
   LessonHeartbeatResult,
   LessonCompleteResult,
+  CourseCompletionRules,
+  UpdateCourseCompletionRulesRequest,
+  CourseLearnerProgressResult,
 } from '../types';
 
 function normalizeSlug(input: string): string {
@@ -725,19 +729,32 @@ export class CourseServiceImpl implements CourseService {
     return { modules, lessons: lessons as Lesson[], orderedLessons };
   }
 
-  private computeRequiredSecondsForLesson(lesson: Lesson): number {
+  private async getTimeRulesForCourse(courseId: number): Promise<{ videoMinSeconds: number; videoMinPercent: number; textMinSeconds: number }> {
+    const repo = AppDataSource.getRepository(CourseCompletionRequirement);
+    const row = await repo.findOne({ where: { course_id: courseId } as any });
+    const videoMinSeconds = Number((row as any)?.video_min_seconds ?? 60);
+    const videoMinPercent = Number((row as any)?.video_min_percent ?? 0.7);
+    const textMinSeconds = Number((row as any)?.text_min_seconds ?? 30);
+    return {
+      videoMinSeconds: Number.isFinite(videoMinSeconds) && videoMinSeconds > 0 ? videoMinSeconds : 60,
+      videoMinPercent: Number.isFinite(videoMinPercent) && videoMinPercent >= 0 && videoMinPercent <= 1 ? videoMinPercent : 0.7,
+      textMinSeconds: Number.isFinite(textMinSeconds) && textMinSeconds > 0 ? textMinSeconds : 30,
+    };
+  }
+
+  private computeRequiredSecondsForLesson(lesson: Lesson, rules: { videoMinSeconds: number; videoMinPercent: number; textMinSeconds: number }): number {
     const t = String((lesson as any).lesson_type || 'text');
     if (t === 'video') {
       const dm = Number((lesson as any).duration_minutes);
       if (Number.isFinite(dm) && dm > 0) {
         const durSec = Math.round(dm * 60);
-        return Math.max(60, Math.round(durSec * 0.7));
+        return Math.max(rules.videoMinSeconds, Math.round(durSec * rules.videoMinPercent));
       }
-      return 60;
+      return rules.videoMinSeconds;
     }
-    if (t === 'text') return 30;
+    if (t === 'text') return rules.textMinSeconds;
     // quiz/assignment: treat as at least a minimal engagement time for now.
-    return 30;
+    return rules.textMinSeconds;
   }
 
   private async ensureEnrolledLearner(subjectUserId: number, courseId: number): Promise<CourseEnrollment> {
@@ -849,7 +866,8 @@ export class CourseServiceImpl implements CourseService {
     (entity as any).time_spent_seconds = Number((entity as any).time_spent_seconds || 0) + delta;
     const saved = await progressRepo.save(entity as any);
 
-    const required_seconds = this.computeRequiredSecondsForLesson(target);
+    const rules = await this.getTimeRulesForCourse(courseId);
+    const required_seconds = this.computeRequiredSecondsForLesson(target, rules);
     const time_spent_seconds = Number((saved as any).time_spent_seconds || 0);
     const can_complete = time_spent_seconds >= required_seconds;
 
@@ -888,7 +906,8 @@ export class CourseServiceImpl implements CourseService {
     const progressRepo = AppDataSource.getRepository(LessonProgress);
     const p = await progressRepo.findOne({ where: { user_id: subjectUserId, course_id: courseId, lesson_id: lessonId } as any });
     const timeSpent = Number((p as any)?.time_spent_seconds ?? 0);
-    const required = this.computeRequiredSecondsForLesson(orderedLessons[idx]);
+    const rules = await this.getTimeRulesForCourse(courseId);
+    const required = this.computeRequiredSecondsForLesson(orderedLessons[idx], rules);
     if (timeSpent < required) {
       throw new Error(`Chưa đủ thời gian học để hoàn thành bài (cần ${required}s).`);
     }
@@ -924,6 +943,128 @@ export class CourseServiceImpl implements CourseService {
     await enrollmentRepo.update({ user_id: subjectUserId, course_id: courseId } as any, patch);
 
     return { lesson_id: lessonId, completed: true, progress_percent };
+  }
+
+  async getMyCourseCompletionRules(subjectUserId: number, courseId: number): Promise<CourseCompletionRules> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+
+    const repo = AppDataSource.getRepository(CourseCompletionRequirement);
+    const row = await repo.findOne({ where: { course_id: courseId } as any });
+    const rules = await this.getTimeRulesForCourse(courseId);
+
+    // If row doesn't exist yet, return defaults (do not force-create).
+    return {
+      course_id: courseId,
+      video_min_seconds: Number((row as any)?.video_min_seconds ?? rules.videoMinSeconds),
+      video_min_percent: Number((row as any)?.video_min_percent ?? rules.videoMinPercent),
+      text_min_seconds: Number((row as any)?.text_min_seconds ?? rules.textMinSeconds),
+    };
+  }
+
+  async updateMyCourseCompletionRules(
+    subjectUserId: number,
+    courseId: number,
+    request: UpdateCourseCompletionRulesRequest
+  ): Promise<CourseCompletionRules> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+
+    const repo = AppDataSource.getRepository(CourseCompletionRequirement);
+    const existing = await repo.findOne({ where: { course_id: courseId } as any });
+    const entity = existing ? existing : repo.create({ course_id: courseId } as any);
+
+    if (request.video_min_seconds != null) (entity as any).video_min_seconds = Number(request.video_min_seconds);
+    if (request.video_min_percent != null) (entity as any).video_min_percent = Number(request.video_min_percent);
+    if (request.text_min_seconds != null) (entity as any).text_min_seconds = Number(request.text_min_seconds);
+
+    const saved = await repo.save(entity as any);
+    return {
+      course_id: courseId,
+      video_min_seconds: Number((saved as any).video_min_seconds ?? 60),
+      video_min_percent: Number((saved as any).video_min_percent ?? 0.7),
+      text_min_seconds: Number((saved as any).text_min_seconds ?? 30),
+    };
+  }
+
+  async listMyCourseLearnerProgress(
+    subjectUserId: number,
+    courseId: number,
+    query: { page?: number; page_size?: number; q?: string }
+  ): Promise<CourseLearnerProgressResult> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+
+    const { orderedLessons } = await this.loadOrderedLessonsForCourse(courseId);
+    const totalLessons = orderedLessons.length;
+
+    const page = Number(query.page || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(query.page_size || 20)));
+    const q = query.q ? String(query.q).trim() : '';
+
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    const qb = enrollmentRepo.createQueryBuilder('ce');
+    qb.innerJoin(User, 'u', 'u.id = ce.user_id');
+    qb.where('ce.course_id = :courseId', { courseId });
+
+    if (q) {
+      qb.andWhere('(u.full_name LIKE :q OR u.email LIKE :q)', { q: `%${q}%` });
+    }
+
+    qb.select([
+      'ce.user_id as user_id',
+      'u.full_name as full_name',
+      'u.email as email',
+      'ce.status as status',
+      'ce.enrolled_at as enrolled_at',
+      'ce.last_accessed_at as last_accessed_at',
+      'ce.completed_at as completed_at',
+      'ce.progress_percent as progress_percent',
+    ]);
+
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(*)')
+        .from(LessonCompletion, 'lc')
+        .innerJoin(Lesson, 'l', 'l.id = lc.lesson_id')
+        .innerJoin(Module, 'm', 'm.id = l.module_id')
+        .where('lc.user_id = ce.user_id')
+        .andWhere('m.course_id = :courseId', { courseId });
+    }, 'completed_lessons');
+
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COALESCE(SUM(lp.time_spent_seconds), 0)')
+        .from(LessonProgress, 'lp')
+        .where('lp.user_id = ce.user_id')
+        .andWhere('lp.course_id = :courseId', { courseId });
+    }, 'time_spent_seconds');
+
+    qb.orderBy('ce.last_accessed_at', 'DESC').addOrderBy('ce.enrolled_at', 'DESC');
+
+    qb.skip((page - 1) * pageSize).take(pageSize);
+    const total = await qb.getCount();
+    const rows = await qb.getRawMany();
+
+    return {
+      course_id: courseId,
+      total_lessons: totalLessons,
+      items: (rows as any[]).map((r) => ({
+        user_id: Number(r.user_id),
+        full_name: String(r.full_name || ''),
+        email: String(r.email || ''),
+        status: r.status as any,
+        enrolled_at: r.enrolled_at ? new Date(r.enrolled_at).toISOString() : new Date().toISOString(),
+        last_accessed_at: r.last_accessed_at ? new Date(r.last_accessed_at).toISOString() : null,
+        completed_at: r.completed_at ? new Date(r.completed_at).toISOString() : null,
+        progress_percent: Number(r.progress_percent ?? 0),
+        completed_lessons: Number(r.completed_lessons ?? 0),
+        time_spent_seconds: Number(r.time_spent_seconds ?? 0),
+      })),
+      page,
+      page_size: pageSize,
+      total,
+    };
   }
 
   // Instructor methods (existing code)

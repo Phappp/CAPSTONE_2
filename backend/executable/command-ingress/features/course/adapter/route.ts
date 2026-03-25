@@ -27,6 +27,9 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
 
   // Content builder (modules & lessons)
   router.route('/:id/content').get(requireAuthorizedUser, controller.getMyCourseContentTree.bind(controller));
+  router.route('/:id/completion-rules').get(requireAuthorizedUser, controller.getMyCourseCompletionRules.bind(controller));
+  router.route('/:id/completion-rules').patch(requireAuthorizedUser, controller.updateMyCourseCompletionRules.bind(controller));
+  router.route('/:id/learners/progress').get(requireAuthorizedUser, controller.listMyCourseLearnerProgress.bind(controller));
   router.route('/:id/content/reorder').patch(requireAuthorizedUser, controller.reorderContent.bind(controller));
   router.route('/:id/modules').post(requireAuthorizedUser, controller.createModule.bind(controller));
   router.route('/:id/modules/:moduleId').patch(requireAuthorizedUser, controller.updateModule.bind(controller));

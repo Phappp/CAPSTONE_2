@@ -270,6 +270,37 @@ export type LessonCompleteResult = {
   progress_percent: number;
 };
 
+export type CourseCompletionRules = {
+  course_id: number;
+  video_min_seconds: number;
+  video_min_percent: number;
+  text_min_seconds: number;
+};
+
+export type UpdateCourseCompletionRulesRequest = Partial<Omit<CourseCompletionRules, 'course_id'>>;
+
+export type CourseLearnerProgressItem = {
+  user_id: number;
+  full_name: string;
+  email: string;
+  status: EnrollmentStatus;
+  enrolled_at: string;
+  last_accessed_at: string | null;
+  completed_at: string | null;
+  progress_percent: number;
+  completed_lessons: number;
+  time_spent_seconds: number;
+};
+
+export type CourseLearnerProgressResult = {
+  course_id: number;
+  total_lessons: number;
+  items: CourseLearnerProgressItem[];
+  page: number;
+  page_size: number;
+  total: number;
+};
+
 export interface CourseService {
   // Public methods
   listPublishedCourses(subjectUserId: number | undefined, query: PublishedCourseListQuery): Promise<PublishedCourseListResult>;
@@ -291,6 +322,9 @@ export interface CourseService {
   updateMyCourse(subjectUserId: number, courseId: number, request: UpdateCourseRequest): Promise<void>;
   setMyCourseStatus(subjectUserId: number, courseId: number, status: CourseStatus): Promise<void>;
   softDeleteMyCourse(subjectUserId: number, courseId: number): Promise<void>;
+  getMyCourseCompletionRules(subjectUserId: number, courseId: number): Promise<CourseCompletionRules>;
+  updateMyCourseCompletionRules(subjectUserId: number, courseId: number, request: UpdateCourseCompletionRulesRequest): Promise<CourseCompletionRules>;
+  listMyCourseLearnerProgress(subjectUserId: number, courseId: number, query: { page?: number; page_size?: number; q?: string }): Promise<CourseLearnerProgressResult>;
 
   getMyCourseContentTree(subjectUserId: number, courseId: number): Promise<CourseContentTree>;
   createModule(subjectUserId: number, courseId: number, request: CreateModuleRequest): Promise<{ id: number }>;
