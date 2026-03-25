@@ -510,7 +510,7 @@
 }
 
 .course-info {
-    display: flex;
+    /* display: flex; */
     gap: 16px;
     flex: 1;
     min-width: 0;

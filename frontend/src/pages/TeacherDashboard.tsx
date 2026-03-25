@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import { getAccessToken } from "../utils/authStorage";
+import AssignmentEditor from "../components/AssignmentEditor";
 import "./TeacherDashboard.css";
 
 export default function TeacherDashboard() {
@@ -1009,29 +1010,8 @@ export default function TeacherDashboard() {
         {section === "assignment" && (
           <div className="assignment-section">
             <h2>📋 Bài tập (Assignment)</h2>
-            <p>Assignment được tạo và chỉnh sửa trong Content Builder của từng khóa học</p>
-            <div className="assignment-controls">
-              <select
-                value={selectedCourseId ?? ""}
-                onChange={(e) => setSelectedCourseId(Number(e.target.value))}
-                disabled={loading || !(result?.items?.length ?? 0)}
-              >
-                <option value="">Chọn khóa học</option>
-                {(result?.items ?? []).map((c: any) => (
-                  <option key={c.id} value={c.id}>{c.title}</option>
-                ))}
-              </select>
-              <button
-                className="section-tab active"
-                onClick={() => {
-                  if (!selectedCourseId) return;
-                  navigate(`/teacher/courses/${selectedCourseId}/content`);
-                }}
-                disabled={!selectedCourseId}
-              >
-                Mở Content Builder →
-              </button>
-            </div>
+            <p>Tạo bài tập theo bài học, upload file đính kèm, xem trước và chỉnh sửa.</p>
+            <AssignmentEditor courses={(result?.items ?? []) as any[]} token={token} loading={loading} />
           </div>
         )}
       </div>
