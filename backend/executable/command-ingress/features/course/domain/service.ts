@@ -67,16 +67,20 @@ function safeJsonParse<T>(value: any, fallback: T): T {
   return value as T;
 }
 
-async function ensureUserIsCourseManager(userId: number) {
+async function isUserCourseManager(userId: number): Promise<boolean> {
   const userRoleRepo = AppDataSource.getRepository(UserRole);
   const roleRepo = AppDataSource.getRepository(Role);
   const userRoles = await userRoleRepo.find({ where: { user_id: userId } });
-  if (!userRoles.length) throw new Error('Bạn không có quyền thực hiện thao tác này.');
+  if (!userRoles.length) return false;
 
   const roleIds = userRoles.map((ur) => ur.role_id);
   const roles = await roleRepo.findByIds(roleIds);
   const names = roles.map((r) => r.name);
-  const ok = names.includes('course_manager') || names.includes('teacher') || names.includes('admin');
+  return names.includes('course_manager') || names.includes('teacher') || names.includes('admin');
+}
+
+async function ensureUserIsCourseManager(userId: number) {
+  const ok = await isUserCourseManager(userId);
   if (!ok) throw new Error('Bạn không có quyền thực hiện thao tác này.');
 }
 
@@ -1128,8 +1132,7 @@ export class CourseServiceImpl implements CourseService {
   }
 
   async listLessonResources(subjectUserId: number, courseId: number, lessonId: number): Promise<LessonResourceItem[]> {
-    await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    await this.ensureCanViewCourseResources(subjectUserId, courseId);
 
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const moduleRepo = AppDataSource.getRepository(Module);
@@ -1149,11 +1152,11 @@ export class CourseServiceImpl implements CourseService {
       id: r.id,
       lesson_id: r.lesson_id,
       resource_type: r.resource_type,
-      url: r.url,
+      url: r.url ? getSignedDeliveryUrl(r.url) : r.url,
       filename: r.filename ?? null,
       mime_type: r.mime_type ?? null,
       size_bytes: r.size_bytes ?? null,
-      preview_url: (r as any).preview_url ?? null,
+      preview_url: (r as any).preview_url ? getSignedDeliveryUrl((r as any).preview_url) : null,
       created_at: new Date(r.created_at).toISOString(),
     }));
   }
@@ -1242,8 +1245,7 @@ export class CourseServiceImpl implements CourseService {
     courseId: number,
     resourceId: number
   ): Promise<{ url: string; mime_type: string | null; filename: string | null }> {
-    await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    await this.ensureCanViewCourseResources(subjectUserId, courseId);
 
     const resourceRepo = AppDataSource.getRepository(LessonResource);
     const lessonRepo = AppDataSource.getRepository(Lesson);
@@ -1264,6 +1266,27 @@ export class CourseServiceImpl implements CourseService {
       mime_type: (resource as any).mime_type ?? null,
       filename: (resource as any).filename ?? null,
     };
+  }
+
+  /**
+   * Course resources (lesson files/videos) phải được phép cho:
+   * - học viên đã enroll course
+   * - hoặc người quản lý khóa học (teacher/admin/course_manager) và là owner của khóa
+   */
+  private async ensureCanViewCourseResources(subjectUserId: number, courseId: number) {
+    const isManager = await isUserCourseManager(subjectUserId);
+    if (isManager) {
+      await this.ensureOwnCourse(subjectUserId, courseId);
+      return;
+    }
+
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    const enrollment = await enrollmentRepo.findOne({
+      where: { user_id: subjectUserId, course_id: courseId } as any,
+    });
+    if (!enrollment) {
+      throw new Error('Bạn chưa đăng ký khóa học này.');
+    }
   }
 
   async createLessonYoutubeResource(

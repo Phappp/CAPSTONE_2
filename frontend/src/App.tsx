@@ -11,6 +11,7 @@ import TeacherCourseContentBuilderPage from "./pages/TeacherCourseContentBuilder
 import CoursesCatalogPage from "./pages/CoursesCatalogPage";
 import CoursePublicDetailPage from "./pages/CoursePublicDetailPage";
 import ProfilePage from "./pages/ProfilePage";
+import LearningPage from "./pages/LearningPage";
 import Authentication from "./router/Authentication";
 
 export default function App() {
@@ -59,6 +60,14 @@ export default function App() {
         element={
           <Authentication>
             <CoursePublicDetailPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/learning/:id/:slug"
+        element={
+          <Authentication>
+            <LearningPage />
           </Authentication>
         }
       />

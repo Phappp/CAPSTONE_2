@@ -11,6 +11,8 @@ export const COURSES_API = {
   setStatus: (id: number | string) => `${COURSES_API_BASE}/${id}/status`,
   softDelete: (id: number | string) => `${COURSES_API_BASE}/${id}`,
   contentTree: (id: number | string) => `${COURSES_API_BASE}/${id}/content`,
+  // Learner view (must be enrolled)
+  learning: (id: number | string) => `${COURSES_API_BASE}/${id}/learning`,
   reorderContent: (id: number | string) => `${COURSES_API_BASE}/${id}/content/reorder`,
   createModule: (id: number | string) => `${COURSES_API_BASE}/${id}/modules`,
   updateModule: (id: number | string, moduleId: number | string) =>
