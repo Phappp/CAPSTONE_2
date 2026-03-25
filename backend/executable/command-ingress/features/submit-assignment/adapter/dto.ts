@@ -2,6 +2,12 @@ import { IsInt, IsOptional, IsString, Min} from 'class-validator';
 import { RequestDto } from '../../../shared/request-dto';
 import { SubmitAssignmentRequest } from '../types';
 
+/**
+ * SubmitAssignmentBody:
+ * - Ép kiểu từ req.body + req.files + param
+ * - Validate với class-validator
+ */
+
 export class SubmitAssignmentBody extends RequestDto implements SubmitAssignmentRequest {
     @IsInt({ message: 'Assignment ID phải là một số nguyên' })
     @Min(1, { message: 'Assignment ID không hợp lệ' })
@@ -17,13 +23,11 @@ export class SubmitAssignmentBody extends RequestDto implements SubmitAssignment
 
     files?: Express.Multer.File[];
 
-    constructor(body: any, files?: any, userId?: number, assignmentId?: any) {
-        super();
-        this.assignment_id = assignmentId != null ? Number(assignmentId) : 0;
-        this.user_id = userId != null ? Number(userId) : 0;
-
-        this.text_submission = body?.text_submission ? String(body.text_submission) : undefined;
-
-        this.files = Array.isArray(files) ? files : undefined;
-    }
+    constructor(body: any, files?: Express.Multer.File[], userId?: number, assignmentId?: any) {
+    super();
+    this.assignment_id = assignmentId != null ? Number(assignmentId) : 0;
+    this.user_id = userId != null ? Number(userId) : 0;
+    this.text_submission = body?.text_submission ? String(body.text_submission) : undefined;
+    this.files = Array.isArray(files) ? files : undefined;
+  }
 }

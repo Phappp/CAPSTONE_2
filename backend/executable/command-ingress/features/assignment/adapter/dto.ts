@@ -1,5 +1,5 @@
 import { Length } from 'class-validator';
-import { CreateAssignmentRequest, AssignmentAtachment, AssignmentFormat } from '../types';
+import { CreateAssignmentRequest, AssignmentAttachment, AssignmentFormat } from '../types';
 import { RequestDto } from '../../../shared/request-dto';
 
 export class CreateAssignmentBody extends RequestDto implements CreateAssignmentRequest {
@@ -9,7 +9,7 @@ export class CreateAssignmentBody extends RequestDto implements CreateAssignment
     @Length(1)
     description: string;
 
-    attachments?: AssignmentAtachment[];
+    attachments?: AssignmentAttachment[];
     max_score: number;
     passing_score?: number | null;
     due_date: string;

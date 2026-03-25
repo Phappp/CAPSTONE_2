@@ -15,24 +15,25 @@ export class SubmissionController extends BaseController {
 
   async submitAssignment(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async () => {
-      // lấy thông tin ID từ Token và URL
-      const uid = Number(req.getSubject()); // lấy user id của học viên từ token
+      const uid = Number(req.getSubject());
       const assignmentId = Number(req.params.assignmentId);
 
-      // khởi tạo DTO (Ép kiểu và gộp dữ liệu từ form-data)
-      const body = new SubmitAssignmentBody(req.body, req.files, uid, assignmentId);
+      if (!assignmentId || isNaN(assignmentId) || assignmentId <= 0) {
+        res.status(400).json({ error: 'err_validation', message: ['Assignment ID không hợp lệ'] });
+        return;
+      }
 
-      // chạy Validate dùng base class
+      const files = (req.files as Express.Multer.File[]) || [];
+      const body = new SubmitAssignmentBody(req.body, files, uid, assignmentId);
+
       const validateResult = await body.validate();
       if (!validateResult.ok) {
         responseValidationError(res, validateResult.errors[0]);
         return;
       }
 
-      // gọi Service xử lý nghiệp vụ nộp bài
       const result = await this.service.submitAssignment(body);
 
-      // trả về Response theo đúng JSON schema của SCRUM-19
       res.status(201).json({
         success: true,
         message: 'Nộp bài thành công',

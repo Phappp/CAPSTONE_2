@@ -22,5 +22,5 @@ export interface SubmitAssignmentResponse {
 }
 
 export interface SubmissionService {
-    submitAssignment(request: SubmitAssignmentRequest): Promise<any>;
+    submitAssignment(body: SubmitAssignmentRequest): Promise<any>;
 }
