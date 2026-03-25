@@ -29,6 +29,8 @@ type RegisterRequest = {
 type LoginRequest = {
   email: string;
   password: string;
+  ip: string;
+  userAgent: string;
 };
 
 type ExchangeTokenResult = {
