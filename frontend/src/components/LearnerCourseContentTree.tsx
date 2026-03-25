@@ -24,6 +24,22 @@ export type ModuleItem = {
   lessons: LessonItem[];
 };
 
+type CourseProgress = {
+  course_id: number;
+  progress_percent: number;
+  completed_lesson_ids: number[];
+  unlocked_lesson_ids: number[];
+  next_locked_lesson_id: number | null;
+};
+
+type LessonHeartbeatDto = {
+  lesson_id: number;
+  time_spent_seconds: number;
+  required_seconds: number;
+  can_complete: boolean;
+  progress_percent: number;
+};
+
 type LessonResource = {
   id: number;
   lesson_id: number;
@@ -340,8 +356,13 @@ function ResourceViewer({ state, onClose }: { state: ResourceViewerState; onClos
   );
 }
 
-export default function LearnerCourseContentTree(props: { courseId: number; modules: ModuleItem[] }) {
-  const { courseId, modules } = props;
+export default function LearnerCourseContentTree(props: {
+  courseId: number;
+  modules: ModuleItem[];
+  progress?: CourseProgress | null;
+  refreshProgress?: () => Promise<void> | void;
+}) {
+  const { courseId, modules, progress, refreshProgress } = props;
   const token = useMemo(() => getAccessToken(), []);
 
   const [loading, setLoading] = useState(false);
@@ -357,9 +378,87 @@ export default function LearnerCourseContentTree(props: { courseId: number; modu
   const inFlightDurations = useRef<Set<number>>(new Set());
 
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
+  const completedSet = useMemo(() => new Set<number>((progress?.completed_lesson_ids || []).map((x) => Number(x))), [progress]);
+  const unlockedSet = useMemo(() => new Set<number>((progress?.unlocked_lesson_ids || []).map((x) => Number(x))), [progress]);
 
   const inFlightResources = useRef<Set<number>>(new Set());
   const inFlightResourcePromises = useRef<Partial<Record<number, Promise<LessonResource[]>>>>({});
+
+  const heartbeatTimerRef = useRef<number | null>(null);
+  const completedAttemptedRef = useRef<Set<number>>(new Set());
+  const [heartbeat, setHeartbeat] = useState<LessonHeartbeatDto | null>(null);
+
+  const postHeartbeat = async (lessonId: number, deltaSeconds: number) => {
+    const res = await fetch(`${url}${COURSES_API.lessonHeartbeat(courseId, lessonId)}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ delta_seconds: deltaSeconds }),
+    });
+    const json = (await res.json().catch(() => ({}))) as Partial<LessonHeartbeatDto> & { message?: string };
+    if (!res.ok) throw new Error(json?.message || "Không thể cập nhật tiến độ bài học.");
+    return json as LessonHeartbeatDto;
+  };
+
+  const tryCompleteLesson = async (lessonId: number) => {
+    if (completedAttemptedRef.current.has(lessonId)) return;
+    completedAttemptedRef.current.add(lessonId);
+    try {
+      const res = await fetch(`${url}${COURSES_API.completeLesson(courseId, lessonId)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const json = (await res.json().catch(() => ({}))) as Partial<{ message?: string }>;
+      if (!res.ok) throw new Error(json?.message || "Không thể hoàn thành bài học.");
+      await Promise.resolve(refreshProgress?.());
+    } catch (e: any) {
+      // If completion fails (not enough time, locked, etc), allow retry later.
+      completedAttemptedRef.current.delete(lessonId);
+      setResourceError(e?.message || "Không thể hoàn thành bài học.");
+    }
+  };
+
+  useEffect(() => {
+    // Heartbeat only while viewer is open for an unlocked lesson.
+    if (!viewer || !selectedLessonId) return;
+    if (progress && !unlockedSet.has(selectedLessonId)) return;
+
+    setResourceError(null);
+    setHeartbeat(null);
+
+    const lessonId = selectedLessonId;
+    const tick = async (deltaSeconds: number) => {
+      try {
+        const data = await postHeartbeat(lessonId, deltaSeconds);
+        setHeartbeat(data);
+        if (data?.can_complete) {
+          void tryCompleteLesson(lessonId);
+        }
+      } catch (e: any) {
+        setResourceError(e?.message || "Không thể cập nhật tiến độ.");
+      }
+    };
+
+    void tick(1);
+    heartbeatTimerRef.current = window.setInterval(() => {
+      void tick(5);
+    }, 5000);
+
+    return () => {
+      if (heartbeatTimerRef.current != null) {
+        window.clearInterval(heartbeatTimerRef.current);
+        heartbeatTimerRef.current = null;
+      }
+      // Best-effort final ping.
+      void tick(1);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewer, selectedLessonId, courseId, token]);
 
   const fetchLessonResources = async (lessonId: number): Promise<LessonResource[]> => {
     const cached = resourcesByLessonId[lessonId];
@@ -407,39 +506,39 @@ export default function LearnerCourseContentTree(props: { courseId: number; modu
     return await promise;
   };
 
-  const ensureAllLessonResources = async () => {
-    setResourceError(null);
+  const ensureUnlockedLessonResources = async (lessonIds: number[]) => {
+    if (!lessonIds.length) return;
     setLoading(true);
     try {
-      const lessonIds = (modules || []).flatMap((m) => (m.lessons || []).map((l) => l.id));
-      if (!lessonIds.length) return;
-
-      // Concurrency limit for better UX.
       const concurrency = 4;
       let idx = 0;
-
       const worker = async () => {
         while (idx < lessonIds.length) {
           const current = lessonIds[idx++];
           if (typeof current !== "number") continue;
-          await fetchLessonResources(current).catch((e) => {
-            setResourceError((e as any)?.message || "Không tải được tài nguyên.");
+          await fetchLessonResources(current).catch(() => {
+            // ignore: resource errors are handled per-click; avoid noisy banners for locked/forbidden.
           });
         }
       };
-
       await Promise.all(Array.from({ length: Math.min(concurrency, lessonIds.length) }, () => worker()));
-    } catch (e: any) {
-      setResourceError(e?.message || "Không thể tải tài nguyên.");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    void ensureAllLessonResources();
+    // Prefetch only unlocked lessons (BE enforces lock; fetching locked lessons would fail).
+    const allLessonIds = (modules || []).flatMap((m) => (m.lessons || []).map((l) => l.id));
+    const ids =
+      progress?.unlocked_lesson_ids?.length
+        ? allLessonIds.filter((id) => unlockedSet.has(id))
+        : allLessonIds.length
+          ? [allLessonIds[0]]
+          : [];
+    void ensureUnlockedLessonResources(ids);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseId]);
+  }, [courseId, progress]);
 
   const ensureDurationForYoutubeResource = async (resource: LessonResource) => {
     const resId = resource.id;
@@ -581,6 +680,32 @@ export default function LearnerCourseContentTree(props: { courseId: number; modu
       {resourceError ? <div className="learnerTreeError">{resourceError}</div> : null}
       {loading && !Object.keys(resourcesByLessonId).length ? <div className="learnerTreeLoading">Đang tải nội dung...</div> : null}
 
+      {viewer && heartbeat && heartbeat.required_seconds > 0 ? (
+        (() => {
+          const remainingPct = Math.max(
+            0,
+            Math.min(
+              100,
+              Math.round((1 - (heartbeat.time_spent_seconds || 0) / Math.max(1, heartbeat.required_seconds || 1)) * 100)
+            )
+          );
+          const isReady = Boolean(heartbeat.can_complete);
+          return (
+            <div
+              className={`learnerTreeCountdown ${isReady ? "learnerTreeCountdown--ready" : ""}`}
+              aria-hidden="true"
+              style={{ ["--pct" as any]: remainingPct }}
+            >
+              <svg className="learnerTreeCountdown__svg" viewBox="0 0 48 48">
+                <circle className="learnerTreeCountdown__track" cx="24" cy="24" r="20" />
+                <circle className="learnerTreeCountdown__ring" cx="24" cy="24" r="20" />
+                <path className="learnerTreeCountdown__tick" d="M16.5 24.5l5.2 5.4L32.5 18.6" />
+              </svg>
+            </div>
+          );
+        })()
+      ) : null}
+
       <div className="learnerTree">
         {(modules || []).map((m, moduleIdx) => {
           const isCollapsed = Boolean(collapsedModules[m.id]);
@@ -609,6 +734,9 @@ export default function LearnerCourseContentTree(props: { courseId: number; modu
 
               {!isCollapsed ? (
                 <div className="learnerTreeLessons">
+                  {m.description ? (
+                    <div className="learnerTreeModule__desc">{m.description}</div>
+                  ) : null}
                   {(m.lessons || []).map((l, lessonIdx) => {
                     const list = resourcesByLessonId[l.id];
                     const latest = list && list.length ? list[0] : null;
@@ -617,14 +745,26 @@ export default function LearnerCourseContentTree(props: { courseId: number; modu
                     const isImage = !!latest && ((latest.mime_type || "").startsWith("image/") || (latest.filename || "").toLowerCase().match(/\.(png|jpg|jpeg|gif|webp|svg)$/));
                     const thumbSrc =
                       ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : isImage ? (latest?.preview_url || latest?.url) : null;
+                    const isUnlocked = !progress || unlockedSet.has(l.id);
+                    const isCompleted = completedSet.has(l.id);
+                    const isLocked = !isUnlocked;
 
                     return (
                       <div
                         key={l.id}
-                        className={`learnerTreeLesson ${selectedLessonId === l.id ? "learnerTreeLesson--active" : ""}`}
-                        role="button"
-                        tabIndex={0}
+                        className={[
+                          "learnerTreeLesson",
+                          selectedLessonId === l.id ? "learnerTreeLesson--active" : "",
+                          isLocked ? "learnerTreeLesson--locked" : "",
+                          isCompleted ? "learnerTreeLesson--completed" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        role={isLocked ? "group" : "button"}
+                        tabIndex={isLocked ? -1 : 0}
+                        aria-disabled={isLocked ? "true" : "false"}
                         onClick={() => {
+                          if (isLocked) return;
                           setSelectedLessonId(l.id);
                           if (latest) {
                             void openResource(latest);
@@ -645,6 +785,7 @@ export default function LearnerCourseContentTree(props: { courseId: number; modu
                         }}
                         onKeyDown={(e) => {
                           if (e.key !== "Enter" && e.key !== " ") return;
+                          if (isLocked) return;
                           setSelectedLessonId(l.id);
                           if (latest) {
                             void openResource(latest);
@@ -666,11 +807,12 @@ export default function LearnerCourseContentTree(props: { courseId: number; modu
                             className="learnerTreeLesson__thumbBtn"
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (isLocked) return;
                               if (!latest) return;
                               setSelectedLessonId(l.id);
                               void openResource(latest);
                             }}
-                            disabled={!latest}
+                            disabled={!latest || isLocked}
                             aria-label={latest ? `Mở tài nguyên: ${latest.filename || l.title}` : `Không có tài nguyên: ${l.title}`}
                           >
                             {thumbSrc ? (
@@ -704,17 +846,21 @@ export default function LearnerCourseContentTree(props: { courseId: number; modu
                             <div className="learnerTreeLesson__title">
                               <span className="learnerTreeLesson__index">Bài {lessonIdx + 1}</span>
                               <span className="learnerTreeLesson__titleText">{l.title}</span>
+                              {isLocked ? <span className="learnerTreeLesson__statusPill learnerTreeLesson__statusPill--locked">Bị khóa</span> : null}
+                              {isCompleted ? <span className="learnerTreeLesson__statusPill learnerTreeLesson__statusPill--completed">Hoàn thành</span> : null}
                             </div>
                             <div className="learnerTreeLesson__desc">
                               {l.description ? l.description : "Không có mô tả."}
                             </div>
-                            {list === undefined ? (
-                              <div className="learnerTreeLesson__loading">Đang tải tài nguyên...</div>
-                            ) : list.length ? (
-                              <div className="learnerTreeLesson__resourceCount">{list.length} tài nguyên</div>
-                            ) : (
-                              <div className="learnerTreeLesson__resourceCount learnerTreeLesson__resourceCount--empty">Chưa có tài nguyên</div>
-                            )}
+                            {!isLocked ? (
+                              list === undefined ? (
+                                <div className="learnerTreeLesson__loading">Đang tải tài nguyên...</div>
+                              ) : list.length ? (
+                                <div className="learnerTreeLesson__resourceCount">{list.length} tài nguyên</div>
+                              ) : (
+                                <div className="learnerTreeLesson__resourceCount learnerTreeLesson__resourceCount--empty">Chưa có tài nguyên</div>
+                              )
+                            ) : null}
                           </div>
                         </div>
                       </div>

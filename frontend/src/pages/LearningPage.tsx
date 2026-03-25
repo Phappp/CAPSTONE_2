@@ -22,6 +22,16 @@ type CourseDetail = {
   };
 };
 
+type CourseProgress = {
+  course_id: number;
+  total_lessons: number;
+  completed_lessons: number;
+  progress_percent: number;
+  completed_lesson_ids: number[];
+  unlocked_lesson_ids: number[];
+  next_locked_lesson_id: number | null;
+};
+
 export default function LearningPage() {
   const navigate = useNavigate();
   const params = useParams();
@@ -34,12 +44,14 @@ export default function LearningPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [course, setCourse] = useState<CourseDetail | null>(null);
+  const [progress, setProgress] = useState<CourseProgress | null>(null);
 
   const fetchLearning = async () => {
     if (!courseId || Number.isNaN(courseId)) return;
     setLoading(true);
     setError(null);
     setCourse(null);
+    setProgress(null);
     try {
       const res = await fetch(`${url}${COURSES_API.learning(courseId)}`, {
         headers: {
@@ -59,8 +71,27 @@ export default function LearningPage() {
     }
   };
 
+  const fetchProgress = async () => {
+    if (!courseId || Number.isNaN(courseId)) return;
+    try {
+      const res = await fetch(`${url}${COURSES_API.progress(courseId)}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const json = (await res.json().catch(() => ({}))) as Partial<CourseProgress> & { message?: string };
+      if (!res.ok) throw new Error(json?.message || "Không thể tải tiến độ.");
+      setProgress(json as CourseProgress);
+    } catch {
+      // Keep UI usable even if progress endpoint fails.
+      setProgress(null);
+    }
+  };
+
   useEffect(() => {
     void fetchLearning();
+    void fetchProgress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
 
@@ -102,7 +133,12 @@ export default function LearningPage() {
     return null;
   }
 
-  const progress = typeof course.enrollment?.progress_percent === "number" ? course.enrollment.progress_percent : 0;
+  const progressPercent =
+    typeof progress?.progress_percent === "number"
+      ? progress.progress_percent
+      : typeof course.enrollment?.progress_percent === "number"
+        ? course.enrollment.progress_percent
+        : 0;
 
   return (
     <div className="learningPage">
@@ -113,9 +149,12 @@ export default function LearningPage() {
         <div className="learningPage__topbarCenter">
           <div className="learningPage__title">{course.title}</div>
           <div className="learningPage__meta">
-            Tiến độ: <b>{progress}%</b>
+            Tiến độ: <b>{progressPercent}%</b>
             {slug ? <span className="learningPage__metaSep">·</span> : null}
             {slug ? <span>{slug}</span> : null}
+          </div>
+          <div className="learningPage__progressBar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent}>
+            <div className="learningPage__progressFill" style={{ width: `${Math.max(0, Math.min(100, progressPercent))}%` }} />
           </div>
         </div>
         <AvatarMenu />
@@ -123,7 +162,12 @@ export default function LearningPage() {
 
       <div className="learningPage__body">
         <main className="learningPage__main">
-          <LearnerCourseContentTree courseId={courseId} modules={course.modules || []} />
+          <LearnerCourseContentTree
+            courseId={courseId}
+            modules={course.modules || []}
+            progress={progress}
+            refreshProgress={fetchProgress}
+          />
         </main>
       </div>
     </div>

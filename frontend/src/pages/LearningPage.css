@@ -50,6 +50,22 @@
   opacity: 0.8;
 }
 
+.learningPage__progressBar {
+  width: min(520px, 70vw);
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.learningPage__progressFill {
+  height: 100%;
+  background: #2563eb;
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
 .learningPage__body {
   display: flex;
   gap: 16px;

@@ -246,6 +246,30 @@ export type EnrollmentResult = {
   progress_percent: number;
 };
 
+export type CourseProgressResult = {
+  course_id: number;
+  total_lessons: number;
+  completed_lessons: number;
+  progress_percent: number;
+  completed_lesson_ids: number[];
+  unlocked_lesson_ids: number[];
+  next_locked_lesson_id: number | null;
+};
+
+export type LessonHeartbeatResult = {
+  lesson_id: number;
+  time_spent_seconds: number;
+  required_seconds: number;
+  can_complete: boolean;
+  progress_percent: number;
+};
+
+export type LessonCompleteResult = {
+  lesson_id: number;
+  completed: boolean;
+  progress_percent: number;
+};
+
 export interface CourseService {
   // Public methods
   listPublishedCourses(subjectUserId: number | undefined, query: PublishedCourseListQuery): Promise<PublishedCourseListResult>;
@@ -255,6 +279,9 @@ export interface CourseService {
   enrollCourse(subjectUserId: number, courseId: number): Promise<EnrollmentResult>;
   listMyEnrollments(subjectUserId: number, query: MyEnrollmentsQuery): Promise<MyEnrollmentsResult>;
   getMyLearningCourse(subjectUserId: number, courseId: number): Promise<CourseDetail>;
+  getMyCourseProgress(subjectUserId: number, courseId: number): Promise<CourseProgressResult>;
+  addLessonProgressHeartbeat(subjectUserId: number, courseId: number, lessonId: number, deltaSeconds: number): Promise<LessonHeartbeatResult>;
+  completeLesson(subjectUserId: number, courseId: number, lessonId: number): Promise<LessonCompleteResult>;
 
   // Instructor methods
   createCourse(subjectUserId: number, request: CreateCourseRequest): Promise<{ id: number }>;

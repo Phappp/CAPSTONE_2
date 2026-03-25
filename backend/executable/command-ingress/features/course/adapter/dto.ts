@@ -207,3 +207,14 @@ export class CreateLessonYoutubeResourceBody extends RequestDto {
     this.title = body?.title != null ? String(body.title) : null;
   }
 }
+
+export class LearnerLessonProgressBody extends RequestDto {
+  @IsNumber()
+  @Min(1)
+  delta_seconds: number;
+
+  constructor(body: any) {
+    super();
+    this.delta_seconds = Number(body?.delta_seconds);
+  }
+}

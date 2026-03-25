@@ -6,6 +6,8 @@ import CourseEnrollment from '../../../../../internal/model/course_enrollment';
 import Module from '../../../../../internal/model/modules';
 import Lesson from '../../../../../internal/model/lesson';
 import LessonResource from '../../../../../internal/model/lesson_resource';
+import LessonCompletion from '../../../../../internal/model/lesson_completion';
+import LessonProgress from '../../../../../internal/model/lesson_progress';
 import UserRole from '../../../../../internal/model/user_roles';
 import Role from '../../../../../internal/model/role';
 import User from '../../../../../internal/model/user';
@@ -40,6 +42,9 @@ import {
   MyEnrollmentListItem,
   EnrollmentResult,
   EnrollmentStatus,
+  CourseProgressResult,
+  LessonHeartbeatResult,
+  LessonCompleteResult,
 } from '../types';
 
 function normalizeSlug(input: string): string {
@@ -686,6 +691,241 @@ export class CourseServiceImpl implements CourseService {
     return courseDetail;
   }
 
+  private async loadOrderedLessonsForCourse(courseId: number): Promise<{ modules: any[]; lessons: Lesson[]; orderedLessons: Lesson[] }> {
+    const moduleRepo = AppDataSource.getRepository(Module);
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+
+    const modules = await moduleRepo.find({
+      where: { course_id: courseId } as any,
+      order: { order_index: 'ASC', id: 'ASC' } as any,
+    });
+    const moduleIds = (modules as any[]).map((m) => m.id);
+    const lessons = moduleIds.length
+      ? await lessonRepo
+          .createQueryBuilder('l')
+          .where('l.module_id IN (:...moduleIds)', { moduleIds })
+          .orderBy('l.order_index', 'ASC')
+          .addOrderBy('l.id', 'ASC')
+          .getMany()
+      : [];
+
+    const moduleOrder = new Map<number, number>();
+    for (let i = 0; i < modules.length; i++) moduleOrder.set((modules as any[])[i].id, i);
+
+    const orderedLessons = [...(lessons as Lesson[])].sort((a: any, b: any) => {
+      const ma = moduleOrder.get(a.module_id) ?? 0;
+      const mb = moduleOrder.get(b.module_id) ?? 0;
+      if (ma !== mb) return ma - mb;
+      const oa = Number(a.order_index ?? 0);
+      const ob = Number(b.order_index ?? 0);
+      if (oa !== ob) return oa - ob;
+      return Number(a.id) - Number(b.id);
+    });
+
+    return { modules, lessons: lessons as Lesson[], orderedLessons };
+  }
+
+  private computeRequiredSecondsForLesson(lesson: Lesson): number {
+    const t = String((lesson as any).lesson_type || 'text');
+    if (t === 'video') {
+      const dm = Number((lesson as any).duration_minutes);
+      if (Number.isFinite(dm) && dm > 0) {
+        const durSec = Math.round(dm * 60);
+        return Math.max(60, Math.round(durSec * 0.7));
+      }
+      return 60;
+    }
+    if (t === 'text') return 30;
+    // quiz/assignment: treat as at least a minimal engagement time for now.
+    return 30;
+  }
+
+  private async ensureEnrolledLearner(subjectUserId: number, courseId: number): Promise<CourseEnrollment> {
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    const enrollment = await enrollmentRepo.findOne({
+      where: { user_id: subjectUserId, course_id: courseId } as any,
+    });
+    if (!enrollment) throw new Error('Bạn chưa đăng ký khóa học này.');
+    return enrollment as any;
+  }
+
+  private async ensureCanAccessLesson(subjectUserId: number, courseId: number, lessonId: number): Promise<void> {
+    const isManager = await isUserCourseManager(subjectUserId);
+    if (isManager) {
+      await this.ensureOwnCourse(subjectUserId, courseId);
+      return;
+    }
+
+    await this.ensureEnrolledLearner(subjectUserId, courseId);
+    const { orderedLessons } = await this.loadOrderedLessonsForCourse(courseId);
+    const idx = orderedLessons.findIndex((l) => Number((l as any).id) === Number(lessonId));
+    if (idx < 0) throw new Error('Bài học không hợp lệ.');
+    if (idx === 0) return;
+
+    const prevId = Number((orderedLessons[idx - 1] as any).id);
+    const completionRepo = AppDataSource.getRepository(LessonCompletion);
+    const prevCompleted = await completionRepo.findOne({ where: { user_id: subjectUserId, lesson_id: prevId } as any });
+    if (!prevCompleted) {
+      throw new Error('Không thể truy cập bài học.');
+    }
+  }
+
+  async getMyCourseProgress(subjectUserId: number, courseId: number): Promise<CourseProgressResult> {
+    await this.ensureEnrolledLearner(subjectUserId, courseId);
+
+    const { orderedLessons } = await this.loadOrderedLessonsForCourse(courseId);
+    const total = orderedLessons.length;
+
+    const completionRepo = AppDataSource.getRepository(LessonCompletion);
+    const completedRows = total
+      ? await completionRepo
+          .createQueryBuilder('lc')
+          .select(['lc.lesson_id'])
+          .where('lc.user_id = :uid', { uid: subjectUserId })
+          .andWhere('lc.lesson_id IN (:...lessonIds)', { lessonIds: orderedLessons.map((l) => (l as any).id) })
+          .getRawMany()
+      : [];
+    const completedSet = new Set<number>(completedRows.map((r: any) => Number(r.lc_lesson_id ?? r.lesson_id)));
+
+    const unlocked: number[] = [];
+    let nextLocked: number | null = null;
+    for (let i = 0; i < orderedLessons.length; i++) {
+      const lessonId = Number((orderedLessons[i] as any).id);
+      if (i === 0) {
+        unlocked.push(lessonId);
+        continue;
+      }
+      const prevId = Number((orderedLessons[i - 1] as any).id);
+      if (completedSet.has(prevId)) {
+        unlocked.push(lessonId);
+      } else {
+        nextLocked = lessonId;
+        break;
+      }
+    }
+
+    const completedCount = completedSet.size;
+    const rawPct = total ? (completedCount / total) * 100 : 0;
+    const progress_percent = Math.max(0, Math.min(100, Math.round(rawPct * 100) / 100));
+
+    // Best-effort sync enrollment progress_percent to computed value.
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    await enrollmentRepo.update({ user_id: subjectUserId, course_id: courseId } as any, { progress_percent } as any);
+
+    return {
+      course_id: courseId,
+      total_lessons: total,
+      completed_lessons: completedCount,
+      progress_percent,
+      completed_lesson_ids: Array.from(completedSet.values()),
+      unlocked_lesson_ids: unlocked,
+      next_locked_lesson_id: nextLocked,
+    };
+  }
+
+  async addLessonProgressHeartbeat(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number,
+    deltaSeconds: number
+  ): Promise<LessonHeartbeatResult> {
+    await this.ensureEnrolledLearner(subjectUserId, courseId);
+
+    const { orderedLessons } = await this.loadOrderedLessonsForCourse(courseId);
+    const target = orderedLessons.find((l) => Number((l as any).id) === Number(lessonId));
+    if (!target) throw new Error('Bài học không hợp lệ.');
+
+    // Clamp delta to reduce abuse.
+    const delta = Math.max(1, Math.min(10, Math.floor(Number(deltaSeconds))));
+
+    const progressRepo = AppDataSource.getRepository(LessonProgress);
+    const existing = await progressRepo.findOne({
+      where: { user_id: subjectUserId, course_id: courseId, lesson_id: lessonId } as any,
+    });
+    const entity = existing
+      ? existing
+      : progressRepo.create({ user_id: subjectUserId, course_id: courseId, lesson_id: lessonId, time_spent_seconds: 0 } as any);
+
+    (entity as any).time_spent_seconds = Number((entity as any).time_spent_seconds || 0) + delta;
+    const saved = await progressRepo.save(entity as any);
+
+    const required_seconds = this.computeRequiredSecondsForLesson(target);
+    const time_spent_seconds = Number((saved as any).time_spent_seconds || 0);
+    const can_complete = time_spent_seconds >= required_seconds;
+
+    const courseProgress = await this.getMyCourseProgress(subjectUserId, courseId);
+    return {
+      lesson_id: lessonId,
+      time_spent_seconds,
+      required_seconds,
+      can_complete,
+      progress_percent: courseProgress.progress_percent,
+    };
+  }
+
+  async completeLesson(subjectUserId: number, courseId: number, lessonId: number): Promise<LessonCompleteResult> {
+    const enrollment = await this.ensureEnrolledLearner(subjectUserId, courseId);
+
+    const { orderedLessons } = await this.loadOrderedLessonsForCourse(courseId);
+    const idx = orderedLessons.findIndex((l) => Number((l as any).id) === Number(lessonId));
+    if (idx < 0) throw new Error('Bài học không hợp lệ.');
+
+    // Enforce unlock rule: previous lesson must be completed.
+    if (idx > 0) {
+      const completionRepo = AppDataSource.getRepository(LessonCompletion);
+      const prevId = Number((orderedLessons[idx - 1] as any).id);
+      const prevCompleted = await completionRepo.findOne({ where: { user_id: subjectUserId, lesson_id: prevId } as any });
+      if (!prevCompleted) throw new Error('Không thể hoàn thành bài học.');
+    }
+
+    const completionRepo = AppDataSource.getRepository(LessonCompletion);
+    const exists = await completionRepo.findOne({ where: { user_id: subjectUserId, lesson_id: lessonId } as any });
+    if (exists) {
+      const courseProgress = await this.getMyCourseProgress(subjectUserId, courseId);
+      return { lesson_id: lessonId, completed: true, progress_percent: courseProgress.progress_percent };
+    }
+
+    const progressRepo = AppDataSource.getRepository(LessonProgress);
+    const p = await progressRepo.findOne({ where: { user_id: subjectUserId, course_id: courseId, lesson_id: lessonId } as any });
+    const timeSpent = Number((p as any)?.time_spent_seconds ?? 0);
+    const required = this.computeRequiredSecondsForLesson(orderedLessons[idx]);
+    if (timeSpent < required) {
+      throw new Error(`Chưa đủ thời gian học để hoàn thành bài (cần ${required}s).`);
+    }
+
+    await completionRepo.save(
+      completionRepo.create({
+        user_id: subjectUserId,
+        lesson_id: lessonId,
+        time_spent_seconds: timeSpent,
+      } as any)
+    );
+
+    // Recompute and persist enrollment progress.
+    const total = orderedLessons.length;
+    const completedRows = total
+      ? await completionRepo
+          .createQueryBuilder('lc')
+          .select(['lc.lesson_id'])
+          .where('lc.user_id = :uid', { uid: subjectUserId })
+          .andWhere('lc.lesson_id IN (:...lessonIds)', { lessonIds: orderedLessons.map((l) => (l as any).id) })
+          .getRawMany()
+      : [];
+    const completedCount = completedRows.length;
+    const rawPct = total ? (completedCount / total) * 100 : 0;
+    const progress_percent = Math.max(0, Math.min(100, Math.round(rawPct * 100) / 100));
+
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    const patch: any = { progress_percent, last_accessed_at: new Date() };
+    if (progress_percent >= 100 && (enrollment as any).status !== 'completed') {
+      patch.status = 'completed';
+      patch.completed_at = new Date();
+    }
+    await enrollmentRepo.update({ user_id: subjectUserId, course_id: courseId } as any, patch);
+
+    return { lesson_id: lessonId, completed: true, progress_percent };
+  }
+
   // Instructor methods (existing code)
   async createCourse(subjectUserId: number, request: CreateCourseRequest): Promise<{ id: number }> {
     await ensureUserIsCourseManager(subjectUserId);
@@ -1133,6 +1373,7 @@ export class CourseServiceImpl implements CourseService {
 
   async listLessonResources(subjectUserId: number, courseId: number, lessonId: number): Promise<LessonResourceItem[]> {
     await this.ensureCanViewCourseResources(subjectUserId, courseId);
+    await this.ensureCanAccessLesson(subjectUserId, courseId, lessonId);
 
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const moduleRepo = AppDataSource.getRepository(Module);
@@ -1258,6 +1499,8 @@ export class CourseServiceImpl implements CourseService {
     if (!lesson) throw new Error('Không tìm thấy tài nguyên.');
     const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id, course_id: courseId } as any });
     if (!mod) throw new Error('Không tìm thấy tài nguyên.');
+
+    await this.ensureCanAccessLesson(subjectUserId, courseId, (lesson as any).id);
 
     const url = (resource as any).url;
     const signedUrl = getSignedDeliveryUrl(url);

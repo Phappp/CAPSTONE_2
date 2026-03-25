@@ -14,6 +14,9 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
   router.route('/:id/enroll').post(requireAuthorizedUser, controller.enrollCourse.bind(controller));
   router.route('/my-enrollments').get(requireAuthorizedUser, controller.listMyEnrollments.bind(controller));
   router.route('/:id/learning').get(requireAuthorizedUser, controller.getMyLearningCourse.bind(controller));
+  router.route('/:id/progress').get(requireAuthorizedUser, controller.getMyCourseProgress.bind(controller));
+  router.route('/:id/lessons/:lessonId/progress').post(requireAuthorizedUser, controller.addLessonProgressHeartbeat.bind(controller));
+  router.route('/:id/lessons/:lessonId/complete').post(requireAuthorizedUser, controller.completeLesson.bind(controller));
 
   // Create course
   router.route('/').post(requireAuthorizedUser, controller.createCourse.bind(controller));

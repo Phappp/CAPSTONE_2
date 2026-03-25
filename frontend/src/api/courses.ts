@@ -13,6 +13,9 @@ export const COURSES_API = {
   contentTree: (id: number | string) => `${COURSES_API_BASE}/${id}/content`,
   // Learner view (must be enrolled)
   learning: (id: number | string) => `${COURSES_API_BASE}/${id}/learning`,
+  progress: (id: number | string) => `${COURSES_API_BASE}/${id}/progress`,
+  lessonHeartbeat: (id: number | string, lessonId: number | string) => `${COURSES_API_BASE}/${id}/lessons/${lessonId}/progress`,
+  completeLesson: (id: number | string, lessonId: number | string) => `${COURSES_API_BASE}/${id}/lessons/${lessonId}/complete`,
   reorderContent: (id: number | string) => `${COURSES_API_BASE}/${id}/content/reorder`,
   createModule: (id: number | string) => `${COURSES_API_BASE}/${id}/modules`,
   updateModule: (id: number | string, moduleId: number | string) =>

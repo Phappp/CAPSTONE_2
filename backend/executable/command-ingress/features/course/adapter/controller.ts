@@ -9,6 +9,7 @@ import {
   CreateLessonBody,
   CreateLessonYoutubeResourceBody,
   CreateModuleBody,
+  LearnerLessonProgressBody,
   ListMyCoursesQuery,
   ListPublishedCoursesQuery,
   ReorderContentBody,
@@ -89,6 +90,41 @@ export class CourseController extends BaseController {
       const courseId = Number(req.params.id);
       const course = await this.service.getMyLearningCourse(uid, courseId);
       res.status(200).json(course);
+    });
+  }
+
+  async getMyCourseProgress(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const result = await this.service.getMyCourseProgress(uid, courseId);
+      res.status(200).json(result);
+    });
+  }
+
+  async addLessonProgressHeartbeat(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const body = new LearnerLessonProgressBody(req.body);
+      const validateResult = await body.validate();
+      if (!validateResult.ok) {
+        responseValidationError(res, validateResult.errors[0]);
+        return;
+      }
+      const result = await this.service.addLessonProgressHeartbeat(uid, courseId, lessonId, body.delta_seconds);
+      res.status(200).json(result);
+    });
+  }
+
+  async completeLesson(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const result = await this.service.completeLesson(uid, courseId, lessonId);
+      res.status(200).json(result);
     });
   }
 
