@@ -4,7 +4,6 @@ import AvatarMenu from "../components/AvatarMenu";
 import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import { getAccessToken } from "../utils/authStorage";
-import LearnerCourseContentTree from "../components/LearnerCourseContentTree";
 import type { ModuleItem } from "../components/LearnerCourseContentTree";
 import "./LearningPage.css";
 
@@ -99,7 +98,12 @@ export default function LearningPage() {
     return (
       <div className="learningPage">
         <div className="learningPage__topbar">
-          <button className="learningPage__back" onClick={() => navigate(-1)} type="button" disabled>
+          <button
+            className="learningPage__back"
+            onClick={() => navigate(`/my-courses/${courseId}/${slug || ""}`)}
+            type="button"
+            disabled
+          >
             ← Quay lại
           </button>
           <AvatarMenu />
@@ -113,7 +117,12 @@ export default function LearningPage() {
     return (
       <div className="learningPage">
         <div className="learningPage__topbar">
-          <button className="learningPage__back" onClick={() => navigate(-1)} type="button" disabled={loading}>
+          <button
+            className="learningPage__back"
+            onClick={() => navigate(`/my-courses/${courseId}/${slug || ""}`)}
+            type="button"
+            disabled={loading}
+          >
             ← Quay lại
           </button>
           <AvatarMenu />
@@ -121,8 +130,8 @@ export default function LearningPage() {
         <div className="learningPage__errorBox">
           <div className="learningPage__errorTitle">Không thể mở trang học</div>
           <div className="learningPage__errorMsg">{error}</div>
-          <button className="btn btn--primary" onClick={() => navigate("/student/dashboard")} type="button">
-            Về Dashboard
+          <button className="btn btn--primary" onClick={() => navigate(`/my-courses/${courseId}/${slug || ""}`)} type="button">
+            Quay lại
           </button>
         </div>
       </div>
@@ -133,6 +142,9 @@ export default function LearningPage() {
     return null;
   }
 
+  const completedSet = new Set<number>((progress?.completed_lesson_ids || []).map((x) => Number(x)));
+  const unlockedSet = new Set<number>((progress?.unlocked_lesson_ids || []).map((x) => Number(x)));
+
   const progressPercent =
     typeof progress?.progress_percent === "number"
       ? progress.progress_percent
@@ -140,18 +152,28 @@ export default function LearningPage() {
         ? course.enrollment.progress_percent
         : 0;
 
+  function formatTimeVi(date: Date): string {
+    try {
+      return date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return "";
+    }
+  }
+
+  const modules = course.modules || [];
+
   return (
     <div className="learningPage">
       <div className="learningPage__topbar">
-        <button className="learningPage__back" onClick={() => navigate("/student/dashboard")} type="button">
-          ← Dashboard
+        <button className="learningPage__back" onClick={() => navigate(`/my-courses/${courseId}/${slug || ""}`)} type="button">
+          ← Quay lại
         </button>
         <div className="learningPage__topbarCenter">
           <div className="learningPage__title">{course.title}</div>
           <div className="learningPage__meta">
             Tiến độ: <b>{progressPercent}%</b>
             {slug ? <span className="learningPage__metaSep">·</span> : null}
-            {slug ? <span>{slug}</span> : null}
+            
           </div>
           <div className="learningPage__progressBar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent}>
             <div className="learningPage__progressFill" style={{ width: `${Math.max(0, Math.min(100, progressPercent))}%` }} />
@@ -162,12 +184,79 @@ export default function LearningPage() {
 
       <div className="learningPage__body">
         <main className="learningPage__main">
-          <LearnerCourseContentTree
-            courseId={courseId}
-            modules={course.modules || []}
-            progress={progress}
-            refreshProgress={fetchProgress}
-          />
+          <div className="learningPage__moduleSteps">
+            {modules.length ? (
+              modules.map((m: ModuleItem, idx) => {
+                const lessonIds = (m.lessons || []).map((l) => l.id);
+                const allCompleted = lessonIds.length ? lessonIds.every((id) => completedSet.has(id)) : false;
+
+                const moduleOpenAt = m.open_at ? new Date(m.open_at) : null;
+                const moduleNotOpenedYet = moduleOpenAt && moduleOpenAt.getTime() > Date.now();
+
+                const unlockedFallback = progress ? false : idx === 0;
+                const anyUnlocked = lessonIds.some((id) => unlockedSet.has(id));
+                const moduleUnlocked = progress ? anyUnlocked : unlockedFallback;
+
+                const canClick = moduleUnlocked && !moduleNotOpenedYet;
+
+                const pill =
+                  moduleNotOpenedYet && moduleOpenAt
+                    ? `Bị khóa (mở ${formatTimeVi(moduleOpenAt)})`
+                    : allCompleted
+                      ? "Hoàn thành"
+                      : moduleUnlocked
+                        ? "Đã mở"
+                        : "Bị khóa";
+
+                return (
+                  <div key={m.id} className="learningPage__moduleStepWrap">
+                    <button
+                      type="button"
+                      className={[
+                        "learningPage__moduleCard",
+                        allCompleted ? "learningPage__moduleCard--completed" : "",
+                        moduleUnlocked && !allCompleted ? "learningPage__moduleCard--unlocked" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onClick={() => {
+                        if (!canClick) return;
+                        navigate(`/learning/${courseId}/${slug}/modules/${m.id}`);
+                      }}
+                      disabled={!canClick}
+                    >
+                      <div className="learningPage__moduleCardLeft">
+                        <div className="learningPage__moduleIndex">Chương {idx + 1}</div>
+                        <div className="learningPage__moduleTitle">{m.title}</div>
+                      </div>
+                      <div className="learningPage__moduleCardRight" aria-hidden="true">
+                        <span
+                          className={[
+                            "learningPage__modulePill",
+                            allCompleted
+                              ? "learningPage__modulePill--completed"
+                              : moduleNotOpenedYet
+                                ? "learningPage__modulePill--locked"
+                                : moduleUnlocked
+                                  ? "learningPage__modulePill--unlocked"
+                                  : "learningPage__modulePill--locked",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
+                          {pill}
+                        </span>
+                      </div>
+                    </button>
+
+                    {idx < modules.length - 1 ? <div className="learningPage__moduleArrow">↓</div> : null}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="learningPage__empty">Chưa có chương nào.</div>
+            )}
+          </div>
         </main>
       </div>
     </div>

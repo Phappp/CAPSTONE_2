@@ -49,6 +49,7 @@ import {
   CourseCompletionRules,
   UpdateCourseCompletionRulesRequest,
   CourseLearnerProgressResult,
+  CourseLeaderboardResult,
   CoursePrerequisiteOption,
   CoursePrerequisiteGraph,
   CoursePrerequisiteGraphNode,
@@ -80,6 +81,23 @@ function safeJsonParse<T>(value: any, fallback: T): T {
   return value as T;
 }
 
+function parseNullableDateTime(input: any): Date | null {
+  if (input == null) return null;
+  const s = String(input).trim();
+  if (!s) return null;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
+function isCourseEffectivelyPublished(course: any, now: Date): boolean {
+  const status = String(course?.status || 'draft');
+  if (status === 'published') return true;
+  if (status === 'archived') return false;
+  const scheduled = parseNullableDateTime(course?.publish_scheduled_at);
+  return Boolean(scheduled && scheduled.getTime() <= now.getTime());
+}
+
 async function isUserCourseManager(userId: number): Promise<boolean> {
   const userRoleRepo = AppDataSource.getRepository(UserRole);
   const roleRepo = AppDataSource.getRepository(Role);
@@ -100,6 +118,9 @@ async function ensureUserIsCourseManager(userId: number) {
 function mapCourseRowToItem(row: any): CourseListItem {
   const rawThumb = row.thumbnail_url ?? null;
   const thumbnail_url = rawThumb ? getSignedDeliveryUrl(rawThumb) : null;
+  const now = new Date();
+  const scheduled = row.publish_scheduled_at ? new Date(row.publish_scheduled_at) : null;
+  const isScheduledAndDue = row.status === 'draft' && scheduled && scheduled.getTime() <= now.getTime();
   return {
     id: Number(row.id),
     title: String(row.title),
@@ -111,8 +132,13 @@ function mapCourseRowToItem(row: any): CourseListItem {
     language: String(row.language),
     learning_objectives: safeJsonParse<string[] | null>(row.learning_objectives ?? null, null),
     prerequisites: safeJsonParse<string[] | null>(row.prerequisites ?? null, null),
-    status: row.status as CourseStatus,
-    published_at: row.published_at ? new Date(row.published_at).toISOString() : null,
+    status: (isScheduledAndDue ? 'published' : (row.status as CourseStatus)) as CourseStatus,
+    published_at: isScheduledAndDue
+      ? scheduled?.toISOString() ?? null
+      : row.published_at
+        ? new Date(row.published_at).toISOString()
+        : null,
+    publish_scheduled_at: row.publish_scheduled_at ? new Date(row.publish_scheduled_at).toISOString() : null,
     created_at: new Date(row.created_at).toISOString(),
     updated_at: new Date(row.updated_at).toISOString(),
     learners_count: Number(row.learners_count ?? 0),
@@ -124,6 +150,9 @@ function mapCourseRowToItem(row: any): CourseListItem {
 function mapToPublishedCourseListItem(row: any): PublishedCourseListItem {
   const rawThumb = row.thumbnail_url ?? null;
   const thumbnail_url = rawThumb ? getSignedDeliveryUrl(rawThumb) : null;
+  const now = new Date();
+  const scheduled = row.publish_scheduled_at ? new Date(row.publish_scheduled_at) : null;
+  const isScheduledAndDue = row.status === 'draft' && scheduled && scheduled.getTime() <= now.getTime();
   
   return {
     id: Number(row.id),
@@ -133,7 +162,7 @@ function mapToPublishedCourseListItem(row: any): PublishedCourseListItem {
     thumbnail_url,
     level: String(row.level),
     language: String(row.language),
-    published_at: row.published_at ? new Date(row.published_at).toISOString() : null,
+    published_at: isScheduledAndDue ? scheduled?.toISOString() ?? null : row.published_at ? new Date(row.published_at).toISOString() : null,
     learners_count: Number(row.learners_count ?? 0),
     modules_count: Number(row.modules_count ?? 0),
     lessons_count: Number(row.lessons_count ?? 0),
@@ -178,20 +207,24 @@ export class CourseServiceImpl implements CourseService {
     const courseRepo = AppDataSource.getRepository(Course);
     const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
     const rootId = Number(rootCourse.id);
+    const now = new Date();
     const qb = courseRepo
       .createQueryBuilder('c')
       .where('c.deleted_at IS NULL');
     if (scope === 'published_or_own' && subjectUserId) {
-      qb.andWhere('(c.status = :published OR c.created_by = :uid OR c.id = :rootId)', {
-        published: 'published',
-        uid: subjectUserId,
-        rootId,
-      });
+      qb.andWhere(
+        `(
+          (c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))
+          OR c.created_by = :uid
+          OR c.id = :rootId
+        )`,
+        { published: 'published', draft: 'draft', now, uid: subjectUserId, rootId }
+      );
     } else {
-      qb.andWhere('(c.status = :published OR c.id = :rootId)', {
-        published: 'published',
-        rootId,
-      });
+      qb.andWhere(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now) OR c.id = :rootId)`,
+        { published: 'published', draft: 'draft', now, rootId }
+      );
     }
     const courses = await qb.getMany();
     const courseById = new Map<number, any>();
@@ -342,13 +375,18 @@ export class CourseServiceImpl implements CourseService {
     query: PublishedCourseListQuery
   ): Promise<PublishedCourseListResult> {
     const courseRepo = AppDataSource.getRepository(Course);
+    const now = new Date();
 
     const page = Number(query.page || 1);
     const pageSize = Math.min(50, Math.max(1, Number(query.page_size || 12)));
     const q = query.q ? String(query.q).trim() : '';
 
     const qb = courseRepo.createQueryBuilder('c');
-    qb.where('c.status = :status', { status: 'published' });
+    // Effective "published": either explicitly published, or draft scheduled for publish_scheduled_at <= now.
+    qb.where(
+      `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+      { published: 'published', draft: 'draft', now }
+    );
     qb.andWhere('c.deleted_at IS NULL');
     
     if (q) {
@@ -488,10 +526,14 @@ export class CourseServiceImpl implements CourseService {
 
   async getPublishedCourseBySlug(subjectUserId: number | undefined, slug: string): Promise<CourseDetail> {
     const courseRepo = AppDataSource.getRepository(Course);
+    const now = new Date();
 
     const qb = courseRepo.createQueryBuilder('c');
     qb.where('c.slug = :slug', { slug });
-    qb.andWhere('c.status = :status', { status: 'published' });
+    qb.andWhere(
+      `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+      { published: 'published', draft: 'draft', now }
+    );
     qb.andWhere('c.deleted_at IS NULL');
 
     // Add learners count
@@ -621,6 +663,7 @@ export class CourseServiceImpl implements CourseService {
         description: l.description ?? null,
         lesson_type: (l.lesson_type || 'text') as LessonType,
         order_index: l.order_index,
+        open_at: (l as any).open_at ? new Date((l as any).open_at).toISOString() : null,
         is_free_preview: l.is_free_preview,
         duration_minutes: l.duration_minutes,
       });
@@ -644,9 +687,16 @@ export class CourseServiceImpl implements CourseService {
     slug: string
   ): Promise<CoursePrerequisiteGraph> {
     const courseRepo = AppDataSource.getRepository(Course);
-    const root = await courseRepo.findOne({
-      where: { slug, status: 'published' as any, deleted_at: null as any } as any,
-    });
+    const now = new Date();
+    const root = await courseRepo
+      .createQueryBuilder('c')
+      .where('c.slug = :slug', { slug })
+      .andWhere('c.deleted_at IS NULL')
+      .andWhere(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      )
+      .getOne();
     if (!root) throw new Error('Không tìm thấy khóa học.');
     return this.buildPrerequisiteGraph(root as any, subjectUserId, 'published');
   }
@@ -656,10 +706,17 @@ export class CourseServiceImpl implements CourseService {
     const courseRepo = AppDataSource.getRepository(Course);
     const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
 
-    // Check if course exists and is published
-    const course = await courseRepo.findOne({ 
-      where: { id: courseId, status: 'published', deleted_at: null as any } 
-    });
+    // Check if course exists and is effectively published (including scheduled publish time).
+    const now = new Date();
+    const course = await courseRepo
+      .createQueryBuilder('c')
+      .where('c.id = :courseId', { courseId })
+      .andWhere('c.deleted_at IS NULL')
+      .andWhere(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      )
+      .getOne();
     
     if (!course) {
       throw new Error('Khóa học không tồn tại hoặc chưa được xuất bản.');
@@ -867,6 +924,7 @@ export class CourseServiceImpl implements CourseService {
         order_index: l.order_index,
         is_free_preview: l.is_free_preview,
         duration_minutes: l.duration_minutes,
+        open_at: l.open_at ? new Date(l.open_at).toISOString() : null,
       });
       lessonByModule.set(l.module_id, arr);
     }
@@ -916,6 +974,7 @@ export class CourseServiceImpl implements CourseService {
         course_id: m.course_id,
         title: m.title,
         description: m.description ?? null,
+        open_at: m.open_at ? new Date(m.open_at).toISOString() : null,
         order_index: m.order_index,
         lessons: lessonByModule.get(m.id) || [],
       })),
@@ -1003,9 +1062,25 @@ export class CourseServiceImpl implements CourseService {
     }
 
     await this.ensureEnrolledLearner(subjectUserId, courseId);
-    const { orderedLessons } = await this.loadOrderedLessonsForCourse(courseId);
+    const { orderedLessons, modules } = await this.loadOrderedLessonsForCourse(courseId);
+    const now = new Date();
+    const moduleById = new Map<number, any>((modules as any[]).map((m) => [Number(m.id), m]));
     const idx = orderedLessons.findIndex((l) => Number((l as any).id) === Number(lessonId));
     if (idx < 0) throw new Error('Bài học không hợp lệ.');
+
+    // Module open time gating (optional schedule)
+    const targetLesson = orderedLessons[idx] as any;
+    const targetModule = moduleById.get(Number(targetLesson?.module_id));
+    const openAt = parseNullableDateTime(targetModule?.open_at);
+    if (openAt && openAt.getTime() > now.getTime()) {
+      throw new Error('Không thể truy cập bài học.');
+    }
+
+    const lessonOpenAt = parseNullableDateTime(targetLesson?.open_at);
+    if (lessonOpenAt && lessonOpenAt.getTime() > now.getTime()) {
+      throw new Error('Không thể truy cập bài học.');
+    }
+
     if (idx === 0) return;
 
     const prevId = Number((orderedLessons[idx - 1] as any).id);
@@ -1019,8 +1094,10 @@ export class CourseServiceImpl implements CourseService {
   async getMyCourseProgress(subjectUserId: number, courseId: number): Promise<CourseProgressResult> {
     await this.ensureEnrolledLearner(subjectUserId, courseId);
 
-    const { orderedLessons } = await this.loadOrderedLessonsForCourse(courseId);
+    const { orderedLessons, modules } = await this.loadOrderedLessonsForCourse(courseId);
     const total = orderedLessons.length;
+    const now = new Date();
+    const moduleById = new Map<number, any>((modules as any[]).map((m) => [Number(m.id), m]));
 
     const completionRepo = AppDataSource.getRepository(LessonCompletion);
     const completedRows = total
@@ -1036,18 +1113,22 @@ export class CourseServiceImpl implements CourseService {
     const unlocked: number[] = [];
     let nextLocked: number | null = null;
     for (let i = 0; i < orderedLessons.length; i++) {
-      const lessonId = Number((orderedLessons[i] as any).id);
-      if (i === 0) {
+      const lesson = orderedLessons[i] as any;
+      const lessonId = Number(lesson.id);
+      const module = moduleById.get(Number(lesson.module_id));
+      const openAt = parseNullableDateTime(module?.open_at);
+      const moduleOk = !openAt || openAt.getTime() <= now.getTime();
+      const lessonOpenAt = parseNullableDateTime(lesson?.open_at);
+      const lessonOk = !lessonOpenAt || lessonOpenAt.getTime() <= now.getTime();
+
+      const prereqOk = i === 0 ? true : completedSet.has(Number((orderedLessons[i - 1] as any).id));
+      if (prereqOk && moduleOk && lessonOk) {
         unlocked.push(lessonId);
         continue;
       }
-      const prevId = Number((orderedLessons[i - 1] as any).id);
-      if (completedSet.has(prevId)) {
-        unlocked.push(lessonId);
-      } else {
-        nextLocked = lessonId;
-        break;
-      }
+
+      nextLocked = lessonId;
+      break;
     }
 
     const completedCount = completedSet.size;
@@ -1077,9 +1158,21 @@ export class CourseServiceImpl implements CourseService {
   ): Promise<LessonHeartbeatResult> {
     await this.ensureEnrolledLearner(subjectUserId, courseId);
 
-    const { orderedLessons } = await this.loadOrderedLessonsForCourse(courseId);
+    const { orderedLessons, modules } = await this.loadOrderedLessonsForCourse(courseId);
     const target = orderedLessons.find((l) => Number((l as any).id) === Number(lessonId));
     if (!target) throw new Error('Bài học không hợp lệ.');
+
+    const now = new Date();
+    const moduleById = new Map<number, any>((modules as any[]).map((m) => [Number(m.id), m]));
+    const targetModule = moduleById.get(Number((target as any).module_id));
+    const openAt = parseNullableDateTime(targetModule?.open_at);
+    if (openAt && openAt.getTime() > now.getTime()) {
+      throw new Error('Không thể truy cập bài học.');
+    }
+    const lessonOpenAt = parseNullableDateTime((target as any)?.open_at);
+    if (lessonOpenAt && lessonOpenAt.getTime() > now.getTime()) {
+      throw new Error('Không thể truy cập bài học.');
+    }
 
     // Clamp delta to reduce abuse.
     const delta = Math.max(1, Math.min(10, Math.floor(Number(deltaSeconds))));
@@ -1113,9 +1206,22 @@ export class CourseServiceImpl implements CourseService {
   async completeLesson(subjectUserId: number, courseId: number, lessonId: number): Promise<LessonCompleteResult> {
     const enrollment = await this.ensureEnrolledLearner(subjectUserId, courseId);
 
-    const { orderedLessons } = await this.loadOrderedLessonsForCourse(courseId);
+    const { orderedLessons, modules } = await this.loadOrderedLessonsForCourse(courseId);
     const idx = orderedLessons.findIndex((l) => Number((l as any).id) === Number(lessonId));
     if (idx < 0) throw new Error('Bài học không hợp lệ.');
+
+    const now = new Date();
+    const moduleById = new Map<number, any>((modules as any[]).map((m) => [Number(m.id), m]));
+    const targetLesson = orderedLessons[idx] as any;
+    const targetModule = moduleById.get(Number(targetLesson?.module_id));
+    const openAt = parseNullableDateTime(targetModule?.open_at);
+    if (openAt && openAt.getTime() > now.getTime()) {
+      throw new Error('Không thể hoàn thành bài học.');
+    }
+    const lessonOpenAt = parseNullableDateTime(targetLesson?.open_at);
+    if (lessonOpenAt && lessonOpenAt.getTime() > now.getTime()) {
+      throw new Error('Không thể hoàn thành bài học.');
+    }
 
     // Enforce unlock rule: previous lesson must be completed.
     if (idx > 0) {
@@ -1244,6 +1350,7 @@ export class CourseServiceImpl implements CourseService {
       'ce.user_id as user_id',
       'u.full_name as full_name',
       'u.email as email',
+      'u.avatar_url as avatar_url',
       'ce.status as status',
       'ce.enrolled_at as enrolled_at',
       'ce.last_accessed_at as last_accessed_at',
@@ -1269,19 +1376,49 @@ export class CourseServiceImpl implements CourseService {
         .andWhere('lp.course_id = :courseId', { courseId });
     }, 'time_spent_seconds');
 
-    qb.orderBy('ce.last_accessed_at', 'DESC').addOrderBy('ce.enrolled_at', 'DESC');
+    // Avoid window functions/subqueries inside window ORDER BY (MySQL parse errors).
+    // We compute rank in application code:
+    // - progress_percent desc
+    // - completed_lessons desc
+    // - time_spent_seconds asc
+    // - last_accessed_at desc
+    // - user_id asc (stable)
+    const allRows = await qb.getRawMany();
+    const total = allRows.length;
 
-    qb.skip((page - 1) * pageSize).take(pageSize);
-    const total = await qb.getCount();
-    const rows = await qb.getRawMany();
+    const sorted = (allRows as any[]).sort((a, b) => {
+      const ap = Number(a.progress_percent ?? 0);
+      const bp = Number(b.progress_percent ?? 0);
+      if (bp !== ap) return bp - ap;
+
+      const ac = Number(a.completed_lessons ?? 0);
+      const bc = Number(b.completed_lessons ?? 0);
+      if (bc !== ac) return bc - ac;
+
+      const at = Number(a.time_spent_seconds ?? 0);
+      const bt = Number(b.time_spent_seconds ?? 0);
+      if (at !== bt) return at - bt;
+
+      const al = a.last_accessed_at ? new Date(a.last_accessed_at).getTime() : 0;
+      const bl = b.last_accessed_at ? new Date(b.last_accessed_at).getTime() : 0;
+      if (bl !== al) return bl - al;
+
+      return Number(a.user_id ?? 0) - Number(b.user_id ?? 0);
+    });
+
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    const pageRows = sorted.slice(start, end);
 
     return {
       course_id: courseId,
       total_lessons: totalLessons,
-      items: (rows as any[]).map((r) => ({
+      items: pageRows.map((r, idx) => ({
+        rank: start + idx + 1,
         user_id: Number(r.user_id),
         full_name: String(r.full_name || ''),
         email: String(r.email || ''),
+        avatar_url: r.avatar_url ? getSignedDeliveryUrl(String(r.avatar_url)) : null,
         status: r.status as any,
         enrolled_at: r.enrolled_at ? new Date(r.enrolled_at).toISOString() : new Date().toISOString(),
         last_accessed_at: r.last_accessed_at ? new Date(r.last_accessed_at).toISOString() : null,
@@ -1296,12 +1433,199 @@ export class CourseServiceImpl implements CourseService {
     };
   }
 
+  async getCourseLeaderboard(subjectUserId: number, courseId: number): Promise<CourseLeaderboardResult> {
+    const isManager = await isUserCourseManager(subjectUserId);
+    if (isManager) {
+      await this.ensureOwnCourse(subjectUserId, courseId);
+    } else {
+      await this.ensureEnrolledLearner(subjectUserId, courseId);
+    }
+
+    const { orderedLessons } = await this.loadOrderedLessonsForCourse(courseId);
+    const totalLessons = orderedLessons.length;
+
+    // IMPORTANT: MySQL version in this project might not support window functions (ROW_NUMBER).
+    // So we compute leaderboard by ordering in SQL + ranking in application code.
+    const TOP_LIMIT = 100;
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+
+    const completedSelect = (subQb: any) => {
+      return subQb
+        .select('COUNT(*)')
+        .from(LessonCompletion, 'lc')
+        .innerJoin(Lesson, 'l', 'l.id = lc.lesson_id')
+        .innerJoin(Module, 'm', 'm.id = l.module_id')
+        .where('lc.user_id = ce.user_id')
+        .andWhere('m.course_id = :courseId', { courseId });
+    };
+
+    const timeSelect = (subQb: any) => {
+      return subQb
+        .select('COALESCE(SUM(lp.time_spent_seconds), 0)')
+        .from(LessonProgress, 'lp')
+        .where('lp.user_id = ce.user_id')
+        .andWhere('lp.course_id = :courseId', { courseId });
+    };
+
+    const topRows = await enrollmentRepo
+      .createQueryBuilder('ce')
+      .innerJoin(User, 'u', 'u.id = ce.user_id')
+      .where('ce.course_id = :courseId', { courseId })
+      .select([
+        'ce.user_id as user_id',
+        'u.full_name as full_name',
+        'u.avatar_url as avatar_url',
+        'ce.progress_percent as progress_percent',
+        'ce.last_accessed_at as last_accessed_at',
+      ])
+      .addSelect((subQb) => completedSelect(subQb), 'completed_lessons')
+      .addSelect((subQb) => timeSelect(subQb), 'time_spent_seconds')
+      .orderBy('ce.progress_percent', 'DESC')
+      // Order by select aliases is supported in MySQL (unlike in window ORDER BY).
+      .addOrderBy('completed_lessons', 'DESC')
+      .addOrderBy('time_spent_seconds', 'ASC')
+      .addOrderBy('ce.last_accessed_at', 'DESC')
+      .addOrderBy('ce.user_id', 'ASC')
+      .limit(TOP_LIMIT)
+      .getRawMany();
+
+    const myRow = await enrollmentRepo
+      .createQueryBuilder('ce')
+      .innerJoin(User, 'u', 'u.id = ce.user_id')
+      .where('ce.course_id = :courseId', { courseId })
+      .andWhere('ce.user_id = :uid', { uid: subjectUserId })
+      .select([
+        'ce.user_id as user_id',
+        'u.full_name as full_name',
+        'u.avatar_url as avatar_url',
+        'ce.progress_percent as progress_percent',
+        'ce.last_accessed_at as last_accessed_at',
+      ])
+      .addSelect((subQb) => completedSelect(subQb), 'completed_lessons')
+      .addSelect((subQb) => timeSelect(subQb), 'time_spent_seconds')
+      .getRawOne();
+
+    type RowShape = {
+      user_id: number;
+      full_name: string;
+      avatar_url: string | null;
+      progress_percent: number;
+      last_accessed_at: string | null;
+      completed_lessons: number;
+      time_spent_seconds: number;
+    };
+
+    const top: RowShape[] = (topRows as any[]).map((r) => ({
+      user_id: Number(r.user_id ?? 0),
+      full_name: String(r.full_name || ''),
+      avatar_url: r.avatar_url ?? null,
+      progress_percent: Number(r.progress_percent ?? 0),
+      last_accessed_at: r.last_accessed_at ?? null,
+      completed_lessons: Number(r.completed_lessons ?? 0),
+      time_spent_seconds: Number(r.time_spent_seconds ?? 0),
+    }));
+
+    const my: RowShape | null = myRow
+      ? {
+          user_id: Number((myRow as any).user_id ?? 0),
+          full_name: String((myRow as any).full_name || ''),
+          avatar_url: (myRow as any).avatar_url ?? null,
+          progress_percent: Number((myRow as any).progress_percent ?? 0),
+          last_accessed_at: (myRow as any).last_accessed_at ?? null,
+          completed_lessons: Number((myRow as any).completed_lessons ?? 0),
+          time_spent_seconds: Number((myRow as any).time_spent_seconds ?? 0),
+        }
+      : null;
+
+    const hasMeInTop = my ? top.some((x) => x.user_id === my.user_id) : false;
+
+    // Compute exact rank for "me" if not in top, without window functions.
+    let myRank: number | null = null;
+    if (my) {
+      if (hasMeInTop) {
+        // Top is already ordered by the ranking rules, so index is rank.
+        myRank = top.findIndex((x) => x.user_id === my.user_id) + 1;
+      } else {
+        const completedExpr = `(SELECT COUNT(*)
+          FROM lesson_completions lc
+          INNER JOIN lessons l ON l.id = lc.lesson_id
+          INNER JOIN modules m ON m.id = l.module_id
+          WHERE lc.user_id = ce.user_id AND m.course_id = :courseId)`;
+        const timeExpr = `(SELECT COALESCE(SUM(lp.time_spent_seconds), 0)
+          FROM lesson_progress lp
+          WHERE lp.user_id = ce.user_id AND lp.course_id = :courseId)`;
+
+        const higherCountQb = enrollmentRepo
+          .createQueryBuilder('ce')
+          .where('ce.course_id = :courseId', { courseId })
+          .andWhere('ce.user_id <> :uid', { uid: subjectUserId })
+          .andWhere(
+            `(
+              ce.progress_percent > :myProgress OR
+              (ce.progress_percent = :myProgress AND ${completedExpr} > :myCompleted) OR
+              (ce.progress_percent = :myProgress AND ${completedExpr} = :myCompleted AND ${timeExpr} < :myTime) OR
+              (ce.progress_percent = :myProgress AND ${completedExpr} = :myCompleted AND ${timeExpr} = :myTime AND COALESCE(ce.last_accessed_at, '1970-01-01') > COALESCE(:myLast, '1970-01-01')) OR
+              (ce.progress_percent = :myProgress AND ${completedExpr} = :myCompleted AND ${timeExpr} = :myTime AND COALESCE(ce.last_accessed_at, '1970-01-01') = COALESCE(:myLast, '1970-01-01') AND ce.user_id < :uid)
+            )`,
+            {
+              myProgress: my.progress_percent,
+              myCompleted: my.completed_lessons,
+              myTime: my.time_spent_seconds,
+              myLast: my.last_accessed_at,
+              uid: subjectUserId,
+              courseId,
+            }
+          );
+
+        const higherCount = await higherCountQb.getCount();
+        myRank = higherCount + 1;
+      }
+    }
+
+    const itemsTop = top.map((r, idx) => ({
+      rank: idx + 1,
+      user_id: r.user_id,
+      full_name: r.full_name,
+      avatar_url: r.avatar_url ? getSignedDeliveryUrl(String(r.avatar_url)) : null,
+      progress_percent: r.progress_percent,
+      completed_lessons: r.completed_lessons,
+      time_spent_seconds: r.time_spent_seconds,
+      is_me: my ? r.user_id === my.user_id : false,
+    }));
+
+    const items =
+      my && !hasMeInTop && myRank != null
+        ? [
+            ...itemsTop,
+            {
+              rank: myRank,
+              user_id: my.user_id,
+              full_name: my.full_name,
+              avatar_url: my.avatar_url ? getSignedDeliveryUrl(String(my.avatar_url)) : null,
+              progress_percent: my.progress_percent,
+              completed_lessons: my.completed_lessons,
+              time_spent_seconds: my.time_spent_seconds,
+              is_me: true,
+            },
+          ].sort((a, b) => a.rank - b.rank)
+        : itemsTop;
+
+    return {
+      course_id: courseId,
+      total_lessons: totalLessons,
+      items,
+      top_limit: TOP_LIMIT,
+      includes_me: Boolean(my && items.some((x) => x.user_id === my.user_id)),
+    };
+  }
+
   // Instructor methods (existing code)
   async createCourse(subjectUserId: number, request: CreateCourseRequest): Promise<{ id: number }> {
     await ensureUserIsCourseManager(subjectUserId);
 
     const courseRepo = AppDataSource.getRepository(Course);
     const instructorRepo = AppDataSource.getRepository(CourseInstructor);
+    const now = new Date();
 
     const baseSlug = normalizeSlug(request.title);
     if (!baseSlug) throw new Error('Tiêu đề khóa học không hợp lệ.');
@@ -1317,6 +1641,9 @@ export class CourseServiceImpl implements CourseService {
     const prerequisiteIds = parsePrerequisiteCourseIds(request.prerequisites);
     await this.validatePrerequisiteIdsExist(prerequisiteIds);
 
+    const scheduledAt = parseNullableDateTime((request as any)?.publish_scheduled_at);
+    const shouldAutoPublish = scheduledAt ? scheduledAt.getTime() <= now.getTime() : false;
+
     const course = courseRepo.create({
       title: request.title,
       slug,
@@ -1327,8 +1654,9 @@ export class CourseServiceImpl implements CourseService {
       prerequisites: prerequisiteIds.length ? prerequisiteIds.map(String) : null,
       level: request.level ?? 'beginner',
       language: request.language ?? 'vi',
-      status: 'draft',
-      published_at: null,
+      status: shouldAutoPublish ? 'published' : 'draft',
+      published_at: shouldAutoPublish ? scheduledAt : null,
+      publish_scheduled_at: !shouldAutoPublish ? scheduledAt : null,
       created_by: subjectUserId,
     });
 
@@ -1501,12 +1829,16 @@ export class CourseServiceImpl implements CourseService {
     const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
     const selectedSet = new Set<number>(parsePrerequisiteCourseIds((ownCourse as any).prerequisites));
     const courseRepo = AppDataSource.getRepository(Course);
+    const now = new Date();
 
     const candidates = await courseRepo
       .createQueryBuilder('c')
       .where('c.deleted_at IS NULL')
       .andWhere('c.id <> :courseId', { courseId })
-      .andWhere('(c.status = :published OR c.created_by = :uid)', { published: 'published', uid: subjectUserId })
+      .andWhere(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now) OR c.created_by = :uid)`,
+        { published: 'published', draft: 'draft', now, uid: subjectUserId }
+      )
       .orderBy('c.title', 'ASC')
       .addOrderBy('c.id', 'ASC')
       .getMany();
@@ -1540,6 +1872,7 @@ export class CourseServiceImpl implements CourseService {
   async updateMyCourse(subjectUserId: number, courseId: number, request: UpdateCourseRequest): Promise<void> {
     await ensureUserIsCourseManager(subjectUserId);
     const courseRepo = AppDataSource.getRepository(Course);
+    const now = new Date();
 
     const course = await courseRepo.findOne({ where: { id: courseId, created_by: subjectUserId } as any });
     if (!course || (course as any).deleted_at) throw new Error('Không tìm thấy khóa học.');
@@ -1559,6 +1892,21 @@ export class CourseServiceImpl implements CourseService {
     if ('level' in request && request.level) course.level = request.level;
     if ('language' in request && request.language) course.language = request.language;
 
+    if ('publish_scheduled_at' in request) {
+      const scheduledAt = parseNullableDateTime((request as any)?.publish_scheduled_at);
+      if (!scheduledAt) {
+        (course as any).publish_scheduled_at = null;
+      } else if (scheduledAt.getTime() <= now.getTime()) {
+        course.status = 'published';
+        course.published_at = scheduledAt;
+        (course as any).publish_scheduled_at = null;
+      } else {
+        course.status = 'draft';
+        course.published_at = null;
+        (course as any).publish_scheduled_at = scheduledAt;
+      }
+    }
+
     await courseRepo.save(course);
   }
 
@@ -1571,11 +1919,14 @@ export class CourseServiceImpl implements CourseService {
     if (status === 'published') {
       course.status = 'published';
       course.published_at = course.published_at ?? new Date();
+      (course as any).publish_scheduled_at = null;
     } else if (status === 'draft') {
       course.status = 'draft';
       course.published_at = null;
+      (course as any).publish_scheduled_at = null;
     } else if (status === 'archived') {
       course.status = 'archived';
+      (course as any).publish_scheduled_at = null;
     } else {
       throw new Error('Trạng thái không hợp lệ.');
     }
@@ -1630,6 +1981,7 @@ export class CourseServiceImpl implements CourseService {
         description: l.description ?? null,
         lesson_type: (l.lesson_type || 'text') as LessonType,
         order_index: l.order_index,
+        open_at: l.open_at ? new Date(l.open_at).toISOString() : null,
       });
       lessonByModule.set(l.module_id, arr);
     }
@@ -1640,6 +1992,7 @@ export class CourseServiceImpl implements CourseService {
       title: m.title,
       description: m.description ?? null,
       order_index: m.order_index,
+      open_at: m.open_at ? new Date(m.open_at).toISOString() : null,
       lessons: lessonByModule.get(m.id) || [],
     }));
 
@@ -1663,6 +2016,7 @@ export class CourseServiceImpl implements CourseService {
       description: request.description ?? null,
       order_index: nextOrder,
       is_published: true,
+      open_at: parseNullableDateTime((request as any)?.open_at),
     } as any);
     const saved = await moduleRepo.save(mod as any);
     return { id: (saved as any).id };
@@ -1677,6 +2031,7 @@ export class CourseServiceImpl implements CourseService {
     if (!mod) throw new Error('Không tìm thấy module.');
     if (request.title != null) (mod as any).title = request.title;
     if ('description' in request) (mod as any).description = request.description ?? null;
+    if ('open_at' in request) (mod as any).open_at = parseNullableDateTime((request as any)?.open_at);
     await moduleRepo.save(mod as any);
   }
 
@@ -1710,6 +2065,7 @@ export class CourseServiceImpl implements CourseService {
       title: request.title,
       description: request.description ?? null,
       lesson_type: request.lesson_type || 'text',
+      open_at: parseNullableDateTime((request as any)?.open_at) ?? null,
       order_index: nextOrder,
       is_published: true,
       is_free_preview: false,
@@ -1735,6 +2091,7 @@ export class CourseServiceImpl implements CourseService {
     if (request.title != null) (lesson as any).title = request.title;
     if ('description' in request) (lesson as any).description = request.description ?? null;
     if (request.lesson_type != null) (lesson as any).lesson_type = request.lesson_type;
+    if ('open_at' in request) (lesson as any).open_at = parseNullableDateTime((request as any)?.open_at) ?? null;
     await lessonRepo.save(lesson as any);
   }
 

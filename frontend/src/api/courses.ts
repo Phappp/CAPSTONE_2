@@ -16,6 +16,7 @@ export const COURSES_API = {
   // Learner view (must be enrolled)
   learning: (id: number | string) => `${COURSES_API_BASE}/${id}/learning`,
   progress: (id: number | string) => `${COURSES_API_BASE}/${id}/progress`,
+  leaderboard: (id: number | string) => `${COURSES_API_BASE}/${id}/leaderboard`,
   lessonHeartbeat: (id: number | string, lessonId: number | string) => `${COURSES_API_BASE}/${id}/lessons/${lessonId}/progress`,
   completeLesson: (id: number | string, lessonId: number | string) => `${COURSES_API_BASE}/${id}/lessons/${lessonId}/complete`,
   // Course manager: completion rules + learner tracking

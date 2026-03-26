@@ -13,6 +13,7 @@ export type LessonItem = {
   description: string | null;
   lesson_type: LessonType;
   order_index: number;
+  open_at?: string | null;
 };
 
 export type ModuleItem = {
@@ -20,6 +21,7 @@ export type ModuleItem = {
   course_id: number;
   title: string;
   description: string | null;
+  open_at?: string | null;
   order_index: number;
   lessons: LessonItem[];
 };
@@ -162,6 +164,22 @@ function parseYoutubeVideoId(inputUrl: string): string | null {
     return null;
   } catch {
     return null;
+  }
+}
+
+function formatTimeVi(date: Date): string {
+  try {
+    return date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+function formatDateTimeVi(date: Date): string {
+  try {
+    return date.toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" });
+  } catch {
+    return "";
   }
 }
 
@@ -359,10 +377,12 @@ function ResourceViewer({ state, onClose }: { state: ResourceViewerState; onClos
 export default function LearnerCourseContentTree(props: {
   courseId: number;
   modules: ModuleItem[];
+  courseThumbnailUrl?: string | null;
   progress?: CourseProgress | null;
   refreshProgress?: () => Promise<void> | void;
+  variant?: "full" | "module-lessons";
 }) {
-  const { courseId, modules, progress, refreshProgress } = props;
+  const { courseId, modules, courseThumbnailUrl, progress, refreshProgress, variant = "full" } = props;
   const token = useMemo(() => getAccessToken(), []);
 
   const [loading, setLoading] = useState(false);
@@ -387,6 +407,28 @@ export default function LearnerCourseContentTree(props: {
   const heartbeatTimerRef = useRef<number | null>(null);
   const completedAttemptedRef = useRef<Set<number>>(new Set());
   const [heartbeat, setHeartbeat] = useState<LessonHeartbeatDto | null>(null);
+
+  // Countdown ring should feel smooth even if the backend heartbeat response is slow.
+  // We render using a locally predicted time based on the last heartbeat baseline.
+  const [countdownRemainingPct, setCountdownRemainingPct] = useState<number>(100);
+  const countdownRequiredSecondsRef = useRef<number>(0);
+  const countdownBaselineTimeSpentRef = useRef<number>(0);
+  const countdownBaselineAtMsRef = useRef<number>(0);
+  const countdownAnimTimerRef = useRef<number | null>(null);
+
+  const syncCountdownBaseline = (data: LessonHeartbeatDto) => {
+    const req = Number(data?.required_seconds || 0);
+    const spent = Number(data?.time_spent_seconds || 0);
+    if (!Number.isFinite(req) || req <= 0) return;
+    countdownRequiredSecondsRef.current = req;
+    countdownBaselineTimeSpentRef.current = Math.max(0, spent);
+    countdownBaselineAtMsRef.current = Date.now();
+
+    const elapsedSeconds = (Date.now() - countdownBaselineAtMsRef.current) / 1000;
+    const predictedSpent = countdownBaselineTimeSpentRef.current + elapsedSeconds;
+    const remaining = Math.max(0, Math.min(100, (1 - predictedSpent / req) * 100));
+    setCountdownRemainingPct(Math.round(remaining * 10) / 10);
+  };
 
   const postHeartbeat = async (lessonId: number, deltaSeconds: number) => {
     const res = await fetch(`${url}${COURSES_API.lessonHeartbeat(courseId, lessonId)}`, {
@@ -430,12 +472,17 @@ export default function LearnerCourseContentTree(props: {
 
     setResourceError(null);
     setHeartbeat(null);
+    setCountdownRemainingPct(100);
+    countdownRequiredSecondsRef.current = 0;
+    countdownBaselineTimeSpentRef.current = 0;
+    countdownBaselineAtMsRef.current = Date.now();
 
     const lessonId = selectedLessonId;
     const tick = async (deltaSeconds: number) => {
       try {
         const data = await postHeartbeat(lessonId, deltaSeconds);
         setHeartbeat(data);
+        syncCountdownBaseline(data);
         if (data?.can_complete) {
           void tryCompleteLesson(lessonId);
         }
@@ -445,9 +492,11 @@ export default function LearnerCourseContentTree(props: {
     };
 
     void tick(1);
+    // Update countdown more frequently for smoother UX.
+    // Using smaller delta reduces "jumpiness" caused by server round-trips.
     heartbeatTimerRef.current = window.setInterval(() => {
-      void tick(5);
-    }, 5000);
+      void tick(3);
+    }, 3000);
 
     return () => {
       if (heartbeatTimerRef.current != null) {
@@ -459,6 +508,35 @@ export default function LearnerCourseContentTree(props: {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewer, selectedLessonId, courseId, token]);
+
+  // Local animation: keep the ring moving based on elapsed time since the last heartbeat baseline.
+  // This makes the countdown feel continuous while FE waits for backend responses.
+  useEffect(() => {
+    if (!viewer || !selectedLessonId) return;
+    const req = countdownRequiredSecondsRef.current;
+    if (!req || req <= 0) return;
+
+    if (countdownAnimTimerRef.current != null) {
+      window.clearInterval(countdownAnimTimerRef.current);
+      countdownAnimTimerRef.current = null;
+    }
+
+    countdownAnimTimerRef.current = window.setInterval(() => {
+      const localReq = countdownRequiredSecondsRef.current;
+      if (!localReq || localReq <= 0) return;
+      const elapsedSeconds = (Date.now() - countdownBaselineAtMsRef.current) / 1000;
+      const predictedSpent = countdownBaselineTimeSpentRef.current + elapsedSeconds;
+      const remaining = Math.max(0, Math.min(100, (1 - predictedSpent / localReq) * 100));
+      setCountdownRemainingPct(Math.round(remaining * 10) / 10);
+    }, 120);
+
+    return () => {
+      if (countdownAnimTimerRef.current != null) {
+        window.clearInterval(countdownAnimTimerRef.current);
+        countdownAnimTimerRef.current = null;
+      }
+    };
+  }, [viewer, selectedLessonId, heartbeat]);
 
   const fetchLessonResources = async (lessonId: number): Promise<LessonResource[]> => {
     const cached = resourcesByLessonId[lessonId];
@@ -682,19 +760,12 @@ export default function LearnerCourseContentTree(props: {
 
       {viewer && heartbeat && heartbeat.required_seconds > 0 ? (
         (() => {
-          const remainingPct = Math.max(
-            0,
-            Math.min(
-              100,
-              Math.round((1 - (heartbeat.time_spent_seconds || 0) / Math.max(1, heartbeat.required_seconds || 1)) * 100)
-            )
-          );
           const isReady = Boolean(heartbeat.can_complete);
           return (
             <div
               className={`learnerTreeCountdown ${isReady ? "learnerTreeCountdown--ready" : ""}`}
               aria-hidden="true"
-              style={{ ["--pct" as any]: remainingPct }}
+              style={{ ["--pct" as any]: countdownRemainingPct }}
             >
               <svg className="learnerTreeCountdown__svg" viewBox="0 0 48 48">
                 <circle className="learnerTreeCountdown__track" cx="24" cy="24" r="20" />
@@ -708,46 +779,62 @@ export default function LearnerCourseContentTree(props: {
 
       <div className="learnerTree">
         {(modules || []).map((m, moduleIdx) => {
-          const isCollapsed = Boolean(collapsedModules[m.id]);
+          const isCollapsed = variant === "module-lessons" ? false : Boolean(collapsedModules[m.id]);
+          const moduleOpenAt = m.open_at ? new Date(m.open_at) : null;
+          const moduleNotOpenedYet = moduleOpenAt && moduleOpenAt.getTime() > Date.now();
+          const lessonIds = (m.lessons || []).map((l) => l.id);
+          const moduleHasAnyUnlockedLesson = !progress ? moduleIdx === 0 : lessonIds.some((id) => unlockedSet.has(id));
+          const moduleLocked = Boolean(moduleNotOpenedYet) || !moduleHasAnyUnlockedLesson;
+          const canToggleModule = !moduleLocked && variant !== "module-lessons";
           return (
             <section key={m.id} className="learnerTreeModule">
-              <header className="learnerTreeModule__header">
-                <div className="learnerTreeModule__left">
-                  <span className="learnerTreeModule__badge">Chương {moduleIdx + 1}</span>
+              {variant === "module-lessons" ? null : (
+                <header className="learnerTreeModule__header">
+                  <div className="learnerTreeModule__left">
+                    <span className="learnerTreeModule__badge">Chương {moduleIdx + 1}</span>
+                    <button
+                      type="button"
+                      className="learnerTreeModule__titleBtn"
+                      disabled={!canToggleModule}
+                      onClick={() => setCollapsedModules((prev) => ({ ...prev, [m.id]: !prev[m.id] }))}
+                      aria-expanded={!isCollapsed}
+                      aria-disabled={!canToggleModule ? "true" : "false"}
+                    >
+                      {m.title}
+                    </button>
+                  </div>
                   <button
                     type="button"
-                    className="learnerTreeModule__titleBtn"
+                    className="learnerTreeModule__collapseBtn"
+                    disabled={!canToggleModule}
                     onClick={() => setCollapsedModules((prev) => ({ ...prev, [m.id]: !prev[m.id] }))}
-                    aria-expanded={!isCollapsed}
+                    aria-disabled={!canToggleModule ? "true" : "false"}
                   >
-                    {m.title}
+                    {isCollapsed ? "＋" : "−"}
                   </button>
-                </div>
-                <button
-                  type="button"
-                  className="learnerTreeModule__collapseBtn"
-                  onClick={() => setCollapsedModules((prev) => ({ ...prev, [m.id]: !prev[m.id] }))}
-                >
-                  {isCollapsed ? "＋" : "−"}
-                </button>
-              </header>
+                </header>
+              )}
 
-              {!isCollapsed ? (
+              {!moduleLocked && !isCollapsed ? (
                 <div className="learnerTreeLessons">
-                  {m.description ? (
-                    <div className="learnerTreeModule__desc">{m.description}</div>
-                  ) : null}
                   {(m.lessons || []).map((l, lessonIdx) => {
                     const list = resourcesByLessonId[l.id];
                     const latest = list && list.length ? list[0] : null;
                     const hasResource = !!latest;
                     const ytId = latest ? parseYoutubeVideoId(latest.url || "") : null;
-                    const isImage = !!latest && ((latest.mime_type || "").startsWith("image/") || (latest.filename || "").toLowerCase().match(/\.(png|jpg|jpeg|gif|webp|svg)$/));
-                    const thumbSrc =
-                      ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : isImage ? (latest?.preview_url || latest?.url) : null;
-                    const isUnlocked = !progress || unlockedSet.has(l.id);
+                    const isImage =
+                      !!latest &&
+                      ((latest.mime_type || "").startsWith("image/") ||
+                        (latest.filename || "").toLowerCase().match(/\.(png|jpg|jpeg|gif|webp|svg)$/));
+                    const thumbSrcFromResource =
+                      ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : isImage ? latest?.preview_url || latest?.url : null;
+                    const thumbSrc = courseThumbnailUrl || thumbSrcFromResource;
+                    const isUnlocked = progress ? unlockedSet.has(l.id) : moduleIdx === 0 && lessonIdx === 0;
                     const isCompleted = completedSet.has(l.id);
                     const isLocked = !isUnlocked;
+                    const shouldShowDefaultThumb = !ytId && !isImage && hasResource && !courseThumbnailUrl;
+                    const lessonOpenAt = l.open_at ? new Date(l.open_at) : null;
+                    const lessonNotOpenedYet = lessonOpenAt && lessonOpenAt.getTime() > Date.now();
 
                     return (
                       <div
@@ -819,10 +906,12 @@ export default function LearnerCourseContentTree(props: {
                               <img src={thumbSrc} alt={latest?.filename || l.title} className="learnerTreeLesson__thumb" />
                             ) : (
                               <div className="learnerTreeLesson__thumbPlaceholder">
-                                {list === undefined && (
-                                  <div className="learnerTreeLesson__thumbLoading">...</div>
-                                )}
-                                {list !== undefined && !hasResource ? <FilePreviewIcon /> : null}
+                                {list === undefined ? <div className="learnerTreeLesson__thumbLoading">...</div> : null}
+                                {list !== undefined ? (
+                                  <>
+                                    {shouldShowDefaultThumb || !hasResource ? <FilePreviewIcon /> : null}
+                                  </>
+                                ) : null}
                               </div>
                             )}
 
@@ -846,20 +935,30 @@ export default function LearnerCourseContentTree(props: {
                             <div className="learnerTreeLesson__title">
                               <span className="learnerTreeLesson__index">Bài {lessonIdx + 1}</span>
                               <span className="learnerTreeLesson__titleText">{l.title}</span>
-                              {isLocked ? <span className="learnerTreeLesson__statusPill learnerTreeLesson__statusPill--locked">Bị khóa</span> : null}
-                              {isCompleted ? <span className="learnerTreeLesson__statusPill learnerTreeLesson__statusPill--completed">Hoàn thành</span> : null}
                             </div>
-                            <div className="learnerTreeLesson__desc">
-                              {l.description ? l.description : "Không có mô tả."}
-                            </div>
-                            {!isLocked ? (
-                              list === undefined ? (
-                                <div className="learnerTreeLesson__loading">Đang tải tài nguyên...</div>
-                              ) : list.length ? (
-                                <div className="learnerTreeLesson__resourceCount">{list.length} tài nguyên</div>
-                              ) : (
-                                <div className="learnerTreeLesson__resourceCount learnerTreeLesson__resourceCount--empty">Chưa có tài nguyên</div>
-                              )
+                          </div>
+
+                          <div className="learnerTreeLesson__right" aria-hidden="true">
+                            {isLocked ? (
+                              <span
+                                className="learnerTreeLesson__statusPill learnerTreeLesson__statusPill--locked"
+                                title={
+                                  moduleNotOpenedYet && moduleOpenAt
+                                    ? `Mở lúc: ${formatDateTimeVi(moduleOpenAt)}`
+                                    : lessonNotOpenedYet && lessonOpenAt
+                                      ? `Mở lúc: ${formatDateTimeVi(lessonOpenAt)}`
+                                      : undefined
+                                }
+                              >
+                                {moduleNotOpenedYet && moduleOpenAt
+                                  ? `Bị khóa (mở ${formatTimeVi(moduleOpenAt)})`
+                                  : lessonNotOpenedYet && lessonOpenAt
+                                    ? `Bị khóa (mở ${formatTimeVi(lessonOpenAt)})`
+                                    : "Bị khóa"}
+                              </span>
+                            ) : null}
+                            {isCompleted ? (
+                              <span className="learnerTreeLesson__statusPill learnerTreeLesson__statusPill--completed">Hoàn thành</span>
                             ) : null}
                           </div>
                         </div>

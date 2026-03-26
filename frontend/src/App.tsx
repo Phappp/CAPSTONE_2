@@ -12,6 +12,8 @@ import CoursesCatalogPage from "./pages/CoursesCatalogPage";
 import CoursePublicDetailPage from "./pages/CoursePublicDetailPage";
 import ProfilePage from "./pages/ProfilePage";
 import LearningPage from "./pages/LearningPage";
+import LearnerCourseHubPage from "./pages/LearnerCourseHubPage";
+import LearningModuleLessonsPage from "./pages/LearningModuleLessonsPage";
 import Authentication from "./router/Authentication";
 
 export default function App() {
@@ -68,6 +70,22 @@ export default function App() {
         element={
           <Authentication>
             <LearningPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/learning/:id/:slug/modules/:moduleId"
+        element={
+          <Authentication>
+            <LearningModuleLessonsPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/my-courses/:id/:slug"
+        element={
+          <Authentication>
+            <LearnerCourseHubPage />
           </Authentication>
         }
       />

@@ -7,6 +7,7 @@ export type CreateCourseRequest = {
   level?: string | null;
   language?: string | null;
   thumbnail_url?: string | null;
+  publish_scheduled_at?: string | null;
   learning_objectives?: string[] | null;
   prerequisites?: string[] | null;
 };
@@ -58,6 +59,7 @@ export type CourseLessonItem = {
   description: string | null;
   lesson_type: LessonType;
   order_index: number;
+  open_at?: string | null;
   is_free_preview?: boolean;
   duration_minutes?: number | null;
 };
@@ -68,6 +70,7 @@ export type CourseModuleItem = {
   title: string;
   description: string | null;
   order_index: number;
+  open_at?: string | null;
   lessons: CourseLessonItem[];
 };
 
@@ -157,23 +160,27 @@ export type MyEnrollmentsResult = {
 export type CreateModuleRequest = {
   title: string;
   description?: string | null;
+  open_at?: string | null;
 };
 
 export type UpdateModuleRequest = {
   title?: string;
   description?: string | null;
+  open_at?: string | null;
 };
 
 export type CreateLessonRequest = {
   title: string;
   description?: string | null;
   lesson_type: LessonType;
+  open_at?: string | null;
 };
 
 export type UpdateLessonRequest = {
   title?: string;
   description?: string | null;
   lesson_type?: LessonType;
+  open_at?: string | null;
 };
 
 export type ReorderModulesRequest = {
@@ -213,6 +220,7 @@ export type CourseListItem = {
   prerequisites?: string[] | null;
   status: CourseStatus;
   published_at: string | null;
+  publish_scheduled_at?: string | null;
   created_at: string;
   updated_at: string;
   learners_count: number;
@@ -284,9 +292,11 @@ export type CourseCompletionRules = {
 export type UpdateCourseCompletionRulesRequest = Partial<Omit<CourseCompletionRules, 'course_id'>>;
 
 export type CourseLearnerProgressItem = {
+  rank: number;
   user_id: number;
   full_name: string;
   email: string;
+  avatar_url: string | null;
   status: EnrollmentStatus;
   enrolled_at: string;
   last_accessed_at: string | null;
@@ -303,6 +313,25 @@ export type CourseLearnerProgressResult = {
   page: number;
   page_size: number;
   total: number;
+};
+
+export type CourseLeaderboardItem = {
+  rank: number;
+  user_id: number;
+  full_name: string;
+  avatar_url: string | null;
+  progress_percent: number;
+  completed_lessons: number;
+  time_spent_seconds: number;
+  is_me?: boolean;
+};
+
+export type CourseLeaderboardResult = {
+  course_id: number;
+  total_lessons: number;
+  items: CourseLeaderboardItem[];
+  top_limit: number;
+  includes_me: boolean;
 };
 
 export type CoursePrerequisiteOption = {
@@ -361,6 +390,7 @@ export interface CourseService {
   getMyCourseCompletionRules(subjectUserId: number, courseId: number): Promise<CourseCompletionRules>;
   updateMyCourseCompletionRules(subjectUserId: number, courseId: number, request: UpdateCourseCompletionRulesRequest): Promise<CourseCompletionRules>;
   listMyCourseLearnerProgress(subjectUserId: number, courseId: number, query: { page?: number; page_size?: number; q?: string }): Promise<CourseLearnerProgressResult>;
+  getCourseLeaderboard(subjectUserId: number, courseId: number): Promise<CourseLeaderboardResult>;
 
   getMyCourseContentTree(subjectUserId: number, courseId: number): Promise<CourseContentTree>;
   createModule(subjectUserId: number, courseId: number, request: CreateModuleRequest): Promise<{ id: number }>;

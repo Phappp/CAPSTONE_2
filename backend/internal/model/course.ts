@@ -87,6 +87,10 @@ export default class Course {
     /** Thời điểm publish (nullable nếu chưa publish). */
     published_at: Date;
 
+    @Column({ type: 'datetime', nullable: true })
+    /** Thời điểm xuất bản tự động (nullable nếu không lên lịch). */
+    publish_scheduled_at: Date;
+
     @Column()
     /** FK -> `users.id`: người tạo course. */
     created_by: number;

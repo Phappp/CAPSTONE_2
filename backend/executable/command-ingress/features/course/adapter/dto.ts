@@ -25,6 +25,7 @@ export class CreateCourseBody extends RequestDto {
   level?: string | null;
   language?: string | null;
   thumbnail_url?: string | null;
+  publish_scheduled_at?: string | null;
   learning_objectives?: string[] | null;
   prerequisites?: string[] | null;
 
@@ -36,6 +37,7 @@ export class CreateCourseBody extends RequestDto {
     this.level = body?.level != null ? String(body.level) : null;
     this.language = body?.language != null ? String(body.language) : null;
     this.thumbnail_url = body?.thumbnail_url != null ? String(body.thumbnail_url) : null;
+    this.publish_scheduled_at = body?.publish_scheduled_at != null ? String(body.publish_scheduled_at) : null;
     this.learning_objectives = Array.isArray(body?.learning_objectives)
       ? body.learning_objectives.map((x: any) => String(x))
       : null;
@@ -52,6 +54,7 @@ export class UpdateCourseBody extends RequestDto {
   level?: string | null;
   language?: string | null;
   thumbnail_url?: string | null;
+  publish_scheduled_at?: string | null;
   learning_objectives?: string[] | null;
   prerequisites?: string[] | null;
 
@@ -63,6 +66,7 @@ export class UpdateCourseBody extends RequestDto {
     if ('level' in (body || {})) this.level = body.level != null ? String(body.level) : null;
     if ('language' in (body || {})) this.language = body.language != null ? String(body.language) : null;
     if ('thumbnail_url' in (body || {})) this.thumbnail_url = body.thumbnail_url != null ? String(body.thumbnail_url) : null;
+    if ('publish_scheduled_at' in (body || {})) this.publish_scheduled_at = body.publish_scheduled_at != null ? String(body.publish_scheduled_at) : null;
     if ('learning_objectives' in (body || {})) {
       this.learning_objectives = Array.isArray(body?.learning_objectives)
         ? body.learning_objectives.map((x: any) => String(x))
@@ -130,22 +134,26 @@ export class CreateModuleBody extends RequestDto {
   @Length(1, 255)
   title: string;
   description?: string | null;
+  open_at?: string | null;
 
   constructor(body: any) {
     super();
     this.title = String(body?.title || '');
     this.description = body?.description != null ? String(body.description) : null;
+    this.open_at = body?.open_at != null && String(body.open_at).trim() ? String(body.open_at) : null;
   }
 }
 
 export class UpdateModuleBody extends RequestDto {
   title?: string;
   description?: string | null;
+  open_at?: string | null;
 
   constructor(body: any) {
     super();
     if (body?.title != null) this.title = String(body.title);
     if ('description' in (body || {})) this.description = body?.description != null ? String(body.description) : null;
+    if ('open_at' in (body || {})) this.open_at = body.open_at != null && String(body.open_at).trim() ? String(body.open_at) : null;
   }
 }
 
@@ -155,12 +163,14 @@ export class CreateLessonBody extends RequestDto {
   description?: string | null;
   @Length(1, 20)
   lesson_type: LessonType;
+  open_at?: string | null;
 
   constructor(body: any) {
     super();
     this.title = String(body?.title || '');
     this.description = body?.description != null ? String(body.description) : null;
     this.lesson_type = String(body?.lesson_type || 'text') as LessonType;
+    this.open_at = body?.open_at != null && String(body.open_at).trim() ? String(body.open_at) : null;
   }
 }
 
@@ -168,12 +178,14 @@ export class UpdateLessonBody extends RequestDto {
   title?: string;
   description?: string | null;
   lesson_type?: LessonType;
+  open_at?: string | null;
 
   constructor(body: any) {
     super();
     if (body?.title != null) this.title = String(body.title);
     if ('description' in (body || {})) this.description = body?.description != null ? String(body.description) : null;
     if (body?.lesson_type != null) this.lesson_type = String(body.lesson_type) as LessonType;
+    if ('open_at' in (body || {})) this.open_at = body.open_at != null && String(body.open_at).trim() ? String(body.open_at) : null;
   }
 }
 

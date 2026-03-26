@@ -63,6 +63,10 @@ export default class Lesson {
     /** Thời lượng dự kiến (phút) (nullable). */
     duration_minutes: number;
 
+    @Column({ type: 'datetime', nullable: true })
+    /** Thời điểm mở lesson cho learner (nullable => mở ngay). */
+    open_at: Date;
+
     @Column({ type: 'boolean', default: true })
     /** True nếu lesson được publish/hiển thị. */
     is_published: boolean;

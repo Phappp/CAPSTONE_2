@@ -199,8 +199,8 @@ export default function StudentDashboard() {
     fetchSuggestedCourses();
   }, []);
 
-  const openLearning = (courseId: number, slug: string) => {
-    navigate(`/learning/${courseId}/${slug}`);
+  const openLearningHub = (courseId: number, slug: string) => {
+    navigate(`/my-courses/${courseId}/${slug}`);
   };
 
   const openCoursePublicDetail = (slug: string) => {
@@ -270,8 +270,6 @@ export default function StudentDashboard() {
       <div className="studentDash__container studentDash__content">
         {/* Welcome Section */}
         <div className="studentDash__hero">
-          <h2 className="studentDash__heroTitle">Xin chào, {displayName}</h2>
-          <p className="studentDash__heroDesc">Quản lý và theo dõi tiến độ học tập của bạn</p>
         </div>
 
         {/* Stats Cards */}
@@ -421,10 +419,10 @@ export default function StudentDashboard() {
                       className="courseCard courseCard--clickable"
                       role="button"
                       tabIndex={0}
-                      onClick={() => openLearning(course.course_id, course.course_slug)}
+                      onClick={() => openLearningHub(course.course_id, course.course_slug)}
                       onKeyDown={(e) => {
                         if (e.key !== 'Enter' && e.key !== ' ') return;
-                        openLearning(course.course_id, course.course_slug);
+                        openLearningHub(course.course_id, course.course_slug);
                       }}
                       aria-label={`Mở khóa học: ${course.course_title}`}
                     >

@@ -23,6 +23,7 @@ type CourseDetail = {
   prerequisites?: string[] | string | null;
   status: CourseStatus;
   published_at: string | null;
+  publish_scheduled_at?: string | null;
   created_at: string;
   updated_at: string;
   learners_count: number;
@@ -38,9 +39,11 @@ type CompletionRules = {
 };
 
 type LearnerProgressItem = {
+  rank: number;
   user_id: number;
   full_name: string;
   email: string;
+  avatar_url: string | null;
   status: string;
   enrolled_at: string;
   last_accessed_at: string | null;
@@ -87,6 +90,7 @@ export default function TeacherCourseDetailPage() {
     thumbnail_url: "",
     learning_objectives: [""] as string[],
     prerequisites: [""] as string[],
+    publish_scheduled_at: "" as string,
   });
   const [initialForm, setInitialForm] = useState<null | {
     title: string;
@@ -97,6 +101,7 @@ export default function TeacherCourseDetailPage() {
     thumbnail_url: string;
     learning_objectives: string[];
     prerequisites: string[];
+    publish_scheduled_at: string;
     status: CourseStatus;
   }>(null);
   const [openStatusMenu, setOpenStatusMenu] = useState(false);
@@ -129,6 +134,7 @@ export default function TeacherCourseDetailPage() {
       form.level !== initialForm.level ||
       form.language !== initialForm.language ||
       form.thumbnail_url !== initialForm.thumbnail_url ||
+      form.publish_scheduled_at !== initialForm.publish_scheduled_at ||
       JSON.stringify(form.learning_objectives) !== JSON.stringify(initialForm.learning_objectives) ||
       JSON.stringify(form.prerequisites) !== JSON.stringify(initialForm.prerequisites) ||
       selectedStatus !== initialForm.status
@@ -220,6 +226,14 @@ export default function TeacherCourseDetailPage() {
     });
   }, [selectedPrerequisiteIds, courseId]);
 
+  const isoToDatetimeLocalValue = (iso: string | null | undefined): string => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad2 = (x: number) => String(x).padStart(2, "0");
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  };
+
   const fetchDetail = async () => {
     const res = await fetch(`${url}${COURSES_API.detail(courseId)}`, {
       headers: {
@@ -239,6 +253,7 @@ export default function TeacherCourseDetailPage() {
       thumbnail_url: data.thumbnail_url ?? "",
       learning_objectives: normalizeStringArray(data.learning_objectives),
       prerequisites: normalizeStringArray(data.prerequisites),
+      publish_scheduled_at: isoToDatetimeLocalValue(data.publish_scheduled_at),
     };
     setForm(nextForm);
     const nextStatus = (data.status ?? "draft") as CourseStatus;
@@ -426,6 +441,7 @@ export default function TeacherCourseDetailPage() {
         language: form.language,
         learning_objectives: form.learning_objectives.map((x) => x.trim()).filter(Boolean),
         prerequisites: Array.from(selectedPrerequisiteIds).map(String),
+        publish_scheduled_at: form.publish_scheduled_at ? new Date(form.publish_scheduled_at).toISOString() : null,
       };
       if (initialForm && form.thumbnail_url !== initialForm.thumbnail_url) {
         payload.thumbnail_url = form.thumbnail_url || null;
@@ -444,7 +460,10 @@ export default function TeacherCourseDetailPage() {
       }
 
       // Nếu có thay đổi trạng thái thì chỉ cập nhật khi bấm "Lưu thay đổi"
-      if (course && selectedStatus !== course.status) {
+      const scheduledAt = form.publish_scheduled_at ? new Date(form.publish_scheduled_at) : null;
+      const scheduleFuture = scheduledAt && scheduledAt.getTime() > Date.now();
+
+      if (course && selectedStatus !== course.status && !scheduleFuture) {
         const res2 = await fetch(`${url}${COURSES_API.setStatus(courseId)}`, {
           method: "PATCH",
           headers: {
@@ -703,6 +722,16 @@ export default function TeacherCourseDetailPage() {
                 rows={8}
                 value={form.full_description}
                 onChange={(e) => setForm((p) => ({ ...p, full_description: e.target.value }))}
+                disabled={loading}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Xuất bản tự động lúc (tùy chọn)</label>
+              <input
+                type="datetime-local"
+                className="form-input"
+                value={form.publish_scheduled_at || ""}
+                onChange={(e) => setForm((p) => ({ ...p, publish_scheduled_at: e.target.value }))}
                 disabled={loading}
               />
             </div>
@@ -1056,6 +1085,7 @@ export default function TeacherCourseDetailPage() {
           <table className="teacherLearnersTable">
             <thead>
               <tr>
+                <th>Hạng</th>
                 <th>Học viên</th>
                 <th>Tiến độ</th>
                 <th>Hoàn thành</th>
@@ -1067,14 +1097,44 @@ export default function TeacherCourseDetailPage() {
             <tbody>
               {learnerLoading ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: 12, color: "#6b7280", fontWeight: 800 }}>Đang tải...</td>
+                  <td colSpan={7} style={{ padding: 12, color: "#6b7280", fontWeight: 800 }}>Đang tải...</td>
                 </tr>
               ) : learnerResult?.items?.length ? (
                 learnerResult.items.map((it) => (
                   <tr key={it.user_id}>
+                    <td style={{ fontWeight: 900, color: "#1d4ed8" }}>#{it.rank}</td>
                     <td>
-                      <div style={{ fontWeight: 900 }}>{it.full_name}</div>
-                      <div style={{ color: "#6b7280", fontSize: 13 }}>{it.email}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        {it.avatar_url ? (
+                          <img
+                            src={it.avatar_url}
+                            alt={it.full_name}
+                            style={{ width: 34, height: 34, borderRadius: "999px", objectFit: "cover", border: "1px solid #e5e7eb" }}
+                          />
+                        ) : (
+                          <div
+                            aria-hidden="true"
+                            style={{
+                              width: 34,
+                              height: 34,
+                              borderRadius: "999px",
+                              background: "#e2e8f0",
+                              border: "1px solid #e5e7eb",
+                              display: "grid",
+                              placeItems: "center",
+                              fontSize: 12,
+                              fontWeight: 900,
+                              color: "#334155",
+                            }}
+                          >
+                            {String(it.full_name || "U").trim().charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <div style={{ fontWeight: 900 }}>{it.full_name}</div>
+                          <div style={{ color: "#6b7280", fontSize: 13 }}>{it.email}</div>
+                        </div>
+                      </div>
                     </td>
                     <td style={{ fontWeight: 900 }}>{Number(it.progress_percent ?? 0)}%</td>
                     <td>
@@ -1087,7 +1147,7 @@ export default function TeacherCourseDetailPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} style={{ padding: 12, color: "#6b7280", fontWeight: 800 }}>Chưa có dữ liệu.</td>
+                  <td colSpan={7} style={{ padding: 12, color: "#6b7280", fontWeight: 800 }}>Chưa có dữ liệu.</td>
                 </tr>
               )}
             </tbody>

@@ -23,6 +23,7 @@ interface CreateCoursePayload {
   estimated_hours?: number | null;
   tags: string[];
   thumbnail_url?: string | null;
+  publish_scheduled_at?: string | null;
 }
 
 type CourseOption = {
@@ -45,6 +46,7 @@ const DEFAULT_PAYLOAD: CreateCoursePayload = {
   estimated_hours: null,
   tags: [],
   thumbnail_url: null,
+  publish_scheduled_at: null,
 };
 
 export default function CreateCoursePage() {
@@ -195,6 +197,7 @@ export default function CreateCoursePage() {
             : Number(payload.estimated_hours),
         tags: payload.tags,
         thumbnail_url: payload.thumbnail_url || null,
+        publish_scheduled_at: payload.publish_scheduled_at ? new Date(payload.publish_scheduled_at).toISOString() : null,
       };
 
       const res = await fetch(`${url}${COURSES_API.createCourse}`, {
@@ -498,6 +501,16 @@ export default function CreateCoursePage() {
                 e.target.value === "" ? null : Number(e.target.value)
               )
             }
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Xuất bản tự động lúc (tùy chọn)</label>
+          <input
+            className="form-input"
+            type="datetime-local"
+            value={payload.publish_scheduled_at ?? ""}
+            onChange={(e) => handleBasicChange("publish_scheduled_at", e.target.value || null)}
           />
         </div>
       </div>
