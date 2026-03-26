@@ -1,25 +1,6 @@
-import { IsEmail, Length, MinLength, validate, ValidationError } from 'class-validator';
+import { IsEmail, Length, MinLength, ValidationError } from 'class-validator';
 import { ValidationResult } from '../../../shared/validation';
-
-export class RequestDto {
-  async validate(): Promise<ValidationResult> {
-    try {
-      const validationErrors = await validate(this, { forbidUnknownValues: false });
-
-      if (validationErrors && validationErrors.length > 0) {
-        return {
-          ok: false,
-          errors: validationErrors,
-        };
-      }
-
-      return { ok: true, errors: [] };
-    } catch (_: any) {
-      return { ok: false, errors: [] };
-    }
-  }
-}
-
+import { RequestDto } from '../../../shared/request-dto';
 
 export class ExchangeGoogleTokenBody extends RequestDto {
   @Length(1)

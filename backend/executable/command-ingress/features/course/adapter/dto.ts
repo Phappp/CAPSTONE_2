@@ -1,20 +1,7 @@
 import { Length, validate, IsOptional, IsNumber, Min, IsEnum, Max } from 'class-validator';
 import { ValidationResult } from '../../../shared/validation';
 import { CourseSortBy, CourseStatus, LessonType, SortDir } from '../types';
-
-class RequestDto {
-  async validate(): Promise<ValidationResult> {
-    try {
-      const validationErrors = await validate(this, { forbidUnknownValues: false });
-      if (validationErrors && validationErrors.length > 0) {
-        return { ok: false, errors: validationErrors };
-      }
-      return { ok: true, errors: [] };
-    } catch {
-      return { ok: false, errors: [] };
-    }
-  }
-}
+import { RequestDto } from '../../../shared/request-dto';
 
 export class CreateCourseBody extends RequestDto {
   @Length(1, 255)

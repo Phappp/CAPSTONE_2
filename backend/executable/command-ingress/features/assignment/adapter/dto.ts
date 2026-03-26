@@ -1,20 +1,6 @@
-import { Length, validate } from 'class-validator';
-import { ValidationResult } from '../../../shared/validation';
-import { CreateAssignmentRequest, AssignmentAtachment, AssignmentFormat } from '../types';
-
-class RequestDto {
-    async validate(): Promise<ValidationResult> {
-        try {
-            const validationErrors = await validate(this, { forbidUnknownValues: false });
-            if(validationErrors && validationErrors.length > 0) {
-                return { ok: false, errors: validationErrors };
-            }
-            return { ok: true, errors: [] };
-        } catch {
-            return { ok: false, errors: [] };
-        }
-    }
-}
+import { Length } from 'class-validator';
+import { CreateAssignmentRequest, AssignmentAttachment, AssignmentFormat } from '../types';
+import { RequestDto } from '../../../shared/request-dto';
 
 export class CreateAssignmentBody extends RequestDto implements CreateAssignmentRequest {
     @Length(1, 255)
@@ -23,7 +9,7 @@ export class CreateAssignmentBody extends RequestDto implements CreateAssignment
     @Length(1)
     description: string;
 
-    attachments?: AssignmentAtachment[];
+    attachments?: AssignmentAttachment[];
     max_score: number;
     passing_score?: number | null;
     due_date: string;
