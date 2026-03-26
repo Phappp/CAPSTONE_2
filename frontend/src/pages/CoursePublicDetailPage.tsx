@@ -4,6 +4,7 @@ import AvatarMenu from "../components/AvatarMenu";
 import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import { getAccessToken } from "../utils/authStorage";
+import PrerequisiteGraph, { type PrerequisiteGraphData } from "../components/PrerequisiteGraph";
 import "./CoursePublicDetailPage.css";
 
 type CourseDetail = {
@@ -15,6 +16,8 @@ type CourseDetail = {
   thumbnail_url: string | null;
   level: string;
   language: string;
+  learning_objectives?: any;
+  prerequisites?: any;
   learners_count: number;
   modules_count: number;
   lessons_count: number;
@@ -25,6 +28,46 @@ type CourseDetail = {
   modules?: { id: number; title: string; lessons: { id: number; title: string; is_free_preview?: boolean }[] }[];
 };
 
+type PrerequisiteCourseOption = {
+  id: number;
+  title: string;
+  slug: string;
+  thumbnail_url?: string | null;
+};
+
+function levelLabel(level: string) {
+  if (level === "beginner") return "Cơ bản";
+  if (level === "intermediate") return "Trung cấp";
+  if (level === "advanced") return "Nâng cao";
+  return level || "—";
+}
+
+function languageLabel(lang: string) {
+  if (lang === "vi") return "Tiếng Việt";
+  if (lang === "en") return "English";
+  return lang || "—";
+}
+
+function toStringList(value: any): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map((x) => String(x)).filter(Boolean);
+  if (typeof value === "string") {
+    const s = value.trim();
+    if (!s) return [];
+    try {
+      const parsed = JSON.parse(s);
+      if (Array.isArray(parsed)) return parsed.map((x) => String(x)).filter(Boolean);
+    } catch {
+      // ignore
+    }
+    return s
+      .split(/\r?\n|•|\u2022|-/g)
+      .map((x) => x.trim())
+      .filter(Boolean);
+  }
+  return [String(value)];
+}
+
 export default function CoursePublicDetailPage() {
   const navigate = useNavigate();
   const params = useParams();
@@ -34,6 +77,10 @@ export default function CoursePublicDetailPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [course, setCourse] = useState<CourseDetail | null>(null);
+  const [prerequisiteCatalog, setPrerequisiteCatalog] = useState<PrerequisiteCourseOption[]>([]);
+  const [myEnrollmentStatusByCourseId, setMyEnrollmentStatusByCourseId] = useState<Record<number, string>>({});
+  const [prerequisiteGraph, setPrerequisiteGraph] = useState<PrerequisiteGraphData | null>(null);
+  const [graphModalOpen, setGraphModalOpen] = useState(false);
 
   const fetchDetail = async () => {
     const res = await fetch(`${url}${COURSES_API.catalogDetail(slug)}`, {
@@ -46,6 +93,98 @@ export default function CoursePublicDetailPage() {
     if (!res.ok) throw new Error(json?.message || "Không thể tải chi tiết khóa học.");
     setCourse(json as CourseDetail);
   };
+
+  const fetchPrerequisiteCatalog = async () => {
+    const params = new URLSearchParams();
+    params.set("page", "1");
+    params.set("page_size", "200");
+    params.set("sort_by", "title");
+    params.set("sort_dir", "asc");
+    const res = await fetch(`${url}${COURSES_API.catalog}?${params.toString()}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    const json = (await res.json().catch(() => ({}))) as { items?: any[] };
+    if (!res.ok) return;
+    const items = Array.isArray(json.items) ? json.items : [];
+    setPrerequisiteCatalog(
+      items.map((x) => ({
+        id: Number(x.id),
+        title: String(x.title || ""),
+        slug: String(x.slug || ""),
+        thumbnail_url: x?.thumbnail_url ? String(x.thumbnail_url) : null,
+      }))
+    );
+  };
+
+  const fetchMyEnrollmentStatus = async () => {
+    if (!token) {
+      setMyEnrollmentStatusByCourseId({});
+      return;
+    }
+    const params = new URLSearchParams();
+    params.set("page", "1");
+    params.set("page_size", "200");
+    const res = await fetch(`${url}${COURSES_API.myEnrollments}?${params.toString()}`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const json = (await res.json().catch(() => ({}))) as { items?: any[] };
+    if (!res.ok) return;
+    const items = Array.isArray(json.items) ? json.items : [];
+    const next: Record<number, string> = {};
+    for (const item of items) {
+      const id = Number(item?.course_id);
+      if (Number.isInteger(id) && id > 0) {
+        next[id] = String(item?.status || "");
+      }
+    }
+    setMyEnrollmentStatusByCourseId(next);
+  };
+
+  const fetchPrerequisiteGraph = async () => {
+    const res = await fetch(`${url}${COURSES_API.catalogPrerequisiteGraph(slug)}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    const json = (await res.json().catch(() => null)) as PrerequisiteGraphData | null;
+    if (!res.ok || !json) return;
+    setPrerequisiteGraph(json);
+  };
+
+  const prerequisiteItems = useMemo(() => {
+    const raw = toStringList(course?.prerequisites);
+    if (!raw.length) return [];
+    const byId = new Map<number, PrerequisiteCourseOption>();
+    for (const c of prerequisiteCatalog) byId.set(c.id, c);
+    return raw.map((value) => {
+      const id = Number(String(value).trim());
+      if (Number.isInteger(id) && id > 0 && byId.has(id)) {
+        const c = byId.get(id)!;
+        const status = myEnrollmentStatusByCourseId[id] || "";
+        return {
+          id,
+          label: c.title,
+          slug: c.slug,
+          thumbnail_url: c.thumbnail_url || null,
+          isLinkedCourse: true,
+          status,
+          isCompleted: status === "completed",
+        };
+      }
+      return { id: 0, label: value, slug: "", thumbnail_url: null, isLinkedCourse: false, status: "", isCompleted: false };
+    });
+  }, [course?.prerequisites, prerequisiteCatalog, myEnrollmentStatusByCourseId]);
+
+  const hasUnfinishedPrerequisites = useMemo(() => {
+    return prerequisiteItems.some((x) => x.isLinkedCourse && !x.isCompleted);
+  }, [prerequisiteItems]);
 
   const enroll = async () => {
     if (!course) return;
@@ -81,6 +220,9 @@ export default function CoursePublicDetailPage() {
     fetchDetail()
       .catch((e: any) => setError(e?.message || "Đã xảy ra lỗi."))
       .finally(() => setLoading(false));
+    void fetchPrerequisiteCatalog();
+    void fetchMyEnrollmentStatus();
+    void fetchPrerequisiteGraph();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
@@ -121,21 +263,35 @@ export default function CoursePublicDetailPage() {
               </div>
 
               <div className="course-stats">
+                <span>Cấp độ: {levelLabel(course.level)}</span>
+                <span>·</span>
+                <span>Ngôn ngữ: {languageLabel(course.language)}</span>
+                <span>·</span>
                 <span>Học viên: {course.learners_count ?? 0}</span>
                 <span>·</span>
                 <span>Chương: {course.modules_count ?? 0}</span>
                 <span>·</span>
                 <span>Bài học: {course.lessons_count ?? 0}</span>
+                {course.total_duration_minutes != null ? (
+                  <>
+                    <span>·</span>
+                    <span>Tổng thời lượng: {course.total_duration_minutes} phút</span>
+                  </>
+                ) : null}
               </div>
 
               <div className="course-actions">
                 <button
                   type="button"
                   onClick={enroll}
-                  disabled={loading || !!course.is_enrolled}
+                  disabled={loading || !!course.is_enrolled || hasUnfinishedPrerequisites}
                   className={`enroll-button ${course.is_enrolled ? "enrolled" : ""}`}
                 >
-                  {course.is_enrolled ? "Đã đăng ký" : "Đăng ký"}
+                  {course.is_enrolled
+                    ? "Đã đăng ký"
+                    : hasUnfinishedPrerequisites
+                      ? "Chưa đủ điều kiện"
+                      : "Đăng ký"}
                 </button>
                 <button
                   type="button"
@@ -146,10 +302,115 @@ export default function CoursePublicDetailPage() {
                   Về Dashboard
                 </button>
               </div>
+              {hasUnfinishedPrerequisites ? (
+                <div style={{ marginTop: 8, color: "#b91c1c", fontWeight: 700 }}>
+                  Bạn cần hoàn thành các khóa tiên quyết trước khi đăng ký.
+                </div>
+              ) : null}
+
+              {Array.isArray(course.instructors) && course.instructors.length ? (
+                <div className="course-full-description">
+                  <h3 style={{ margin: "16px 0 8px 0" }}>Giảng viên</h3>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {course.instructors.map((ins) => (
+                      <div key={ins.id} style={{ display: "flex", gap: 10, alignItems: "center", border: "1px solid #e5e7eb", borderRadius: 12, padding: "8px 10px" }}>
+                        {ins.avatar_url ? (
+                          <img src={ins.avatar_url} alt={ins.full_name} style={{ width: 34, height: 34, borderRadius: 999, objectFit: "cover" }} />
+                        ) : (
+                          <div style={{ width: 34, height: 34, borderRadius: 999, background: "#e5e7eb" }} />
+                        )}
+                        <div style={{ fontWeight: 900 }}>
+                          {ins.full_name}
+                          {ins.is_primary ? <span style={{ marginLeft: 8, fontWeight: 800, color: "#2563eb" }}>(Chính)</span> : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {toStringList(course.learning_objectives).length ? (
+                <div className="course-full-description">
+                  <h3 style={{ margin: "16px 0 8px 0" }}>Bạn sẽ học được</h3>
+                  <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    {toStringList(course.learning_objectives).map((x, idx) => (
+                      <li key={idx} style={{ marginBottom: 6 }}>{x}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {prerequisiteItems.length ? (
+                <div className="course-full-description">
+                  <h3 style={{ margin: "16px 0 8px 0" }}>Yêu cầu trước khi học</h3>
+                  <div className="prerequisite-grid">
+                    {prerequisiteItems.map((x, idx) => (
+                      <div key={`${x.label}-${idx}`} className="prerequisite-card">
+                        {x.thumbnail_url ? (
+                          <img src={x.thumbnail_url} alt={x.label} className="prerequisite-card__thumb" />
+                        ) : (
+                          <div className="prerequisite-card__thumb prerequisite-card__thumb--empty">No image</div>
+                        )}
+                        <div className="prerequisite-card__content">
+                          {x.isLinkedCourse ? (
+                            <button type="button" onClick={() => navigate(`/courses/${x.slug}`)} className="prerequisite-card__titleBtn">
+                              {x.label}
+                            </button>
+                          ) : (
+                            <div className="prerequisite-card__title">{x.label}</div>
+                          )}
+                          {x.isLinkedCourse ? (
+                            <div className={`prerequisite-card__status ${x.isCompleted ? "done" : "pending"}`}>
+                              {x.isCompleted ? "✓ Đã hoàn thành" : "✗ Chưa hoàn thành"}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="course-full-description">
+                <h3 style={{ margin: "16px 0 8px 0" }}>Sơ đồ tiên quyết</h3>
+                <button type="button" className="dashboard-button" onClick={() => setGraphModalOpen(true)}>
+                  Xem sơ đồ tiên quyết
+                </button>
+              </div>
 
               {course.full_description ? (
                 <div className="course-full-description">
+                  <h3 style={{ margin: "16px 0 8px 0" }}>Mô tả chi tiết</h3>
                   {course.full_description}
+                </div>
+              ) : null}
+
+              {Array.isArray(course.modules) && course.modules.length ? (
+                <div className="course-full-description">
+                  <h3 style={{ margin: "16px 0 8px 0" }}>Nội dung khóa học</h3>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {course.modules.map((m, midx) => (
+                      <div key={m.id} style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 12, background: "#fff" }}>
+                        <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                          Chương {midx + 1}: {m.title}
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {(m.lessons || []).map((l, lidx) => (
+                            <div key={l.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 10px", border: "1px solid #f1f5f9", borderRadius: 12, background: "#fafafa" }}>
+                              <div style={{ fontWeight: 800 }}>
+                                Bài {lidx + 1}: {l.title}
+                              </div>
+                              {l.is_free_preview ? (
+                                <span className="badge badge--blue">Preview</span>
+                              ) : (
+                                <span style={{ color: "#6b7280", fontWeight: 700 }}>—</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -160,6 +421,21 @@ export default function CoursePublicDetailPage() {
           </div>
         )}
       </div>
+      {graphModalOpen ? (
+        <div className="save-success-modal-overlay" role="dialog" aria-modal="true">
+          <div className="save-success-modal" style={{ width: "min(1200px, 96vw)" }}>
+            <div className="save-success-modal-title">Sơ đồ tiên quyết</div>
+            <div style={{ maxHeight: "70vh", overflow: "auto", marginTop: 8 }}>
+              <PrerequisiteGraph data={prerequisiteGraph} onOpenCourse={(s) => navigate(`/courses/${s}`)} />
+            </div>
+            <div className="save-success-modal-actions">
+              <button type="button" className="primary-button" onClick={() => setGraphModalOpen(false)}>
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

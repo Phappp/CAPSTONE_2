@@ -6,6 +6,9 @@ import CourseEnrollment from '../../../../../internal/model/course_enrollment';
 import Module from '../../../../../internal/model/modules';
 import Lesson from '../../../../../internal/model/lesson';
 import LessonResource from '../../../../../internal/model/lesson_resource';
+import LessonCompletion from '../../../../../internal/model/lesson_completion';
+import LessonProgress from '../../../../../internal/model/lesson_progress';
+import CourseCompletionRequirement from '../../../../../internal/model/course_completion_requirements';
 import UserRole from '../../../../../internal/model/user_roles';
 import Role from '../../../../../internal/model/role';
 import User from '../../../../../internal/model/user';
@@ -40,6 +43,17 @@ import {
   MyEnrollmentListItem,
   EnrollmentResult,
   EnrollmentStatus,
+  CourseProgressResult,
+  LessonHeartbeatResult,
+  LessonCompleteResult,
+  CourseCompletionRules,
+  UpdateCourseCompletionRulesRequest,
+  CourseLearnerProgressResult,
+  CourseLeaderboardResult,
+  CoursePrerequisiteOption,
+  CoursePrerequisiteGraph,
+  CoursePrerequisiteGraphNode,
+  CoursePrerequisiteGraphEdge,
 } from '../types';
 
 function normalizeSlug(input: string): string {
@@ -67,32 +81,64 @@ function safeJsonParse<T>(value: any, fallback: T): T {
   return value as T;
 }
 
-async function ensureUserIsCourseManager(userId: number) {
+function parseNullableDateTime(input: any): Date | null {
+  if (input == null) return null;
+  const s = String(input).trim();
+  if (!s) return null;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
+function isCourseEffectivelyPublished(course: any, now: Date): boolean {
+  const status = String(course?.status || 'draft');
+  if (status === 'published') return true;
+  if (status === 'archived') return false;
+  const scheduled = parseNullableDateTime(course?.publish_scheduled_at);
+  return Boolean(scheduled && scheduled.getTime() <= now.getTime());
+}
+
+async function isUserCourseManager(userId: number): Promise<boolean> {
   const userRoleRepo = AppDataSource.getRepository(UserRole);
   const roleRepo = AppDataSource.getRepository(Role);
   const userRoles = await userRoleRepo.find({ where: { user_id: userId } });
-  if (!userRoles.length) throw new Error('Bạn không có quyền thực hiện thao tác này.');
+  if (!userRoles.length) return false;
 
   const roleIds = userRoles.map((ur) => ur.role_id);
   const roles = await roleRepo.findByIds(roleIds);
   const names = roles.map((r) => r.name);
-  const ok = names.includes('course_manager') || names.includes('teacher') || names.includes('admin');
+  return names.includes('course_manager') || names.includes('teacher') || names.includes('admin');
+}
+
+async function ensureUserIsCourseManager(userId: number) {
+  const ok = await isUserCourseManager(userId);
   if (!ok) throw new Error('Bạn không có quyền thực hiện thao tác này.');
 }
 
 function mapCourseRowToItem(row: any): CourseListItem {
   const rawThumb = row.thumbnail_url ?? null;
   const thumbnail_url = rawThumb ? getSignedDeliveryUrl(rawThumb) : null;
+  const now = new Date();
+  const scheduled = row.publish_scheduled_at ? new Date(row.publish_scheduled_at) : null;
+  const isScheduledAndDue = row.status === 'draft' && scheduled && scheduled.getTime() <= now.getTime();
   return {
     id: Number(row.id),
     title: String(row.title),
     slug: String(row.slug),
     short_description: row.short_description ?? null,
+    full_description: row.full_description ?? null,
     thumbnail_url,
     level: String(row.level),
     language: String(row.language),
-    status: row.status as CourseStatus,
-    published_at: row.published_at ? new Date(row.published_at).toISOString() : null,
+    learning_objectives: safeJsonParse<string[] | null>(row.learning_objectives ?? null, null),
+    prerequisites: safeJsonParse<string[] | null>(row.prerequisites ?? null, null),
+    status: (isScheduledAndDue ? 'published' : (row.status as CourseStatus)) as CourseStatus,
+    published_at: isScheduledAndDue
+      ? scheduled?.toISOString() ?? null
+      : row.published_at
+        ? new Date(row.published_at).toISOString()
+        : null,
+    publish_scheduled_at: row.publish_scheduled_at ? new Date(row.publish_scheduled_at).toISOString() : null,
     created_at: new Date(row.created_at).toISOString(),
     updated_at: new Date(row.updated_at).toISOString(),
     learners_count: Number(row.learners_count ?? 0),
@@ -104,6 +150,9 @@ function mapCourseRowToItem(row: any): CourseListItem {
 function mapToPublishedCourseListItem(row: any): PublishedCourseListItem {
   const rawThumb = row.thumbnail_url ?? null;
   const thumbnail_url = rawThumb ? getSignedDeliveryUrl(rawThumb) : null;
+  const now = new Date();
+  const scheduled = row.publish_scheduled_at ? new Date(row.publish_scheduled_at) : null;
+  const isScheduledAndDue = row.status === 'draft' && scheduled && scheduled.getTime() <= now.getTime();
   
   return {
     id: Number(row.id),
@@ -113,12 +162,14 @@ function mapToPublishedCourseListItem(row: any): PublishedCourseListItem {
     thumbnail_url,
     level: String(row.level),
     language: String(row.language),
-    published_at: row.published_at ? new Date(row.published_at).toISOString() : null,
+    published_at: isScheduledAndDue ? scheduled?.toISOString() ?? null : row.published_at ? new Date(row.published_at).toISOString() : null,
     learners_count: Number(row.learners_count ?? 0),
     modules_count: Number(row.modules_count ?? 0),
     lessons_count: Number(row.lessons_count ?? 0),
     total_duration_minutes: row.total_duration_minutes ? Number(row.total_duration_minutes) : null,
-    is_enrolled: row.is_enrolled === 1,
+    // COUNT(*) from SQL drivers thường trả về string ("0"/"1"), nên ép kiểu số.
+    is_enrolled: Number(row.is_enrolled ?? 0) > 0,
+    can_enroll: row.can_enroll == null ? true : Boolean(row.can_enroll),
     instructors: safeJsonParse<any[]>(row.instructors, []),
   };
 }
@@ -139,20 +190,203 @@ function mapToMyEnrollmentListItem(row: any): MyEnrollmentListItem {
   };
 }
 
+function parsePrerequisiteCourseIds(prerequisites: unknown): number[] {
+  if (!Array.isArray(prerequisites)) return [];
+  const ids = prerequisites
+    .map((x) => Number(String(x).trim()))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  return Array.from(new Set(ids));
+}
+
 export class CourseServiceImpl implements CourseService {
+  private async buildPrerequisiteGraph(
+    rootCourse: any,
+    subjectUserId: number | undefined,
+    scope: 'published' | 'published_or_own' = 'published'
+  ): Promise<CoursePrerequisiteGraph> {
+    const courseRepo = AppDataSource.getRepository(Course);
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    const rootId = Number(rootCourse.id);
+    const now = new Date();
+    const qb = courseRepo
+      .createQueryBuilder('c')
+      .where('c.deleted_at IS NULL');
+    if (scope === 'published_or_own' && subjectUserId) {
+      qb.andWhere(
+        `(
+          (c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))
+          OR c.created_by = :uid
+          OR c.id = :rootId
+        )`,
+        { published: 'published', draft: 'draft', now, uid: subjectUserId, rootId }
+      );
+    } else {
+      qb.andWhere(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now) OR c.id = :rootId)`,
+        { published: 'published', draft: 'draft', now, rootId }
+      );
+    }
+    const courses = await qb.getMany();
+    const courseById = new Map<number, any>();
+    for (const c of courses as any[]) courseById.set(Number(c.id), c);
+    if (!courseById.has(rootId)) courseById.set(rootId, rootCourse);
+
+    const edges: CoursePrerequisiteGraphEdge[] = [];
+    const undirected = new Map<number, Set<number>>();
+    const addUndirected = (a: number, b: number) => {
+      const sa = undirected.get(a) || new Set<number>();
+      sa.add(b);
+      undirected.set(a, sa);
+      const sb = undirected.get(b) || new Set<number>();
+      sb.add(a);
+      undirected.set(b, sb);
+    };
+
+    for (const [cid, c] of courseById.entries()) {
+      const prereqIds = parsePrerequisiteCourseIds(c.prerequisites);
+      for (const pid of prereqIds) {
+        if (!courseById.has(pid) || pid === cid) continue;
+        edges.push({ from_course_id: pid, to_course_id: cid });
+        addUndirected(pid, cid);
+      }
+    }
+
+    const componentIds = new Set<number>();
+    const queue: number[] = [rootId];
+    while (queue.length) {
+      const id = queue.shift()!;
+      if (componentIds.has(id)) continue;
+      componentIds.add(id);
+      const adj = undirected.get(id);
+      if (!adj) continue;
+      for (const n of adj) if (!componentIds.has(n)) queue.push(n);
+    }
+
+    const nodesById = new Map<number, CoursePrerequisiteGraphNode>();
+    for (const id of componentIds) {
+      const c = courseById.get(id);
+      if (!c) continue;
+      nodesById.set(id, {
+        id,
+        title: String(c.title || ''),
+        slug: String(c.slug || ''),
+        thumbnail_url: c.thumbnail_url ? getSignedDeliveryUrl(c.thumbnail_url) : null,
+        level: String(c.level || ''),
+        is_current: id === rootId,
+        is_completed: false,
+      });
+    }
+    const filteredEdges = edges.filter(
+      (e) => componentIds.has(e.from_course_id) && componentIds.has(e.to_course_id)
+    );
+
+    if (subjectUserId) {
+      const nodeIds = Array.from(nodesById.keys());
+      if (nodeIds.length) {
+        const enrollments = await enrollmentRepo.find({ where: { user_id: subjectUserId } as any });
+        const completedSet = new Set<number>(
+          (enrollments as any[])
+            .filter((e) => String((e as any).status) === 'completed')
+            .map((e) => Number((e as any).course_id))
+        );
+        for (const id of nodeIds) {
+          const n = nodesById.get(id);
+          if (n) n.is_completed = completedSet.has(id);
+        }
+      }
+    }
+
+    return {
+      root_course_id: rootId,
+      nodes: Array.from(nodesById.values()),
+      edges: filteredEdges,
+    };
+  }
+
+  private async validatePrerequisiteGraph(courseId: number, prerequisiteIds: number[]): Promise<void> {
+    const uniquePrerequisiteIds = Array.from(
+      new Set(prerequisiteIds.filter((id) => Number.isInteger(id) && id > 0))
+    );
+    if (!uniquePrerequisiteIds.length) return;
+
+    if (uniquePrerequisiteIds.includes(courseId)) {
+      throw new Error('Không thể đặt khóa học làm tiên quyết của chính nó.');
+    }
+
+    const courseRepo = AppDataSource.getRepository(Course);
+    const prerequisiteCourses = await courseRepo.findByIds(uniquePrerequisiteIds as any);
+    const existingIds = new Set<number>((prerequisiteCourses as any[]).map((c) => Number(c.id)));
+    const missingIds = uniquePrerequisiteIds.filter((id) => !existingIds.has(id));
+    if (missingIds.length) {
+      throw new Error(`Không tìm thấy khóa học tiên quyết: ${missingIds.join(', ')}.`);
+    }
+
+    for (const c of prerequisiteCourses as any[]) {
+      const deps = parsePrerequisiteCourseIds(c.prerequisites);
+      if (deps.includes(courseId)) {
+        throw new Error(`Quan hệ tiên quyết không hợp lệ với khóa học "${c.title}" (không được đặt ngược).`);
+      }
+    }
+
+    const cache = new Map<number, number[]>();
+    const getDeps = async (id: number): Promise<number[]> => {
+      if (cache.has(id)) return cache.get(id)!;
+      const c = await courseRepo.findOne({ where: { id, deleted_at: null as any } as any });
+      const deps = c ? parsePrerequisiteCourseIds((c as any).prerequisites) : [];
+      cache.set(id, deps);
+      return deps;
+    };
+
+    for (const start of uniquePrerequisiteIds) {
+      const stack: number[] = [start];
+      const visited = new Set<number>();
+      while (stack.length) {
+        const node = stack.pop()!;
+        if (node === courseId) {
+          throw new Error('Quan hệ khóa học tiên quyết bị xoay vòng. Vui lòng kiểm tra lại.');
+        }
+        if (visited.has(node)) continue;
+        visited.add(node);
+        const deps = await getDeps(node);
+        for (const dep of deps) {
+          if (!visited.has(dep)) stack.push(dep);
+        }
+      }
+    }
+  }
+
+  private async validatePrerequisiteIdsExist(prerequisiteIds: number[]): Promise<void> {
+    const uniquePrerequisiteIds = Array.from(
+      new Set(prerequisiteIds.filter((id) => Number.isInteger(id) && id > 0))
+    );
+    if (!uniquePrerequisiteIds.length) return;
+    const courseRepo = AppDataSource.getRepository(Course);
+    const prerequisiteCourses = await courseRepo.findByIds(uniquePrerequisiteIds as any);
+    const existingIds = new Set<number>((prerequisiteCourses as any[]).map((c) => Number(c.id)));
+    const missingIds = uniquePrerequisiteIds.filter((id) => !existingIds.has(id));
+    if (missingIds.length) {
+      throw new Error(`Không tìm thấy khóa học tiên quyết: ${missingIds.join(', ')}.`);
+    }
+  }
+
   // Public methods - Course catalog
   async listPublishedCourses(
     subjectUserId: number | undefined, 
     query: PublishedCourseListQuery
   ): Promise<PublishedCourseListResult> {
     const courseRepo = AppDataSource.getRepository(Course);
+    const now = new Date();
 
     const page = Number(query.page || 1);
     const pageSize = Math.min(50, Math.max(1, Number(query.page_size || 12)));
     const q = query.q ? String(query.q).trim() : '';
 
     const qb = courseRepo.createQueryBuilder('c');
-    qb.where('c.status = :status', { status: 'published' });
+    // Effective "published": either explicitly published, or draft scheduled for publish_scheduled_at <= now.
+    qb.where(
+      `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+      { published: 'published', draft: 'draft', now }
+    );
     qb.andWhere('c.deleted_at IS NULL');
     
     if (q) {
@@ -248,7 +482,20 @@ export class CourseServiceImpl implements CourseService {
     const total = await qb.getCount();
     const { raw } = await qb.getRawAndEntities();
 
+    let completedSet = new Set<number>();
+    if (subjectUserId) {
+      const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+      const enrollments = await enrollmentRepo.find({ where: { user_id: subjectUserId } as any });
+      completedSet = new Set<number>(
+        (enrollments as any[])
+          .filter((e) => String((e as any).status) === 'completed')
+          .map((e) => Number((e as any).course_id))
+      );
+    }
+
     const items = raw.map((r: any) => {
+      const prerequisiteIds = parsePrerequisiteCourseIds(r.c_prerequisites ?? r.prerequisites);
+      const canEnrollByPrerequisite = prerequisiteIds.every((id) => completedSet.has(id));
       const row = {
         id: r.c_id ?? r.id,
         title: r.c_title ?? r.title,
@@ -263,6 +510,7 @@ export class CourseServiceImpl implements CourseService {
         lessons_count: r.lessons_count,
         total_duration_minutes: r.total_duration_minutes,
         is_enrolled: r.is_enrolled,
+        can_enroll: subjectUserId ? canEnrollByPrerequisite : true,
         instructors: r.instructors,
       };
       return mapToPublishedCourseListItem(row);
@@ -278,10 +526,14 @@ export class CourseServiceImpl implements CourseService {
 
   async getPublishedCourseBySlug(subjectUserId: number | undefined, slug: string): Promise<CourseDetail> {
     const courseRepo = AppDataSource.getRepository(Course);
+    const now = new Date();
 
     const qb = courseRepo.createQueryBuilder('c');
     qb.where('c.slug = :slug', { slug });
-    qb.andWhere('c.status = :status', { status: 'published' });
+    qb.andWhere(
+      `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+      { published: 'published', draft: 'draft', now }
+    );
     qb.andWhere('c.deleted_at IS NULL');
 
     // Add learners count
@@ -411,6 +663,7 @@ export class CourseServiceImpl implements CourseService {
         description: l.description ?? null,
         lesson_type: (l.lesson_type || 'text') as LessonType,
         order_index: l.order_index,
+        open_at: (l as any).open_at ? new Date((l as any).open_at).toISOString() : null,
         is_free_preview: l.is_free_preview,
         duration_minutes: l.duration_minutes,
       });
@@ -429,18 +682,64 @@ export class CourseServiceImpl implements CourseService {
     return course;
   }
 
+  async getPublishedCoursePrerequisiteGraphBySlug(
+    subjectUserId: number | undefined,
+    slug: string
+  ): Promise<CoursePrerequisiteGraph> {
+    const courseRepo = AppDataSource.getRepository(Course);
+    const now = new Date();
+    const root = await courseRepo
+      .createQueryBuilder('c')
+      .where('c.slug = :slug', { slug })
+      .andWhere('c.deleted_at IS NULL')
+      .andWhere(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      )
+      .getOne();
+    if (!root) throw new Error('Không tìm thấy khóa học.');
+    return this.buildPrerequisiteGraph(root as any, subjectUserId, 'published');
+  }
+
   // Enrollment methods
   async enrollCourse(subjectUserId: number, courseId: number): Promise<EnrollmentResult> {
     const courseRepo = AppDataSource.getRepository(Course);
     const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
 
-    // Check if course exists and is published
-    const course = await courseRepo.findOne({ 
-      where: { id: courseId, status: 'published', deleted_at: null as any } 
-    });
+    // Check if course exists and is effectively published (including scheduled publish time).
+    const now = new Date();
+    const course = await courseRepo
+      .createQueryBuilder('c')
+      .where('c.id = :courseId', { courseId })
+      .andWhere('c.deleted_at IS NULL')
+      .andWhere(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      )
+      .getOne();
     
     if (!course) {
       throw new Error('Khóa học không tồn tại hoặc chưa được xuất bản.');
+    }
+
+    // Check prerequisite courses: learner must complete all prerequisite courses first.
+    const prerequisiteIds = parsePrerequisiteCourseIds((course as any).prerequisites);
+    if (prerequisiteIds.length) {
+      const prerequisiteEnrollments = await enrollmentRepo.find({
+        where: { user_id: subjectUserId } as any,
+      });
+      const completedSet = new Set<number>(
+        (prerequisiteEnrollments as any[])
+          .filter((e) => String((e as any).status) === 'completed')
+          .map((e) => Number((e as any).course_id))
+      );
+      const missingIds = prerequisiteIds.filter((id) => !completedSet.has(id));
+      if (missingIds.length) {
+        const prerequisiteCourses = await courseRepo.findByIds(missingIds as any);
+        const names = (prerequisiteCourses as any[]).map((c) => String(c.title)).filter(Boolean);
+        const missingText = names.length ? names.join(', ') : missingIds.map(String).join(', ');
+        throw new Error(`Bạn cần hoàn tất khóa học tiên quyết trước khi đăng ký: ${missingText}.`);
+      }
     }
 
     // Check if already enrolled
@@ -625,6 +924,7 @@ export class CourseServiceImpl implements CourseService {
         order_index: l.order_index,
         is_free_preview: l.is_free_preview,
         duration_minutes: l.duration_minutes,
+        open_at: l.open_at ? new Date(l.open_at).toISOString() : null,
       });
       lessonByModule.set(l.module_id, arr);
     }
@@ -674,6 +974,7 @@ export class CourseServiceImpl implements CourseService {
         course_id: m.course_id,
         title: m.title,
         description: m.description ?? null,
+        open_at: m.open_at ? new Date(m.open_at).toISOString() : null,
         order_index: m.order_index,
         lessons: lessonByModule.get(m.id) || [],
       })),
@@ -682,12 +983,649 @@ export class CourseServiceImpl implements CourseService {
     return courseDetail;
   }
 
+  private async loadOrderedLessonsForCourse(courseId: number): Promise<{ modules: any[]; lessons: Lesson[]; orderedLessons: Lesson[] }> {
+    const moduleRepo = AppDataSource.getRepository(Module);
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+
+    const modules = await moduleRepo.find({
+      where: { course_id: courseId } as any,
+      order: { order_index: 'ASC', id: 'ASC' } as any,
+    });
+    const moduleIds = (modules as any[]).map((m) => m.id);
+    const lessons = moduleIds.length
+      ? await lessonRepo
+          .createQueryBuilder('l')
+          .where('l.module_id IN (:...moduleIds)', { moduleIds })
+          .orderBy('l.order_index', 'ASC')
+          .addOrderBy('l.id', 'ASC')
+          .getMany()
+      : [];
+
+    const moduleOrder = new Map<number, number>();
+    for (let i = 0; i < modules.length; i++) moduleOrder.set((modules as any[])[i].id, i);
+
+    const orderedLessons = [...(lessons as Lesson[])].sort((a: any, b: any) => {
+      const ma = moduleOrder.get(a.module_id) ?? 0;
+      const mb = moduleOrder.get(b.module_id) ?? 0;
+      if (ma !== mb) return ma - mb;
+      const oa = Number(a.order_index ?? 0);
+      const ob = Number(b.order_index ?? 0);
+      if (oa !== ob) return oa - ob;
+      return Number(a.id) - Number(b.id);
+    });
+
+    return { modules, lessons: lessons as Lesson[], orderedLessons };
+  }
+
+  private async getTimeRulesForCourse(courseId: number): Promise<{ videoMinSeconds: number; videoMinPercent: number; textMinSeconds: number }> {
+    const repo = AppDataSource.getRepository(CourseCompletionRequirement);
+    const row = await repo.findOne({ where: { course_id: courseId } as any });
+    const videoMinSeconds = Number((row as any)?.video_min_seconds ?? 60);
+    const videoMinPercent = Number((row as any)?.video_min_percent ?? 0.7);
+    const textMinSeconds = Number((row as any)?.text_min_seconds ?? 30);
+    return {
+      videoMinSeconds: Number.isFinite(videoMinSeconds) && videoMinSeconds > 0 ? videoMinSeconds : 60,
+      videoMinPercent: Number.isFinite(videoMinPercent) && videoMinPercent >= 0 && videoMinPercent <= 1 ? videoMinPercent : 0.7,
+      textMinSeconds: Number.isFinite(textMinSeconds) && textMinSeconds > 0 ? textMinSeconds : 30,
+    };
+  }
+
+  private computeRequiredSecondsForLesson(lesson: Lesson, rules: { videoMinSeconds: number; videoMinPercent: number; textMinSeconds: number }): number {
+    const t = String((lesson as any).lesson_type || 'text');
+    if (t === 'video') {
+      const dm = Number((lesson as any).duration_minutes);
+      if (Number.isFinite(dm) && dm > 0) {
+        const durSec = Math.round(dm * 60);
+        return Math.max(rules.videoMinSeconds, Math.round(durSec * rules.videoMinPercent));
+      }
+      return rules.videoMinSeconds;
+    }
+    if (t === 'text') return rules.textMinSeconds;
+    // quiz/assignment: treat as at least a minimal engagement time for now.
+    return rules.textMinSeconds;
+  }
+
+  private async ensureEnrolledLearner(subjectUserId: number, courseId: number): Promise<CourseEnrollment> {
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    const enrollment = await enrollmentRepo.findOne({
+      where: { user_id: subjectUserId, course_id: courseId } as any,
+    });
+    if (!enrollment) throw new Error('Bạn chưa đăng ký khóa học này.');
+    return enrollment as any;
+  }
+
+  private async ensureCanAccessLesson(subjectUserId: number, courseId: number, lessonId: number): Promise<void> {
+    const isManager = await isUserCourseManager(subjectUserId);
+    if (isManager) {
+      await this.ensureOwnCourse(subjectUserId, courseId);
+      return;
+    }
+
+    await this.ensureEnrolledLearner(subjectUserId, courseId);
+    const { orderedLessons, modules } = await this.loadOrderedLessonsForCourse(courseId);
+    const now = new Date();
+    const moduleById = new Map<number, any>((modules as any[]).map((m) => [Number(m.id), m]));
+    const idx = orderedLessons.findIndex((l) => Number((l as any).id) === Number(lessonId));
+    if (idx < 0) throw new Error('Bài học không hợp lệ.');
+
+    // Module open time gating (optional schedule)
+    const targetLesson = orderedLessons[idx] as any;
+    const targetModule = moduleById.get(Number(targetLesson?.module_id));
+    const openAt = parseNullableDateTime(targetModule?.open_at);
+    if (openAt && openAt.getTime() > now.getTime()) {
+      throw new Error('Không thể truy cập bài học.');
+    }
+
+    const lessonOpenAt = parseNullableDateTime(targetLesson?.open_at);
+    if (lessonOpenAt && lessonOpenAt.getTime() > now.getTime()) {
+      throw new Error('Không thể truy cập bài học.');
+    }
+
+    if (idx === 0) return;
+
+    const prevId = Number((orderedLessons[idx - 1] as any).id);
+    const completionRepo = AppDataSource.getRepository(LessonCompletion);
+    const prevCompleted = await completionRepo.findOne({ where: { user_id: subjectUserId, lesson_id: prevId } as any });
+    if (!prevCompleted) {
+      throw new Error('Không thể truy cập bài học.');
+    }
+  }
+
+  async getMyCourseProgress(subjectUserId: number, courseId: number): Promise<CourseProgressResult> {
+    await this.ensureEnrolledLearner(subjectUserId, courseId);
+
+    const { orderedLessons, modules } = await this.loadOrderedLessonsForCourse(courseId);
+    const total = orderedLessons.length;
+    const now = new Date();
+    const moduleById = new Map<number, any>((modules as any[]).map((m) => [Number(m.id), m]));
+
+    const completionRepo = AppDataSource.getRepository(LessonCompletion);
+    const completedRows = total
+      ? await completionRepo
+          .createQueryBuilder('lc')
+          .select(['lc.lesson_id'])
+          .where('lc.user_id = :uid', { uid: subjectUserId })
+          .andWhere('lc.lesson_id IN (:...lessonIds)', { lessonIds: orderedLessons.map((l) => (l as any).id) })
+          .getRawMany()
+      : [];
+    const completedSet = new Set<number>(completedRows.map((r: any) => Number(r.lc_lesson_id ?? r.lesson_id)));
+
+    const unlocked: number[] = [];
+    let nextLocked: number | null = null;
+    for (let i = 0; i < orderedLessons.length; i++) {
+      const lesson = orderedLessons[i] as any;
+      const lessonId = Number(lesson.id);
+      const module = moduleById.get(Number(lesson.module_id));
+      const openAt = parseNullableDateTime(module?.open_at);
+      const moduleOk = !openAt || openAt.getTime() <= now.getTime();
+      const lessonOpenAt = parseNullableDateTime(lesson?.open_at);
+      const lessonOk = !lessonOpenAt || lessonOpenAt.getTime() <= now.getTime();
+
+      const prereqOk = i === 0 ? true : completedSet.has(Number((orderedLessons[i - 1] as any).id));
+      if (prereqOk && moduleOk && lessonOk) {
+        unlocked.push(lessonId);
+        continue;
+      }
+
+      nextLocked = lessonId;
+      break;
+    }
+
+    const completedCount = completedSet.size;
+    const rawPct = total ? (completedCount / total) * 100 : 0;
+    const progress_percent = Math.max(0, Math.min(100, Math.round(rawPct * 100) / 100));
+
+    // Best-effort sync enrollment progress_percent to computed value.
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    await enrollmentRepo.update({ user_id: subjectUserId, course_id: courseId } as any, { progress_percent } as any);
+
+    return {
+      course_id: courseId,
+      total_lessons: total,
+      completed_lessons: completedCount,
+      progress_percent,
+      completed_lesson_ids: Array.from(completedSet.values()),
+      unlocked_lesson_ids: unlocked,
+      next_locked_lesson_id: nextLocked,
+    };
+  }
+
+  async addLessonProgressHeartbeat(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number,
+    deltaSeconds: number
+  ): Promise<LessonHeartbeatResult> {
+    await this.ensureEnrolledLearner(subjectUserId, courseId);
+
+    const { orderedLessons, modules } = await this.loadOrderedLessonsForCourse(courseId);
+    const target = orderedLessons.find((l) => Number((l as any).id) === Number(lessonId));
+    if (!target) throw new Error('Bài học không hợp lệ.');
+
+    const now = new Date();
+    const moduleById = new Map<number, any>((modules as any[]).map((m) => [Number(m.id), m]));
+    const targetModule = moduleById.get(Number((target as any).module_id));
+    const openAt = parseNullableDateTime(targetModule?.open_at);
+    if (openAt && openAt.getTime() > now.getTime()) {
+      throw new Error('Không thể truy cập bài học.');
+    }
+    const lessonOpenAt = parseNullableDateTime((target as any)?.open_at);
+    if (lessonOpenAt && lessonOpenAt.getTime() > now.getTime()) {
+      throw new Error('Không thể truy cập bài học.');
+    }
+
+    // Clamp delta to reduce abuse.
+    const delta = Math.max(1, Math.min(10, Math.floor(Number(deltaSeconds))));
+
+    const progressRepo = AppDataSource.getRepository(LessonProgress);
+    const existing = await progressRepo.findOne({
+      where: { user_id: subjectUserId, course_id: courseId, lesson_id: lessonId } as any,
+    });
+    const entity = existing
+      ? existing
+      : progressRepo.create({ user_id: subjectUserId, course_id: courseId, lesson_id: lessonId, time_spent_seconds: 0 } as any);
+
+    (entity as any).time_spent_seconds = Number((entity as any).time_spent_seconds || 0) + delta;
+    const saved = await progressRepo.save(entity as any);
+
+    const rules = await this.getTimeRulesForCourse(courseId);
+    const required_seconds = this.computeRequiredSecondsForLesson(target, rules);
+    const time_spent_seconds = Number((saved as any).time_spent_seconds || 0);
+    const can_complete = time_spent_seconds >= required_seconds;
+
+    const courseProgress = await this.getMyCourseProgress(subjectUserId, courseId);
+    return {
+      lesson_id: lessonId,
+      time_spent_seconds,
+      required_seconds,
+      can_complete,
+      progress_percent: courseProgress.progress_percent,
+    };
+  }
+
+  async completeLesson(subjectUserId: number, courseId: number, lessonId: number): Promise<LessonCompleteResult> {
+    const enrollment = await this.ensureEnrolledLearner(subjectUserId, courseId);
+
+    const { orderedLessons, modules } = await this.loadOrderedLessonsForCourse(courseId);
+    const idx = orderedLessons.findIndex((l) => Number((l as any).id) === Number(lessonId));
+    if (idx < 0) throw new Error('Bài học không hợp lệ.');
+
+    const now = new Date();
+    const moduleById = new Map<number, any>((modules as any[]).map((m) => [Number(m.id), m]));
+    const targetLesson = orderedLessons[idx] as any;
+    const targetModule = moduleById.get(Number(targetLesson?.module_id));
+    const openAt = parseNullableDateTime(targetModule?.open_at);
+    if (openAt && openAt.getTime() > now.getTime()) {
+      throw new Error('Không thể hoàn thành bài học.');
+    }
+    const lessonOpenAt = parseNullableDateTime(targetLesson?.open_at);
+    if (lessonOpenAt && lessonOpenAt.getTime() > now.getTime()) {
+      throw new Error('Không thể hoàn thành bài học.');
+    }
+
+    // Enforce unlock rule: previous lesson must be completed.
+    if (idx > 0) {
+      const completionRepo = AppDataSource.getRepository(LessonCompletion);
+      const prevId = Number((orderedLessons[idx - 1] as any).id);
+      const prevCompleted = await completionRepo.findOne({ where: { user_id: subjectUserId, lesson_id: prevId } as any });
+      if (!prevCompleted) throw new Error('Không thể hoàn thành bài học.');
+    }
+
+    const completionRepo = AppDataSource.getRepository(LessonCompletion);
+    const exists = await completionRepo.findOne({ where: { user_id: subjectUserId, lesson_id: lessonId } as any });
+    if (exists) {
+      const courseProgress = await this.getMyCourseProgress(subjectUserId, courseId);
+      return { lesson_id: lessonId, completed: true, progress_percent: courseProgress.progress_percent };
+    }
+
+    const progressRepo = AppDataSource.getRepository(LessonProgress);
+    const p = await progressRepo.findOne({ where: { user_id: subjectUserId, course_id: courseId, lesson_id: lessonId } as any });
+    const timeSpent = Number((p as any)?.time_spent_seconds ?? 0);
+    const rules = await this.getTimeRulesForCourse(courseId);
+    const required = this.computeRequiredSecondsForLesson(orderedLessons[idx], rules);
+    if (timeSpent < required) {
+      throw new Error(`Chưa đủ thời gian học để hoàn thành bài (cần ${required}s).`);
+    }
+
+    await completionRepo.save(
+      completionRepo.create({
+        user_id: subjectUserId,
+        lesson_id: lessonId,
+        time_spent_seconds: timeSpent,
+      } as any)
+    );
+
+    // Recompute and persist enrollment progress.
+    const total = orderedLessons.length;
+    const completedRows = total
+      ? await completionRepo
+          .createQueryBuilder('lc')
+          .select(['lc.lesson_id'])
+          .where('lc.user_id = :uid', { uid: subjectUserId })
+          .andWhere('lc.lesson_id IN (:...lessonIds)', { lessonIds: orderedLessons.map((l) => (l as any).id) })
+          .getRawMany()
+      : [];
+    const completedCount = completedRows.length;
+    const rawPct = total ? (completedCount / total) * 100 : 0;
+    const progress_percent = Math.max(0, Math.min(100, Math.round(rawPct * 100) / 100));
+
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    const patch: any = { progress_percent, last_accessed_at: new Date() };
+    if (progress_percent >= 100 && (enrollment as any).status !== 'completed') {
+      patch.status = 'completed';
+      patch.completed_at = new Date();
+    }
+    await enrollmentRepo.update({ user_id: subjectUserId, course_id: courseId } as any, patch);
+
+    return { lesson_id: lessonId, completed: true, progress_percent };
+  }
+
+  async getMyCourseCompletionRules(subjectUserId: number, courseId: number): Promise<CourseCompletionRules> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+
+    const repo = AppDataSource.getRepository(CourseCompletionRequirement);
+    const row = await repo.findOne({ where: { course_id: courseId } as any });
+    const rules = await this.getTimeRulesForCourse(courseId);
+
+    // If row doesn't exist yet, return defaults (do not force-create).
+    return {
+      course_id: courseId,
+      video_min_seconds: Number((row as any)?.video_min_seconds ?? rules.videoMinSeconds),
+      video_min_percent: Number((row as any)?.video_min_percent ?? rules.videoMinPercent),
+      text_min_seconds: Number((row as any)?.text_min_seconds ?? rules.textMinSeconds),
+    };
+  }
+
+  async updateMyCourseCompletionRules(
+    subjectUserId: number,
+    courseId: number,
+    request: UpdateCourseCompletionRulesRequest
+  ): Promise<CourseCompletionRules> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+
+    const repo = AppDataSource.getRepository(CourseCompletionRequirement);
+    const existing = await repo.findOne({ where: { course_id: courseId } as any });
+    const entity = existing ? existing : repo.create({ course_id: courseId } as any);
+
+    if (request.video_min_seconds != null) (entity as any).video_min_seconds = Number(request.video_min_seconds);
+    if (request.video_min_percent != null) (entity as any).video_min_percent = Number(request.video_min_percent);
+    if (request.text_min_seconds != null) (entity as any).text_min_seconds = Number(request.text_min_seconds);
+
+    const saved = await repo.save(entity as any);
+    return {
+      course_id: courseId,
+      video_min_seconds: Number((saved as any).video_min_seconds ?? 60),
+      video_min_percent: Number((saved as any).video_min_percent ?? 0.7),
+      text_min_seconds: Number((saved as any).text_min_seconds ?? 30),
+    };
+  }
+
+  async listMyCourseLearnerProgress(
+    subjectUserId: number,
+    courseId: number,
+    query: { page?: number; page_size?: number; q?: string }
+  ): Promise<CourseLearnerProgressResult> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+
+    const { orderedLessons } = await this.loadOrderedLessonsForCourse(courseId);
+    const totalLessons = orderedLessons.length;
+
+    const page = Number(query.page || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(query.page_size || 20)));
+    const q = query.q ? String(query.q).trim() : '';
+
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    const qb = enrollmentRepo.createQueryBuilder('ce');
+    qb.innerJoin(User, 'u', 'u.id = ce.user_id');
+    qb.where('ce.course_id = :courseId', { courseId });
+
+    if (q) {
+      qb.andWhere('(u.full_name LIKE :q OR u.email LIKE :q)', { q: `%${q}%` });
+    }
+
+    qb.select([
+      'ce.user_id as user_id',
+      'u.full_name as full_name',
+      'u.email as email',
+      'u.avatar_url as avatar_url',
+      'ce.status as status',
+      'ce.enrolled_at as enrolled_at',
+      'ce.last_accessed_at as last_accessed_at',
+      'ce.completed_at as completed_at',
+      'ce.progress_percent as progress_percent',
+    ]);
+
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(*)')
+        .from(LessonCompletion, 'lc')
+        .innerJoin(Lesson, 'l', 'l.id = lc.lesson_id')
+        .innerJoin(Module, 'm', 'm.id = l.module_id')
+        .where('lc.user_id = ce.user_id')
+        .andWhere('m.course_id = :courseId', { courseId });
+    }, 'completed_lessons');
+
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COALESCE(SUM(lp.time_spent_seconds), 0)')
+        .from(LessonProgress, 'lp')
+        .where('lp.user_id = ce.user_id')
+        .andWhere('lp.course_id = :courseId', { courseId });
+    }, 'time_spent_seconds');
+
+    // Avoid window functions/subqueries inside window ORDER BY (MySQL parse errors).
+    // We compute rank in application code:
+    // - progress_percent desc
+    // - completed_lessons desc
+    // - time_spent_seconds asc
+    // - last_accessed_at desc
+    // - user_id asc (stable)
+    const allRows = await qb.getRawMany();
+    const total = allRows.length;
+
+    const sorted = (allRows as any[]).sort((a, b) => {
+      const ap = Number(a.progress_percent ?? 0);
+      const bp = Number(b.progress_percent ?? 0);
+      if (bp !== ap) return bp - ap;
+
+      const ac = Number(a.completed_lessons ?? 0);
+      const bc = Number(b.completed_lessons ?? 0);
+      if (bc !== ac) return bc - ac;
+
+      const at = Number(a.time_spent_seconds ?? 0);
+      const bt = Number(b.time_spent_seconds ?? 0);
+      if (at !== bt) return at - bt;
+
+      const al = a.last_accessed_at ? new Date(a.last_accessed_at).getTime() : 0;
+      const bl = b.last_accessed_at ? new Date(b.last_accessed_at).getTime() : 0;
+      if (bl !== al) return bl - al;
+
+      return Number(a.user_id ?? 0) - Number(b.user_id ?? 0);
+    });
+
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    const pageRows = sorted.slice(start, end);
+
+    return {
+      course_id: courseId,
+      total_lessons: totalLessons,
+      items: pageRows.map((r, idx) => ({
+        rank: start + idx + 1,
+        user_id: Number(r.user_id),
+        full_name: String(r.full_name || ''),
+        email: String(r.email || ''),
+        avatar_url: r.avatar_url ? getSignedDeliveryUrl(String(r.avatar_url)) : null,
+        status: r.status as any,
+        enrolled_at: r.enrolled_at ? new Date(r.enrolled_at).toISOString() : new Date().toISOString(),
+        last_accessed_at: r.last_accessed_at ? new Date(r.last_accessed_at).toISOString() : null,
+        completed_at: r.completed_at ? new Date(r.completed_at).toISOString() : null,
+        progress_percent: Number(r.progress_percent ?? 0),
+        completed_lessons: Number(r.completed_lessons ?? 0),
+        time_spent_seconds: Number(r.time_spent_seconds ?? 0),
+      })),
+      page,
+      page_size: pageSize,
+      total,
+    };
+  }
+
+  async getCourseLeaderboard(subjectUserId: number, courseId: number): Promise<CourseLeaderboardResult> {
+    const isManager = await isUserCourseManager(subjectUserId);
+    if (isManager) {
+      await this.ensureOwnCourse(subjectUserId, courseId);
+    } else {
+      await this.ensureEnrolledLearner(subjectUserId, courseId);
+    }
+
+    const { orderedLessons } = await this.loadOrderedLessonsForCourse(courseId);
+    const totalLessons = orderedLessons.length;
+
+    // IMPORTANT: MySQL version in this project might not support window functions (ROW_NUMBER).
+    // So we compute leaderboard by ordering in SQL + ranking in application code.
+    const TOP_LIMIT = 100;
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+
+    const completedSelect = (subQb: any) => {
+      return subQb
+        .select('COUNT(*)')
+        .from(LessonCompletion, 'lc')
+        .innerJoin(Lesson, 'l', 'l.id = lc.lesson_id')
+        .innerJoin(Module, 'm', 'm.id = l.module_id')
+        .where('lc.user_id = ce.user_id')
+        .andWhere('m.course_id = :courseId', { courseId });
+    };
+
+    const timeSelect = (subQb: any) => {
+      return subQb
+        .select('COALESCE(SUM(lp.time_spent_seconds), 0)')
+        .from(LessonProgress, 'lp')
+        .where('lp.user_id = ce.user_id')
+        .andWhere('lp.course_id = :courseId', { courseId });
+    };
+
+    const topRows = await enrollmentRepo
+      .createQueryBuilder('ce')
+      .innerJoin(User, 'u', 'u.id = ce.user_id')
+      .where('ce.course_id = :courseId', { courseId })
+      .select([
+        'ce.user_id as user_id',
+        'u.full_name as full_name',
+        'u.avatar_url as avatar_url',
+        'ce.progress_percent as progress_percent',
+        'ce.last_accessed_at as last_accessed_at',
+      ])
+      .addSelect((subQb) => completedSelect(subQb), 'completed_lessons')
+      .addSelect((subQb) => timeSelect(subQb), 'time_spent_seconds')
+      .orderBy('ce.progress_percent', 'DESC')
+      // Order by select aliases is supported in MySQL (unlike in window ORDER BY).
+      .addOrderBy('completed_lessons', 'DESC')
+      .addOrderBy('time_spent_seconds', 'ASC')
+      .addOrderBy('ce.last_accessed_at', 'DESC')
+      .addOrderBy('ce.user_id', 'ASC')
+      .limit(TOP_LIMIT)
+      .getRawMany();
+
+    const myRow = await enrollmentRepo
+      .createQueryBuilder('ce')
+      .innerJoin(User, 'u', 'u.id = ce.user_id')
+      .where('ce.course_id = :courseId', { courseId })
+      .andWhere('ce.user_id = :uid', { uid: subjectUserId })
+      .select([
+        'ce.user_id as user_id',
+        'u.full_name as full_name',
+        'u.avatar_url as avatar_url',
+        'ce.progress_percent as progress_percent',
+        'ce.last_accessed_at as last_accessed_at',
+      ])
+      .addSelect((subQb) => completedSelect(subQb), 'completed_lessons')
+      .addSelect((subQb) => timeSelect(subQb), 'time_spent_seconds')
+      .getRawOne();
+
+    type RowShape = {
+      user_id: number;
+      full_name: string;
+      avatar_url: string | null;
+      progress_percent: number;
+      last_accessed_at: string | null;
+      completed_lessons: number;
+      time_spent_seconds: number;
+    };
+
+    const top: RowShape[] = (topRows as any[]).map((r) => ({
+      user_id: Number(r.user_id ?? 0),
+      full_name: String(r.full_name || ''),
+      avatar_url: r.avatar_url ?? null,
+      progress_percent: Number(r.progress_percent ?? 0),
+      last_accessed_at: r.last_accessed_at ?? null,
+      completed_lessons: Number(r.completed_lessons ?? 0),
+      time_spent_seconds: Number(r.time_spent_seconds ?? 0),
+    }));
+
+    const my: RowShape | null = myRow
+      ? {
+          user_id: Number((myRow as any).user_id ?? 0),
+          full_name: String((myRow as any).full_name || ''),
+          avatar_url: (myRow as any).avatar_url ?? null,
+          progress_percent: Number((myRow as any).progress_percent ?? 0),
+          last_accessed_at: (myRow as any).last_accessed_at ?? null,
+          completed_lessons: Number((myRow as any).completed_lessons ?? 0),
+          time_spent_seconds: Number((myRow as any).time_spent_seconds ?? 0),
+        }
+      : null;
+
+    const hasMeInTop = my ? top.some((x) => x.user_id === my.user_id) : false;
+
+    // Compute exact rank for "me" if not in top, without window functions.
+    let myRank: number | null = null;
+    if (my) {
+      if (hasMeInTop) {
+        // Top is already ordered by the ranking rules, so index is rank.
+        myRank = top.findIndex((x) => x.user_id === my.user_id) + 1;
+      } else {
+        const completedExpr = `(SELECT COUNT(*)
+          FROM lesson_completions lc
+          INNER JOIN lessons l ON l.id = lc.lesson_id
+          INNER JOIN modules m ON m.id = l.module_id
+          WHERE lc.user_id = ce.user_id AND m.course_id = :courseId)`;
+        const timeExpr = `(SELECT COALESCE(SUM(lp.time_spent_seconds), 0)
+          FROM lesson_progress lp
+          WHERE lp.user_id = ce.user_id AND lp.course_id = :courseId)`;
+
+        const higherCountQb = enrollmentRepo
+          .createQueryBuilder('ce')
+          .where('ce.course_id = :courseId', { courseId })
+          .andWhere('ce.user_id <> :uid', { uid: subjectUserId })
+          .andWhere(
+            `(
+              ce.progress_percent > :myProgress OR
+              (ce.progress_percent = :myProgress AND ${completedExpr} > :myCompleted) OR
+              (ce.progress_percent = :myProgress AND ${completedExpr} = :myCompleted AND ${timeExpr} < :myTime) OR
+              (ce.progress_percent = :myProgress AND ${completedExpr} = :myCompleted AND ${timeExpr} = :myTime AND COALESCE(ce.last_accessed_at, '1970-01-01') > COALESCE(:myLast, '1970-01-01')) OR
+              (ce.progress_percent = :myProgress AND ${completedExpr} = :myCompleted AND ${timeExpr} = :myTime AND COALESCE(ce.last_accessed_at, '1970-01-01') = COALESCE(:myLast, '1970-01-01') AND ce.user_id < :uid)
+            )`,
+            {
+              myProgress: my.progress_percent,
+              myCompleted: my.completed_lessons,
+              myTime: my.time_spent_seconds,
+              myLast: my.last_accessed_at,
+              uid: subjectUserId,
+              courseId,
+            }
+          );
+
+        const higherCount = await higherCountQb.getCount();
+        myRank = higherCount + 1;
+      }
+    }
+
+    const itemsTop = top.map((r, idx) => ({
+      rank: idx + 1,
+      user_id: r.user_id,
+      full_name: r.full_name,
+      avatar_url: r.avatar_url ? getSignedDeliveryUrl(String(r.avatar_url)) : null,
+      progress_percent: r.progress_percent,
+      completed_lessons: r.completed_lessons,
+      time_spent_seconds: r.time_spent_seconds,
+      is_me: my ? r.user_id === my.user_id : false,
+    }));
+
+    const items =
+      my && !hasMeInTop && myRank != null
+        ? [
+            ...itemsTop,
+            {
+              rank: myRank,
+              user_id: my.user_id,
+              full_name: my.full_name,
+              avatar_url: my.avatar_url ? getSignedDeliveryUrl(String(my.avatar_url)) : null,
+              progress_percent: my.progress_percent,
+              completed_lessons: my.completed_lessons,
+              time_spent_seconds: my.time_spent_seconds,
+              is_me: true,
+            },
+          ].sort((a, b) => a.rank - b.rank)
+        : itemsTop;
+
+    return {
+      course_id: courseId,
+      total_lessons: totalLessons,
+      items,
+      top_limit: TOP_LIMIT,
+      includes_me: Boolean(my && items.some((x) => x.user_id === my.user_id)),
+    };
+  }
+
   // Instructor methods (existing code)
   async createCourse(subjectUserId: number, request: CreateCourseRequest): Promise<{ id: number }> {
     await ensureUserIsCourseManager(subjectUserId);
 
     const courseRepo = AppDataSource.getRepository(Course);
     const instructorRepo = AppDataSource.getRepository(CourseInstructor);
+    const now = new Date();
 
     const baseSlug = normalizeSlug(request.title);
     if (!baseSlug) throw new Error('Tiêu đề khóa học không hợp lệ.');
@@ -700,6 +1638,12 @@ export class CourseServiceImpl implements CourseService {
       slug = `${baseSlug}-${counter}`;
     }
 
+    const prerequisiteIds = parsePrerequisiteCourseIds(request.prerequisites);
+    await this.validatePrerequisiteIdsExist(prerequisiteIds);
+
+    const scheduledAt = parseNullableDateTime((request as any)?.publish_scheduled_at);
+    const shouldAutoPublish = scheduledAt ? scheduledAt.getTime() <= now.getTime() : false;
+
     const course = courseRepo.create({
       title: request.title,
       slug,
@@ -707,11 +1651,12 @@ export class CourseServiceImpl implements CourseService {
       full_description: request.full_description ?? null,
       thumbnail_url: request.thumbnail_url ?? null,
       learning_objectives: request.learning_objectives ?? null,
-      prerequisites: request.prerequisites ?? null,
+      prerequisites: prerequisiteIds.length ? prerequisiteIds.map(String) : null,
       level: request.level ?? 'beginner',
       language: request.language ?? 'vi',
-      status: 'draft',
-      published_at: null,
+      status: shouldAutoPublish ? 'published' : 'draft',
+      published_at: shouldAutoPublish ? scheduledAt : null,
+      publish_scheduled_at: !shouldAutoPublish ? scheduledAt : null,
       created_by: subjectUserId,
     });
 
@@ -856,9 +1801,12 @@ export class CourseServiceImpl implements CourseService {
       title: raw.c_title ?? raw.title,
       slug: raw.c_slug ?? raw.slug,
       short_description: raw.c_short_description ?? raw.short_description,
+      full_description: raw.c_full_description ?? raw.full_description,
       thumbnail_url: raw.c_thumbnail_url ?? raw.thumbnail_url,
       level: raw.c_level ?? raw.level,
       language: raw.c_language ?? raw.language,
+      learning_objectives: raw.c_learning_objectives ?? raw.learning_objectives,
+      prerequisites: raw.c_prerequisites ?? raw.prerequisites,
       status: raw.c_status ?? raw.status,
       published_at: raw.c_published_at ?? raw.published_at,
       created_at: raw.c_created_at ?? raw.created_at,
@@ -870,9 +1818,61 @@ export class CourseServiceImpl implements CourseService {
     return mapCourseRowToItem(row);
   }
 
+  async getMyCoursePrerequisiteGraph(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteGraph> {
+    await ensureUserIsCourseManager(subjectUserId);
+    const root = await this.ensureOwnCourse(subjectUserId, courseId);
+    return this.buildPrerequisiteGraph(root as any, subjectUserId, 'published_or_own');
+  }
+
+  async listMyCoursePrerequisiteOptions(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteOption[]> {
+    await ensureUserIsCourseManager(subjectUserId);
+    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    const selectedSet = new Set<number>(parsePrerequisiteCourseIds((ownCourse as any).prerequisites));
+    const courseRepo = AppDataSource.getRepository(Course);
+    const now = new Date();
+
+    const candidates = await courseRepo
+      .createQueryBuilder('c')
+      .where('c.deleted_at IS NULL')
+      .andWhere('c.id <> :courseId', { courseId })
+      .andWhere(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now) OR c.created_by = :uid)`,
+        { published: 'published', draft: 'draft', now, uid: subjectUserId }
+      )
+      .orderBy('c.title', 'ASC')
+      .addOrderBy('c.id', 'ASC')
+      .getMany();
+
+    const items = await Promise.all(
+      (candidates as any[]).map(async (c) => {
+        const id = Number(c.id);
+        const title = String(c.title || '');
+        const slug = String(c.slug || '');
+        if (selectedSet.has(id)) {
+          return { id, title, slug, selectable: true, reason: null };
+        }
+        try {
+          await this.validatePrerequisiteGraph(courseId, [id]);
+          return { id, title, slug, selectable: true, reason: null };
+        } catch (e: any) {
+          return {
+            id,
+            title,
+            slug,
+            selectable: false,
+            reason: e?.message ? String(e.message) : 'Không thể chọn làm tiên quyết.',
+          };
+        }
+      })
+    );
+
+    return items;
+  }
+
   async updateMyCourse(subjectUserId: number, courseId: number, request: UpdateCourseRequest): Promise<void> {
     await ensureUserIsCourseManager(subjectUserId);
     const courseRepo = AppDataSource.getRepository(Course);
+    const now = new Date();
 
     const course = await courseRepo.findOne({ where: { id: courseId, created_by: subjectUserId } as any });
     if (!course || (course as any).deleted_at) throw new Error('Không tìm thấy khóa học.');
@@ -884,9 +1884,28 @@ export class CourseServiceImpl implements CourseService {
     if ('full_description' in request) course.full_description = request.full_description ?? null;
     if ('thumbnail_url' in request) course.thumbnail_url = request.thumbnail_url ?? null;
     if ('learning_objectives' in request) course.learning_objectives = request.learning_objectives ?? null;
-    if ('prerequisites' in request) course.prerequisites = request.prerequisites ?? null;
+    if ('prerequisites' in request) {
+      const prerequisiteIds = parsePrerequisiteCourseIds(request.prerequisites);
+      await this.validatePrerequisiteGraph(courseId, prerequisiteIds);
+      course.prerequisites = prerequisiteIds.length ? prerequisiteIds.map(String) : null;
+    }
     if ('level' in request && request.level) course.level = request.level;
     if ('language' in request && request.language) course.language = request.language;
+
+    if ('publish_scheduled_at' in request) {
+      const scheduledAt = parseNullableDateTime((request as any)?.publish_scheduled_at);
+      if (!scheduledAt) {
+        (course as any).publish_scheduled_at = null;
+      } else if (scheduledAt.getTime() <= now.getTime()) {
+        course.status = 'published';
+        course.published_at = scheduledAt;
+        (course as any).publish_scheduled_at = null;
+      } else {
+        course.status = 'draft';
+        course.published_at = null;
+        (course as any).publish_scheduled_at = scheduledAt;
+      }
+    }
 
     await courseRepo.save(course);
   }
@@ -900,11 +1919,14 @@ export class CourseServiceImpl implements CourseService {
     if (status === 'published') {
       course.status = 'published';
       course.published_at = course.published_at ?? new Date();
+      (course as any).publish_scheduled_at = null;
     } else if (status === 'draft') {
       course.status = 'draft';
       course.published_at = null;
+      (course as any).publish_scheduled_at = null;
     } else if (status === 'archived') {
       course.status = 'archived';
+      (course as any).publish_scheduled_at = null;
     } else {
       throw new Error('Trạng thái không hợp lệ.');
     }
@@ -959,6 +1981,7 @@ export class CourseServiceImpl implements CourseService {
         description: l.description ?? null,
         lesson_type: (l.lesson_type || 'text') as LessonType,
         order_index: l.order_index,
+        open_at: l.open_at ? new Date(l.open_at).toISOString() : null,
       });
       lessonByModule.set(l.module_id, arr);
     }
@@ -969,6 +1992,7 @@ export class CourseServiceImpl implements CourseService {
       title: m.title,
       description: m.description ?? null,
       order_index: m.order_index,
+      open_at: m.open_at ? new Date(m.open_at).toISOString() : null,
       lessons: lessonByModule.get(m.id) || [],
     }));
 
@@ -992,6 +2016,7 @@ export class CourseServiceImpl implements CourseService {
       description: request.description ?? null,
       order_index: nextOrder,
       is_published: true,
+      open_at: parseNullableDateTime((request as any)?.open_at),
     } as any);
     const saved = await moduleRepo.save(mod as any);
     return { id: (saved as any).id };
@@ -1006,6 +2031,7 @@ export class CourseServiceImpl implements CourseService {
     if (!mod) throw new Error('Không tìm thấy module.');
     if (request.title != null) (mod as any).title = request.title;
     if ('description' in request) (mod as any).description = request.description ?? null;
+    if ('open_at' in request) (mod as any).open_at = parseNullableDateTime((request as any)?.open_at);
     await moduleRepo.save(mod as any);
   }
 
@@ -1039,6 +2065,7 @@ export class CourseServiceImpl implements CourseService {
       title: request.title,
       description: request.description ?? null,
       lesson_type: request.lesson_type || 'text',
+      open_at: parseNullableDateTime((request as any)?.open_at) ?? null,
       order_index: nextOrder,
       is_published: true,
       is_free_preview: false,
@@ -1064,6 +2091,7 @@ export class CourseServiceImpl implements CourseService {
     if (request.title != null) (lesson as any).title = request.title;
     if ('description' in request) (lesson as any).description = request.description ?? null;
     if (request.lesson_type != null) (lesson as any).lesson_type = request.lesson_type;
+    if ('open_at' in request) (lesson as any).open_at = parseNullableDateTime((request as any)?.open_at) ?? null;
     await lessonRepo.save(lesson as any);
   }
 
@@ -1128,8 +2156,8 @@ export class CourseServiceImpl implements CourseService {
   }
 
   async listLessonResources(subjectUserId: number, courseId: number, lessonId: number): Promise<LessonResourceItem[]> {
-    await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    await this.ensureCanViewCourseResources(subjectUserId, courseId);
+    await this.ensureCanAccessLesson(subjectUserId, courseId, lessonId);
 
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const moduleRepo = AppDataSource.getRepository(Module);
@@ -1149,11 +2177,11 @@ export class CourseServiceImpl implements CourseService {
       id: r.id,
       lesson_id: r.lesson_id,
       resource_type: r.resource_type,
-      url: r.url,
+      url: r.url ? getSignedDeliveryUrl(r.url) : r.url,
       filename: r.filename ?? null,
       mime_type: r.mime_type ?? null,
       size_bytes: r.size_bytes ?? null,
-      preview_url: (r as any).preview_url ?? null,
+      preview_url: (r as any).preview_url ? getSignedDeliveryUrl((r as any).preview_url) : null,
       created_at: new Date(r.created_at).toISOString(),
     }));
   }
@@ -1242,8 +2270,7 @@ export class CourseServiceImpl implements CourseService {
     courseId: number,
     resourceId: number
   ): Promise<{ url: string; mime_type: string | null; filename: string | null }> {
-    await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    await this.ensureCanViewCourseResources(subjectUserId, courseId);
 
     const resourceRepo = AppDataSource.getRepository(LessonResource);
     const lessonRepo = AppDataSource.getRepository(Lesson);
@@ -1257,6 +2284,8 @@ export class CourseServiceImpl implements CourseService {
     const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id, course_id: courseId } as any });
     if (!mod) throw new Error('Không tìm thấy tài nguyên.');
 
+    await this.ensureCanAccessLesson(subjectUserId, courseId, (lesson as any).id);
+
     const url = (resource as any).url;
     const signedUrl = getSignedDeliveryUrl(url);
     return {
@@ -1264,6 +2293,27 @@ export class CourseServiceImpl implements CourseService {
       mime_type: (resource as any).mime_type ?? null,
       filename: (resource as any).filename ?? null,
     };
+  }
+
+  /**
+   * Course resources (lesson files/videos) phải được phép cho:
+   * - học viên đã enroll course
+   * - hoặc người quản lý khóa học (teacher/admin/course_manager) và là owner của khóa
+   */
+  private async ensureCanViewCourseResources(subjectUserId: number, courseId: number) {
+    const isManager = await isUserCourseManager(subjectUserId);
+    if (isManager) {
+      await this.ensureOwnCourse(subjectUserId, courseId);
+      return;
+    }
+
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    const enrollment = await enrollmentRepo.findOne({
+      where: { user_id: subjectUserId, course_id: courseId } as any,
+    });
+    if (!enrollment) {
+      throw new Error('Bạn chưa đăng ký khóa học này.');
+    }
   }
 
   async createLessonYoutubeResource(

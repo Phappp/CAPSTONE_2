@@ -9,6 +9,8 @@ import {
   CreateLessonBody,
   CreateLessonYoutubeResourceBody,
   CreateModuleBody,
+  LearnerLessonProgressBody,
+  UpdateCourseCompletionRulesBody,
   ListMyCoursesQuery,
   ListPublishedCoursesQuery,
   ReorderContentBody,
@@ -55,6 +57,16 @@ export class CourseController extends BaseController {
     });
   }
 
+  async getPublishedCoursePrerequisiteGraphBySlug(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const slug = req.params.slug;
+      const subjectRaw = (req as any)?.getSubject?.();
+      const uid = subjectRaw != null ? Number(subjectRaw) : undefined;
+      const graph = await this.service.getPublishedCoursePrerequisiteGraphBySlug(uid, slug);
+      res.status(200).json(graph);
+    });
+  }
+
   // Enrollment routes
   async enrollCourse(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
@@ -89,6 +101,50 @@ export class CourseController extends BaseController {
       const courseId = Number(req.params.id);
       const course = await this.service.getMyLearningCourse(uid, courseId);
       res.status(200).json(course);
+    });
+  }
+
+  async getMyCourseProgress(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const result = await this.service.getMyCourseProgress(uid, courseId);
+      res.status(200).json(result);
+    });
+  }
+
+  async getCourseLeaderboard(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const result = await this.service.getCourseLeaderboard(uid, courseId);
+      res.status(200).json(result);
+    });
+  }
+
+  async addLessonProgressHeartbeat(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const body = new LearnerLessonProgressBody(req.body);
+      const validateResult = await body.validate();
+      if (!validateResult.ok) {
+        responseValidationError(res, validateResult.errors[0]);
+        return;
+      }
+      const result = await this.service.addLessonProgressHeartbeat(uid, courseId, lessonId, body.delta_seconds);
+      res.status(200).json(result);
+    });
+  }
+
+  async completeLesson(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const result = await this.service.completeLesson(uid, courseId, lessonId);
+      res.status(200).json(result);
     });
   }
 
@@ -141,6 +197,24 @@ export class CourseController extends BaseController {
     });
   }
 
+  async getMyCoursePrerequisiteGraph(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const graph = await this.service.getMyCoursePrerequisiteGraph(uid, courseId);
+      res.status(200).json(graph);
+    });
+  }
+
+  async listMyCoursePrerequisiteOptions(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const items = await this.service.listMyCoursePrerequisiteOptions(uid, courseId);
+      res.status(200).json({ items });
+    });
+  }
+
   async updateMyCourse(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
       const body = new UpdateCourseBody(req.body);
@@ -181,6 +255,42 @@ export class CourseController extends BaseController {
       const courseId = Number(req.params.id);
       const tree = await this.service.getMyCourseContentTree(uid, courseId);
       res.status(200).json(tree);
+    });
+  }
+
+  async getMyCourseCompletionRules(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const rules = await this.service.getMyCourseCompletionRules(uid, courseId);
+      res.status(200).json(rules);
+    });
+  }
+
+  async updateMyCourseCompletionRules(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const body = new UpdateCourseCompletionRulesBody(req.body);
+      const validateResult = await body.validate();
+      if (!validateResult.ok) {
+        responseValidationError(res, validateResult.errors[0]);
+        return;
+      }
+      const rules = await this.service.updateMyCourseCompletionRules(uid, courseId, body);
+      res.status(200).json(rules);
+    });
+  }
+
+  async listMyCourseLearnerProgress(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const page = req.query.page ? Number(req.query.page) : 1;
+      const page_size = req.query.page_size ? Number(req.query.page_size) : 20;
+      const q = req.query.q != null ? String(req.query.q) : undefined;
+      const result = await this.service.listMyCourseLearnerProgress(uid, courseId, { page, page_size, q });
+      res.status(200).json(result);
     });
   }
 

@@ -243,3 +243,39 @@
     font-weight: 800;
     font-size: 1.05rem;
 }
+
+/* Learner progress table */
+.teacherLearnersTableWrap {
+    width: 100%;
+    overflow: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #fff;
+}
+
+.teacherLearnersTable {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 840px;
+}
+
+.teacherLearnersTable th,
+.teacherLearnersTable td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+    text-align: left;
+}
+
+.teacherLearnersTable th {
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #6b7280;
+    font-weight: 900;
+    background: #f8fafc;
+}
+
+.teacherLearnersTable tr:hover td {
+    background: #fbfdff;
+}

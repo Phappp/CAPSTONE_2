@@ -103,9 +103,9 @@ function redirectByRole(
   const roles = (user?.roles ?? [])
     .map((r) => String(r).trim().toLowerCase())
     .filter(Boolean);
+  // Ưu tiên suy ra role từ roles để tránh trường hợp primary_role bị lệch.
   const role =
-    normalizedPrimaryRole ||
-    (roles.includes("admin")
+    roles.includes("admin")
       ? "admin"
       : roles.includes("course_manager")
       ? "course_manager"
@@ -115,7 +115,7 @@ function redirectByRole(
       ? "learner"
       : roles.includes("student")
       ? "student"
-      : roles[0] || "");
+      : normalizedPrimaryRole || roles[0] || "";
   // Hỗ trợ cả tên role cũ (student/teacher) và mới (learner/course_manager)
   if (role === "student" || role === "learner") {
     navigate("/student/dashboard", { replace: true });

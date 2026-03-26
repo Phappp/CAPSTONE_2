@@ -9,8 +9,6 @@ import './StudentDashboard.css';
 import {
   Clock,
   BookOpen,
-  PlayCircle,
-  ChevronRight,
   Search,
   GraduationCap,
   Award,
@@ -20,7 +18,8 @@ import {
   Sparkles,
   Users,
   Layers3,
-  ListChecks
+  ListChecks,
+  ChevronRight
 } from 'lucide-react';
 
 // Types
@@ -200,11 +199,11 @@ export default function StudentDashboard() {
     fetchSuggestedCourses();
   }, []);
 
-  const handleContinueLearning = (courseId: number, slug: string) => {
-    navigate(`/learning/${courseId}/${slug}`);
+  const openLearningHub = (courseId: number, slug: string) => {
+    navigate(`/my-courses/${courseId}/${slug}`);
   };
 
-  const handleViewDetails = (courseId: number, slug: string) => {
+  const openCoursePublicDetail = (slug: string) => {
     navigate(`/courses/${slug}`);
   };
 
@@ -271,8 +270,6 @@ export default function StudentDashboard() {
       <div className="studentDash__container studentDash__content">
         {/* Welcome Section */}
         <div className="studentDash__hero">
-          <h2 className="studentDash__heroTitle">Xin chào, {displayName}</h2>
-          <p className="studentDash__heroDesc">Quản lý và theo dõi tiến độ học tập của bạn</p>
         </div>
 
         {/* Stats Cards */}
@@ -417,7 +414,18 @@ export default function StudentDashboard() {
                   const status = getStatusBadge(course.status);
 
                   return (
-                    <div key={course.id} className="courseCard">
+                    <div
+                      key={course.id}
+                      className="courseCard courseCard--clickable"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openLearningHub(course.course_id, course.course_slug)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        openLearningHub(course.course_id, course.course_slug);
+                      }}
+                      aria-label={`Mở khóa học: ${course.course_title}`}
+                    >
                       {/* Thumbnail */}
                       <div className="courseCard__thumb">
                         {course.course_thumbnail ? (
@@ -480,26 +488,6 @@ export default function StudentDashboard() {
                             <ListChecks size={14} />
                             <span>{toDisplayCount(course.lessons_count)}</span>
                           </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="courseCard__actions">
-                          {course.status === 'active' && (
-                            <button
-                              onClick={() => handleContinueLearning(course.course_id, course.course_slug)}
-                              className="btn btn--primary btn--full"
-                            >
-                              <PlayCircle width={16} height={16} />
-                              Học tiếp
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleViewDetails(course.course_id, course.course_slug)}
-                            className={`btn btn--secondary ${course.status === 'active' ? 'btn--compact' : 'btn--full'}`}
-                          >
-                            Chi tiết
-                            <ChevronRight width={16} height={16} />
-                          </button>
                         </div>
 
                         {/* Completed badge */}
@@ -583,7 +571,18 @@ export default function StudentDashboard() {
                 {visibleSuggested.map((course) => {
                   const level = getLevelBadge(course.level);
                   return (
-                    <div key={course.id} className="courseCard">
+                    <div
+                      key={course.id}
+                      className="courseCard courseCard--clickable"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openCoursePublicDetail(course.slug)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        openCoursePublicDetail(course.slug);
+                      }}
+                      aria-label={`Xem khóa học: ${course.title}`}
+                    >
                       <div className="courseCard__thumb">
                         {course.thumbnail_url ? (
                           <img src={course.thumbnail_url} alt={course.title} />
@@ -611,16 +610,6 @@ export default function StudentDashboard() {
                             <ListChecks size={14} />
                             <span>{toDisplayCount(course.lessons_count)}</span>
                           </div>
-                        </div>
-                        <div className="courseCard__actions">
-                          <button
-                            type="button"
-                            className="btn btn--secondary btn--full"
-                            onClick={() => navigate(`/courses/${course.slug}`)}
-                          >
-                            Chi tiết
-                            <ChevronRight width={16} height={16} />
-                          </button>
                         </div>
                       </div>
                     </div>

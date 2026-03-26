@@ -7,6 +7,7 @@ export type CreateCourseRequest = {
   level?: string | null;
   language?: string | null;
   thumbnail_url?: string | null;
+  publish_scheduled_at?: string | null;
   learning_objectives?: string[] | null;
   prerequisites?: string[] | null;
 };
@@ -58,6 +59,7 @@ export type CourseLessonItem = {
   description: string | null;
   lesson_type: LessonType;
   order_index: number;
+  open_at?: string | null;
   is_free_preview?: boolean;
   duration_minutes?: number | null;
 };
@@ -68,6 +70,7 @@ export type CourseModuleItem = {
   title: string;
   description: string | null;
   order_index: number;
+  open_at?: string | null;
   lessons: CourseLessonItem[];
 };
 
@@ -125,6 +128,7 @@ export type PublishedCourseListItem = {
   lessons_count: number;
   total_duration_minutes?: number | null;
   is_enrolled?: boolean;
+  can_enroll?: boolean;
   instructors: {
     id: number;
     full_name: string;
@@ -156,23 +160,27 @@ export type MyEnrollmentsResult = {
 export type CreateModuleRequest = {
   title: string;
   description?: string | null;
+  open_at?: string | null;
 };
 
 export type UpdateModuleRequest = {
   title?: string;
   description?: string | null;
+  open_at?: string | null;
 };
 
 export type CreateLessonRequest = {
   title: string;
   description?: string | null;
   lesson_type: LessonType;
+  open_at?: string | null;
 };
 
 export type UpdateLessonRequest = {
   title?: string;
   description?: string | null;
   lesson_type?: LessonType;
+  open_at?: string | null;
 };
 
 export type ReorderModulesRequest = {
@@ -204,11 +212,15 @@ export type CourseListItem = {
   title: string;
   slug: string;
   short_description: string | null;
+  full_description?: string | null;
   thumbnail_url: string | null;
   level: string;
   language: string;
+  learning_objectives?: string[] | null;
+  prerequisites?: string[] | null;
   status: CourseStatus;
   published_at: string | null;
+  publish_scheduled_at?: string | null;
   created_at: string;
   updated_at: string;
   learners_count: number;
@@ -246,24 +258,139 @@ export type EnrollmentResult = {
   progress_percent: number;
 };
 
+export type CourseProgressResult = {
+  course_id: number;
+  total_lessons: number;
+  completed_lessons: number;
+  progress_percent: number;
+  completed_lesson_ids: number[];
+  unlocked_lesson_ids: number[];
+  next_locked_lesson_id: number | null;
+};
+
+export type LessonHeartbeatResult = {
+  lesson_id: number;
+  time_spent_seconds: number;
+  required_seconds: number;
+  can_complete: boolean;
+  progress_percent: number;
+};
+
+export type LessonCompleteResult = {
+  lesson_id: number;
+  completed: boolean;
+  progress_percent: number;
+};
+
+export type CourseCompletionRules = {
+  course_id: number;
+  video_min_seconds: number;
+  video_min_percent: number;
+  text_min_seconds: number;
+};
+
+export type UpdateCourseCompletionRulesRequest = Partial<Omit<CourseCompletionRules, 'course_id'>>;
+
+export type CourseLearnerProgressItem = {
+  rank: number;
+  user_id: number;
+  full_name: string;
+  email: string;
+  avatar_url: string | null;
+  status: EnrollmentStatus;
+  enrolled_at: string;
+  last_accessed_at: string | null;
+  completed_at: string | null;
+  progress_percent: number;
+  completed_lessons: number;
+  time_spent_seconds: number;
+};
+
+export type CourseLearnerProgressResult = {
+  course_id: number;
+  total_lessons: number;
+  items: CourseLearnerProgressItem[];
+  page: number;
+  page_size: number;
+  total: number;
+};
+
+export type CourseLeaderboardItem = {
+  rank: number;
+  user_id: number;
+  full_name: string;
+  avatar_url: string | null;
+  progress_percent: number;
+  completed_lessons: number;
+  time_spent_seconds: number;
+  is_me?: boolean;
+};
+
+export type CourseLeaderboardResult = {
+  course_id: number;
+  total_lessons: number;
+  items: CourseLeaderboardItem[];
+  top_limit: number;
+  includes_me: boolean;
+};
+
+export type CoursePrerequisiteOption = {
+  id: number;
+  title: string;
+  slug: string;
+  selectable: boolean;
+  reason?: string | null;
+};
+
+export type CoursePrerequisiteGraphNode = {
+  id: number;
+  title: string;
+  slug: string;
+  thumbnail_url: string | null;
+  level: string;
+  is_current: boolean;
+  is_completed: boolean;
+};
+
+export type CoursePrerequisiteGraphEdge = {
+  from_course_id: number;
+  to_course_id: number;
+};
+
+export type CoursePrerequisiteGraph = {
+  root_course_id: number;
+  nodes: CoursePrerequisiteGraphNode[];
+  edges: CoursePrerequisiteGraphEdge[];
+};
+
 export interface CourseService {
   // Public methods
   listPublishedCourses(subjectUserId: number | undefined, query: PublishedCourseListQuery): Promise<PublishedCourseListResult>;
   getPublishedCourseBySlug(subjectUserId: number | undefined, slug: string): Promise<CourseDetail>;
+  getPublishedCoursePrerequisiteGraphBySlug(subjectUserId: number | undefined, slug: string): Promise<CoursePrerequisiteGraph>;
 
   // Enrollment methods
   enrollCourse(subjectUserId: number, courseId: number): Promise<EnrollmentResult>;
   listMyEnrollments(subjectUserId: number, query: MyEnrollmentsQuery): Promise<MyEnrollmentsResult>;
   getMyLearningCourse(subjectUserId: number, courseId: number): Promise<CourseDetail>;
+  getMyCourseProgress(subjectUserId: number, courseId: number): Promise<CourseProgressResult>;
+  addLessonProgressHeartbeat(subjectUserId: number, courseId: number, lessonId: number, deltaSeconds: number): Promise<LessonHeartbeatResult>;
+  completeLesson(subjectUserId: number, courseId: number, lessonId: number): Promise<LessonCompleteResult>;
 
   // Instructor methods
   createCourse(subjectUserId: number, request: CreateCourseRequest): Promise<{ id: number }>;
   listMyCourses(subjectUserId: number, query: CourseListQuery): Promise<CourseListResult>;
   getMyCourseDashboardStats(subjectUserId: number): Promise<CourseDashboardStats>;
   getMyCourseDetail(subjectUserId: number, courseId: number): Promise<CourseListItem>;
+  getMyCoursePrerequisiteGraph(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteGraph>;
+  listMyCoursePrerequisiteOptions(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteOption[]>;
   updateMyCourse(subjectUserId: number, courseId: number, request: UpdateCourseRequest): Promise<void>;
   setMyCourseStatus(subjectUserId: number, courseId: number, status: CourseStatus): Promise<void>;
   softDeleteMyCourse(subjectUserId: number, courseId: number): Promise<void>;
+  getMyCourseCompletionRules(subjectUserId: number, courseId: number): Promise<CourseCompletionRules>;
+  updateMyCourseCompletionRules(subjectUserId: number, courseId: number, request: UpdateCourseCompletionRulesRequest): Promise<CourseCompletionRules>;
+  listMyCourseLearnerProgress(subjectUserId: number, courseId: number, query: { page?: number; page_size?: number; q?: string }): Promise<CourseLearnerProgressResult>;
+  getCourseLeaderboard(subjectUserId: number, courseId: number): Promise<CourseLeaderboardResult>;
 
   getMyCourseContentTree(subjectUserId: number, courseId: number): Promise<CourseContentTree>;
   createModule(subjectUserId: number, courseId: number, request: CreateModuleRequest): Promise<{ id: number }>;

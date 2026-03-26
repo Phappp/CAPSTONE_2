@@ -7,10 +7,21 @@ export const COURSES_API = {
   myStats: `${COURSES_API_BASE}/my/stats`,
   myList: `${COURSES_API_BASE}/my`,
   detail: (id: number | string) => `${COURSES_API_BASE}/${id}`,
+  prerequisiteGraph: (id: number | string) => `${COURSES_API_BASE}/${id}/prerequisite-graph`,
+  prerequisiteOptions: (id: number | string) => `${COURSES_API_BASE}/${id}/prerequisite-options`,
   update: (id: number | string) => `${COURSES_API_BASE}/${id}`,
   setStatus: (id: number | string) => `${COURSES_API_BASE}/${id}/status`,
   softDelete: (id: number | string) => `${COURSES_API_BASE}/${id}`,
   contentTree: (id: number | string) => `${COURSES_API_BASE}/${id}/content`,
+  // Learner view (must be enrolled)
+  learning: (id: number | string) => `${COURSES_API_BASE}/${id}/learning`,
+  progress: (id: number | string) => `${COURSES_API_BASE}/${id}/progress`,
+  leaderboard: (id: number | string) => `${COURSES_API_BASE}/${id}/leaderboard`,
+  lessonHeartbeat: (id: number | string, lessonId: number | string) => `${COURSES_API_BASE}/${id}/lessons/${lessonId}/progress`,
+  completeLesson: (id: number | string, lessonId: number | string) => `${COURSES_API_BASE}/${id}/lessons/${lessonId}/complete`,
+  // Course manager: completion rules + learner tracking
+  completionRules: (id: number | string) => `${COURSES_API_BASE}/${id}/completion-rules`,
+  learnersProgress: (id: number | string) => `${COURSES_API_BASE}/${id}/learners/progress`,
   reorderContent: (id: number | string) => `${COURSES_API_BASE}/${id}/content/reorder`,
   createModule: (id: number | string) => `${COURSES_API_BASE}/${id}/modules`,
   updateModule: (id: number | string, moduleId: number | string) =>
@@ -41,6 +52,7 @@ export const COURSES_API = {
    // NEW: Catalog & Enrollment endpoints
   catalog: `${COURSES_API_BASE}/catalog`,
   catalogDetail: (slug: string) => `${COURSES_API_BASE}/catalog/${slug}`,
+  catalogPrerequisiteGraph: (slug: string) => `${COURSES_API_BASE}/catalog/${slug}/prerequisite-graph`,
   enroll: (id: number | string) => `${COURSES_API_BASE}/${id}/enroll`,
   enrollmentStatus: (id: number | string) => `${COURSES_API_BASE}/${id}/enrollment-status`,
   myEnrollments: `${COURSES_API_BASE}/my-enrollments`,

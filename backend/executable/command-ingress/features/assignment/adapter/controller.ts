@@ -41,4 +41,48 @@ export class AssignmentController extends BaseController {
       });
     });
   }
+
+  async uploadAssignmentAttachments(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const lessonId = Number(req.params.lessonId);
+      const assignmentId = Number(req.params.assignmentId);
+
+      const files = ((req as any)?.files ?? []) as any[];
+      if (!Array.isArray(files) || files.length === 0) {
+        res.status(400).json({ message: 'Vui lòng chọn file để upload.' });
+        return;
+      }
+
+      const attachments = await this.service.uploadAssignmentAttachments(uid, lessonId, assignmentId, files);
+
+      res.status(201).json({
+        success: true,
+        message: 'Upload đính kèm thành công!',
+        data: { assignment_id: assignmentId, attachments },
+      });
+    });
+  }
+
+  async getAssignmentPreview(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const lessonId = Number(req.params.lessonId);
+      const assignmentId = Number(req.params.assignmentId);
+
+      const preview = await this.service.getAssignmentPreview(uid, lessonId, assignmentId);
+      res.status(200).json(preview);
+    });
+  }
+
+  async updateAssignment(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const lessonId = Number(req.params.lessonId);
+      const assignmentId = Number(req.params.assignmentId);
+
+      await this.service.updateAssignment(uid, lessonId, assignmentId, req.body);
+      res.sendStatus(204);
+    });
+  }
 }

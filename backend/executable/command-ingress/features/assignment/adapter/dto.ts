@@ -35,6 +35,6 @@ export class CreateAssignmentBody extends RequestDto implements CreateAssignment
         this.max_resubmissions = body?.max_resubmissions != null ? Number(body.max_resubmissions) : 1;
         this.allowed_formats = Array.isArray(body?.allowed_formats)
         ? body.allowed_formats
-        : ['pdf', 'docx', 'doc', 'jpg', 'jpeg', 'png', 'zip', 'rar', '7z'];
+        : ['pdf', 'docx', 'doc', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'zip', 'rar', '7z'];
         }
 }

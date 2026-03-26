@@ -1,0 +1,56 @@
+.prereqGraphDiagram {
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.prereqGraphDiagram__svg {
+  display: block;
+  min-width: 100%;
+}
+
+.prereqGraphDiagram__edge {
+  fill: none;
+  stroke: #94a3b8;
+  stroke-width: 1.6;
+}
+
+.prereqGraphDiagram__nodeGroup {
+  cursor: pointer;
+}
+
+.prereqGraphDiagram__nodeRect {
+  fill: #f8fafc;
+  stroke: #cbd5e1;
+  stroke-width: 1.2;
+}
+
+.prereqGraphDiagram__nodeGroup.isCurrent .prereqGraphDiagram__nodeRect {
+  fill: #eff6ff;
+  stroke: #60a5fa;
+}
+
+.prereqGraphDiagram__nodeTitle {
+  fill: #0f172a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.prereqGraphDiagram__nodeStatus {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.prereqGraphDiagram__nodeStatus.done {
+  fill: #15803d;
+}
+
+.prereqGraphDiagram__nodeStatus.pending {
+  fill: #b91c1c;
+}
+
+.prereqGraph__empty {
+  color: #6b7280;
+  font-weight: 700;
+}

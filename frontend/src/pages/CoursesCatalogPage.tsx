@@ -20,6 +20,7 @@ type PublishedCourse = {
   lessons_count: number;
   total_duration_minutes?: number | null;
   is_enrolled?: boolean;
+  can_enroll?: boolean;
 };
 
 type CatalogResponse = {
@@ -118,6 +119,10 @@ export default function CoursesCatalogPage() {
   }, [q, level]);
 
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
+  const visibleItems = useMemo(() => {
+    const items = data?.items || [];
+    return items.filter((c) => !c.is_enrolled);
+  }, [data]);
 
   return (
     <div className="catalog">
@@ -166,7 +171,7 @@ export default function CoursesCatalogPage() {
         {error ? <div className="errorBox">{error}</div> : null}
 
         <div className="catalog__grid">
-          {(data?.items || []).map((c) => {
+          {visibleItems.map((c) => {
             const lb = levelBadge(c.level);
             return (
               <div key={c.id} className="card">
@@ -176,7 +181,6 @@ export default function CoursesCatalogPage() {
                 <div className="card__body">
                   <div style={{ marginBottom: 8 }}>
                     <span className={lb.className}>{lb.label}</span>
-                    {c.is_enrolled ? <span className="badge badge--green">Đã đăng ký</span> : null}
                   </div>
                   <h3 className="card__title">{c.title}</h3>
                   <p className="card__desc">{c.short_description || "—"}</p>
@@ -194,17 +198,28 @@ export default function CoursesCatalogPage() {
                       type="button"
                       className="btn btn--primary"
                       onClick={() => enroll(c.id)}
-                      disabled={loading || !!c.is_enrolled}
-                      title={c.is_enrolled ? "Bạn đã đăng ký" : "Đăng ký khóa học"}
+                      disabled={loading || c.can_enroll === false}
+                      title="Đăng ký khóa học"
                     >
-                      Đăng ký
+                      {c.can_enroll === false ? "Chưa đủ điều kiện" : "Đăng ký"}
                     </button>
                   </div>
+                  {c.can_enroll === false ? (
+                    <div style={{ marginTop: 8, color: "#b91c1c", fontWeight: 700, fontSize: 13 }}>
+                      Cần hoàn tất khóa tiên quyết trước khi đăng ký.
+                    </div>
+                  ) : null}
                 </div>
               </div>
             );
           })}
         </div>
+
+        {!loading && !error && visibleItems.length === 0 ? (
+          <div className="errorBox" style={{ background: "#fff", borderColor: "#e5e7eb", color: "#374151" }}>
+            Không có khóa học mới để đăng ký (các khóa học trong danh sách này bạn đã đăng ký hết).
+          </div>
+        ) : null}
 
         <div className="catalog__footerRow">
           <div className="muted">

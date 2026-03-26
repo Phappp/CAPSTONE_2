@@ -10,6 +10,11 @@
  * - require_all_assignments: bắt buộc hoàn thành tất cả assignment
  * - min_quiz_score: (nullable) điểm quiz tối thiểu để tính hoàn thành
  * - require_final_exam: có yêu cầu bài thi cuối khóa không
+ *
+ * Time-based learning rules (per course):
+ * - video_min_seconds: tối thiểu xem video (giây)
+ * - video_min_percent: tối thiểu % thời lượng video (0..1) nếu có duration_minutes
+ * - text_min_seconds: tối thiểu đọc bài text (giây)
  */
 import {
     Entity,
@@ -53,4 +58,16 @@ export default class CourseCompletionRequirement {
     @Column({ type: 'boolean', default: false })
     /** True nếu yêu cầu final exam để hoàn thành course. */
     require_final_exam: boolean;
+
+    @Column({ type: 'int', default: 60 })
+    /** Tối thiểu xem video (giây) để tính hoàn thành lesson video. */
+    video_min_seconds: number;
+
+    @Column({ type: 'decimal', precision: 5, scale: 2, default: 0.7 })
+    /** Tối thiểu % thời lượng video (0..1) để tính hoàn thành (nếu lesson có duration). */
+    video_min_percent: number;
+
+    @Column({ type: 'int', default: 30 })
+    /** Tối thiểu đọc bài text (giây) để tính hoàn thành lesson text. */
+    text_min_seconds: number;
 }

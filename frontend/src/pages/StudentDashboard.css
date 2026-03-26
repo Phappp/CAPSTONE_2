@@ -324,6 +324,15 @@
   transition: box-shadow 0.2s ease;
 }
 
+.courseCard--clickable {
+  cursor: pointer;
+}
+
+.courseCard--clickable:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 3px;
+}
+
 .courseCard:hover {
   box-shadow: 0 10px 25px rgba(15, 23, 42, 0.10);
 }
