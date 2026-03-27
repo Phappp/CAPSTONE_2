@@ -95,6 +95,11 @@ const createHttpServer = (redisClient: any) => {
   // FE uses /api/v1/profile...
   app.use('/api/v1', createProfileRoutes(profileController));
 
+  // chấm điểm đánh giá
+  const assignmentService = new AssignmentServiceImpl();
+  const assignmentController = new AssignmentController(assignmentService);
+
+  app.use('/api/assignments', initAssignmentRoute(assignmentController));
   return server;
 };
 

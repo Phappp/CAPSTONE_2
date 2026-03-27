@@ -13,6 +13,7 @@ import type {
   CreateAssignmentRequest,
   UploadedAssignmentFile,
   UpdateAssignmentRequest,
+  GradeSubmissionRequest
 } from '../types';
 
 function getFormatFromFileName(fileName: string): AssignmentFormat | null {
@@ -369,5 +370,134 @@ export class AssignmentServiceImpl implements AssignmentService {
       } as any
     );
   }
-}
+
+  async gradeSubmission(data: GradeSubmissionRequest): Promise<void> {
+    await AppDataSource.transaction(async (manager) => {
+        // 1. Cập nhật/Tạo mới feedback
+        await manager.query(`
+            INSERT INTO submission_feedback (submission_id, grader_id, score, feedback_text, graded_at)
+            VALUES (?, ?, ?, ?, NOW())
+            ON DUPLICATE KEY UPDATE 
+                score = VALUES(score), 
+                feedback_text = VALUES(feedback_text), 
+                grader_id = VALUES(grader_id), 
+                graded_at = NOW()
+        `, [data.submissionId, data.graderId, data.score, data.feedbackText]);
+
+        // 2. Cập nhật trạng thái submission
+        await manager.query(`UPDATE submissions SET status = 'graded' WHERE id = ?`, [data.submissionId]);
+
+        // 3. Cập nhật bảng điểm grades
+        await manager.query(`
+            UPDATE grades SET score = ?, graded_at = NOW()
+            WHERE grade_item_id = ? AND user_id = ?
+        `, [data.score, data.gradeItemId, data.userId]);
+
+        // 4. Gửi thông báo
+        await manager.query(`
+            INSERT INTO notifications (user_id, type_id, title, content, data, created_at)
+            VALUES (?, (SELECT id FROM notification_types WHERE name = 'assignment_graded'), ?, ?, ?, NOW())
+        `, [
+            data.userId, 
+            'Bài tập đã được chấm điểm', 
+            `Điểm của bạn: ${data.score}/10`, 
+            JSON.stringify({ score: data.score })
+        ]);
+    });
+  }
+
+  async getMyGradesSummary(studentId: number): Promise<any[]> {
+    const rawData = await AppDataSource.query(`
+        SELECT 
+            c.id as course_id,
+            c.title as course_title,
+            gi.id as item_id,
+            gi.name as item_title,
+            gi.item_type as type,
+            g.score,
+            gi.max_score,
+            g.graded_at,
+            s.created_at as submitted_at
+        FROM courses c
+        JOIN enrollments e ON e.course_id = c.id
+        JOIN grade_items gi ON gi.course_id = c.id
+        LEFT JOIN submissions s ON s.assignment_id = gi.item_id AND s.user_id = e.user_id
+        LEFT JOIN grades g ON g.grade_item_id = gi.id AND g.user_id = e.user_id
+        WHERE e.user_id = ? AND c.deleted_at IS NULL
+    `, [studentId]);
+
+    return this.formatGradesSummary(rawData);
+  }
+
+  private formatGradesSummary(rawData: any[]): any[] {
+    const map = new Map<number, any>();
+    for (const row of rawData) {
+        if (!map.has(row.course_id)) {
+            map.set(row.course_id, {
+                course_id: row.course_id,
+                course_title: row.course_title,
+                average_score: 0,
+                items: []
+            });
+        }
+        const course = map.get(row.course_id)!;
+        course.items.push({
+            id: row.item_id,
+            name: row.item_title,
+            type: row.type,
+            score: row.score !== null ? Number(row.score) : null,
+            max_score: Number(row.max_score),
+            percentage: row.score !== null ? (Number(row.score) / Number(row.max_score)) * 100 : 0,
+            submitted_at: row.submitted_at,
+            graded_at: row.graded_at
+        });
+    }
+    map.forEach(course => {
+      const gradedItems = course.items.filter(i => i.score !== null);
+      if (gradedItems.length > 0) {
+          // 1. Tính điểm trung bình (hệ 10)
+          const total = gradedItems.reduce((sum, i) => sum + (i.score! / i.max_score) * 10, 0);
+          course.average_score = Math.round((total / gradedItems.length) * 10) / 10;
+          
+          // 2. Logic Xếp loại học lực
+          let rank = 'Yếu';
+          if (course.average_score >= 9.0) rank = 'Xuất sắc';
+          else if (course.average_score >= 8.0) rank = 'Giỏi';
+          else if (course.average_score >= 6.5) rank = 'Khá';
+          else if (course.average_score >= 5.0) rank = 'Trung bình';
+          
+          (course as any).rank = rank; 
+
+          // 3. Logic Trạng thái Đạt (✅)
+          (course as any).is_passed = course.average_score >= 5.0; 
+      }
+    });
+    return Array.from(map.values());
+  }
+
+  async getMyAssignmentGradeDetail(studentId: number, assignmentId: number): Promise<any> {
+    const data = await AppDataSource.query(`
+        SELECT 
+            a.title, a.description, a.due_date, a.max_score,
+            s.id as submission_id, s.status, s.created_at as submitted_at,
+            sf.score, sf.feedback_text, sf.graded_at
+        FROM assignments a
+        LEFT JOIN submissions s ON s.assignment_id = a.id AND s.user_id = ?
+        LEFT JOIN submission_feedback sf ON sf.submission_id = s.id
+        WHERE a.id = ?
+        ORDER BY s.created_at DESC LIMIT 1
+    `, [studentId, assignmentId]);
+
+    if (!data.length) throw new Error('Không tìm thấy thông tin bài tập!');
+    return data[0];
+  }
+
+  async createGradeAppeal(studentId: number, submissionId: number, content: string): Promise<void> {
+    // Logic lưu khiếu nại vào bảng submission_appeals và gửi thông báo cho giảng viên
+    await AppDataSource.query(`
+        INSERT INTO submission_appeals (submission_id, user_id, content, created_at)
+        VALUES (?, ?, ?, NOW())
+    `, [submissionId, studentId, content]);
+  }
+} 
 

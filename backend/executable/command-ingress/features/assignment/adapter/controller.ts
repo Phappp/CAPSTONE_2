@@ -83,6 +83,67 @@ export class AssignmentController extends BaseController {
 
       await this.service.updateAssignment(uid, lessonId, assignmentId, req.body);
       res.sendStatus(204);
+    })
+  }
+  
+  async gradeSubmission(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+        const graderId = Number(req.getSubject()); // Lấy ID giảng viên từ token
+        const { submissionId, gradeItemId, userId, score, feedbackText } = req.body;
+
+        await this.service.gradeSubmission({
+            submissionId,
+            gradeItemId,
+            userId,
+            score,
+            feedbackText,
+            graderId
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'Chấm điểm và gửi thông báo thành công!'
+        });
+    });
+  }
+  async getMyGrades(req: HttpRequest, res: Response, next: NextFunction) {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+        const studentId = Number(req.getSubject());
+        const data = await this.service.getMyGradesSummary(studentId);
+        
+        res.status(200).json({
+            success: true,
+            data: { grades_summary: data }
+        });
+    });
+  }
+
+  async getMyAssignmentGradeDetail(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const studentId = Number(req.getSubject());
+      const assignmentId = Number(req.params.assignmentId);
+
+      const detail = await this.service.getMyAssignmentGradeDetail(studentId, assignmentId);
+      res.status(200).json({
+        success: true,
+        data: detail
+      });
+    });
+  }
+
+  async sendGradeAppeal(req: HttpRequest, res: Response, next: NextFunction) {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+        const studentId = Number(req.getSubject());
+        const submissionId = Number(req.params.submissionId);
+        const { content } = req.body; // Nội dung khiếu nại
+
+        // Gọi service lưu vào DB
+        await this.service.createGradeAppeal(studentId, submissionId, content);
+
+        res.status(201).json({ 
+            success: true, 
+            message: 'Đã gửi khiếu nại thành công cho giảng viên!' 
+        });
     });
   }
 }

@@ -44,7 +44,29 @@ const initAssignmentRoute: (controller: AssignmentController) => express.Router 
   // mount submission routes
   router.use('/assignments/:assignmentId/submissions', initSubmissionRoute(submissionController));
 
+  // Route cho xem điểm và phản hồi
+  router.route('/my/grades').get(
+    requireAuthorizedUser, 
+    controller.getMyGrades.bind(controller)
+  );
+
+  // Lấy chi tiết bài tập 
+  router.route('/:assignmentId/my-grade').get(requireAuthorizedUser, controller.getMyAssignmentGradeDetail.bind(controller));
+
+  // Route gửi khiếu nại (Appeal)
+  router.route('/assignments/submissions/:submissionId/appeals').post(
+    requireAuthorizedUser,
+    controller.sendGradeAppeal.bind(controller)
+  );
+  router.route('/assignments/:assignmentId/my-grade').get(
+    requireAuthorizedUser, 
+    controller.getMyAssignmentGradeDetail.bind(controller)
+  );
+  // Route cho chấm điểm
+  router.route('/submissions/:submissionId/grade').post(requireAuthorizedUser, controller.gradeSubmission.bind(controller));
   return router;
+
+  
 };
 
 export default initAssignmentRoute;
