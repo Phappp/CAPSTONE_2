@@ -27,6 +27,9 @@ import { MysqlProfileRepository } from './features/profiles/domain/repository';
 import { createProfileRoutes } from './features/profiles/adapter/route';
 import { uploadBufferToCloudinary, isCloudinaryEnabled } from './lib/cloudinary';
 
+import initQuestionBankRoute from './features/question-bank/adapter/route';
+
+
 const app = express();
 
 const createHttpServer = (redisClient: any) => {
@@ -59,7 +62,7 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/auth', initAuthRoute(new AuthController(authService)));
   app.use('/api/v1/courses', initCourseRoute(new CourseController(new CourseServiceImpl())));
   app.use('/api/v1', initAssignmentRoute(new AssignmentController(new AssignmentServiceImpl())));
-
+  app.use('/api/v1/question-banks', initQuestionBankRoute());
   app.use(recoverMiddleware);
 
   // app.use('/search', searchRouter);
