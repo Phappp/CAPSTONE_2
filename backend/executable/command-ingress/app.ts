@@ -20,6 +20,7 @@ import { CourseServiceImpl } from './features/course/domain/service';
 import initAssignmentRoute from './features/assignment/adapter/route';
 import { AssignmentController } from './features/assignment/adapter/controller';
 import { AssignmentServiceImpl } from './features/assignment/domain/service';
+import { createQuizRouter, createQuizByIdRouter, createQuizAttemptRouter } from './features/quiz/adapter/route';
 
 import { ProfileController } from './features/profiles/adapter/controller';
 import { ProfileService } from './features/profiles/domain/services';
@@ -59,6 +60,9 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/auth', initAuthRoute(new AuthController(authService)));
   app.use('/api/v1/courses', initCourseRoute(new CourseController(new CourseServiceImpl())));
   app.use('/api/v1', initAssignmentRoute(new AssignmentController(new AssignmentServiceImpl())));
+  app.use('/api/v1/lessons/:lessonId/quizzes', createQuizRouter());
+  app.use('/api/v1/quizzes', createQuizByIdRouter());
+  app.use('/api/v1/quiz-attempts', createQuizAttemptRouter());
 
   app.use(recoverMiddleware);
 

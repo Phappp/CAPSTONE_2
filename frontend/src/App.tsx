@@ -14,6 +14,9 @@ import ProfilePage from "./pages/ProfilePage";
 import LearningPage from "./pages/LearningPage";
 import LearnerCourseHubPage from "./pages/LearnerCourseHubPage";
 import LearningModuleLessonsPage from "./pages/LearningModuleLessonsPage";
+import CreateAssessmentPage from "./pages/CreateAssessmentPage";
+import StudentQuizPage from "./pages/StudentQuizPage";
+import StudentQuizAttemptPage from "./pages/StudentQuizAttemptPage";
 import Authentication from "./router/Authentication";
 
 export default function App() {
@@ -113,6 +116,36 @@ export default function App() {
           </Authentication>
         }
       />
+
+      //tran an thuyen task
+         
+      <Route
+        path="/teacher/courses/:courseId/lessons/:lessonId/assessment/new"
+        element={
+          <Authentication>
+            <CreateAssessmentPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/quizzes/:quizId"
+        element={
+          <Authentication>
+            <StudentQuizPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/quizzes/:quizId/attempts/:attemptId"
+        element={
+          <Authentication>
+            <StudentQuizAttemptPage />
+          </Authentication>
+        }
+      />
+
+      //
+
       <Route
         path="/admin"
         element={

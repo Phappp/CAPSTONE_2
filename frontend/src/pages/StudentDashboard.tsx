@@ -87,6 +87,7 @@ export default function StudentDashboard() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [quizIdToJoin, setQuizIdToJoin] = useState('');
 
   // States cho thống kê
   const [stats, setStats] = useState<Stats>({
@@ -270,6 +271,28 @@ export default function StudentDashboard() {
       <div className="studentDash__container studentDash__content">
         {/* Welcome Section */}
         <div className="studentDash__hero">
+        </div>
+
+        {/* Student quiz quick entry */}
+        <div className="studentDash__quizEntry" style={{ marginBottom: 20, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            type="text"
+            className="input"
+            placeholder="Nhập ID bài kiểm tra"
+            value={quizIdToJoin}
+            onChange={(e) => setQuizIdToJoin(e.target.value)}
+            style={{ width: 200 }}
+          />
+          <button
+            className="btn btn--primary"
+            onClick={() => {
+              if (quizIdToJoin.trim()) {
+                navigate(`/quizzes/${quizIdToJoin.trim()}`);
+              }
+            }}
+          >
+            Mở quiz
+          </button>
         </div>
 
         {/* Stats Cards */}

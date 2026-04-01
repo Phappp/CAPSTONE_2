@@ -16,7 +16,7 @@ export type AssignmentAttachment = {
     file_path: string;
 };
 
-export type AssignmentAttachmentPreview = AssignmentAtachment & {
+export type AssignmentAttachmentPreview = AssignmentAttachment & {
   signed_url: string;
 };
 
@@ -44,7 +44,7 @@ export type UploadedAssignmentFile = {
 export type UpdateAssignmentRequest = Partial<{
   title: string;
   description: string | null;
-  attachments?: AssignmentAtachment[] | null;
+  attachments?: AssignmentAttachment[] | null;
   max_score: number;
   passing_score?: number | null;
   due_date: string;
