@@ -98,4 +98,12 @@ export default class User {
     /** Lưu mã OTP 6 số tạm thời để xác thực 2FA. */
     @Column({ name: 'temp_otp', type: 'varchar', length: 10, nullable: true })
     temp_otp: string | null;
+
+    /** Token một lần cho luồng quên mật khẩu. */
+    @Column({ name: 'password_reset_token', type: 'varchar', length: 255, nullable: true })
+    password_reset_token: string | null;
+
+    /** Hạn dùng token quên mật khẩu. */
+    @Column({ name: 'password_reset_expires_at', type: 'datetime', nullable: true })
+    password_reset_expires_at: Date | null;
 }

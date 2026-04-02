@@ -168,6 +168,16 @@ select {
   margin-bottom: 0.75rem;
 }
 
+.success-box {
+  font-size: 0.85rem;
+  color: #1b6e3a;
+  background: #edf9f0;
+  border: 1px solid rgba(27, 110, 58, 0.25);
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
 .primary-button {
   width: 100%;
   display: inline-flex;

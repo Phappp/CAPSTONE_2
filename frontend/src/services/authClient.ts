@@ -30,6 +30,39 @@ export type GoogleAuthUrlResponse = {
   url: string;
 };
 
+export async function apiForgotPassword(params: { email: string }): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${AUTH_API.forgotPassword}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.message || data?.code || "FORGOT_PASSWORD_FAILED");
+  }
+}
+
+export async function apiResetPassword(params: {
+  token: string;
+  new_password: string;
+}): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${AUTH_API.resetPassword}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.message || data?.code || "RESET_PASSWORD_FAILED");
+  }
+}
+
 // Đăng ký tài khoản
 export async function apiRegister(params: {
   email: string;

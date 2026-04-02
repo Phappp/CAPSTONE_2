@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import {
   AuthService,
   ExchangeTokenResult,
@@ -277,6 +278,54 @@ export class AuthServiceImpl implements AuthService {
       ...tokens,
       user: authUser,
     };
+  }
+
+  async requestPasswordReset(request: { email: string }): Promise<void> {
+    const userRepository = AppDataSource.getRepository(User);
+    const user = await userRepository.findOne({ where: { email: request.email } });
+
+    if (!user || !user.is_active) {
+      // Trả lỗi rõ ràng theo yêu cầu UI (để người dùng biết email chưa có tài khoản).
+      throw new Error("Email không tồn tại. Vui lòng đăng ký tài khoản.");
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    user.password_reset_token = token;
+    user.password_reset_expires_at = expiresAt;
+    await userRepository.save(user);
+
+    try {
+      const { sendPasswordResetEmail } = await import('../../../../../lib/email/service');
+      const clientBaseUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+      const resetLink = `${clientBaseUrl}/reset-password?token=${encodeURIComponent(token)}`;
+      await sendPasswordResetEmail(user.email, resetLink);
+    } catch (e) {
+      console.log('Send password reset email error:', e);
+    }
+  }
+
+  async resetPassword(request: { token: string; newPassword: string }): Promise<void> {
+    const userRepository = AppDataSource.getRepository(User);
+    const user = await userRepository.findOne({
+      where: { password_reset_token: request.token },
+    });
+
+    if (!user || !user.password_reset_expires_at || user.password_reset_expires_at < new Date()) {
+      throw new Error('Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(request.newPassword, salt);
+    user.password_hash = passwordHash;
+
+    // Xóa token dùng một lần sau khi đã đổi mật khẩu.
+    user.password_reset_token = null;
+    user.password_reset_expires_at = null;
+    user.failed_login_attempts = 0;
+    user.locked_until = null;
+    await userRepository.save(user);
   }
 
   // Đăng nhập bằng email/mật khẩu

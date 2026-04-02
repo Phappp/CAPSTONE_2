@@ -180,7 +180,7 @@ export default function LoginPage() {
               type="button"
               className="link-button"
               onClick={() => {
-                alert("Chức năng quên mật khẩu sẽ được triển khai sau.");
+                navigate("/forgot-password");
               }}
             >
               Quên mật khẩu?

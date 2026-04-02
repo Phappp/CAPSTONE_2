@@ -71,6 +71,34 @@ export class VerifyOtpRequestBody extends RequestDto {
   }
 }
 
+export class RequestPasswordResetBody extends RequestDto {
+  @IsEmail()
+  email: string;
+
+  constructor(body: any) {
+    super();
+    if (body) {
+      this.email = String(body.email || '');
+    }
+  }
+}
+
+export class ResetPasswordBody extends RequestDto {
+  @Length(1, 255)
+  token: string;
+
+  @MinLength(6)
+  newPassword: string;
+
+  constructor(body: any) {
+    super();
+    if (body) {
+      this.token = String(body.token || '');
+      this.newPassword = String(body.new_password || body.newPassword || '');
+    }
+  }
+}
+
 export class LogoutRequestBody extends RequestDto {
   constructor(body: any) {
     super();

@@ -6,7 +6,9 @@ import {
   LogoutRequestBody,
   RefreshTokenRequestBody,
   LoginRequestBody,
+  RequestPasswordResetBody,
   RegisterRequestBody,
+  ResetPasswordBody,
   VerifyOtpRequestBody,
 } from './dto';
 import { BaseController } from '../../../shared/base-controller';
@@ -97,6 +99,45 @@ class AuthController extends BaseController {
         access_token: result.accessToken,
         refresh_token: result.refreshToken,
         user: result.user,
+      });
+    });
+  }
+
+  async requestPasswordReset(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res, _next) => {
+      const body = new RequestPasswordResetBody(req.body);
+      const validateResult = await body.validate();
+      if (!validateResult.ok) {
+        responseValidationError(res, validateResult.errors[0]);
+        return;
+      }
+
+      await this.authService.requestPasswordReset({
+        email: body.email,
+      });
+
+      res.status(200).json({
+        message: 'Liên kết đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra email.',
+      });
+    });
+  }
+
+  async resetPassword(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res, _next) => {
+      const body = new ResetPasswordBody(req.body);
+      const validateResult = await body.validate();
+      if (!validateResult.ok) {
+        responseValidationError(res, validateResult.errors[0]);
+        return;
+      }
+
+      await this.authService.resetPassword({
+        token: body.token,
+        newPassword: body.newPassword,
+      });
+
+      res.status(200).json({
+        message: 'Đặt lại mật khẩu thành công.',
       });
     });
   }
