@@ -445,29 +445,6 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     clearAuth,
   };
 
-function redirectByRole(
-  user: AuthUser | null,
-  navigate: ReturnType<typeof useNavigate>
-) {
-  const roles = [user?.primary_role, ...(user?.roles ?? [])]
-    .filter(Boolean)
-    .map((r) => String(r).toLowerCase());
-
-  // Hỗ trợ cả tên role cũ (student/teacher) và mới (learner/course_manager)
-  if (roles.includes("student") || roles.includes("learner")) {
-    navigate("/student/dashboard", { replace: true });
-    return;
-  }
-  if (roles.includes("teacher") || roles.includes("course_manager")) {
-    navigate("/teacher/dashboard", { replace: true });
-    return;
-  }
-  if (roles.includes("admin")) {
-    navigate("/admin", { replace: true });
-    return;
-  }
-  // Mặc định: học viên
-  navigate("/student/dashboard", { replace: true });
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
