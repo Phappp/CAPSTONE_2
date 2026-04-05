@@ -8,6 +8,7 @@ const env = cleanEnv(process.env, {
   DATABASE_USER: str(),
   DATABASE_PASSWORD: str(),
   DATABASE_NAME: str(),
+  DATABASE_SYNC: bool({ default: false }),
   JWT_SECRET: str(),
   JWT_REFRESH_SECRET: str(),
   DEV: bool(),

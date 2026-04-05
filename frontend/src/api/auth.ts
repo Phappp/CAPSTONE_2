@@ -9,4 +9,6 @@ export const AUTH_API = {
   logout: `${AUTH_API_BASE}/logout`,
   refreshToken: `${AUTH_API_BASE}/token`,
   googleOAuth: `${AUTH_API_BASE}/google/oauth`,
+  googleAuthUrl: `${AUTH_API_BASE}/google/url`, // Thêm endpoint lấy URL Google OAuth
+  verify2FA: `${AUTH_API_BASE}/verify-2fa`,
 } as const;

@@ -32,7 +32,7 @@ export default class BankQuestionOption {
     /** FK -> `bank_questions.id`: câu hỏi cha. */
     question_id: number;
 
-    @ManyToOne(() => BankQuestion)
+    @ManyToOne(() => BankQuestion, (question) => question.options)
     @JoinColumn({ name: 'question_id' })
     /** Quan hệ đến bank question. */
     question: BankQuestion;

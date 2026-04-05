@@ -83,4 +83,19 @@ export default class User {
     @Column({ type: 'datetime', nullable: true })
     /** Soft delete timestamp (nullable). */
     deleted_at: Date;
+    /** Trạng thái bật/tắt xác thực 2 lớp. */
+    @Column({ name: 'is_2fa_enabled', type: 'tinyint', default: 0 })
+    is_2fa_enabled: boolean;
+
+    /** Trạng thái bật/tắt thông báo khi có đăng nhập mới. */
+    @Column({ name: 'notify_new_login', type: 'tinyint', default: 1 })
+    notify_new_login: boolean;
+
+    /** Cột hỗ trợ tính năng Tin cậy thiết bị (Trusted Device). */
+    @Column({ name: 'is_trusted_device', type: 'tinyint', default: 0 })
+    is_trusted_device: boolean;
+
+    /** Lưu mã OTP 6 số tạm thời để xác thực 2FA. */
+    @Column({ name: 'temp_otp', type: 'varchar', length: 10, nullable: true })
+    temp_otp: string | null;
 }

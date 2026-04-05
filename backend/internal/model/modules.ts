@@ -55,6 +55,10 @@ export default class Module {
     /** True nếu module được publish/hiển thị. */
     is_published: boolean;
 
+    @Column({ type: 'datetime', nullable: true })
+    /** Thời điểm mở module cho learner (nullable => mở ngay). */
+    open_at: Date;
+
     @OneToMany(() => Lesson, lesson => lesson.module)
     /** Danh sách lessons thuộc module. */
     lessons: Lesson[];

@@ -47,6 +47,14 @@ export default class Lesson {
     /** Mô tả bài học (nullable). */
     description: string;
 
+    @Column({
+        type: 'enum',
+        enum: ['video', 'text', 'quiz', 'assignment'],
+        default: 'text'
+    })
+    /** Loại bài học: video/text/quiz/assignment */
+    lesson_type: string;
+
     @Column()
     /** Thứ tự lesson trong module. */
     order_index: number;
@@ -54,6 +62,10 @@ export default class Lesson {
     @Column({ type: 'int', nullable: true })
     /** Thời lượng dự kiến (phút) (nullable). */
     duration_minutes: number;
+
+    @Column({ type: 'datetime', nullable: true })
+    /** Thời điểm mở lesson cho learner (nullable => mở ngay). */
+    open_at: Date;
 
     @Column({ type: 'boolean', default: true })
     /** True nếu lesson được publish/hiển thị. */

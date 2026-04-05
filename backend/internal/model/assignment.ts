@@ -1,3 +1,4 @@
+/* eslint-disable no-trailing-spaces */
 /**
  * Entity: `assignments`
  * Mục đích: Bài tập (assignment) gắn với một lesson.
@@ -7,6 +8,7 @@
  * - title/description/instructions: nội dung bài tập
  * - max_score/passing_score: thang điểm & điểm đạt (nullable)
  * - due_date: hạn nộp (nullable)
+ * - allow_late_submission: cho phép nộp muộn (boolean) 
  * - late_submission_days/late_penalty_percent: chính sách nộp trễ
  * - allow_resubmission/max_resubmissions: cho phép nộp lại
  * - submission_format: cấu hình định dạng nộp (JSON) (nullable)
@@ -73,6 +75,10 @@ export default class Assignment {
     /** Hạn nộp bài (nullable). */
     due_date: Date;
 
+    @Column({ type: 'boolean', default: false })
+    /** Cho phép nộp muộn (boolean). */
+    allow_late_submission: boolean;
+
     @Column({ type: 'int', default: 0 })
     /** Số ngày cho phép nộp trễ. */
     late_submission_days: number;
@@ -97,6 +103,10 @@ export default class Assignment {
     @Column({ type: 'json', nullable: true })
     /** Cấu hình định dạng nộp bài (JSON) (nullable). */
     submission_format: any;
+
+    @Column({ type:'json',nullable:true })
+    /** Cấu hình đính kèm bài tập (JSON) (nullable). */
+    attachments: any;
 
     @CreateDateColumn()
     /** Thời điểm tạo. */

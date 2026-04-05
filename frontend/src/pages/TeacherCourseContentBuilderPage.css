@@ -1,0 +1,28 @@
+/* TeacherCourseContentBuilderPage.css */
+
+.content-builder-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+    gap: 1rem;
+}
+
+.content-builder-title-section {
+    flex: 1;
+}
+
+.content-builder-card {
+    padding: 1rem;
+}
+
+.content-builder-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.back-button {
+    width: auto;
+}

@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AvatarMenu from "../components/AvatarMenu";
 import { url } from "../baseUrl";
+import { COURSES_API } from "../api/courses";
+import { getAccessToken } from "../utils/authStorage";
+import "./CreateCoursePage.css";
 
 type Level = "beginner" | "intermediate" | "advanced";
 type Language = "vi" | "en";
@@ -20,7 +23,14 @@ interface CreateCoursePayload {
   estimated_hours?: number | null;
   tags: string[];
   thumbnail_url?: string | null;
+  publish_scheduled_at?: string | null;
 }
+
+type CourseOption = {
+  id: number;
+  title: string;
+  slug: string;
+};
 
 const DEFAULT_PAYLOAD: CreateCoursePayload = {
   title: "",
@@ -36,6 +46,7 @@ const DEFAULT_PAYLOAD: CreateCoursePayload = {
   estimated_hours: null,
   tags: [],
   thumbnail_url: null,
+  publish_scheduled_at: null,
 };
 
 export default function CreateCoursePage() {
@@ -44,10 +55,19 @@ export default function CreateCoursePage() {
   const [error, setError] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [payload, setPayload] = useState<CreateCoursePayload>(DEFAULT_PAYLOAD);
+  const [prerequisiteOptions, setPrerequisiteOptions] = useState<CourseOption[]>([]);
 
   const navigate = useNavigate();
 
   const maxStep = 4;
+
+  const selectedPrerequisiteIds = useMemo(() => {
+    return new Set(
+      (payload.prerequisites || [])
+        .map((x) => Number(String(x).trim()))
+        .filter((n) => Number.isInteger(n) && n > 0)
+    );
+  }, [payload.prerequisites]);
 
   const handleBasicChange = (field: keyof CreateCoursePayload, value: any) => {
     setPayload((prev) => ({ ...prev, [field]: value }));
@@ -85,26 +105,77 @@ export default function CreateCoursePage() {
     payload.short_description.trim().length > 0 &&
     payload.short_description.trim().length <= 200;
 
-  const handleImageChange = (file: File | null) => {
+  useEffect(() => {
+    const fetchPrerequisiteOptions = async () => {
+      try {
+        const token = getAccessToken();
+        const params = new URLSearchParams();
+        params.set("page", "1");
+        params.set("page_size", "100");
+        params.set("sort_by", "title");
+        params.set("sort_dir", "asc");
+        const res = await fetch(`${url}${COURSES_API.catalog}?${params.toString()}`, {
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        const data = (await res.json().catch(() => ({}))) as { items?: CourseOption[] };
+        if (!res.ok) return;
+        const items = Array.isArray(data.items) ? data.items : [];
+        setPrerequisiteOptions(items.map((x) => ({ id: Number(x.id), title: String(x.title), slug: String(x.slug) })));
+      } catch {
+        // ignore loading errors for optional field
+      }
+    };
+    void fetchPrerequisiteOptions();
+  }, []);
+
+  const toAbsoluteThumbnailUrl = (input: string): string => {
+    const value = String(input || "").trim();
+    if (!value) return "";
+    if (value.startsWith("http://") || value.startsWith("https://")) return value;
+    return `${url}${value}`;
+  };
+
+  const handleImageChange = async (file: File | null) => {
     if (!file) {
       setImagePreview(null);
       handleBasicChange("thumbnail_url", null);
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImagePreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
-    handleBasicChange("thumbnail_url", file.name);
+
+    try {
+      const token = getAccessToken();
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(`${url}${COURSES_API.uploadCourseThumbnail()}`, {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Upload ảnh thất bại.");
+
+      const imageUrl = data?.url as string | undefined;
+      if (imageUrl) {
+        const absoluteUrl = toAbsoluteThumbnailUrl(imageUrl);
+        setImagePreview(absoluteUrl);
+        handleBasicChange("thumbnail_url", absoluteUrl);
+      }
+    } catch (e: any) {
+      setError(e?.message || "Upload ảnh thất bại.");
+    }
   };
 
   const handleSave = async (publish: boolean) => {
-    // publish = false => lưu tạm (draft), true => tạo khóa học (vẫn draft theo BE)
     setIsSubmitting(true);
     setError(null);
     try {
-      const token = localStorage.getItem("access_token");
+      const token = getAccessToken();
 
       const body: any = {
         title: payload.title,
@@ -125,9 +196,11 @@ export default function CreateCoursePage() {
             ? undefined
             : Number(payload.estimated_hours),
         tags: payload.tags,
+        thumbnail_url: payload.thumbnail_url || null,
+        publish_scheduled_at: payload.publish_scheduled_at ? new Date(payload.publish_scheduled_at).toISOString() : null,
       };
 
-      const res = await fetch(`${url}/api/v1/courses`, {
+      const res = await fetch(`${url}${COURSES_API.createCourse}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -141,10 +214,13 @@ export default function CreateCoursePage() {
         throw new Error(text || "Không thể lưu khóa học.");
       }
 
-      // BE: cần trả về courseId; tạm thời giả định ok và quay về dashboard
-      if (publish) {
-        navigate("/teacher/dashboard");
+      const data = await res.json().catch(() => ({}));
+      const courseId = data?.id;
+      if (!courseId) {
+        throw new Error("Không thể tạo khóa học: thiếu course id trả về từ server.");
       }
+
+      navigate(`/teacher/courses/${courseId}`);
     } catch (e: any) {
       setError(e.message || "Đã xảy ra lỗi.");
     } finally {
@@ -179,9 +255,8 @@ export default function CreateCoursePage() {
           return (
             <div
               key={label}
-              className={`wizard-step ${isActive ? "active" : ""} ${
-                isDone ? "done" : ""
-              }`}
+              className={`wizard-step ${isActive ? "active" : ""} ${isDone ? "done" : ""
+                }`}
             >
               <div className="wizard-step-circle">{current}</div>
               <div className="wizard-step-label">{label}</div>
@@ -196,7 +271,7 @@ export default function CreateCoursePage() {
     <>
       <div className="form-group">
         <label className="form-label">
-          Tên khóa học <span style={{ color: "#e11d48" }}>*</span>
+          Tên khóa học <span className="required-star">*</span>
         </label>
         <input
           className="form-input"
@@ -208,7 +283,7 @@ export default function CreateCoursePage() {
 
       <div className="form-group">
         <label className="form-label">
-          Mô tả ngắn <span style={{ color: "#e11d48" }}>*</span>
+          Mô tả ngắn <span className="required-star">*</span>
         </label>
         <textarea
           className="form-input"
@@ -218,15 +293,7 @@ export default function CreateCoursePage() {
           value={payload.short_description}
           onChange={(e) => handleBasicChange("short_description", e.target.value)}
         />
-        <div
-          style={{
-            fontSize: "0.8rem",
-            color:
-              payload.short_description.length > 200 ? "#b91c1c" : "#6b7280",
-            marginTop: "0.25rem",
-            textAlign: "right",
-          }}
-        >
+        <div className="character-counter">
           {payload.short_description.length}/200
         </div>
       </div>
@@ -246,13 +313,7 @@ export default function CreateCoursePage() {
         </select>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "1rem",
-        }}
-      >
+      <div className="two-column-grid">
         <div className="form-group">
           <label className="form-label">Cấp độ</label>
           <select
@@ -299,10 +360,7 @@ export default function CreateCoursePage() {
       <div className="form-group">
         <label className="form-label">Mục tiêu học tập</label>
         {payload.learning_objectives.map((item, idx) => (
-          <div
-            key={idx}
-            style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}
-          >
+          <div key={idx} className="array-item">
             <input
               className="form-input"
               placeholder="Ví dụ: Hiểu cú pháp Python cơ bản"
@@ -331,35 +389,37 @@ export default function CreateCoursePage() {
 
       <div className="form-group">
         <label className="form-label">Yêu cầu tiên quyết</label>
-        {payload.prerequisites.map((item, idx) => (
-          <div
-            key={idx}
-            style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}
-          >
-            <input
-              className="form-input"
-              placeholder="Ví dụ: Không yêu cầu kiến thức lập trình"
-              value={item}
-              onChange={(e) =>
-                handleArrayChange("prerequisites", idx, e.target.value)
-              }
-            />
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => handleRemoveArrayItem("prerequisites", idx)}
-            >
-              Xóa
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          className="link-button"
-          onClick={() => handleAddArrayItem("prerequisites")}
-        >
-          + Thêm yêu cầu
-        </button>
+        <p className="form-hint">Chọn các khóa học cần hoàn tất trước khi được đăng ký khóa này.</p>
+        <div style={{ display: "grid", gap: "0.5rem", maxHeight: 220, overflow: "auto", border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }}>
+          {prerequisiteOptions.length ? (
+            prerequisiteOptions.map((c) => {
+              const checked = selectedPrerequisiteIds.has(c.id);
+              return (
+                <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      setPayload((prev) => {
+                        const set = new Set(
+                          (prev.prerequisites || [])
+                            .map((x) => Number(String(x).trim()))
+                            .filter((n) => Number.isInteger(n) && n > 0)
+                        );
+                        if (e.target.checked) set.add(c.id);
+                        else set.delete(c.id);
+                        return { ...prev, prerequisites: Array.from(set).map(String) };
+                      });
+                    }}
+                  />
+                  <span style={{ fontWeight: 700 }}>{c.title}</span>
+                </label>
+              );
+            })
+          ) : (
+            <div style={{ color: "#6b7280" }}>Chưa có khóa học để chọn.</div>
+          )}
+        </div>
       </div>
     </>
   );
@@ -368,7 +428,7 @@ export default function CreateCoursePage() {
     <>
       <div className="form-group">
         <label className="form-label">Ảnh bìa khóa học</label>
-        <p style={{ fontSize: "0.8rem", color: "#6b7280", marginBottom: "0.5rem" }}>
+        <p className="form-hint">
           Khuyến nghị kích thước 1280x720, dung lượng &lt; 2MB.
         </p>
         <input
@@ -395,13 +455,7 @@ export default function CreateCoursePage() {
 
   const renderStep4 = () => (
     <>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1.2fr 1fr 1fr",
-          gap: "1rem",
-        }}
-      >
+      <div className="three-column-grid">
         <div className="form-group">
           <label className="form-label">Giá khóa học (VNĐ)</label>
           <input
@@ -449,6 +503,16 @@ export default function CreateCoursePage() {
             }
           />
         </div>
+
+        <div className="form-group">
+          <label className="form-label">Xuất bản tự động lúc (tùy chọn)</label>
+          <input
+            className="form-input"
+            type="datetime-local"
+            value={payload.publish_scheduled_at ?? ""}
+            onChange={(e) => handleBasicChange("publish_scheduled_at", e.target.value || null)}
+          />
+        </div>
       </div>
 
       <div className="form-group">
@@ -488,15 +552,7 @@ export default function CreateCoursePage() {
 
   return (
     <div className="dashboard-page">
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "1.5rem",
-          gap: "1rem",
-        }}
-      >
+      <div className="page-header">
         <div>
           <h1 className="dashboard-title">Tạo khóa học mới</h1>
           <p className="dashboard-subtitle">
@@ -549,7 +605,6 @@ export default function CreateCoursePage() {
               <button
                 type="button"
                 className="primary-button"
-                style={{ width: "auto", minWidth: "140px" }}
                 onClick={() => setStep((s) => Math.min(maxStep, s + 1))}
                 disabled={isSubmitting || (step === 1 && !canGoNextFromStep1)}
               >
@@ -561,7 +616,6 @@ export default function CreateCoursePage() {
               <button
                 type="button"
                 className="primary-button"
-                style={{ width: "auto", minWidth: "160px" }}
                 onClick={() => handleSave(true)}
                 disabled={isSubmitting || !canGoNextFromStep1}
               >
@@ -574,4 +628,3 @@ export default function CreateCoursePage() {
     </div>
   );
 }
-

@@ -13,10 +13,10 @@ const transporter = nodemailer.createTransport({
     tls: process.env.DEV === 'true' ? { rejectUnauthorized: false } : undefined,
 });
 
-export async function sendMail(to: string, subject: string, text: string) {
+export async function sendMail(to: string, subject: string, html: string) {
     // Nếu thiếu cấu hình SMTP thì bỏ qua việc gửi mail để tránh throw lỗi trong lúc dev
     if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-        console.warn('SMTP credentials are not fully set, skip sending email. OTP:', text);
+        console.warn('SMTP credentials are not fully set, skip sending email.');
         return;
     }
 
@@ -24,7 +24,7 @@ export async function sendMail(to: string, subject: string, text: string) {
         from: process.env.EMAIL_FROM || process.env.SMTP_USER,
         to,
         subject,
-        text,
+        html,
     });
 }
 

@@ -86,20 +86,32 @@ export class AuthServiceImpl implements AuthService {
     return jwt.verify(token, secret);
   }
 
-  async createUserIfNotExists(userProfile: any): Promise<any> {
+  async createUserIfNotExists(userProfile: any): Promise<User> {
     const userRepository = AppDataSource.getRepository(User);
+
+    if (!userProfile.email) {
+      throw new Error('Email không được cung cấp từ Google');
+    }
+
     let user = await userRepository.findOne({ where: { email: userProfile.email } });
+
     if (!user) {
       user = userRepository.create({
         email: userProfile.email,
-        full_name: userProfile.name ?? '',
-        avatar_url: userProfile.picture ?? '',
-        // Đăng nhập Google nên không dùng password cục bộ; set tạm chuỗi rỗng
-        password_hash: '',
+        full_name: userProfile.name ?? userProfile.email.split('@')[0] ?? '',
+        avatar_url: userProfile.picture ?? null,
+        password_hash: '', // Google login không dùng password
         is_active: true,
+        email_verified_at: new Date(), // Email đã được Google xác thực
       });
 
       await userRepository.save(user);
+    } else {
+      // Cập nhật avatar nếu user đã tồn tại nhưng chưa có avatar
+      if (!user.avatar_url && userProfile.picture) {
+        user.avatar_url = userProfile.picture;
+        await userRepository.save(user);
+      }
     }
 
     return user;
@@ -122,9 +134,14 @@ export class AuthServiceImpl implements AuthService {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(request.password, salt);
 
-    // Chuẩn hóa role, chỉ cho phép 'learner' hoặc 'course_manager'
+    // Chuẩn hóa role: hệ thống hỗ trợ mặc định learner/course_manager/admin
+    // Nếu client gửi giá trị khác thì fallback về learner.
     const normalizedRole =
-      request.role === 'course_manager' ? 'course_manager' : 'learner';
+      request.role === 'course_manager'
+        ? 'course_manager'
+        : request.role === 'admin'
+          ? 'admin'
+          : 'learner';
 
     // Tạo/ghi đè bản ghi đăng ký tạm với OTP
     const code = this.generateOtpCode();
@@ -155,12 +172,10 @@ export class AuthServiceImpl implements AuthService {
 
     // Gửi email OTP
     try {
-      const { sendMail } = await import('../../../../../lib/mailer');
-      await sendMail(
-        request.email,
-        'Mã xác thực đăng ký tài khoản',
-        `Mã OTP của bạn là: ${code}. Mã có hiệu lực trong 10 phút.`
-      );
+      const { sendOtpEmail } = await import('../../../../../lib/email/service');
+
+      await sendOtpEmail(request.email, code);
+
     } catch (e) {
       console.log('Send OTP email error:', e);
     }
@@ -196,7 +211,7 @@ export class AuthServiceImpl implements AuthService {
     });
     await userRepository.save(user);
 
-    // Gán role mặc định theo đăng ký (learner / course_manager)
+    // Gán role theo đăng ký (learner / course_manager / admin)
     // Hỗ trợ cả tên role cũ (student/teacher) để tương thích dữ liệu DB cũ
     // và tự tạo role nếu chưa tồn tại trong bảng `roles`.
     try {
@@ -210,6 +225,9 @@ export class AuthServiceImpl implements AuthService {
       } else if (pending.role_name === 'learner') {
         // role mới cho học viên; fallback về 'student' nếu DB đang dùng tên cũ
         targetNames = ['learner', 'student'];
+      } else if (pending.role_name === 'admin') {
+        // role admin: không cần fallback tên cũ (nếu có thể tự tạo)
+        targetNames = ['admin'];
       } else {
         targetNames = [pending.role_name];
       }
@@ -262,54 +280,94 @@ export class AuthServiceImpl implements AuthService {
   }
 
   // Đăng nhập bằng email/mật khẩu
+  // Đăng nhập bằng email/mật khẩu
   async login(request: LoginRequest): Promise<LoginResult> {
     const userRepository = AppDataSource.getRepository(User);
     const now = new Date();
+    const { ip, userAgent } = request;
 
     const user = await userRepository.findOne({ where: { email: request.email } });
-    // Nếu không tìm thấy user hoặc không có password hash -> trả lỗi chung
     if (!user || !user.password_hash) {
       throw new Error('Email hoặc mật khẩu không đúng.');
     }
 
-    // Kiểm tra tài khoản bị khóa tạm thời do nhập sai nhiều lần
     if (user.locked_until && user.locked_until > now) {
       throw new Error('Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút.');
     }
 
-    // Kiểm tra trạng thái kích hoạt email
     if (!user.email_verified_at) {
-      throw new Error(
-        'Tài khoản chưa được kích hoạt. Vui lòng kiểm tra email để kích hoạt hoặc gửi lại email kích hoạt.'
-      );
+      throw new Error('Tài khoản chưa được kích hoạt.');
     }
 
-    // Kiểm tra tài khoản bị khóa vĩnh viễn / do admin
     if (!user.is_active) {
-      throw new Error('Tài khoản của bạn đã bị khóa. Vui lòng liên hệ admin để được hỗ trợ.');
+      throw new Error('Tài khoản của bạn đã bị khóa.');
     }
 
     const isValid = await bcrypt.compare(request.password, user.password_hash);
     if (!isValid) {
-      // Sai mật khẩu -> tăng biến đếm, nếu >= 5 thì khóa 15 phút
       const currentFailed = user.failed_login_attempts || 0;
       const newFailed = currentFailed + 1;
       user.failed_login_attempts = newFailed;
-
       if (newFailed >= 5) {
-        const lockedUntil = new Date(now.getTime() + 15 * 60 * 1000);
-        user.locked_until = lockedUntil;
+        user.locked_until = new Date(now.getTime() + 15 * 60 * 1000);
       }
-
       await userRepository.save(user);
       throw new Error('Email hoặc mật khẩu không đúng.');
     }
 
-    // Đăng nhập thành công -> reset đếm sai & mở khóa, cập nhật last_login_at
+    // Đăng nhập thành công -> reset đếm sai
     user.failed_login_attempts = 0;
     user.locked_until = null;
     user.last_login_at = now;
     await userRepository.save(user);
+
+    // --- LOGIC BẢO MẬT TAB 3 CHO ĐỒ ÁN ---
+
+    // 1. Kiểm tra Thông báo đăng nhập mới
+    if (user.notify_new_login) {
+      try {
+        const { sendLoginWarningEmail } = await import('../../../../../lib/email/service');
+        const { parseUserAgent } = await import('../../../../../lib/device');
+
+        const deviceName = parseUserAgent(userAgent);
+
+        await sendLoginWarningEmail(
+          user.email,
+          ip,
+          deviceName
+        );
+
+      } catch (e) {
+        console.log('Notification email error:', e);
+      }
+    }
+
+    // 2. KIỂM TRA 2FA (QUAN TRỌNG)
+    if (user.is_2fa_enabled) {
+      const otpCode = this.generateOtpCode();
+      user.temp_otp = otpCode; // Lưu vào cột temp_otp trong DB
+      await userRepository.save(user);
+
+      // Gửi mã OTP qua email
+      try {
+        const { sendMail } = await import('../../../../../lib/mailer');
+        await sendMail(
+          user.email,
+          'Mã xác thực 2FA - MindBridge',
+          `Mã xác thực của bạn là: ${otpCode}. Mã có hiệu lực trong 5 phút.`
+        );
+      } catch (e) {
+        console.log('2FA OTP email error:', e);
+      }
+
+      // TRẢ VỀ YÊU CẦU 2FA VÀ DỪNG LUỒNG TẠI ĐÂY
+      return {
+        requires2FA: true,
+        email: user.email,
+      } as any;
+    }
+
+    // --- KẾT THÚC LOGIC BẢO MẬT ---
 
     const sessionRepository = AppDataSource.getRepository(Session);
     const sessionID = uuidv4();
@@ -336,10 +394,52 @@ export class AuthServiceImpl implements AuthService {
       accessToken: googleToken.accessToken,
     });
 
+    // Kiểm tra email có tồn tại không
+    if (!userProfile.email) {
+      throw new Error('Không thể lấy email từ Google. Vui lòng đảm bảo bạn đã cấp quyền email.');
+    }
+
     const user = await this.createUserIfNotExists(userProfile);
+
+    // === THÊM: Gán role mặc định cho user đăng nhập Google ===
+    const userRoleRepository = AppDataSource.getRepository(UserRole);
+    const roleRepository = AppDataSource.getRepository(Role);
+
+    // Kiểm tra user đã có role chưa
+    const existingRoles = await userRoleRepository.find({
+      where: { user_id: user.id }
+    });
+
+    if (existingRoles.length === 0) {
+      // Tìm role 'learner' hoặc 'student' mặc định
+      let defaultRole = await roleRepository.findOne({
+        where: [{ name: 'learner' }, { name: 'student' }]
+      });
+
+      if (!defaultRole) {
+        // Tạo role mới nếu chưa tồn tại
+        defaultRole = roleRepository.create({
+          name: 'learner',
+          description: 'Default role for Google login users'
+        });
+        await roleRepository.save(defaultRole);
+      }
+
+      // Gán role cho user
+      const userRole = userRoleRepository.create({
+        user_id: user.id,
+        role_id: defaultRole.id
+      });
+      await userRoleRepository.save(userRole);
+    }
+    // === KẾT THÚC THÊM ===
+
     const sessionRepository = AppDataSource.getRepository(Session);
     const sessionID = uuidv4();
-    const session = sessionRepository.create({ sessionID: sessionID, userID: String(user.id) });
+    const session = sessionRepository.create({
+      sessionID: sessionID,
+      userID: String(user.id)
+    });
     await sessionRepository.save(session);
 
     const tokens = await this.signTokensForUser(user, sessionID);
@@ -387,5 +487,41 @@ export class AuthServiceImpl implements AuthService {
       accessToken: newAccessToken,
       refreshToken: newRefreshToken,
     }
+  }
+  async verify2FA(email: string, code: string): Promise<LoginResult> {
+    const userRepository = AppDataSource.getRepository(User);
+
+    // 1. Tìm user theo email
+    const user = await userRepository.findOne({ where: { email, is_active: true } });
+    if (!user) {
+      throw new Error('Người dùng không tồn tại hoặc đã bị khóa.');
+    }
+
+    // 2. Kiểm tra mã OTP
+    // (Đảm bảo bạn đã thêm cột temp_otp vào model User như đã bàn)
+    if (!user.temp_otp || user.temp_otp !== code) {
+      throw new Error('Mã xác thực không chính xác.');
+    }
+
+    // 3. Xác thực thành công -> Xóa OTP và tạo session mới
+    user.temp_otp = null;
+    await userRepository.save(user);
+
+    const sessionRepository = AppDataSource.getRepository(Session);
+    const sessionID = uuidv4();
+    const session = sessionRepository.create({
+      sessionID,
+      userID: String(user.id),
+    });
+    await sessionRepository.save(session);
+
+    // 4. Ký và trả về token chính thức
+    const tokens = await this.signTokensForUser(user, sessionID);
+    const authUser = await this.mapUserToAuthUser(user);
+
+    return {
+      ...tokens,
+      user: authUser,
+    };
   }
 }

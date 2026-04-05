@@ -12,11 +12,15 @@ async function start() {
 
     // Tự động đồng bộ schema database (tạo bảng nếu chưa tồn tại, cập nhật nếu đã tồn tại)
     // Lưu ý: TypeORM synchronize phù hợp cho môi trường dev / dự án capstone.
-    try {
+    // try {
+    //     await syncDatabase();
+    // } catch (error) {
+    //     // Im lặng bỏ qua lỗi sync khi khởi động server (ví dụ bảng đã tồn tại).
+    //     // Nếu muốn xem lỗi chi tiết, hãy chạy: npm run db:sync
+    // }
+    // Chỉ đồng bộ khi bật flag DATABASE_SYNC
+    if (env.DATABASE_SYNC) {
         await syncDatabase();
-    } catch (error) {
-        // Im lặng bỏ qua lỗi sync khi khởi động server (ví dụ bảng đã tồn tại).
-        // Nếu muốn xem lỗi chi tiết, hãy chạy: npm run db:sync
     }
 
     const redisClient = undefined;

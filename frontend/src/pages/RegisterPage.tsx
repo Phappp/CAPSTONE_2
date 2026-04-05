@@ -1,26 +1,35 @@
-import { FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { FormEvent, useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   apiRegister,
   apiVerifyRegistrationOtp,
 } from "../services/authClient";
+import GoogleLoginButton from "../components/GoogleLoginButton";
 import { MESSAGES } from "../constants/messages";
+import "./RegisterPage.css";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"learner" | "course_manager">("learner");
-  const [otpDigits, setOtpDigits] = useState<string[]>(
-    Array(6).fill("")
-  );
+  const [otpDigits, setOtpDigits] = useState<string[]>(Array(6).fill(""));
   const [isOtpStep, setIsOtpStep] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const otp = otpDigits.join("");
+
+  // Xử lý lỗi từ redirect Google
+  useEffect(() => {
+    const errorMsg = searchParams.get("error");
+    if (errorMsg) {
+      setError(decodeURIComponent(errorMsg));
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -60,7 +69,6 @@ export default function RegisterPage() {
       setSuccess(
         "Kích hoạt tài khoản thành công. Bạn có thể đăng nhập bằng email và mật khẩu."
       );
-      // Sau khi xác thực thành công, điều hướng về trang đăng nhập
       setTimeout(() => {
         navigate("/");
       }, 1500);
@@ -92,6 +100,10 @@ export default function RegisterPage() {
       const prevInput = document.getElementById(`otp-${index - 1}`);
       prevInput?.focus();
     }
+  };
+
+  const handleGoogleError = (errorMsg: string) => {
+    setError(errorMsg);
   };
 
   return (
@@ -151,8 +163,8 @@ export default function RegisterPage() {
 
             <div className="form-group">
               <label className="form-label">Vai trò</label>
-              <div style={{ display: "flex", gap: "1rem" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div className="radio-group">
+                <label className="radio-label">
                   <input
                     type="radio"
                     name="role"
@@ -160,9 +172,9 @@ export default function RegisterPage() {
                     checked={role === "learner"}
                     onChange={() => setRole("learner")}
                   />
-                  <span>Learner</span>
+                  <span>Học viên</span>
                 </label>
-                <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <label className="radio-label">
                   <input
                     type="radio"
                     name="role"
@@ -170,7 +182,7 @@ export default function RegisterPage() {
                     checked={role === "course_manager"}
                     onChange={() => setRole("course_manager")}
                   />
-                  <span>Creater</span>
+                  <span>Giảng viên</span>
                 </label>
               </div>
             </div>
@@ -184,16 +196,25 @@ export default function RegisterPage() {
             >
               {loading ? "Đang đăng ký..." : "Đăng ký"}
             </button>
+
+            <div className="auth-divider">
+              <span>Hoặc đăng ký với</span>
+            </div>
+
+            <GoogleLoginButton
+              onError={handleGoogleError}
+              text="Đăng ký với Google"
+            />
           </form>
         )}
 
         {isOtpStep && (
-          <form onSubmit={handleVerifyOtp} style={{ marginTop: "1.5rem" }}>
+          <form onSubmit={handleVerifyOtp} className="otp-form">
             <div className="form-group">
               <label htmlFor="otp" className="form-label">
                 Mã OTP
               </label>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
+              <div className="otp-input-group">
                 {otpDigits.map((digit, idx) => (
                   <input
                     key={idx}
@@ -204,27 +225,19 @@ export default function RegisterPage() {
                     value={digit}
                     onChange={(e) => handleOtpChange(idx, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                    className="form-input"
-                    style={{ width: "2.5rem", textAlign: "center" }}
+                    className="form-input otp-input"
                     required
                   />
                 ))}
               </div>
-              <p style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "#607489" }}>
+              <p className="otp-hint">
                 Nhập mã OTP 6 chữ số được gửi tới email của bạn.
               </p>
             </div>
 
             {error && <div className="error-box">{error}</div>}
             {success && (
-              <div
-                className="error-box"
-                style={{
-                  color: "#256029",
-                  background: "#edf7ed",
-                  borderColor: "rgba(76, 175, 80, 0.3)",
-                }}
-              >
+              <div className="success-box">
                 {success}
               </div>
             )}
@@ -239,14 +252,7 @@ export default function RegisterPage() {
           </form>
         )}
 
-        <div
-          style={{
-            marginTop: "0.9rem",
-            fontSize: "0.85rem",
-            textAlign: "center",
-            color: "#607489",
-          }}
-        >
+        <div className="auth-redirect">
           Đã có tài khoản?{" "}
           <button
             type="button"
@@ -260,5 +266,3 @@ export default function RegisterPage() {
     </div>
   );
 }
-
-

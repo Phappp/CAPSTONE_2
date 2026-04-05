@@ -29,6 +29,8 @@ type RegisterRequest = {
 type LoginRequest = {
   email: string;
   password: string;
+  ip: string;
+  userAgent: string;
 };
 
 type ExchangeTokenResult = {
@@ -53,6 +55,7 @@ interface AuthService {
 
   logout(token: string): Promise<void>;
   refreshToken(token: string): Promise<ExchangeTokenResult>;
+  verify2FA(email: string, code: string): Promise<LoginResult>;
 }
 
 export {

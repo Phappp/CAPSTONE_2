@@ -16,11 +16,9 @@ import { HttpRequest } from '../../../types';
 
 
 class AuthController extends BaseController {
-  service: AuthService;
 
-  constructor(service: AuthService) {
+  constructor(private readonly authService: AuthService) {
     super();
-    this.service = service;
   }
 
   async exchangeGoogleToken(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
@@ -33,19 +31,35 @@ class AuthController extends BaseController {
         return;
       }
 
-      const exchangeResult = await this.service.exchangeWithGoogleIDP({
-        idp: 'google',
-        code: exchangeGoogleTokenBody.code,
-      });
+      try {
+        console.log('1. Starting Google exchange with code:', exchangeGoogleTokenBody.code);
 
-      const params = new URLSearchParams({
-        uid: exchangeResult.sub,
-        access_token: exchangeResult.accessToken,
-        refresh_token: exchangeResult.refreshToken
-      });
+        const exchangeResult = await this.authService.exchangeWithGoogleIDP({
+          idp: 'google',
+          code: exchangeGoogleTokenBody.code,
+        });
 
-      const redirectURL = `${env.CLIENT_URL}/oauth/redirect?${params.toString()}`;
-      res.redirect(redirectURL);
+        console.log('2. Exchange result:', exchangeResult);
+
+        const params = new URLSearchParams({
+          uid: exchangeResult.sub,
+          access_token: exchangeResult.accessToken,
+          refresh_token: exchangeResult.refreshToken
+        });
+
+        const redirectURL = `${env.CLIENT_URL}/oauth/redirect?${params.toString()}`;
+        console.log('3. Redirecting to:', redirectURL);
+        res.redirect(redirectURL);
+      } catch (error: any) {
+        console.error('Google login error DETAILS:', {
+          message: error.message,
+          stack: error.stack,
+          response: error.response?.data
+        });
+        const errorRedirectURL = `${env.CLIENT_URL}/login?error=${encodeURIComponent(error.message)}`;
+        console.log('4. Error redirect to:', errorRedirectURL);
+        res.redirect(errorRedirectURL);
+      }
 
       return;
     });
@@ -60,9 +74,23 @@ class AuthController extends BaseController {
         return;
       }
 
-      const result = await this.service.login({
+      const rawIp =
+        req.headers['x-forwarded-for']?.toString().split(',')[0] ||
+        req.socket.remoteAddress;
+
+      const ip =
+        rawIp === '::1' || rawIp === '127.0.0.1'
+          ? '8.8.8.8'
+          : rawIp;
+
+      const userAgent =
+        req.headers['user-agent'] || 'Unknown device';
+
+      const result = await this.authService.login({
         email: loginRequestBody.email,
         password: loginRequestBody.password,
+        ip,
+        userAgent
       });
 
       res.status(200).json({
@@ -82,7 +110,7 @@ class AuthController extends BaseController {
         return;
       }
 
-      await this.service.register({
+      await this.authService.register({
         email: body.email,
         password: body.password,
         fullName: body.fullName,
@@ -104,7 +132,7 @@ class AuthController extends BaseController {
         return;
       }
 
-      const result = await this.service.verifyRegistrationOtp(body.email, body.code);
+      const result = await this.authService.verifyRegistrationOtp(body.email, body.code);
 
       res.status(200).json({
         access_token: result.accessToken,
@@ -123,7 +151,7 @@ class AuthController extends BaseController {
         return;
       }
 
-      await this.service.logout(logoutRequestBody.refreshToken);
+      await this.authService.logout(logoutRequestBody.refreshToken);
 
       res.sendStatus(200);
       return;
@@ -140,7 +168,7 @@ class AuthController extends BaseController {
       return;
     }
 
-    const token = await this.service.refreshToken(refreshTokenRequestBody.refreshToken);
+    const token = await this.authService.refreshToken(refreshTokenRequestBody.refreshToken);
 
     res.status(200).json({
       refresh_token: token.refreshToken,
@@ -148,6 +176,38 @@ class AuthController extends BaseController {
     });
 
     return;
+  }
+
+  verify2FA = async (req: HttpRequest, res: Response) => {
+    try {
+      const { email, code } = req.body;
+      const result = await this.authService.verify2FA(email, code);
+      return res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error: any) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  };
+  // Thêm vào controller.ts
+  async getGoogleAuthUrl(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res, _next) => {
+      // Lấy googleIdentityBroker từ authService nếu có
+      // Hoặc tạo URL trực tiếp với env
+      const url = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
+        client_id: env.GOOGLE_OAUTH_CLIENT_ID,
+        redirect_uri: env.GOOGLE_OAUTH_REDIRECT_URL,
+        response_type: 'code',
+        scope: 'email profile',
+        access_type: 'offline',
+      })}`;
+
+      res.json({ url });
+    });
   }
 }
 

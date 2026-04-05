@@ -1,2 +1,5 @@
-
+.env
 coverage
+package-lock.json
+frontend/.env
+frontend/.env
