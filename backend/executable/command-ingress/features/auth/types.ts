@@ -33,6 +33,15 @@ type LoginRequest = {
   userAgent: string;
 };
 
+type RequestPasswordResetRequest = {
+  email: string;
+};
+
+type ResetPasswordRequest = {
+  token: string;
+  newPassword: string;
+};
+
 type ExchangeTokenResult = {
   sub: string;
   refreshToken: string;
@@ -56,6 +65,8 @@ interface AuthService {
   logout(token: string): Promise<void>;
   refreshToken(token: string): Promise<ExchangeTokenResult>;
   verify2FA(email: string, code: string): Promise<LoginResult>;
+  requestPasswordReset(request: RequestPasswordResetRequest): Promise<void>;
+  resetPassword(request: ResetPasswordRequest): Promise<void>;
 }
 
 export {
@@ -64,6 +75,8 @@ export {
   ExchangeTokenResult,
   RegisterRequest,
   LoginRequest,
+  RequestPasswordResetRequest,
+  ResetPasswordRequest,
   LoginResult,
   AuthUser,
   TokenPair,
