@@ -1181,6 +1181,77 @@ export class CourseServiceImpl implements CourseService {
     return completedSet.has(Number((orderedLessons[globalIndex - 1] as any).id));
   }
 
+  private async loadEffectiveCompletedLessonSet(subjectUserId: number, orderedLessons: Lesson[]): Promise<Set<number>> {
+    const lessonIds = orderedLessons.map((l) => Number((l as any).id)).filter((x) => Number.isFinite(x) && x > 0);
+    if (!lessonIds.length) return new Set<number>();
+
+    const completionRepo = AppDataSource.getRepository(LessonCompletion);
+    const completionRows = await completionRepo
+      .createQueryBuilder('lc')
+      .select(['lc.lesson_id'])
+      .where('lc.user_id = :uid', { uid: subjectUserId })
+      .andWhere('lc.lesson_id IN (:...lessonIds)', { lessonIds })
+      .getRawMany();
+    const set = new Set<number>(completionRows.map((r: any) => Number(r.lc_lesson_id ?? r.lesson_id)));
+
+    // Backward-compatibility: với dữ liệu cũ, assignment đã nộp nhưng chưa ghi lesson_completion.
+    const submittedAssignments = await AppDataSource.query(
+      `
+      SELECT DISTINCT a.lesson_id
+      FROM submissions s
+      INNER JOIN assignments a ON a.id = s.assignment_id
+      WHERE s.user_id = ? AND s.status IN ('submitted', 'graded', 'returned') AND a.lesson_id IN (?)
+      `,
+      [subjectUserId, lessonIds]
+    ).catch(async () => {
+      // Fallback cho một số cấu hình driver không map IN (?) với mảng.
+      return await AppDataSource.query(
+        `
+        SELECT DISTINCT a.lesson_id
+        FROM submissions s
+        INNER JOIN assignments a ON a.id = s.assignment_id
+        WHERE s.user_id = ? AND s.status IN ('submitted', 'graded', 'returned') AND a.lesson_id IN (${lessonIds
+          .map(() => '?')
+          .join(',')})
+        `,
+        [subjectUserId, ...lessonIds]
+      );
+    });
+    for (const r of submittedAssignments as any[]) {
+      const lid = Number((r as any).lesson_id);
+      if (Number.isFinite(lid) && lid > 0) set.add(lid);
+    }
+
+    // Backward-compatibility: quiz đã đạt nhưng chưa ghi lesson_completion.
+    const passedQuizLessons = await AppDataSource.query(
+      `
+      SELECT DISTINCT q.lesson_id
+      FROM quiz_attempts qa
+      INNER JOIN quizzes q ON q.id = qa.quiz_id
+      WHERE qa.user_id = ? AND qa.is_passed = 1 AND q.lesson_id IN (?)
+      `,
+      [subjectUserId, lessonIds]
+    ).catch(async () => {
+      return await AppDataSource.query(
+        `
+        SELECT DISTINCT q.lesson_id
+        FROM quiz_attempts qa
+        INNER JOIN quizzes q ON q.id = qa.quiz_id
+        WHERE qa.user_id = ? AND qa.is_passed = 1 AND q.lesson_id IN (${lessonIds
+          .map(() => '?')
+          .join(',')})
+        `,
+        [subjectUserId, ...lessonIds]
+      );
+    });
+    for (const r of passedQuizLessons as any[]) {
+      const lid = Number((r as any).lesson_id);
+      if (Number.isFinite(lid) && lid > 0) set.add(lid);
+    }
+
+    return set;
+  }
+
   private async getTimeRulesForCourse(courseId: number): Promise<{ videoMinSeconds: number; videoMinPercent: number; textMinSeconds: number }> {
     const repo = AppDataSource.getRepository(CourseCompletionRequirement);
     const row = await repo.findOne({ where: { course_id: courseId } as any });
@@ -1245,16 +1316,7 @@ export class CourseServiceImpl implements CourseService {
       throw new Error('Không thể truy cập bài học.');
     }
 
-    const completionRepo = AppDataSource.getRepository(LessonCompletion);
-    const completedRows = orderedLessons.length
-      ? await completionRepo
-          .createQueryBuilder('lc')
-          .select(['lc.lesson_id'])
-          .where('lc.user_id = :uid', { uid: subjectUserId })
-          .andWhere('lc.lesson_id IN (:...lessonIds)', { lessonIds: orderedLessons.map((l) => (l as any).id) })
-          .getRawMany()
-      : [];
-    const completedSet = new Set<number>(completedRows.map((r: any) => Number(r.lc_lesson_id ?? r.lesson_id)));
+    const completedSet = await this.loadEffectiveCompletedLessonSet(subjectUserId, orderedLessons);
 
     const prereqOk = this.lessonProgressionPrerequisiteMet(
       targetLesson,
@@ -1274,16 +1336,7 @@ export class CourseServiceImpl implements CourseService {
     const now = new Date();
     const moduleById = new Map<number, any>((modules as any[]).map((m) => [Number(m.id), m]));
 
-    const completionRepo = AppDataSource.getRepository(LessonCompletion);
-    const completedRows = total
-      ? await completionRepo
-          .createQueryBuilder('lc')
-          .select(['lc.lesson_id'])
-          .where('lc.user_id = :uid', { uid: subjectUserId })
-          .andWhere('lc.lesson_id IN (:...lessonIds)', { lessonIds: orderedLessons.map((l) => (l as any).id) })
-          .getRawMany()
-      : [];
-    const completedSet = new Set<number>(completedRows.map((r: any) => Number(r.lc_lesson_id ?? r.lesson_id)));
+    const completedSet = await this.loadEffectiveCompletedLessonSet(subjectUserId, orderedLessons);
 
     const unlocked: number[] = [];
     let nextLocked: number | null = null;
@@ -1295,6 +1348,12 @@ export class CourseServiceImpl implements CourseService {
       const moduleOk = !openAt || openAt.getTime() <= now.getTime();
       const lessonOpenAt = parseNullableDateTime(lesson?.open_at);
       const lessonOk = !lessonOpenAt || lessonOpenAt.getTime() <= now.getTime();
+
+      // Always keep first lesson reachable once schedule window is open.
+      if (i === 0 && moduleOk && lessonOk) {
+        unlocked.push(lessonId);
+        continue;
+      }
 
       const prereqOk = this.lessonProgressionPrerequisiteMet(lesson, i, orderedLessons, modules, completedSet);
       if (prereqOk && moduleOk && lessonOk) {
@@ -1399,17 +1458,7 @@ export class CourseServiceImpl implements CourseService {
     }
 
     const completionRepo = AppDataSource.getRepository(LessonCompletion);
-    const completedRowsForPrereq = orderedLessons.length
-      ? await completionRepo
-          .createQueryBuilder('lc')
-          .select(['lc.lesson_id'])
-          .where('lc.user_id = :uid', { uid: subjectUserId })
-          .andWhere('lc.lesson_id IN (:...lessonIds)', { lessonIds: orderedLessons.map((l) => (l as any).id) })
-          .getRawMany()
-      : [];
-    const completedSetForPrereq = new Set<number>(
-      completedRowsForPrereq.map((r: any) => Number(r.lc_lesson_id ?? r.lesson_id))
-    );
+    const completedSetForPrereq = await this.loadEffectiveCompletedLessonSet(subjectUserId, orderedLessons);
     const prereqOk = this.lessonProgressionPrerequisiteMet(
       targetLesson,
       idx,
@@ -2963,6 +3012,78 @@ export class CourseServiceImpl implements CourseService {
 
     if (!questions.length) return null;
 
+    const recentAttemptsRaw = await attemptRepo.find({
+      where: { quiz_id: (quiz as any).id, user_id: subjectUserId } as any,
+      order: { attempt_number: 'DESC' } as any,
+      take: 5,
+    });
+    const recentAttemptIds = (recentAttemptsRaw as any[]).map((a) => Number(a.id)).filter((x) => x > 0);
+
+    const respRepo = AppDataSource.getRepository(QuizResponse);
+    const roRepo = AppDataSource.getRepository(QuizResponseOption);
+    const responses = recentAttemptIds.length
+      ? await respRepo.find({
+          where: { attempt_id: In(recentAttemptIds) } as any,
+          order: { id: 'ASC' } as any,
+        })
+      : [];
+
+    const responseIds = (responses as any[]).map((r) => Number((r as any).id)).filter((x) => x > 0);
+    const roRows = responseIds.length
+      ? await roRepo.find({
+          where: { response_id: In(responseIds) } as any,
+        })
+      : [];
+    const optionIds = [...new Set((roRows as any[]).map((x) => Number((x as any).option_id)).filter((x) => x > 0))];
+    const optionRows = optionIds.length
+      ? await qOptRepo.find({
+          where: { id: In(optionIds) } as any,
+        })
+      : [];
+    const optionTextById = new Map<number, string>(
+      (optionRows as any[]).map((o) => [Number((o as any).id), String((o as any).option_text || '')])
+    );
+    const optionByResponseId = new Map<number, number>();
+    for (const row of roRows as any[]) {
+      const rid = Number((row as any).response_id);
+      const oid = Number((row as any).option_id);
+      if (!optionByResponseId.has(rid)) optionByResponseId.set(rid, oid);
+    }
+
+    const qTextByQqId = new Map<number, string>(questions.map((q) => [q.quiz_question_id, q.question_text]));
+    const respByAttemptId = new Map<number, any[]>();
+    for (const r of responses as any[]) {
+      const aid = Number((r as any).attempt_id);
+      const arr = respByAttemptId.get(aid) || [];
+      arr.push(r);
+      respByAttemptId.set(aid, arr);
+    }
+
+    const recent_attempts: LearnerQuizTakePayload['recent_attempts'] = (recentAttemptsRaw as any[]).map((a) => {
+      const aid = Number((a as any).id);
+      const resps = respByAttemptId.get(aid) || [];
+      const answers = resps.map((r) => {
+        const qqId = Number((r as any).quiz_question_id);
+        const selectedOptionId = optionByResponseId.get(Number((r as any).id)) ?? null;
+        return {
+          quiz_question_id: qqId,
+          question_text: String(qTextByQqId.get(qqId) ?? ''),
+          selected_option_id: selectedOptionId,
+          selected_option_text:
+            selectedOptionId != null ? String(optionTextById.get(selectedOptionId) ?? '') : null,
+        };
+      });
+      return {
+        attempt_id: aid,
+        attempt_number: Number((a as any).attempt_number),
+        submitted_at: (a as any).submitted_at ? new Date((a as any).submitted_at).toISOString() : null,
+        score_percent: (a as any).score != null ? Number((a as any).score) : null,
+        is_passed: (a as any).is_passed != null ? Boolean((a as any).is_passed) : null,
+        status: String((a as any).status ?? ''),
+        answers,
+      };
+    });
+
     return {
       quiz_id: Number((quiz as any).id),
       lesson_id: lessonId,
@@ -2975,6 +3096,7 @@ export class CourseServiceImpl implements CourseService {
       attempts_used: Number(attemptsUsed),
       show_results_immediately: (quiz as any).show_results_immediately !== false,
       show_correct_answers: (quiz as any).show_correct_answers !== false,
+      recent_attempts,
       questions,
     };
   }

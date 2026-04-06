@@ -876,7 +876,7 @@ export class AssignmentServiceImpl implements AssignmentService {
     const data = await AppDataSource.query(`
         SELECT 
             a.title, a.description, a.due_date, a.max_score,
-            s.id as submission_id, s.status, s.created_at as submitted_at,
+            s.id as submission_id, s.status, s.resubmission_count, s.created_at as submitted_at,
             sf.score, sf.feedback_text, sf.graded_at
         FROM assignments a
         LEFT JOIN submissions s ON s.assignment_id = a.id AND s.user_id = ?
@@ -886,7 +886,63 @@ export class AssignmentServiceImpl implements AssignmentService {
     `, [studentId, assignmentId]);
 
     if (!data.length) throw new Error('Không tìm thấy thông tin bài tập!');
-    return data[0];
+    const row = data[0];
+    const submissionId = row?.submission_id != null ? Number(row.submission_id) : null;
+    if (!submissionId) {
+      return {
+        ...row,
+        submission_text: null,
+        submission_short_answers: [],
+        submission_attachments: [],
+      };
+    }
+
+    const texts = await AppDataSource.query(
+      `SELECT content FROM submission_text WHERE submission_id = ? ORDER BY id DESC LIMIT 1`,
+      [submissionId]
+    );
+    const textContent = texts?.[0]?.content != null ? String(texts[0].content) : null;
+    let submissionText: string | null = textContent;
+    let submissionShortAnswers: { question_id: string; answer_text: string }[] = [];
+    if (textContent) {
+      try {
+        const j = JSON.parse(textContent);
+        if (j && j.kind === 'short_answer' && Array.isArray(j.answers)) {
+          submissionText = null;
+          submissionShortAnswers = (j.answers as any[]).map((a) => ({
+            question_id: String((a as any)?.question_id ?? ''),
+            answer_text: String((a as any)?.answer_text ?? ''),
+          }));
+        }
+      } catch {
+        // text submission dạng tự do
+      }
+    }
+
+    const atts = await AppDataSource.query(
+      `
+      SELECT file_name, file_path, file_size, mime_type, uploaded_at
+      FROM submission_attachments
+      WHERE submission_id = ?
+      ORDER BY uploaded_at ASC, id ASC
+      `,
+      [submissionId]
+    );
+    const submissionAttachments = (atts as any[]).map((a) => ({
+      file_name: String(a.file_name ?? ''),
+      file_path: String(a.file_path ?? ''),
+      signed_url: getSignedDeliveryUrl(String(a.file_path ?? '')),
+      file_size: Number(a.file_size ?? 0),
+      mime_type: String(a.mime_type ?? ''),
+      uploaded_at: a.uploaded_at ? new Date(a.uploaded_at).toISOString() : null,
+    }));
+
+    return {
+      ...row,
+      submission_text: submissionText,
+      submission_short_answers: submissionShortAnswers,
+      submission_attachments: submissionAttachments,
+    };
   }
 
   async createGradeAppeal(studentId: number, submissionId: number, content: string): Promise<void> {
