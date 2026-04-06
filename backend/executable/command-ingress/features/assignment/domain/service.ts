@@ -1,3 +1,4 @@
+import { In } from 'typeorm';
 import AppDataSource from '../../../../../lib/database';
 import Course from '../../../../../internal/model/course';
 import Module from '../../../../../internal/model/modules';
@@ -5,16 +6,52 @@ import Lesson from '../../../../../internal/model/lesson';
 import Assignment from '../../../../../internal/model/assignment';
 import GradeItem from '../../../../../internal/model/grade_items';
 import Submission from '../../../../../internal/model/submissions';
+import CourseEnrollment from '../../../../../internal/model/course_enrollment';
 import { uploadBufferToCloudinary, getSignedDeliveryUrl, isCloudinaryEnabled } from '../../../lib/cloudinary';
 import type {
   AssignmentAttachmentPreview,
   AssignmentFormat,
+  AssignmentKind,
   AssignmentService,
+  AssignmentLearnerRosterResult,
+  AssignmentLearnerRosterRow,
+  AssignmentSubmissionListRow,
   CreateAssignmentRequest,
+  ShortAnswerQuestionDef,
   UploadedAssignmentFile,
   UpdateAssignmentRequest,
   GradeSubmissionRequest
 } from '../types';
+import GradeEntity from '../../../../../internal/model/grade';
+import SubmissionFeedback from '../../../../../internal/model/submission_feedback';
+
+function normalizeShortAnswerQuestionsForSave(raw: any): ShortAnswerQuestionDef[] {
+  if (!Array.isArray(raw)) return [];
+  const tmp: { text: string; oldId: string }[] = [];
+  raw.forEach((q: any, i: number) => {
+    const text = String(q?.question_text ?? '').trim();
+    if (!text) return;
+    tmp.push({ text, oldId: String(q?.id ?? `x${i}`) });
+  });
+  return tmp.map((row, i) => ({
+    id: `q${i + 1}`,
+    question_text: row.text,
+    order_index: i,
+  }));
+}
+
+function parseAssignmentKind(value: any): AssignmentKind {
+  return String(value || '') === 'short_answer' ? 'short_answer' : 'file_prompt';
+}
+
+function mapShortAnswerQuestionsFromDb(raw: any): ShortAnswerQuestionDef[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as any[]).map((q, i) => ({
+    id: String((q as any)?.id ?? `q${i + 1}`),
+    question_text: String((q as any)?.question_text ?? ''),
+    order_index: Number((q as any)?.order_index ?? i),
+  }));
+}
 
 function getFormatFromFileName(fileName: string): AssignmentFormat | null {
   const ext = String(fileName || '')
@@ -39,6 +76,48 @@ function getFormatFromFileName(fileName: string): AssignmentFormat | null {
   if (ext === '7z') return '7z';
 
   return null;
+}
+
+function mapRawToAssignmentSubmissionRow(r: any): AssignmentSubmissionListRow {
+  return {
+    submission_id: Number(r.submission_id),
+    user_id: Number(r.user_id),
+    user_email: String(r.user_email ?? ''),
+    user_full_name: String(r.user_full_name ?? ''),
+    status: String(r.status ?? ''),
+    submitted_at: r.submitted_at ? new Date(r.submitted_at).toISOString() : null,
+    is_late: Boolean(r.is_late),
+    resubmission_count: Number(r.resubmission_count ?? 0),
+    grade_item_id: r.grade_item_id != null ? Number(r.grade_item_id) : null,
+    graded_score: r.graded_score != null ? Number(r.graded_score) : null,
+    feedback_text: r.feedback_text != null ? String(r.feedback_text) : null,
+    feedback_graded_at: r.feedback_graded_at ? new Date(r.feedback_graded_at).toISOString() : null,
+    content_preview: buildSubmissionContentPreview(r.text_content, Number(r.attachment_count ?? 0)),
+    attachment_count: Number(r.attachment_count ?? 0),
+  };
+}
+
+function buildSubmissionContentPreview(textContent: string | null | undefined, attachmentCount: number): string {
+  const n = Number(attachmentCount) || 0;
+  const filePart = n > 0 ? `${n} file đính kèm` : '';
+  if (!textContent || !String(textContent).trim()) {
+    return filePart || '—';
+  }
+  const raw = String(textContent).trim();
+  try {
+    const j = JSON.parse(raw);
+    if (j && j.kind === 'short_answer' && Array.isArray(j.answers)) {
+      const lines = (j.answers as any[]).map((a, i) => `Câu ${i + 1}: ${String(a?.answer_text ?? '').slice(0, 200)}`);
+      const block = lines.join(' · ');
+      const extra = filePart ? ` · ${filePart}` : '';
+      return block.slice(0, 600) + (block.length > 600 ? '…' : '') + extra;
+    }
+  } catch {
+    // plain text
+  }
+  const snippet = raw.slice(0, 400);
+  const extra = filePart ? ` · ${filePart}` : '';
+  return snippet + (raw.length > 400 ? '…' : '') + extra;
 }
 
 function normalizeAllowedFormats(value: any, fallback: AssignmentFormat[]): AssignmentFormat[] {
@@ -79,6 +158,16 @@ export class AssignmentServiceImpl implements AssignmentService {
       throw new Error('Định dạng hạn nộp (ở cột due_date) không hợp lệ!');
     }
 
+    const kind: AssignmentKind =
+      (request as any).assignment_kind === 'short_answer' ? 'short_answer' : 'file_prompt';
+    const saq =
+      kind === 'short_answer'
+        ? normalizeShortAnswerQuestionsForSave((request as any).short_answer_questions)
+        : [];
+    if (kind === 'short_answer' && saq.length < 1) {
+      throw new Error('Dạng trả lời ngắn cần ít nhất một câu hỏi.');
+    }
+
     // thực thi db transaction giữa table assignments và grade_items
     return await AppDataSource.transaction(async (manager) => {
       const assignmentRepo = manager.getRepository(Assignment);
@@ -102,7 +191,10 @@ export class AssignmentServiceImpl implements AssignmentService {
         allow_resubmission: request.allow_resubmission,
         max_resubmissions: maxResub,
         submission_format: request.allowed_formats, // map từ allowed_formats sang submission_format vì lỡ lưu tên cột trong db hơi khác với tên biến trong request
-        attachments: request.attachments
+        attachments: request.attachments,
+        allow_late_submission: Boolean(request.allow_late_submission),
+        assignment_kind: kind,
+        short_answer_questions: kind === 'short_answer' ? saq : null,
       } as any);
 
       const savedAssignment = await assignmentRepo.save(newAssignment as any);
@@ -212,6 +304,8 @@ export class AssignmentServiceImpl implements AssignmentService {
     allowed_formats: AssignmentFormat[];
     attachments: AssignmentAttachmentPreview[];
     created_at: string;
+    assignment_kind: AssignmentKind;
+    short_answer_questions: ShortAnswerQuestionDef[];
   }> {
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const moduleRepo = AppDataSource.getRepository(Module);
@@ -252,7 +346,7 @@ export class AssignmentServiceImpl implements AssignmentService {
       due_date: (assignment as any).due_date ? new Date((assignment as any).due_date).toISOString() : null,
       max_score: Number((assignment as any).max_score ?? 0),
       passing_score: (assignment as any).passing_score != null ? Number((assignment as any).passing_score) : null,
-      allow_late_submission: Boolean((assignment as any).late_submission_days && Number((assignment as any).late_submission_days) > 0),
+      allow_late_submission: Boolean((assignment as any).allow_late_submission),
       late_submission_days: Number((assignment as any).late_submission_days ?? 0),
       late_penalty_percent: Number((assignment as any).late_penalty_percent ?? 0),
       allow_resubmission: Boolean((assignment as any).allow_resubmission),
@@ -260,6 +354,82 @@ export class AssignmentServiceImpl implements AssignmentService {
       allowed_formats: allowedFormats,
       attachments,
       created_at: new Date((assignment as any).created_at).toISOString(),
+      assignment_kind: parseAssignmentKind((assignment as any).assignment_kind),
+      short_answer_questions: mapShortAnswerQuestionsFromDb((assignment as any).short_answer_questions),
+    };
+  }
+
+  async getLearnerAssignmentForLesson(subjectUserId: number, lessonId: number): Promise<{
+    assignment_id: number;
+    lesson_id: number;
+    title: string;
+    description: string;
+    due_date: string | null;
+    max_score: number;
+    passing_score: number | null;
+    allow_late_submission: boolean;
+    late_submission_days: number;
+    late_penalty_percent: number;
+    allow_resubmission: boolean;
+    max_resubmissions: number;
+    allowed_formats: AssignmentFormat[];
+    attachments: AssignmentAttachmentPreview[];
+    assignment_kind: AssignmentKind;
+    short_answer_questions: ShortAnswerQuestionDef[];
+  }> {
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const moduleRepo = AppDataSource.getRepository(Module);
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    const assignmentRepo = AppDataSource.getRepository(Assignment);
+
+    const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
+    if (!lesson) throw new Error('Không tìm thấy bài học.');
+
+    const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id } as any });
+    if (!mod) throw new Error('Không tìm thấy chương.');
+
+    const enroll = await enrollmentRepo.findOne({
+      where: {
+        user_id: subjectUserId,
+        course_id: (mod as any).course_id,
+        status: In(['active', 'completed']),
+      } as any,
+    });
+    if (!enroll) throw new Error('Bạn chưa ghi danh khóa học này.');
+
+    const assignment = await assignmentRepo.findOne({
+      where: { lesson_id: lessonId } as any,
+      order: { id: 'DESC' } as any,
+    });
+    if (!assignment) throw new Error('Chưa có bài tập cho bài học này.');
+
+    const fallbackAllowed: AssignmentFormat[] = ['pdf', 'docx', 'doc', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'zip', 'rar', '7z'];
+    const allowedFormats = normalizeAllowedFormats(assignment.submission_format, fallbackAllowed);
+
+    const attachmentsRaw = Array.isArray(assignment.attachments) ? assignment.attachments : [];
+    const attachments = (attachmentsRaw as any[]).map((a) => ({
+      file_name: String(a.file_name ?? ''),
+      file_path: String(a.file_path ?? ''),
+      signed_url: getSignedDeliveryUrl(String(a.file_path ?? '')),
+    }));
+
+    return {
+      assignment_id: (assignment as any).id,
+      lesson_id: lessonId,
+      title: String((assignment as any).title ?? ''),
+      description: String((assignment as any).description ?? ''),
+      due_date: (assignment as any).due_date ? new Date((assignment as any).due_date).toISOString() : null,
+      max_score: Number((assignment as any).max_score ?? 0),
+      passing_score: (assignment as any).passing_score != null ? Number((assignment as any).passing_score) : null,
+      allow_late_submission: Boolean((assignment as any).allow_late_submission),
+      late_submission_days: Number((assignment as any).late_submission_days ?? 0),
+      late_penalty_percent: Number((assignment as any).late_penalty_percent ?? 0),
+      allow_resubmission: Boolean((assignment as any).allow_resubmission),
+      max_resubmissions: Number((assignment as any).max_resubmissions ?? 1),
+      allowed_formats: allowedFormats,
+      attachments,
+      assignment_kind: parseAssignmentKind((assignment as any).assignment_kind),
+      short_answer_questions: mapShortAnswerQuestionsFromDb((assignment as any).short_answer_questions),
     };
   }
 
@@ -353,6 +523,22 @@ export class AssignmentServiceImpl implements AssignmentService {
       assignment.attachments = request.attachments ?? null;
     }
 
+    if (request.assignment_kind != null) {
+      const nk = parseAssignmentKind(request.assignment_kind);
+      (assignment as any).assignment_kind = nk;
+      if (nk === 'short_answer') {
+        const sa = normalizeShortAnswerQuestionsForSave(request.short_answer_questions);
+        if (sa.length < 1) throw new Error('Dạng trả lời ngắn cần ít nhất một câu hỏi.');
+        (assignment as any).short_answer_questions = sa;
+      } else {
+        (assignment as any).short_answer_questions = null;
+      }
+    } else if (request.short_answer_questions !== undefined && parseAssignmentKind((assignment as any).assignment_kind) === 'short_answer') {
+      const sa = normalizeShortAnswerQuestionsForSave(request.short_answer_questions);
+      if (sa.length < 1) throw new Error('Cần ít nhất một câu hỏi.');
+      (assignment as any).short_answer_questions = sa;
+    }
+
     await assignmentRepo.save(assignment as any);
 
     // Sync grade item basics so gradebook stays consistent.
@@ -371,38 +557,249 @@ export class AssignmentServiceImpl implements AssignmentService {
     );
   }
 
+  async listAssignmentSubmissions(
+    subjectUserId: number,
+    lessonId: number,
+    assignmentId: number
+  ): Promise<AssignmentSubmissionListRow[]> {
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const moduleRepo = AppDataSource.getRepository(Module);
+    const courseRepo = AppDataSource.getRepository(Course);
+    const assignmentRepo = AppDataSource.getRepository(Assignment);
+
+    const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
+    if (!lesson) throw new Error('Không tìm thấy bài học!');
+
+    const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id } as any });
+    if (!mod) throw new Error('Không tìm thấy module chứa bài học này!');
+
+    const course = await courseRepo.findOne({
+      where: { id: (mod as any).course_id, created_by: subjectUserId, deleted_at: null as any } as any,
+    });
+    if (!course) throw new Error('Không tìm thấy khóa học hoặc bạn không có quyền thực hiện thao tác này!');
+
+    const assignment = await assignmentRepo.findOne({
+      where: { id: assignmentId, lesson_id: lessonId } as any,
+    });
+    if (!assignment) throw new Error('Không tìm thấy bài tập!');
+
+    const rows = await AppDataSource.query(
+      `
+      SELECT
+        s.id AS submission_id,
+        s.user_id,
+        s.status,
+        s.submitted_at,
+        s.is_late,
+        s.resubmission_count,
+        u.email AS user_email,
+        u.full_name AS user_full_name,
+        st.content AS text_content,
+        (SELECT COUNT(*) FROM submission_attachments sa WHERE sa.submission_id = s.id) AS attachment_count,
+        sf.score AS graded_score,
+        sf.feedback_text,
+        sf.graded_at AS feedback_graded_at,
+        gi.id AS grade_item_id
+      FROM submissions s
+      INNER JOIN assignments a ON a.id = s.assignment_id AND a.id = ? AND a.lesson_id = ?
+      INNER JOIN lessons l ON l.id = a.lesson_id
+      INNER JOIN modules m ON m.id = l.module_id
+      INNER JOIN courses c ON c.id = m.course_id AND c.id = ? AND c.created_by = ? AND c.deleted_at IS NULL
+      INNER JOIN users u ON u.id = s.user_id
+      LEFT JOIN submission_text st ON st.submission_id = s.id
+      LEFT JOIN grade_items gi ON gi.course_id = c.id AND gi.item_type = 'assignment' AND gi.item_id = a.id
+      LEFT JOIN submission_feedback sf ON sf.submission_id = s.id
+      ORDER BY s.submitted_at DESC
+    `,
+      [assignmentId, lessonId, (course as any).id, subjectUserId]
+    );
+
+    return (rows as any[]).map((r) => mapRawToAssignmentSubmissionRow(r));
+  }
+
+  async getAssignmentLearnerRosterByLesson(
+    subjectUserId: number,
+    lessonId: number
+  ): Promise<AssignmentLearnerRosterResult> {
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const moduleRepo = AppDataSource.getRepository(Module);
+    const courseRepo = AppDataSource.getRepository(Course);
+    const assignmentRepo = AppDataSource.getRepository(Assignment);
+
+    const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
+    if (!lesson) throw new Error('Không tìm thấy bài học!');
+
+    const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id } as any });
+    if (!mod) throw new Error('Không tìm thấy module chứa bài học này!');
+
+    const course = await courseRepo.findOne({
+      where: { id: (mod as any).course_id, created_by: subjectUserId, deleted_at: null as any } as any,
+    });
+    if (!course) throw new Error('Không tìm thấy khóa học hoặc bạn không có quyền thực hiện thao tác này!');
+
+    const assignment = await assignmentRepo.findOne({
+      where: { lesson_id: lessonId } as any,
+      order: { id: 'DESC' } as any,
+    });
+    if (!assignment) {
+      return { assignment: null, learners: [] };
+    }
+
+    const assignmentId = Number((assignment as any).id);
+    const courseId = Number((course as any).id);
+
+    const rows = await AppDataSource.query(
+      `
+      SELECT
+        u.id AS user_id,
+        u.email AS user_email,
+        u.full_name AS user_full_name,
+        s.id AS submission_id,
+        s.user_id,
+        s.status,
+        s.submitted_at,
+        s.is_late,
+        s.resubmission_count,
+        st.content AS text_content,
+        (SELECT COUNT(*) FROM submission_attachments sa WHERE sa.submission_id = s.id) AS attachment_count,
+        sf.score AS graded_score,
+        sf.feedback_text,
+        sf.graded_at AS feedback_graded_at,
+        gi.id AS grade_item_id
+      FROM course_enrollments ce
+      INNER JOIN users u ON u.id = ce.user_id
+      LEFT JOIN submissions s ON s.id = (
+        SELECT s2.id FROM submissions s2
+        WHERE s2.assignment_id = ? AND s2.user_id = ce.user_id
+        ORDER BY s2.created_at DESC
+        LIMIT 1
+      )
+      LEFT JOIN submission_text st ON st.submission_id = s.id
+      LEFT JOIN grade_items gi ON gi.course_id = ce.course_id AND gi.item_type = 'assignment' AND gi.item_id = ?
+      LEFT JOIN submission_feedback sf ON sf.submission_id = s.id
+      WHERE ce.course_id = ? AND ce.status IN ('active', 'completed')
+      ORDER BY u.full_name ASC
+    `,
+      [assignmentId, assignmentId, courseId]
+    );
+
+    const learners: AssignmentLearnerRosterRow[] = (rows as any[]).map((r) => {
+      const has = r.submission_id != null;
+      return {
+        user_id: Number(r.user_id),
+        email: String(r.user_email ?? ''),
+        full_name: String(r.user_full_name ?? ''),
+        has_submitted: has,
+        submission: has ? mapRawToAssignmentSubmissionRow(r) : null,
+      };
+    });
+
+    return {
+      assignment: {
+        id: assignmentId,
+        title: String((assignment as any).title ?? ''),
+        max_score: Number((assignment as any).max_score ?? 0),
+      },
+      learners,
+    };
+  }
+
   async gradeSubmission(data: GradeSubmissionRequest): Promise<void> {
+    const submissionRepo = AppDataSource.getRepository(Submission);
+    const assignmentRepo = AppDataSource.getRepository(Assignment);
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const moduleRepo = AppDataSource.getRepository(Module);
+    const courseRepo = AppDataSource.getRepository(Course);
+    const gradeItemRepo = AppDataSource.getRepository(GradeItem);
+
+    const submission = await submissionRepo.findOne({ where: { id: data.submissionId } as any });
+    if (!submission) throw new Error('Không tìm thấy bài nộp.');
+
+    const assignment = await assignmentRepo.findOne({ where: { id: (submission as any).assignment_id } as any });
+    if (!assignment) throw new Error('Không tìm thấy bài tập.');
+
+    const lesson = await lessonRepo.findOne({ where: { id: (assignment as any).lesson_id } as any });
+    if (!lesson) throw new Error('Không tìm thấy bài học!');
+
+    const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id } as any });
+    if (!mod) throw new Error('Không tìm thấy module chứa bài học này!');
+
+    const course = await courseRepo.findOne({
+      where: { id: (mod as any).course_id, created_by: data.graderId, deleted_at: null as any } as any,
+    });
+    if (!course) throw new Error('Bạn không có quyền chấm bài này.');
+
+    const maxScore = Number((assignment as any).max_score ?? 0);
+    const sc = Number(data.score);
+    if (Number.isNaN(sc) || sc < 0 || sc > maxScore) {
+      throw new Error(`Điểm phải từ 0 đến ${maxScore}.`);
+    }
+
+    const gi = await gradeItemRepo.findOne({
+      where: {
+        course_id: (course as any).id,
+        item_type: 'assignment',
+        item_id: (assignment as any).id,
+      } as any,
+    });
+    if (!gi) throw new Error('Không tìm thấy hạng mục điểm cho bài tập này.');
+
+    const feedbackStr = data.feedbackText != null ? String(data.feedbackText) : '';
+    const studentId = Number((submission as any).user_id);
+
     await AppDataSource.transaction(async (manager) => {
-        // 1. Cập nhật/Tạo mới feedback
-        await manager.query(`
-            INSERT INTO submission_feedback (submission_id, grader_id, score, feedback_text, graded_at)
-            VALUES (?, ?, ?, ?, NOW())
-            ON DUPLICATE KEY UPDATE 
-                score = VALUES(score), 
-                feedback_text = VALUES(feedback_text), 
-                grader_id = VALUES(grader_id), 
-                graded_at = NOW()
-        `, [data.submissionId, data.graderId, data.score, data.feedbackText]);
+      const fbRepo = manager.getRepository(SubmissionFeedback);
+      const existing = await fbRepo.findOne({ where: { submission_id: data.submissionId } as any });
+      const row = existing ?? fbRepo.create({ submission_id: data.submissionId } as any);
+      (row as any).grader_id = data.graderId;
+      (row as any).score = sc;
+      (row as any).feedback_text = feedbackStr;
+      (row as any).is_auto_graded = false;
+      await fbRepo.save(row as any);
 
-        // 2. Cập nhật trạng thái submission
-        await manager.query(`UPDATE submissions SET status = 'graded' WHERE id = ?`, [data.submissionId]);
+      await manager.getRepository(Submission).update({ id: data.submissionId } as any, { status: 'graded' } as any);
 
-        // 3. Cập nhật bảng điểm grades
-        await manager.query(`
-            UPDATE grades SET score = ?, graded_at = NOW()
-            WHERE grade_item_id = ? AND user_id = ?
-        `, [data.score, data.gradeItemId, data.userId]);
+      const gradeRepo = manager.getRepository(GradeEntity);
+      let g: GradeEntity | null = await gradeRepo.findOne({
+        where: { grade_item_id: (gi as any).id, user_id: studentId } as any,
+      });
+      const now = new Date();
+      if (!g) {
+        g = gradeRepo.create({
+          grade_item_id: (gi as any).id,
+          user_id: studentId,
+          score: sc,
+          feedback: feedbackStr || null,
+          graded_by: data.graderId,
+          graded_at: now,
+        } as Partial<GradeEntity>) as GradeEntity;
+      } else {
+        g.score = sc as any;
+        g.feedback = feedbackStr || null;
+        g.graded_by = data.graderId;
+        g.graded_at = now;
+      }
+      await gradeRepo.save(g);
 
-        // 4. Gửi thông báo
-        await manager.query(`
+      try {
+        await manager.query(
+          `
             INSERT INTO notifications (user_id, type_id, title, content, data, created_at)
-            VALUES (?, (SELECT id FROM notification_types WHERE name = 'assignment_graded'), ?, ?, ?, NOW())
-        `, [
-            data.userId, 
-            'Bài tập đã được chấm điểm', 
-            `Điểm của bạn: ${data.score}/10`, 
-            JSON.stringify({ score: data.score })
-        ]);
+            SELECT ?, id, ?, ?, ?, NOW()
+            FROM notification_types
+            WHERE name = 'assignment_graded'
+            LIMIT 1
+          `,
+          [
+            studentId,
+            'Bài tập đã được chấm điểm',
+            `Điểm của bạn: ${sc}/${maxScore}`,
+            JSON.stringify({ score: sc, assignment_id: (assignment as any).id }),
+          ]
+        );
+      } catch {
+        // Bảng thông báo có thể chưa seed type — không chặn chấm điểm.
+      }
     });
   }
 

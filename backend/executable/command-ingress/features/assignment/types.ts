@@ -1,3 +1,11 @@
+export type AssignmentKind = 'file_prompt' | 'short_answer';
+
+export type ShortAnswerQuestionDef = {
+  id: string;
+  question_text: string;
+  order_index: number;
+};
+
 export type AssignmentFormat =
   | 'pdf'
   | 'docx'
@@ -33,6 +41,8 @@ export type CreateAssignmentRequest = {
     allow_resubmission: boolean;
     max_resubmissions?: number | null;
     allowed_formats: AssignmentFormat[];
+    assignment_kind?: AssignmentKind;
+    short_answer_questions?: ShortAnswerQuestionDef[] | null;
 };
 
 export type UploadedAssignmentFile = {
@@ -42,11 +52,39 @@ export type UploadedAssignmentFile = {
 };
 export type GradeSubmissionRequest = {
   submissionId: number;
-  gradeItemId: number;
-  userId: number; // ID học viên nhận điểm
   score: number;
   feedbackText: string;
   graderId: number; // ID giảng viên
+};
+
+export type AssignmentSubmissionListRow = {
+  submission_id: number;
+  user_id: number;
+  user_email: string;
+  user_full_name: string;
+  status: string;
+  submitted_at: string | null;
+  is_late: boolean;
+  resubmission_count: number;
+  grade_item_id: number | null;
+  graded_score: number | null;
+  feedback_text: string | null;
+  feedback_graded_at: string | null;
+  content_preview: string;
+  attachment_count: number;
+};
+
+export type AssignmentLearnerRosterRow = {
+  user_id: number;
+  email: string;
+  full_name: string;
+  has_submitted: boolean;
+  submission: AssignmentSubmissionListRow | null;
+};
+
+export type AssignmentLearnerRosterResult = {
+  assignment: { id: number; title: string; max_score: number } | null;
+  learners: AssignmentLearnerRosterRow[];
 };
 
 export type UpdateAssignmentRequest = Partial<{
@@ -62,6 +100,8 @@ export type UpdateAssignmentRequest = Partial<{
   allow_resubmission: boolean;
   max_resubmissions?: number | null;
   allowed_formats: AssignmentFormat[];
+  assignment_kind: AssignmentKind;
+  short_answer_questions: ShortAnswerQuestionDef[] | null;
 }>;
 
 export interface AssignmentService {
@@ -94,6 +134,30 @@ export interface AssignmentService {
       allowed_formats: AssignmentFormat[];
       attachments: AssignmentAttachmentPreview[];
       created_at: string;
+      assignment_kind: AssignmentKind;
+      short_answer_questions: ShortAnswerQuestionDef[];
+    }>;
+
+    getLearnerAssignmentForLesson(
+      subjectUserId: number,
+      lessonId: number
+    ): Promise<{
+      assignment_id: number;
+      lesson_id: number;
+      title: string;
+      description: string;
+      due_date: string | null;
+      max_score: number;
+      passing_score: number | null;
+      allow_late_submission: boolean;
+      late_submission_days: number;
+      late_penalty_percent: number;
+      allow_resubmission: boolean;
+      max_resubmissions: number;
+      allowed_formats: AssignmentFormat[];
+      attachments: AssignmentAttachmentPreview[];
+      assignment_kind: AssignmentKind;
+      short_answer_questions: ShortAnswerQuestionDef[];
     }>;
 
     updateAssignment(
@@ -103,6 +167,15 @@ export interface AssignmentService {
       request: UpdateAssignmentRequest
     ): Promise<void>;
     gradeSubmission(data: GradeSubmissionRequest): Promise<void>;
+    listAssignmentSubmissions(
+      subjectUserId: number,
+      lessonId: number,
+      assignmentId: number
+    ): Promise<AssignmentSubmissionListRow[]>;
+    getAssignmentLearnerRosterByLesson(
+      subjectUserId: number,
+      lessonId: number
+    ): Promise<AssignmentLearnerRosterResult>;
     getMyGradesSummary(studentId: number): Promise<CourseGradeSummary[]>;
 
     getMyAssignmentGradeDetail(studentId: number, assignmentId: number): Promise<any>;

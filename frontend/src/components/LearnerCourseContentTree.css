@@ -142,10 +142,106 @@
   font-weight: 900;
 }
 
+.learnerTreeModule__columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 32%);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .learnerTreeModule__columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.learnerTreeModule__mainColumn {
+  min-width: 0;
+}
+
+.learnerTreeModule__sideStack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.learnerTreeModule__quizColumn {
+  min-width: 0;
+  border: 1px solid #c7d2fe;
+  background: linear-gradient(180deg, #eef2ff 0%, #fff 52%);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.learnerTreeModule__quizHeading {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  font-weight: 950;
+  color: #3730a3;
+}
+
+.learnerTreeModule__quizHint {
+  margin: 0 0 12px 0;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+  color: #4338ca;
+}
+
+.learnerTreeModule__assignColumn {
+  min-width: 0;
+  border: 1px solid #fde68a;
+  background: linear-gradient(180deg, #fffbeb 0%, #fff 48%);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+@media (min-width: 901px) {
+  .learnerTreeModule__sideStack {
+    position: sticky;
+    top: 12px;
+  }
+}
+
+.learnerTreeModule__assignHeading {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  font-weight: 950;
+  color: #92400e;
+}
+
+.learnerTreeModule__assignHint {
+  margin: 0 0 12px 0;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+  color: #78350f;
+}
+
+.learnerTreeModule__emptyHint {
+  margin: 0;
+  padding: 14px 12px;
+  font-size: 13px;
+  font-weight: 750;
+  color: #6b7280;
+  background: #f9fafb;
+  border: 1px dashed #e5e7eb;
+  border-radius: 12px;
+}
+
 .learnerTreeLessons {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.learnerTreeLessons--assignments {
+  gap: 8px;
+}
+
+.learnerTreeLessons--quizzes {
+  gap: 8px;
 }
 
 .learnerTreeLesson {
@@ -253,6 +349,21 @@
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
+.learnerTreeLesson--assignment.learnerTreeLesson--active {
+  border-color: #d97706;
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.12);
+}
+
+.learnerTreeLesson--quiz.learnerTreeLesson--active {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.14);
+}
+
+.learnerTreeLesson__assignThumb {
+  font-size: 36px;
+  line-height: 1;
+}
+
 .learnerTreeLesson__typeTag {
   position: absolute;
   left: 8px;
@@ -309,6 +420,62 @@
   font-size: 12px;
   font-weight: 900;
   color: #3730a3;
+}
+
+.learnerTreeLesson__unlockHint {
+  margin: 6px 0 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+.learnerTreeLesson--compactAssessment .learnerTreeLesson__unlockHint {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #475569;
+}
+
+.learnerTreeLesson--compactAssessment .learnerTreeLesson__row--compactAssessment {
+  padding: 8px 10px;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.learnerTreeLesson__kindIcon {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 10px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+.learnerTreeLesson--compactAssessment.learnerTreeLesson--quiz .learnerTreeLesson__kindIcon {
+  background: #e0e7ff;
+  border-color: #c7d2fe;
+}
+
+.learnerTreeLesson--compactAssessment.learnerTreeLesson--assignment .learnerTreeLesson__kindIcon {
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+
+.learnerTreeLesson__row--compactAssessment .learnerTreeLesson__meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.learnerTreeLesson__row--compactAssessment .learnerTreeLesson__right {
+  min-width: 0;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding-top: 2px;
 }
 
 .learnerTreeLesson__titleText {
@@ -445,5 +612,36 @@
 
 .learnerTreeViewer__download a:hover {
   text-decoration: underline;
+}
+
+.learnerTreeLesson__typeBadge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: #eef2ff;
+  color: #4338ca;
+  vertical-align: middle;
+}
+
+.learnerTreeLesson__typeBadge--assign {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.learnerTreeLesson__quizThumb {
+  font-size: 2.25rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(145deg, #e0e7ff, #f5f3ff);
 }
 

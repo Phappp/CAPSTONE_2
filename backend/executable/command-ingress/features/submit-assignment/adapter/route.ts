@@ -4,16 +4,23 @@ import { SubmissionController } from './controller';
 import upload from '../../../utils/upload';
 
 const initSubmissionAssignmentRoute: (controller: SubmissionController) => express.Router = (controller) => {
-    const router = express.Router({ mergeParams: true});
+  const router = express.Router({ mergeParams: true });
 
-    // Submit Assignment: POST /api/v1/assignments/:assignmentId/submissions
-    router.route('/').post(
-        requireAuthorizedUser,
-        upload.array('files[]', 5),
-        controller.submitAssignment.bind(controller)
-    );
+  const maybeMultipart = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const ct = String(req.headers['content-type'] || '');
+    if (ct.includes('multipart/form-data')) {
+      return upload.array('files', 15)(req, res, next);
+    }
+    return next();
+  };
 
-    return router;
+  router.route('/').post(
+    requireAuthorizedUser,
+    maybeMultipart,
+    controller.submitAssignment.bind(controller)
+  );
+
+  return router;
 };
 
 export default initSubmissionAssignmentRoute;

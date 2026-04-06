@@ -108,6 +108,17 @@ export default class Assignment {
     /** Cấu hình đính kèm bài tập (JSON) (nullable). */
     attachments: any;
 
+    @Column({ type: 'varchar', length: 32, default: 'file_prompt' })
+    /**
+     * file_prompt: GV upload đề; HV nộp file và/hoặc text.
+     * short_answer: GV tạo câu trả lời ngắn; HV điền từng câu.
+     */
+    assignment_kind: string;
+
+    @Column({ type: 'json', nullable: true })
+    /** [{ id, question_text, order_index }] */
+    short_answer_questions: any;
+
     @CreateDateColumn()
     /** Thời điểm tạo. */
     created_at: Date;

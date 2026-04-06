@@ -3,8 +3,10 @@ import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import { getAccessToken } from "../utils/authStorage";
 import "./LearnerCourseContentTree.css";
+import LearnerQuizTake from "./LearnerQuizTake";
+import LearnerAssignmentSubmit from "./LearnerAssignmentSubmit";
 
-type LessonType = "video" | "text";
+type LessonType = "video" | "text" | "quiz" | "assignment";
 
 export type LessonItem = {
   id: number;
@@ -14,6 +16,10 @@ export type LessonItem = {
   lesson_type: LessonType;
   order_index: number;
   open_at?: string | null;
+  /** Quizz gắn với bài video/text (lesson_type không đổi thành quiz). */
+  has_quiz?: boolean;
+  /** Bài tập gắn với bài video/text. */
+  has_assignment?: boolean;
 };
 
 export type ModuleItem = {
@@ -181,6 +187,52 @@ function formatDateTimeVi(date: Date): string {
   } catch {
     return "";
   }
+}
+
+function learnerCoreLessonsInOrder(sorted: LessonItem[]): LessonItem[] {
+  return sorted.filter((x) => x.lesson_type !== "quiz" && x.lesson_type !== "assignment");
+}
+
+/** Nhãn ngắn theo thứ tự trong chương (bài học / Quizz / bài tập). */
+function learnerShortLabelInChapter(le: LessonItem, sorted: LessonItem[]): string {
+  if (le.lesson_type === "video" || le.lesson_type === "text") {
+    const core = learnerCoreLessonsInOrder(sorted);
+    const i = core.findIndex((x) => x.id === le.id) + 1;
+    return i > 0 ? `Bài học ${i}` : "Bài học";
+  }
+  if (le.lesson_type === "quiz") {
+    const qs = sorted.filter((x) => x.lesson_type === "quiz");
+    const i = qs.findIndex((x) => x.id === le.id) + 1;
+    return i > 0 ? `Quizz ${i}` : "Quizz";
+  }
+  if (le.lesson_type === "assignment") {
+    const as = sorted.filter((x) => x.lesson_type === "assignment");
+    const i = as.findIndex((x) => x.id === le.id) + 1;
+    return i > 0 ? `Bài tập ${i}` : "Bài tập";
+  }
+  return "Mục trước";
+}
+
+/** Điều kiện mở: quiz/bài tập gắn bài video-text (cùng lesson id). */
+function learnerUnlockHintAttachedAssessment(moduleIdx: number, host: LessonItem, sorted: LessonItem[]): string {
+  const ch = moduleIdx + 1;
+  const core = learnerCoreLessonsInOrder(sorted);
+  const n = core.findIndex((x) => x.id === host.id) + 1;
+  if (n > 0) return `Ch.${ch} · Mở sau Bài học ${n}`;
+  return `Ch.${ch} · Mở sau bài học đi kèm`;
+}
+
+/** Điều kiện mở: lesson loại quiz/assignment đứng một mình trong chương. */
+function learnerUnlockHintStandaloneAssessment(moduleIdx: number, le: LessonItem, sorted: LessonItem[]): string {
+  const ch = moduleIdx + 1;
+  const pos = sorted.findIndex((x) => x.id === le.id);
+  if (pos < 0) return `Ch.${ch} · Theo tiến độ khóa`;
+  if (pos === 0) {
+    if (moduleIdx <= 0) return `Ch.${ch} · Đầu chương`;
+    return `Ch.${ch} · Sau Ch.${moduleIdx}`;
+  }
+  const prev = sorted[pos - 1]!;
+  return `Ch.${ch} · Sau ${learnerShortLabelInChapter(prev, sorted)}`;
 }
 
 function guessViewerKind(args: { contentType: string; filename: string; mimeType: string | null }): ResourceViewerState["type"] {
@@ -398,6 +450,9 @@ export default function LearnerCourseContentTree(props: {
   const inFlightDurations = useRef<Set<number>>(new Set());
 
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
+  const [highlightKey, setHighlightKey] = useState<string | null>(null);
+  const [quizTake, setQuizTake] = useState<{ lessonId: number; title: string } | null>(null);
+  const [assignmentTake, setAssignmentTake] = useState<{ lessonId: number; title: string } | null>(null);
   const completedSet = useMemo(() => new Set<number>((progress?.completed_lesson_ids || []).map((x) => Number(x))), [progress]);
   const unlockedSet = useMemo(() => new Set<number>((progress?.unlocked_lesson_ids || []).map((x) => Number(x))), [progress]);
 
@@ -753,6 +808,259 @@ export default function LearnerCourseContentTree(props: {
     });
   };
 
+  type LessonCardOpts = {
+    highlightKey: string;
+    rowKey?: string;
+    hideTypeBadge?: boolean;
+    isUnlockedOverride?: boolean;
+    unlockHint?: string;
+    interaction?: "content" | "quizOnly" | "assignmentOpen";
+    visualVariant?: "core" | "quiz" | "assignment";
+    showCompletedPill?: boolean;
+    /** Quizz / bài tập: không thumbnail, chỉ icon nhỏ + chữ. */
+    compactAssessment?: boolean;
+  };
+
+  const renderLessonCard = (
+    l: LessonItem,
+    moduleIdx: number,
+    allLessonsInModule: LessonItem[],
+    displayIndexLabel: string,
+    moduleSchedule: { openAt: Date | null; notOpenedYet: boolean },
+    options: LessonCardOpts
+  ) => {
+    const hideTypeBadge = Boolean(options.hideTypeBadge);
+    const interaction = options.interaction ?? "content";
+    const quizOnly = interaction === "quizOnly";
+    const assignmentOnly = interaction === "assignmentOpen";
+    const visualVariant =
+      options.visualVariant ??
+      (l.lesson_type === "assignment" ? "assignment" : l.lesson_type === "quiz" ? "quiz" : "core");
+
+    const list = resourcesByLessonId[l.id];
+    const latest = list && list.length ? list[0] : null;
+    const hasResource = !!latest;
+    const ytId = !quizOnly && latest ? parseYoutubeVideoId(latest.url || "") : null;
+    const isImage =
+      !quizOnly &&
+      !!latest &&
+      ((latest.mime_type || "").startsWith("image/") ||
+        (latest.filename || "").toLowerCase().match(/\.(png|jpg|jpeg|gif|webp|svg)$/));
+    const thumbSrcFromResource = ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : isImage ? latest?.preview_url || latest?.url : null;
+    const thumbSrc = quizOnly ? null : courseThumbnailUrl || thumbSrcFromResource;
+    const firstInModuleId = allLessonsInModule[0]?.id;
+    const defaultUnlocked = progress ? unlockedSet.has(l.id) : moduleIdx === 0 && l.id === firstInModuleId;
+    const isUnlocked = options.isUnlockedOverride !== undefined ? options.isUnlockedOverride : defaultUnlocked;
+    const isCompleted = completedSet.has(l.id);
+    const isLocked = !isUnlocked;
+    const shouldShowDefaultThumb = !quizOnly && !ytId && !isImage && hasResource && !courseThumbnailUrl;
+    const lessonOpenAt = l.open_at ? new Date(l.open_at) : null;
+    const lessonNotOpenedYet = lessonOpenAt && lessonOpenAt.getTime() > Date.now();
+    const moduleOpenAt = moduleSchedule.openAt;
+    const moduleNotOpenedYet = moduleSchedule.notOpenedYet;
+    const showCompletedPill = options.showCompletedPill !== false && isCompleted;
+    const isCardActive = highlightKey === options.highlightKey;
+    const compactAssessment = Boolean(options.compactAssessment);
+
+    const runOpenContent = () => {
+      setSelectedLessonId(l.id);
+      if (latest) {
+        void openResource(latest);
+        return;
+      }
+      if (list !== undefined) {
+        openLessonFallback(l);
+        return;
+      }
+      void fetchLessonResources(l.id).then((items) => {
+        if (items?.[0]) void openResource(items[0]);
+        else openLessonFallback(l);
+      });
+    };
+
+    const runOpenQuiz = () => {
+      setSelectedLessonId(l.id);
+      setQuizTake({ lessonId: l.id, title: l.title });
+    };
+
+    const runOpenAssignment = () => {
+      setSelectedLessonId(l.id);
+      setAssignmentTake({ lessonId: l.id, title: l.title });
+    };
+
+    const pillTitleLocked =
+      moduleNotOpenedYet && moduleOpenAt
+        ? `Mở lúc: ${formatDateTimeVi(moduleOpenAt)}`
+        : lessonNotOpenedYet && lessonOpenAt
+          ? `Mở lúc: ${formatDateTimeVi(lessonOpenAt)}`
+          : options.unlockHint ||
+            (visualVariant === "quiz"
+              ? "Hoàn thành các mục đứng trước trong chương (theo thứ tự) để mở Quizz."
+              : visualVariant === "assignment"
+                ? "Hoàn thành các mục đứng trước trong chương (theo thứ tự) để mở bài tập."
+                : undefined);
+
+    return (
+      <div
+        key={options.rowKey ?? `lesson-${l.id}`}
+        className={[
+          "learnerTreeLesson",
+          compactAssessment ? "learnerTreeLesson--compactAssessment" : "",
+          isCardActive ? "learnerTreeLesson--active" : "",
+          isLocked ? "learnerTreeLesson--locked" : "",
+          isCompleted ? "learnerTreeLesson--completed" : "",
+          visualVariant === "assignment" ? "learnerTreeLesson--assignment" : "",
+          visualVariant === "quiz" ? "learnerTreeLesson--quiz" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        role={isLocked ? "group" : "button"}
+        tabIndex={isLocked ? -1 : 0}
+        aria-disabled={isLocked ? "true" : "false"}
+        onClick={() => {
+          if (isLocked) return;
+          setHighlightKey(options.highlightKey);
+          if (quizOnly) {
+            runOpenQuiz();
+            return;
+          }
+          if (assignmentOnly) {
+            runOpenAssignment();
+            return;
+          }
+          runOpenContent();
+        }}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter" && e.key !== " ") return;
+          if (isLocked) return;
+          setHighlightKey(options.highlightKey);
+          if (quizOnly) {
+            runOpenQuiz();
+            return;
+          }
+          if (assignmentOnly) {
+            runOpenAssignment();
+            return;
+          }
+          runOpenContent();
+        }}
+      >
+        <div
+          className={["learnerTreeLesson__row", compactAssessment ? "learnerTreeLesson__row--compactAssessment" : ""]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          {compactAssessment ? (
+            <span className="learnerTreeLesson__kindIcon" aria-hidden>
+              {visualVariant === "assignment" ? "📋" : "📝"}
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="learnerTreeLesson__thumbBtn"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isLocked) return;
+                setHighlightKey(options.highlightKey);
+                if (quizOnly) {
+                  runOpenQuiz();
+                  return;
+                }
+                if (assignmentOnly) {
+                  runOpenAssignment();
+                  return;
+                }
+                if (!latest) return;
+                void openResource(latest);
+              }}
+              disabled={
+                (quizOnly || assignmentOnly ? false : l.lesson_type !== "quiz" && !latest) || isLocked
+              }
+              aria-label={
+                quizOnly || l.lesson_type === "quiz"
+                  ? `Làm Quizz: ${l.title}`
+                  : assignmentOnly || l.lesson_type === "assignment"
+                    ? `Nộp bài tập: ${l.title}`
+                    : latest
+                      ? `Mở tài nguyên: ${latest.filename || l.title}`
+                      : `Không có tài nguyên: ${l.title}`
+              }
+            >
+              {thumbSrc ? (
+                <img src={thumbSrc} alt={latest?.filename || l.title} className="learnerTreeLesson__thumb" />
+              ) : (
+                <div className="learnerTreeLesson__thumbPlaceholder">
+                  {list === undefined && !quizOnly ? <div className="learnerTreeLesson__thumbLoading">...</div> : null}
+                  {list !== undefined || quizOnly ? (
+                    <>
+                      {(quizOnly || l.lesson_type === "quiz") && !thumbSrc ? (
+                        <span className="learnerTreeLesson__quizThumb" aria-hidden>
+                          📝
+                        </span>
+                      ) : visualVariant === "assignment" && !thumbSrc ? (
+                        <span className="learnerTreeLesson__assignThumb" aria-hidden>
+                          📋
+                        </span>
+                      ) : shouldShowDefaultThumb || !hasResource ? (
+                        <FilePreviewIcon />
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
+              )}
+
+              {!quizOnly && hasResource && ytId ? (
+                <>
+                  <div className="learnerTreeLesson__playOverlay" aria-hidden="true">
+                    <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                      <path d="M10 8.5v7l6-3.5-6-3.5Z" fill="#ffffff" />
+                    </svg>
+                  </div>
+                  {durationByResourceId[latest!.id] != null ? (
+                    <div className="learnerTreeLesson__durationPill">
+                      {formatDurationSeconds(durationByResourceId[latest!.id])}
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </button>
+          )}
+
+          <div className="learnerTreeLesson__meta">
+            <div className="learnerTreeLesson__title">
+              <span className="learnerTreeLesson__index">{displayIndexLabel}</span>
+              <span className="learnerTreeLesson__titleText">{l.title}</span>
+              {l.lesson_type === "quiz" && !hideTypeBadge && !quizOnly ? (
+                <span className="learnerTreeLesson__typeBadge">Quiz</span>
+              ) : null}
+              {l.lesson_type === "assignment" && !hideTypeBadge && visualVariant === "assignment" && !quizOnly ? (
+                <span className="learnerTreeLesson__typeBadge learnerTreeLesson__typeBadge--assign">Bài tập</span>
+              ) : null}
+            </div>
+            {options.unlockHint ? <p className="learnerTreeLesson__unlockHint">{options.unlockHint}</p> : null}
+          </div>
+
+          <div className="learnerTreeLesson__right" aria-hidden="true">
+            {isLocked ? (
+              <span className="learnerTreeLesson__statusPill learnerTreeLesson__statusPill--locked" title={pillTitleLocked}>
+                {moduleNotOpenedYet && moduleOpenAt
+                  ? `Bị khóa (mở ${formatTimeVi(moduleOpenAt)})`
+                  : lessonNotOpenedYet && lessonOpenAt
+                    ? `Bị khóa (mở ${formatTimeVi(lessonOpenAt)})`
+                    : visualVariant === "quiz" || visualVariant === "assignment"
+                      ? "Chưa mở khóa"
+                      : "Bị khóa"}
+              </span>
+            ) : null}
+            {showCompletedPill ? (
+              <span className="learnerTreeLesson__statusPill learnerTreeLesson__statusPill--completed">Hoàn thành</span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="learnerTreeWrap">
       {resourceError ? <div className="learnerTreeError">{resourceError}</div> : null}
@@ -816,156 +1124,127 @@ export default function LearnerCourseContentTree(props: {
               )}
 
               {!moduleLocked && !isCollapsed ? (
-                <div className="learnerTreeLessons">
-                  {(m.lessons || []).map((l, lessonIdx) => {
-                    const list = resourcesByLessonId[l.id];
-                    const latest = list && list.length ? list[0] : null;
-                    const hasResource = !!latest;
-                    const ytId = latest ? parseYoutubeVideoId(latest.url || "") : null;
-                    const isImage =
-                      !!latest &&
-                      ((latest.mime_type || "").startsWith("image/") ||
-                        (latest.filename || "").toLowerCase().match(/\.(png|jpg|jpeg|gif|webp|svg)$/));
-                    const thumbSrcFromResource =
-                      ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : isImage ? latest?.preview_url || latest?.url : null;
-                    const thumbSrc = courseThumbnailUrl || thumbSrcFromResource;
-                    const isUnlocked = progress ? unlockedSet.has(l.id) : moduleIdx === 0 && lessonIdx === 0;
-                    const isCompleted = completedSet.has(l.id);
-                    const isLocked = !isUnlocked;
-                    const shouldShowDefaultThumb = !ytId && !isImage && hasResource && !courseThumbnailUrl;
-                    const lessonOpenAt = l.open_at ? new Date(l.open_at) : null;
-                    const lessonNotOpenedYet = lessonOpenAt && lessonOpenAt.getTime() > Date.now();
+                (() => {
+                  const allLessons = m.lessons || [];
+                  const sorted = [...allLessons].sort((a, b) => {
+                    const oa = Number(a.order_index ?? 0);
+                    const ob = Number(b.order_index ?? 0);
+                    if (oa !== ob) return oa - ob;
+                    return Number(a.id) - Number(b.id);
+                  });
 
+                  const coreLessons = sorted.filter((x) => x.lesson_type !== "assignment" && x.lesson_type !== "quiz");
+
+                  type QuizEntry = { kind: "standalone"; lesson: LessonItem } | { kind: "attached"; lesson: LessonItem };
+                  const quizEntries: QuizEntry[] = [];
+                  for (const le of sorted) {
+                    if (le.lesson_type === "quiz") quizEntries.push({ kind: "standalone", lesson: le });
+                    else if ((le.lesson_type === "video" || le.lesson_type === "text") && le.has_quiz) {
+                      quizEntries.push({ kind: "attached", lesson: le });
+                    }
+                  }
+
+                  type AsgEntry = { kind: "standalone"; lesson: LessonItem } | { kind: "attached"; lesson: LessonItem };
+                  const asgEntries: AsgEntry[] = [];
+                  for (const le of sorted) {
+                    if (le.lesson_type === "assignment") asgEntries.push({ kind: "standalone", lesson: le });
+                    else if ((le.lesson_type === "video" || le.lesson_type === "text") && le.has_assignment) {
+                      asgEntries.push({ kind: "attached", lesson: le });
+                    }
+                  }
+
+                  const sched = { openAt: moduleOpenAt, notOpenedYet: Boolean(moduleNotOpenedYet) };
+                  const hasSideColumn = quizEntries.length > 0 || asgEntries.length > 0;
+
+                  const attachedUnlocked = (lessonId: number) =>
+                    progress != null ? unlockedSet.has(lessonId) && completedSet.has(lessonId) : false;
+
+                  if (!hasSideColumn) {
                     return (
-                      <div
-                        key={l.id}
-                        className={[
-                          "learnerTreeLesson",
-                          selectedLessonId === l.id ? "learnerTreeLesson--active" : "",
-                          isLocked ? "learnerTreeLesson--locked" : "",
-                          isCompleted ? "learnerTreeLesson--completed" : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        role={isLocked ? "group" : "button"}
-                        tabIndex={isLocked ? -1 : 0}
-                        aria-disabled={isLocked ? "true" : "false"}
-                        onClick={() => {
-                          if (isLocked) return;
-                          setSelectedLessonId(l.id);
-                          if (latest) {
-                            void openResource(latest);
-                            return;
-                          }
-
-                          // Nếu đã fetch xong và lesson không có tài nguyên -> vẫn mở modal hiển thị mô tả/bài học.
-                          if (list !== undefined) {
-                            openLessonFallback(l);
-                            return;
-                          }
-
-                          // Nếu chưa fetch xong -> đợi fetch rồi quyết định.
-                          void fetchLessonResources(l.id).then((items) => {
-                            if (items?.[0]) void openResource(items[0]);
-                            else openLessonFallback(l);
-                          });
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key !== "Enter" && e.key !== " ") return;
-                          if (isLocked) return;
-                          setSelectedLessonId(l.id);
-                          if (latest) {
-                            void openResource(latest);
-                            return;
-                          }
-                          if (list !== undefined) {
-                            openLessonFallback(l);
-                            return;
-                          }
-                          void fetchLessonResources(l.id).then((items) => {
-                            if (items?.[0]) void openResource(items[0]);
-                            else openLessonFallback(l);
-                          });
-                        }}
-                      >
-                        <div className="learnerTreeLesson__row">
-                          <button
-                            type="button"
-                            className="learnerTreeLesson__thumbBtn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isLocked) return;
-                              if (!latest) return;
-                              setSelectedLessonId(l.id);
-                              void openResource(latest);
-                            }}
-                            disabled={!latest || isLocked}
-                            aria-label={latest ? `Mở tài nguyên: ${latest.filename || l.title}` : `Không có tài nguyên: ${l.title}`}
-                          >
-                            {thumbSrc ? (
-                              <img src={thumbSrc} alt={latest?.filename || l.title} className="learnerTreeLesson__thumb" />
-                            ) : (
-                              <div className="learnerTreeLesson__thumbPlaceholder">
-                                {list === undefined ? <div className="learnerTreeLesson__thumbLoading">...</div> : null}
-                                {list !== undefined ? (
-                                  <>
-                                    {shouldShowDefaultThumb || !hasResource ? <FilePreviewIcon /> : null}
-                                  </>
-                                ) : null}
-                              </div>
-                            )}
-
-                            {hasResource && ytId ? (
-                              <>
-                                <div className="learnerTreeLesson__playOverlay" aria-hidden="true">
-                                  <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
-                                    <path d="M10 8.5v7l6-3.5-6-3.5Z" fill="#ffffff" />
-                                  </svg>
-                                </div>
-                                {durationByResourceId[latest.id] != null ? (
-                                  <div className="learnerTreeLesson__durationPill">
-                                    {formatDurationSeconds(durationByResourceId[latest.id])}
-                                  </div>
-                                ) : null}
-                              </>
-                            ) : null}
-                          </button>
-
-                          <div className="learnerTreeLesson__meta">
-                            <div className="learnerTreeLesson__title">
-                              <span className="learnerTreeLesson__index">Bài {lessonIdx + 1}</span>
-                              <span className="learnerTreeLesson__titleText">{l.title}</span>
-                            </div>
-                          </div>
-
-                          <div className="learnerTreeLesson__right" aria-hidden="true">
-                            {isLocked ? (
-                              <span
-                                className="learnerTreeLesson__statusPill learnerTreeLesson__statusPill--locked"
-                                title={
-                                  moduleNotOpenedYet && moduleOpenAt
-                                    ? `Mở lúc: ${formatDateTimeVi(moduleOpenAt)}`
-                                    : lessonNotOpenedYet && lessonOpenAt
-                                      ? `Mở lúc: ${formatDateTimeVi(lessonOpenAt)}`
-                                      : undefined
-                                }
-                              >
-                                {moduleNotOpenedYet && moduleOpenAt
-                                  ? `Bị khóa (mở ${formatTimeVi(moduleOpenAt)})`
-                                  : lessonNotOpenedYet && lessonOpenAt
-                                    ? `Bị khóa (mở ${formatTimeVi(lessonOpenAt)})`
-                                    : "Bị khóa"}
-                              </span>
-                            ) : null}
-                            {isCompleted ? (
-                              <span className="learnerTreeLesson__statusPill learnerTreeLesson__statusPill--completed">Hoàn thành</span>
-                            ) : null}
-                          </div>
-                        </div>
+                      <div className="learnerTreeLessons">
+                        {coreLessons.map((le, i) =>
+                          renderLessonCard(le, moduleIdx, allLessons, `Bài học ${i + 1}`, sched, {
+                            highlightKey: `core-${le.id}`,
+                            rowKey: `core-${le.id}`,
+                          })
+                        )}
                       </div>
                     );
-                  })}
-                </div>
+                  }
+
+                  return (
+                    <div className="learnerTreeModule__columns">
+                      <div className="learnerTreeModule__mainColumn">
+                        {coreLessons.length ? (
+                          <div className="learnerTreeLessons">
+                            {coreLessons.map((le, i) =>
+                              renderLessonCard(le, moduleIdx, allLessons, `Bài học ${i + 1}`, sched, {
+                                highlightKey: `core-${le.id}`,
+                                rowKey: `core-${le.id}`,
+                              })
+                            )}
+                          </div>
+                        ) : (
+                          <p className="learnerTreeModule__emptyHint">
+                            Chương này chỉ có Quizz / bài tập — xem cột bên phải.
+                          </p>
+                        )}
+                      </div>
+                      <div className="learnerTreeModule__sideStack">
+                        {quizEntries.length ? (
+                          <aside className="learnerTreeModule__quizColumn" aria-label="Quizz trong chương">
+                            <h3 className="learnerTreeModule__quizHeading">Quizz</h3>
+                            <p className="learnerTreeModule__quizHint">Điều kiện mở khóa xem trên từng thẻ (Ch. + bài trước).</p>
+                            <div className="learnerTreeLessons learnerTreeLessons--quizzes">
+                              {quizEntries.map((entry, i) => {
+                                const le = entry.lesson;
+                                const attach = entry.kind === "attached";
+                                return renderLessonCard(le, moduleIdx, allLessons, `Quizz ${i + 1}`, sched, {
+                                  highlightKey: attach ? `quizA-${le.id}` : `quiz-${le.id}`,
+                                  rowKey: attach ? `quizA-${le.id}` : `quiz-${le.id}`,
+                                  hideTypeBadge: true,
+                                  unlockHint: attach
+                                    ? learnerUnlockHintAttachedAssessment(moduleIdx, le, sorted)
+                                    : learnerUnlockHintStandaloneAssessment(moduleIdx, le, sorted),
+                                  visualVariant: "quiz",
+                                  interaction: "quizOnly",
+                                  isUnlockedOverride: attach ? attachedUnlocked(le.id) : undefined,
+                                  showCompletedPill: attach ? false : undefined,
+                                  compactAssessment: true,
+                                });
+                              })}
+                            </div>
+                          </aside>
+                        ) : null}
+                        {asgEntries.length ? (
+                          <aside className="learnerTreeModule__assignColumn" aria-label="Bài tập trong chương">
+                            <h3 className="learnerTreeModule__assignHeading">Bài tập</h3>
+                            <p className="learnerTreeModule__assignHint">Điều kiện mở khóa xem trên từng thẻ (Ch. + bài trước).</p>
+                            <div className="learnerTreeLessons learnerTreeLessons--assignments">
+                              {asgEntries.map((entry, i) => {
+                                const le = entry.lesson;
+                                const attach = entry.kind === "attached";
+                                return renderLessonCard(le, moduleIdx, allLessons, `Bài tập ${i + 1}`, sched, {
+                                  highlightKey: attach ? `asgA-${le.id}` : `asg-${le.id}`,
+                                  rowKey: attach ? `asgA-${le.id}` : `asg-${le.id}`,
+                                  hideTypeBadge: true,
+                                  unlockHint: attach
+                                    ? learnerUnlockHintAttachedAssessment(moduleIdx, le, sorted)
+                                    : learnerUnlockHintStandaloneAssessment(moduleIdx, le, sorted),
+                                  visualVariant: "assignment",
+                                  interaction: "assignmentOpen",
+                                  isUnlockedOverride: attach ? attachedUnlocked(le.id) : undefined,
+                                  showCompletedPill: attach ? false : undefined,
+                                  compactAssessment: true,
+                                });
+                              })}
+                            </div>
+                          </aside>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })()
               ) : null}
             </section>
           );
@@ -973,6 +1252,27 @@ export default function LearnerCourseContentTree(props: {
       </div>
 
       {viewer ? <ResourceViewer state={viewer} onClose={closeViewer} /> : null}
+
+      {quizTake ? (
+        <LearnerQuizTake
+          courseId={courseId}
+          lessonId={quizTake.lessonId}
+          lessonTitle={quizTake.title}
+          token={token}
+          onClose={() => setQuizTake(null)}
+          onCompleted={() => void refreshProgress?.()}
+        />
+      ) : null}
+
+      {assignmentTake ? (
+        <LearnerAssignmentSubmit
+          lessonId={assignmentTake.lessonId}
+          lessonTitle={assignmentTake.title}
+          token={token}
+          onClose={() => setAssignmentTake(null)}
+          onSubmitted={() => void refreshProgress?.()}
+        />
+      ) : null}
     </div>
   );
 }

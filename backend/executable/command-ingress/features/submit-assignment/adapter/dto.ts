@@ -1,6 +1,27 @@
 import { IsInt, IsOptional, IsString, Min} from 'class-validator';
 import { RequestDto } from '../../../shared/request-dto';
-import { SubmitAssignmentRequest } from '../types';
+import { ShortAnswerSubmissionItem, SubmitAssignmentRequest } from '../types';
+
+function parseShortAnswersFromBody(body: any): ShortAnswerSubmissionItem[] | undefined {
+    const raw = body?.short_answers;
+    if (raw == null || raw === '') return undefined;
+    let arr: any[] | null = null;
+    if (typeof raw === 'string') {
+        try {
+            const p = JSON.parse(raw);
+            arr = Array.isArray(p) ? p : null;
+        } catch {
+            return undefined;
+        }
+    } else if (Array.isArray(raw)) {
+        arr = raw;
+    }
+    if (!arr) return undefined;
+    return arr.map((x: any) => ({
+        question_id: String(x?.question_id ?? ''),
+        answer_text: String(x?.answer_text ?? ''),
+    }));
+}
 
 /**
  * SubmitAssignmentBody:
@@ -21,6 +42,8 @@ export class SubmitAssignmentBody extends RequestDto implements SubmitAssignment
     @IsString({ message: 'Nội dung nộp bài phải là định dạng văn bản' })
     text_submission?: string;
 
+    short_answers?: ShortAnswerSubmissionItem[];
+
     files?: Express.Multer.File[];
 
     constructor(body: any, files?: Express.Multer.File[], userId?: number, assignmentId?: any) {
@@ -28,6 +51,7 @@ export class SubmitAssignmentBody extends RequestDto implements SubmitAssignment
     this.assignment_id = assignmentId != null ? Number(assignmentId) : 0;
     this.user_id = userId != null ? Number(userId) : 0;
     this.text_submission = body?.text_submission ? String(body.text_submission) : undefined;
+    this.short_answers = parseShortAnswersFromBody(body);
     this.files = Array.isArray(files) ? files : undefined;
   }
 }

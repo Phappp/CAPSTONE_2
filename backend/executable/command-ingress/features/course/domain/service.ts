@@ -1,3 +1,4 @@
+import { In } from 'typeorm';
 import AppDataSource from '../../../../../lib/database';
 import { getSignedDeliveryUrl } from '../../../lib/cloudinary';
 import Course from '../../../../../internal/model/course';
@@ -12,6 +13,16 @@ import CourseCompletionRequirement from '../../../../../internal/model/course_co
 import UserRole from '../../../../../internal/model/user_roles';
 import Role from '../../../../../internal/model/role';
 import User from '../../../../../internal/model/user';
+import Quiz from '../../../../../internal/model/quizze';
+import QuizQuestion from '../../../../../internal/model/quiz_question';
+import QuizAttempt from '../../../../../internal/model/quiz_attempt';
+import QuestionBank from '../../../../../internal/model/question_banks';
+import BankQuestion from '../../../../../internal/model/bank_questions';
+import BankQuestionOption from '../../../../../internal/model/bank_question_options';
+import QuestionOption from '../../../../../internal/model/question_option';
+import QuizResponse from '../../../../../internal/model/quiz_response';
+import QuizResponseOption from '../../../../../internal/model/quiz_response_options';
+import Assignment from '../../../../../internal/model/assignment';
 
 import {
   CourseDashboardStats,
@@ -50,11 +61,78 @@ import {
   UpdateCourseCompletionRulesRequest,
   CourseLearnerProgressResult,
   CourseLeaderboardResult,
+  CourseManagerOverview,
   CoursePrerequisiteOption,
   CoursePrerequisiteGraph,
   CoursePrerequisiteGraphNode,
   CoursePrerequisiteGraphEdge,
+  ManualQuizDetailResult,
+  ManualQuizUpsertRequest,
+  ManualQuizQuestionInput,
+  LearnerQuizTakePayload,
+  LearnerQuizSubmitRequest,
+  LearnerQuizSubmitResult,
+  QuizLearnerScoresResult,
+  QuizLearnerScoresRow,
+  QuizLearnerAttemptRow,
 } from '../types';
+
+function shuffleArray<T>(items: T[]): T[] {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function validateManualQuizQuestions(questions: ManualQuizQuestionInput[]): ManualQuizQuestionInput[] {
+  if (!Array.isArray(questions) || questions.length < 1) {
+    throw new Error('Cần ít nhất một câu hỏi.');
+  }
+  return questions.map((raw, qi) => {
+    const qt = String(raw?.question_type || '');
+    if (qt !== 'multiple_choice' && qt !== 'true_false') {
+      throw new Error(`Câu ${qi + 1}: loại câu hỏi không hợp lệ.`);
+    }
+    const text = String(raw?.question_text || '').trim();
+    if (!text) throw new Error(`Câu ${qi + 1}: nội dung trống.`);
+
+    let options = Array.isArray(raw?.options) ? [...raw.options] : [];
+    if (qt === 'true_false' && options.length === 0) {
+      options = [
+        { option_text: 'Đúng', is_correct: true },
+        { option_text: 'Sai', is_correct: false },
+      ] as ManualQuizQuestionInput['options'];
+    }
+    if (options.length < 2) {
+      throw new Error(`Câu ${qi + 1}: cần ít nhất 2 lựa chọn.`);
+    }
+    const mapped = options.map((o) => ({
+      option_text: String(o?.option_text ?? '').trim(),
+      is_correct: Boolean(o?.is_correct),
+    }));
+    if (mapped.some((o) => !o.option_text)) {
+      throw new Error(`Câu ${qi + 1}: đáp án không được để trống.`);
+    }
+    if (!mapped.some((o) => o.is_correct)) {
+      throw new Error(`Câu ${qi + 1}: chưa chọn đáp án đúng.`);
+    }
+
+    const diff = String(raw?.difficulty || 'medium');
+    const difficulty = diff === 'easy' || diff === 'hard' ? diff : 'medium';
+    const points = raw?.points != null && Number.isFinite(Number(raw.points)) ? Number(raw.points) : 1;
+
+    return {
+      question_type: qt as ManualQuizQuestionInput['question_type'],
+      question_text: text,
+      explanation: raw?.explanation != null ? String(raw.explanation) : null,
+      points,
+      difficulty: difficulty as ManualQuizQuestionInput['difficulty'],
+      options: mapped,
+    };
+  });
+}
 
 function normalizeSlug(input: string): string {
   return input
@@ -653,8 +731,10 @@ export class CourseServiceImpl implements CourseService {
           .getMany()
       : [];
 
+    const attachFlags = await this.loadLessonAttachmentFlags((lessons as any[]).map((l) => Number(l.id)));
     const lessonByModule = new Map<number, CourseLessonItem[]>();
     for (const l of lessons as any[]) {
+      const lid = Number(l.id);
       const arr = lessonByModule.get(l.module_id) || [];
       arr.push({
         id: l.id,
@@ -666,6 +746,8 @@ export class CourseServiceImpl implements CourseService {
         open_at: (l as any).open_at ? new Date((l as any).open_at).toISOString() : null,
         is_free_preview: l.is_free_preview,
         duration_minutes: l.duration_minutes,
+        has_quiz: attachFlags.hasQuiz.has(lid),
+        has_assignment: attachFlags.hasAssignment.has(lid),
       });
       lessonByModule.set(l.module_id, arr);
     }
@@ -912,8 +994,10 @@ export class CourseServiceImpl implements CourseService {
           .getMany()
       : [];
 
+    const attachFlagsLearning = await this.loadLessonAttachmentFlags((lessons as any[]).map((l) => Number(l.id)));
     const lessonByModule = new Map<number, CourseLessonItem[]>();
     for (const l of lessons as any[]) {
+      const lid = Number(l.id);
       const arr = lessonByModule.get(l.module_id) || [];
       arr.push({
         id: l.id,
@@ -925,6 +1009,8 @@ export class CourseServiceImpl implements CourseService {
         is_free_preview: l.is_free_preview,
         duration_minutes: l.duration_minutes,
         open_at: l.open_at ? new Date(l.open_at).toISOString() : null,
+        has_quiz: attachFlagsLearning.hasQuiz.has(lid),
+        has_assignment: attachFlagsLearning.hasAssignment.has(lid),
       });
       lessonByModule.set(l.module_id, arr);
     }
@@ -1017,6 +1103,84 @@ export class CourseServiceImpl implements CourseService {
     return { modules, lessons: lessons as Lesson[], orderedLessons };
   }
 
+  private async loadLessonAttachmentFlags(lessonIds: number[]): Promise<{
+    hasQuiz: Set<number>;
+    hasAssignment: Set<number>;
+  }> {
+    const hasQuiz = new Set<number>();
+    const hasAssignment = new Set<number>();
+    const ids = lessonIds.map((x) => Number(x)).filter((x) => Number.isFinite(x));
+    if (!ids.length) return { hasQuiz, hasAssignment };
+    const quizRepo = AppDataSource.getRepository(Quiz);
+    const assignRepo = AppDataSource.getRepository(Assignment);
+    const qRaw = await quizRepo
+      .createQueryBuilder('q')
+      .select('q.lesson_id', 'lesson_id')
+      .where('q.lesson_id IN (:...ids)', { ids })
+      .getRawMany();
+    for (const r of qRaw as any[]) {
+      const lid = Number(r.lesson_id);
+      if (Number.isFinite(lid)) hasQuiz.add(lid);
+    }
+    const aRaw = await assignRepo
+      .createQueryBuilder('a')
+      .select('a.lesson_id', 'lesson_id')
+      .where('a.lesson_id IN (:...ids)', { ids })
+      .getRawMany();
+    for (const r of aRaw as any[]) {
+      const lid = Number(r.lesson_id);
+      if (Number.isFinite(lid)) hasAssignment.add(lid);
+    }
+    return { hasQuiz, hasAssignment };
+  }
+
+  private moduleLessonsInOrder(moduleId: number, orderedLessons: Lesson[]): Lesson[] {
+    return orderedLessons.filter((l) => Number((l as any).module_id) === Number(moduleId));
+  }
+
+  /** Quizz & bài tập (theo lesson_type): chỉ mở khi mọi bài đứng trước trong cùng chương đã hoàn thành. */
+  private assessmentPredecessorsInModuleComplete(
+    lesson: any,
+    inModule: Lesson[],
+    completedSet: Set<number>
+  ): boolean {
+    const lt = String((lesson as any).lesson_type || '');
+    if (lt !== 'assignment' && lt !== 'quiz') return true;
+    const lessonId = Number((lesson as any).id);
+    const sorted = [...inModule].sort((a, b) => {
+      const oa = Number((a as any).order_index ?? 0);
+      const ob = Number((b as any).order_index ?? 0);
+      if (oa !== ob) return oa - ob;
+      return Number((a as any).id) - Number((b as any).id);
+    });
+    const selfIdx = sorted.findIndex((x) => Number((x as any).id) === lessonId);
+    if (selfIdx <= 0) return true;
+    for (let i = 0; i < selfIdx; i++) {
+      const x = sorted[i] as any;
+      if (!completedSet.has(Number(x.id))) return false;
+    }
+    return true;
+  }
+
+  private lessonProgressionPrerequisiteMet(
+    lesson: any,
+    globalIndex: number,
+    orderedLessons: Lesson[],
+    modules: any[],
+    completedSet: Set<number>
+  ): boolean {
+    const moduleId = Number(lesson.module_id);
+    const moduleIdsOrdered = (modules as any[]).map((m) => Number(m.id));
+    const mi = moduleIdsOrdered.indexOf(moduleId);
+    if (mi < 0) return false;
+
+    const inModule = this.moduleLessonsInOrder(moduleId, orderedLessons);
+    if (!this.assessmentPredecessorsInModuleComplete(lesson, inModule, completedSet)) return false;
+
+    if (globalIndex === 0) return true;
+    return completedSet.has(Number((orderedLessons[globalIndex - 1] as any).id));
+  }
+
   private async getTimeRulesForCourse(courseId: number): Promise<{ videoMinSeconds: number; videoMinPercent: number; textMinSeconds: number }> {
     const repo = AppDataSource.getRepository(CourseCompletionRequirement);
     const row = await repo.findOne({ where: { course_id: courseId } as any });
@@ -1081,14 +1245,25 @@ export class CourseServiceImpl implements CourseService {
       throw new Error('Không thể truy cập bài học.');
     }
 
-    if (idx === 0) return;
-
-    const prevId = Number((orderedLessons[idx - 1] as any).id);
     const completionRepo = AppDataSource.getRepository(LessonCompletion);
-    const prevCompleted = await completionRepo.findOne({ where: { user_id: subjectUserId, lesson_id: prevId } as any });
-    if (!prevCompleted) {
-      throw new Error('Không thể truy cập bài học.');
-    }
+    const completedRows = orderedLessons.length
+      ? await completionRepo
+          .createQueryBuilder('lc')
+          .select(['lc.lesson_id'])
+          .where('lc.user_id = :uid', { uid: subjectUserId })
+          .andWhere('lc.lesson_id IN (:...lessonIds)', { lessonIds: orderedLessons.map((l) => (l as any).id) })
+          .getRawMany()
+      : [];
+    const completedSet = new Set<number>(completedRows.map((r: any) => Number(r.lc_lesson_id ?? r.lesson_id)));
+
+    const prereqOk = this.lessonProgressionPrerequisiteMet(
+      targetLesson,
+      idx,
+      orderedLessons,
+      modules,
+      completedSet
+    );
+    if (!prereqOk) throw new Error('Không thể truy cập bài học.');
   }
 
   async getMyCourseProgress(subjectUserId: number, courseId: number): Promise<CourseProgressResult> {
@@ -1121,7 +1296,7 @@ export class CourseServiceImpl implements CourseService {
       const lessonOpenAt = parseNullableDateTime(lesson?.open_at);
       const lessonOk = !lessonOpenAt || lessonOpenAt.getTime() <= now.getTime();
 
-      const prereqOk = i === 0 ? true : completedSet.has(Number((orderedLessons[i - 1] as any).id));
+      const prereqOk = this.lessonProgressionPrerequisiteMet(lesson, i, orderedLessons, modules, completedSet);
       if (prereqOk && moduleOk && lessonOk) {
         unlocked.push(lessonId);
         continue;
@@ -1223,15 +1398,27 @@ export class CourseServiceImpl implements CourseService {
       throw new Error('Không thể hoàn thành bài học.');
     }
 
-    // Enforce unlock rule: previous lesson must be completed.
-    if (idx > 0) {
-      const completionRepo = AppDataSource.getRepository(LessonCompletion);
-      const prevId = Number((orderedLessons[idx - 1] as any).id);
-      const prevCompleted = await completionRepo.findOne({ where: { user_id: subjectUserId, lesson_id: prevId } as any });
-      if (!prevCompleted) throw new Error('Không thể hoàn thành bài học.');
-    }
-
     const completionRepo = AppDataSource.getRepository(LessonCompletion);
+    const completedRowsForPrereq = orderedLessons.length
+      ? await completionRepo
+          .createQueryBuilder('lc')
+          .select(['lc.lesson_id'])
+          .where('lc.user_id = :uid', { uid: subjectUserId })
+          .andWhere('lc.lesson_id IN (:...lessonIds)', { lessonIds: orderedLessons.map((l) => (l as any).id) })
+          .getRawMany()
+      : [];
+    const completedSetForPrereq = new Set<number>(
+      completedRowsForPrereq.map((r: any) => Number(r.lc_lesson_id ?? r.lesson_id))
+    );
+    const prereqOk = this.lessonProgressionPrerequisiteMet(
+      targetLesson,
+      idx,
+      orderedLessons,
+      modules,
+      completedSetForPrereq
+    );
+    if (!prereqOk) throw new Error('Không thể hoàn thành bài học.');
+
     const exists = await completionRepo.findOne({ where: { user_id: subjectUserId, lesson_id: lessonId } as any });
     if (exists) {
       const courseProgress = await this.getMyCourseProgress(subjectUserId, courseId);
@@ -1818,6 +2005,126 @@ export class CourseServiceImpl implements CourseService {
     return mapCourseRowToItem(row);
   }
 
+  async getMyCourseManagerOverview(subjectUserId: number, courseId: number): Promise<CourseManagerOverview> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+
+    const detail = await this.getMyCourseDetail(subjectUserId, courseId);
+    const enrollRepo = AppDataSource.getRepository(CourseEnrollment);
+
+    const statusRows = await enrollRepo
+      .createQueryBuilder('ce')
+      .select('ce.status', 'status')
+      .addSelect('COUNT(*)', 'cnt')
+      .where('ce.course_id = :courseId', { courseId })
+      .groupBy('ce.status')
+      .getRawMany();
+
+    const enrollmentByStatus: Record<string, number> = {
+      active: 0,
+      completed: 0,
+      dropped: 0,
+      expired: 0,
+    };
+    for (const r of statusRows as any[]) {
+      const s = String(r.status || '');
+      if (s in enrollmentByStatus) enrollmentByStatus[s] = Number(r.cnt) || 0;
+    }
+
+    const avgRow = await enrollRepo
+      .createQueryBuilder('ce')
+      .select('AVG(ce.progress_percent)', 'avg_p')
+      .where('ce.course_id = :courseId', { courseId })
+      .getRawOne();
+    const avgProgress =
+      avgRow?.avg_p != null && !Number.isNaN(Number(avgRow.avg_p)) ? Math.round(Number(avgRow.avg_p) * 100) / 100 : 0;
+
+    const now = new Date();
+    const startMonth = new Date(now.getFullYear(), now.getMonth() - 5, 1, 0, 0, 0, 0);
+    const monthlyRaw = await enrollRepo
+      .createQueryBuilder('ce')
+      .select("DATE_FORMAT(ce.enrolled_at, '%Y-%m')", 'ym')
+      .addSelect('COUNT(*)', 'cnt')
+      .where('ce.course_id = :courseId', { courseId })
+      .andWhere('ce.enrolled_at >= :startMonth', { startMonth })
+      .groupBy('ym')
+      .orderBy('ym', 'ASC')
+      .getRawMany();
+
+    const monthKeys: string[] = [];
+    const enrollmentTrendLabels: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      monthKeys.push(`${y}-${m}`);
+      enrollmentTrendLabels.push(d.toLocaleDateString('vi-VN', { month: 'short', year: 'numeric' }));
+    }
+    const byYm = new Map((monthlyRaw as any[]).map((r) => [String(r.ym), Number(r.cnt) || 0]));
+    const enrollmentTrendValues = monthKeys.map((k) => byYm.get(k) ?? 0);
+
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const ltRaw = await lessonRepo
+      .createQueryBuilder('l')
+      .innerJoin(Module, 'm', 'm.id = l.module_id')
+      .select('l.lesson_type', 'lesson_type')
+      .addSelect('COUNT(*)', 'cnt')
+      .where('m.course_id = :courseId', { courseId })
+      .groupBy('l.lesson_type')
+      .getRawMany();
+
+    const lessonTypeCounts: Record<string, number> = {
+      video: 0,
+      text: 0,
+      quiz: 0,
+      assignment: 0,
+    };
+    for (const r of ltRaw as any[]) {
+      const t = String(r.lesson_type || '');
+      if (t in lessonTypeCounts) lessonTypeCounts[t] = Number(r.cnt) || 0;
+    }
+
+    const idRows = await lessonRepo
+      .createQueryBuilder('l')
+      .innerJoin(Module, 'm', 'm.id = l.module_id')
+      .select('l.id', 'id')
+      .where('m.course_id = :courseId', { courseId })
+      .getRawMany();
+    const lessonIds = (idRows as any[]).map((x) => Number(x.id)).filter((x) => Number.isFinite(x) && x > 0);
+    const flags = await this.loadLessonAttachmentFlags(lessonIds);
+
+    const progressRows = await enrollRepo
+      .createQueryBuilder('ce')
+      .select('ce.progress_percent', 'p')
+      .where('ce.course_id = :courseId', { courseId })
+      .getRawMany();
+
+    const progressBuckets = [
+      { label: '0–25%', count: 0 },
+      { label: '26–50%', count: 0 },
+      { label: '51–75%', count: 0 },
+      { label: '76–100%', count: 0 },
+    ];
+    for (const r of progressRows as any[]) {
+      const p = Math.min(100, Math.max(0, Number(r.p) || 0));
+      if (p <= 25) progressBuckets[0].count += 1;
+      else if (p <= 50) progressBuckets[1].count += 1;
+      else if (p <= 75) progressBuckets[2].count += 1;
+      else progressBuckets[3].count += 1;
+    }
+
+    return {
+      course: detail,
+      enrollment_by_status: enrollmentByStatus,
+      avg_progress_percent: avgProgress,
+      enrollment_trend: { labels: enrollmentTrendLabels, values: enrollmentTrendValues },
+      lesson_type_counts: lessonTypeCounts,
+      lessons_with_quiz_count: flags.hasQuiz.size,
+      lessons_with_assignment_count: flags.hasAssignment.size,
+      progress_distribution: progressBuckets.map(({ label, count }) => ({ label, count })),
+    };
+  }
+
   async getMyCoursePrerequisiteGraph(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteGraph> {
     await ensureUserIsCourseManager(subjectUserId);
     const root = await this.ensureOwnCourse(subjectUserId, courseId);
@@ -1971,8 +2278,10 @@ export class CourseServiceImpl implements CourseService {
           .getMany()
       : [];
 
+    const attachFlagsTree = await this.loadLessonAttachmentFlags((lessons as any[]).map((l) => Number(l.id)));
     const lessonByModule = new Map<number, CourseLessonItem[]>();
     for (const l of lessons as any[]) {
+      const lid = Number(l.id);
       const arr = lessonByModule.get(l.module_id) || [];
       arr.push({
         id: l.id,
@@ -1982,6 +2291,8 @@ export class CourseServiceImpl implements CourseService {
         lesson_type: (l.lesson_type || 'text') as LessonType,
         order_index: l.order_index,
         open_at: l.open_at ? new Date(l.open_at).toISOString() : null,
+        has_quiz: attachFlagsTree.hasQuiz.has(lid),
+        has_assignment: attachFlagsTree.hasAssignment.has(lid),
       });
       lessonByModule.set(l.module_id, arr);
     }
@@ -2060,11 +2371,12 @@ export class CourseServiceImpl implements CourseService {
     const last = await lessonRepo.findOne({ where: { module_id: moduleId } as any, order: { order_index: 'DESC' } as any });
     const nextOrder = last ? Number((last as any).order_index) + 1 : 1;
 
+    const lt = request.lesson_type || 'text';
     const lesson = lessonRepo.create({
       module_id: moduleId,
       title: request.title,
       description: request.description ?? null,
-      lesson_type: request.lesson_type || 'text',
+      lesson_type: lt,
       open_at: parseNullableDateTime((request as any)?.open_at) ?? null,
       order_index: nextOrder,
       is_published: true,
@@ -2090,7 +2402,9 @@ export class CourseServiceImpl implements CourseService {
 
     if (request.title != null) (lesson as any).title = request.title;
     if ('description' in request) (lesson as any).description = request.description ?? null;
-    if (request.lesson_type != null) (lesson as any).lesson_type = request.lesson_type;
+    if (request.lesson_type != null) {
+      (lesson as any).lesson_type = request.lesson_type;
+    }
     if ('open_at' in request) (lesson as any).open_at = parseNullableDateTime((request as any)?.open_at) ?? null;
     await lessonRepo.save(lesson as any);
   }
@@ -2348,5 +2662,587 @@ export class CourseServiceImpl implements CourseService {
     } as any);
     const saved = await resourceRepo.save(entity as any);
     return { id: Number((saved as any).id) };
+  }
+
+  async getManualQuizForLesson(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number
+  ): Promise<ManualQuizDetailResult | null> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const moduleRepo = AppDataSource.getRepository(Module);
+    const quizRepo = AppDataSource.getRepository(Quiz);
+    const qqRepo = AppDataSource.getRepository(QuizQuestion);
+
+    const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
+    if (!lesson) throw new Error('Không tìm thấy bài học.');
+    const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id, course_id: courseId } as any });
+    if (!mod) throw new Error('Không tìm thấy bài học.');
+
+    const quiz = await quizRepo.findOne({ where: { lesson_id: lessonId } as any });
+    if (!quiz) return null;
+
+    const maps = await qqRepo.find({
+      where: { quiz_id: (quiz as any).id } as any,
+      order: { order_index: 'ASC' } as any,
+      relations: ['bankQuestion', 'bankQuestion.options'],
+    });
+
+    const questions = (maps as any[]).map((m) => {
+      const bq = m.bankQuestion;
+      const opts = (bq?.options || []) as any[];
+      const sortedOpts = [...opts].sort(
+        (a, b) => Number(a.order_index ?? 0) - Number(b.order_index ?? 0)
+      );
+      return {
+        order_index: Number(m.order_index),
+        points: Number(m.points ?? bq?.points ?? 1),
+        question_type: String(bq?.question_type || 'multiple_choice'),
+        question_text: String(bq?.question_text || ''),
+        explanation: bq?.explanation ?? null,
+        difficulty: String(bq?.difficulty || 'medium'),
+        options: sortedOpts.map((o: any) => ({
+          option_text: String(o.option_text || ''),
+          is_correct: Boolean(o.is_correct),
+          order_index: Number(o.order_index ?? 0),
+        })),
+      };
+    });
+
+    return {
+      quiz_id: Number((quiz as any).id),
+      lesson_id: lessonId,
+      title: String((quiz as any).title || ''),
+      description: (quiz as any).description ?? null,
+      time_limit_minutes:
+        (quiz as any).time_limit_minutes != null ? Number((quiz as any).time_limit_minutes) : null,
+      passing_score: (quiz as any).passing_score != null ? Number((quiz as any).passing_score) : null,
+      max_attempts: Number((quiz as any).max_attempts ?? 1),
+      shuffle_questions: Boolean((quiz as any).shuffle_questions),
+      shuffle_options: Boolean((quiz as any).shuffle_options),
+      show_results_immediately: (quiz as any).show_results_immediately !== false,
+      show_correct_answers: (quiz as any).show_correct_answers !== false,
+      questions,
+    };
+  }
+
+  async upsertManualQuizForLesson(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number,
+    request: ManualQuizUpsertRequest
+  ): Promise<{ quiz_id: number }> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+
+    const title = String(request?.title || '').trim();
+    if (!title) throw new Error('Vui lòng nhập tiêu đề quiz.');
+    const validated = validateManualQuizQuestions(request.questions);
+
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const moduleRepo = AppDataSource.getRepository(Module);
+
+    const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
+    if (!lesson) throw new Error('Không tìm thấy bài học.');
+    const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id, course_id: courseId } as any });
+    if (!mod) throw new Error('Không tìm thấy bài học.');
+
+    return await AppDataSource.transaction(async (manager) => {
+      const qBankRepo = manager.getRepository(QuestionBank);
+      const bqRepo = manager.getRepository(BankQuestion);
+      const optRepo = manager.getRepository(BankQuestionOption);
+      const quizRepo = manager.getRepository(Quiz);
+      const qqRepo = manager.getRepository(QuizQuestion);
+      const attemptRepo = manager.getRepository(QuizAttempt);
+      const qOptRepo = manager.getRepository(QuestionOption);
+
+      let bankId: number | null = null;
+      let quiz = await quizRepo.findOne({ where: { lesson_id: lessonId } as any });
+
+      if (quiz) {
+        const nAttempts = await attemptRepo.count({ where: { quiz_id: (quiz as any).id } as any });
+        if (nAttempts > 0) {
+          throw new Error('Đã có học viên làm bài — không thể thay đổi danh sách câu hỏi.');
+        }
+        const maps = await qqRepo.find({ where: { quiz_id: (quiz as any).id } as any });
+        if (maps.length) {
+          const first = await qqRepo.findOne({
+            where: { quiz_id: (quiz as any).id } as any,
+            relations: ['bankQuestion'],
+          });
+          bankId = first?.bankQuestion ? Number((first.bankQuestion as any).bank_id) : null;
+          const qqIds = (maps as any[]).map((m) => Number(m.id));
+          const bqIds = (maps as any[]).map((m) => Number(m.bank_question_id));
+          await qOptRepo.delete({ quiz_question_id: In(qqIds) } as any);
+          await qqRepo.delete({ quiz_id: (quiz as any).id } as any);
+          for (const bid of bqIds) {
+            await optRepo.delete({ question_id: bid } as any);
+            await bqRepo.delete({ id: bid } as any);
+          }
+        } else {
+          await qqRepo.delete({ quiz_id: (quiz as any).id } as any);
+        }
+      }
+
+      if (bankId == null) {
+        const bank = qBankRepo.create({
+          course_id: courseId,
+          name: `Quiz thủ công — ${String((lesson as any).title || 'bài học')}`,
+          description: null,
+          created_by: subjectUserId,
+          is_shared: false,
+        } as any);
+        const savedBank = await qBankRepo.save(bank as any);
+        bankId = Number((savedBank as any).id);
+      }
+
+      const tl = request.time_limit_minutes != null ? Number(request.time_limit_minutes) : null;
+      const ps = request.passing_score != null ? Number(request.passing_score) : null;
+      const maxAtt = request.max_attempts != null ? Math.max(1, Math.floor(Number(request.max_attempts))) : 1;
+
+      if (!quiz) {
+        const q = quizRepo.create({
+          lesson_id: lessonId,
+          title,
+          description: request.description != null ? String(request.description) : null,
+          time_limit_minutes: tl != null && Number.isFinite(tl) ? tl : null,
+          passing_score: ps != null && Number.isFinite(ps) ? ps : null,
+          max_attempts: maxAtt,
+          shuffle_questions: Boolean(request.shuffle_questions),
+          shuffle_options: Boolean(request.shuffle_options),
+          show_results_immediately: request.show_results_immediately !== false,
+          show_correct_answers: request.show_correct_answers !== false,
+          random_question_count: null,
+        } as any);
+        quiz = (await quizRepo.save(q as any)) as any;
+      } else {
+        (quiz as any).title = title;
+        (quiz as any).description = request.description != null ? String(request.description) : null;
+        (quiz as any).time_limit_minutes = tl != null && Number.isFinite(tl) ? tl : null;
+        (quiz as any).passing_score = ps != null && Number.isFinite(ps) ? ps : null;
+        (quiz as any).max_attempts = maxAtt;
+        (quiz as any).shuffle_questions = Boolean(request.shuffle_questions);
+        (quiz as any).shuffle_options = Boolean(request.shuffle_options);
+        (quiz as any).show_results_immediately = request.show_results_immediately !== false;
+        (quiz as any).show_correct_answers = request.show_correct_answers !== false;
+        await quizRepo.save(quiz as any);
+      }
+
+      const quizId = Number((quiz as any).id);
+      let order = 1;
+      for (const qdef of validated) {
+        const optEntities = qdef.options.map((o, i) =>
+          optRepo.create({
+            option_text: o.option_text,
+            is_correct: o.is_correct,
+            order_index: i + 1,
+            explanation: null,
+          } as any)
+        );
+        const bq = bqRepo.create({
+          bank_id: bankId,
+          question_type: qdef.question_type,
+          question_text: qdef.question_text,
+          explanation: qdef.explanation ?? null,
+          difficulty: qdef.difficulty || 'medium',
+          category: null,
+          tags: null,
+          points: qdef.points,
+          created_by: subjectUserId,
+          is_ai_generated: false,
+          options: optEntities,
+        } as any);
+        const savedBq = await bqRepo.save(bq as any);
+        const bqId = Number((savedBq as any).id);
+        const bqReloaded = await bqRepo.findOne({
+          where: { id: bqId } as any,
+          relations: ['options'],
+        });
+        const bankOpts = [...((bqReloaded as any)?.options || [])].sort(
+          (a: any, b: any) => Number(a.order_index ?? 0) - Number(b.order_index ?? 0)
+        );
+
+        const qq = qqRepo.create({
+          quiz_id: quizId,
+          bank_question_id: bqId,
+          order_index: order,
+          points: qdef.points,
+        } as any);
+        const savedQq = await qqRepo.save(qq as any);
+        const qqRowId = Number((savedQq as any).id);
+
+        for (const bo of bankOpts) {
+          await qOptRepo.save(
+            qOptRepo.create({
+              quiz_question_id: qqRowId,
+              option_text: String((bo as any).option_text || ''),
+              is_correct: Boolean((bo as any).is_correct),
+              order_index: Number((bo as any).order_index ?? 0),
+              explanation: (bo as any).explanation ?? null,
+            } as any)
+          );
+        }
+        order += 1;
+      }
+
+      return { quiz_id: quizId };
+    });
+  }
+
+  async getLearnerQuizForLesson(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number
+  ): Promise<LearnerQuizTakePayload | null> {
+    await this.ensureEnrolledLearner(subjectUserId, courseId);
+    await this.ensureCanAccessLesson(subjectUserId, courseId, lessonId);
+
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
+    if (!lesson) return null;
+
+    const quizRepo = AppDataSource.getRepository(Quiz);
+    const quiz = await quizRepo.findOne({ where: { lesson_id: lessonId } as any });
+    if (!quiz) return null;
+
+    const lt = String((lesson as any).lesson_type || '');
+    if (lt !== 'quiz') {
+      const completionRepo = AppDataSource.getRepository(LessonCompletion);
+      const done = await completionRepo.findOne({
+        where: { user_id: subjectUserId, lesson_id: lessonId } as any,
+      });
+      if (!done) throw new Error('Vui lòng hoàn thành bài học trước khi làm Quizz.');
+    }
+
+    const qqRepo = AppDataSource.getRepository(QuizQuestion);
+    const qOptRepo = AppDataSource.getRepository(QuestionOption);
+    const attemptRepo = AppDataSource.getRepository(QuizAttempt);
+
+    const maps = await qqRepo.find({
+      where: { quiz_id: (quiz as any).id } as any,
+      order: { order_index: 'ASC' } as any,
+      relations: ['bankQuestion'],
+    });
+    if (!maps.length) return null;
+
+    const attemptsUsed = await attemptRepo.count({
+      where: { quiz_id: (quiz as any).id, user_id: subjectUserId } as any,
+    });
+
+    let questions: LearnerQuizTakePayload['questions'] = [];
+    for (const m of maps as any[]) {
+      const bq = m.bankQuestion;
+      if (!bq) continue;
+      const rawOpts = await qOptRepo.find({
+        where: { quiz_question_id: Number(m.id) } as any,
+        order: { order_index: 'ASC' } as any,
+      });
+      if (!rawOpts.length) continue;
+
+      let opts = (rawOpts as any[]).map((o) => ({
+        id: Number(o.id),
+        option_text: String(o.option_text || ''),
+      }));
+      if ((quiz as any).shuffle_options) opts = shuffleArray(opts);
+
+      questions.push({
+        quiz_question_id: Number(m.id),
+        question_text: String(bq.question_text || ''),
+        question_type: String(bq.question_type || 'multiple_choice'),
+        points: Number(m.points ?? bq.points ?? 1),
+        options: opts,
+      });
+    }
+
+    if ((quiz as any).shuffle_questions) {
+      questions = shuffleArray(questions);
+    }
+
+    if (!questions.length) return null;
+
+    return {
+      quiz_id: Number((quiz as any).id),
+      lesson_id: lessonId,
+      title: String((quiz as any).title || ''),
+      description: (quiz as any).description ?? null,
+      time_limit_minutes:
+        (quiz as any).time_limit_minutes != null ? Number((quiz as any).time_limit_minutes) : null,
+      passing_score: (quiz as any).passing_score != null ? Number((quiz as any).passing_score) : null,
+      max_attempts: Number((quiz as any).max_attempts ?? 1),
+      attempts_used: Number(attemptsUsed),
+      show_results_immediately: (quiz as any).show_results_immediately !== false,
+      show_correct_answers: (quiz as any).show_correct_answers !== false,
+      questions,
+    };
+  }
+
+  async submitLearnerQuiz(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number,
+    request: LearnerQuizSubmitRequest
+  ): Promise<LearnerQuizSubmitResult> {
+    await this.ensureEnrolledLearner(subjectUserId, courseId);
+    await this.ensureCanAccessLesson(subjectUserId, courseId, lessonId);
+
+    const answers = Array.isArray(request?.answers) ? request.answers : [];
+    if (!answers.length) throw new Error('Vui lòng gửi câu trả lời.');
+
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
+    if (!lesson) throw new Error('Không tìm thấy bài học.');
+
+    const quizRepo = AppDataSource.getRepository(Quiz);
+    const quiz = await quizRepo.findOne({ where: { lesson_id: lessonId } as any });
+    if (!quiz) throw new Error('Không tìm thấy quiz.');
+
+    const lt = String((lesson as any).lesson_type || '');
+    if (lt !== 'quiz') {
+      const completionRepo = AppDataSource.getRepository(LessonCompletion);
+      const done = await completionRepo.findOne({
+        where: { user_id: subjectUserId, lesson_id: lessonId } as any,
+      });
+      if (!done) throw new Error('Vui lòng hoàn thành bài học trước khi nộp Quizz.');
+    }
+
+    const qqRepo = AppDataSource.getRepository(QuizQuestion);
+    const qOptRepo = AppDataSource.getRepository(QuestionOption);
+    const attemptRepo = AppDataSource.getRepository(QuizAttempt);
+
+    const maps = await qqRepo.find({ where: { quiz_id: (quiz as any).id } as any });
+    if (!(maps as any[]).length) throw new Error('Quiz chưa có câu hỏi.');
+    const maxPts = (maps as any[]).reduce((s, m) => s + Number(m.points ?? 1), 0);
+
+    const answerByQq = new Map<number, number>();
+    for (const a of answers) {
+      answerByQq.set(Number((a as any).quiz_question_id), Number((a as any).selected_option_id));
+    }
+    for (const m of maps as any[]) {
+      const qid = Number(m.id);
+      if (!answerByQq.has(qid) || !Number.isFinite(answerByQq.get(qid)!)) {
+        throw new Error('Vui lòng chọn đáp án cho mọi câu hỏi.');
+      }
+    }
+
+    const last = await attemptRepo.findOne({
+      where: { quiz_id: (quiz as any).id, user_id: subjectUserId } as any,
+      order: { attempt_number: 'DESC' } as any,
+    });
+    const nextNum = last ? Number((last as any).attempt_number) + 1 : 1;
+    if (nextNum > Number((quiz as any).max_attempts ?? 1)) {
+      throw new Error('Bạn đã hết số lần làm bài.');
+    }
+
+    let earned = 0;
+    const details: LearnerQuizSubmitResult['details'] = [];
+
+    return await AppDataSource.transaction(async (manager) => {
+      const attRepo = manager.getRepository(QuizAttempt);
+      const qOptRepoT = manager.getRepository(QuestionOption);
+      const respRepo = manager.getRepository(QuizResponse);
+      const roRepo = manager.getRepository(QuizResponseOption);
+      const progressRepo = manager.getRepository(LessonProgress);
+
+      const attemptEnt = await attRepo.save(
+        attRepo.create({
+          quiz_id: (quiz as any).id,
+          user_id: subjectUserId,
+          attempt_number: nextNum,
+          started_at: new Date(),
+          submitted_at: new Date(),
+          time_spent_seconds: null,
+          score: null,
+          is_passed: null,
+          status: 'in_progress',
+        } as any)
+      );
+      const attemptId = Number((attemptEnt as any).id);
+
+      for (const m of maps as any[]) {
+        const qqId = Number(m.id);
+        const selId = Number(answerByQq.get(qqId));
+        const pts = Number(m.points ?? 1);
+        const opt = await qOptRepoT.findOne({ where: { id: selId, quiz_question_id: qqId } as any });
+        const isCorrect = Boolean(opt?.is_correct);
+        if (isCorrect) earned += pts;
+
+        const resp = await respRepo.save(
+          respRepo.create({
+            attempt_id: attemptId,
+            quiz_question_id: qqId,
+            is_correct: isCorrect,
+            points_earned: isCorrect ? pts : 0,
+          } as any)
+        );
+        const respId = Number((resp as any).id);
+        if (opt) {
+          await roRepo.save(
+            roRepo.create({
+              response_id: respId,
+              option_id: selId,
+            } as any)
+          );
+        }
+
+        const allOpts = await qOptRepoT.find({
+          where: { quiz_question_id: qqId } as any,
+          order: { order_index: 'ASC' } as any,
+        });
+        details.push({
+          quiz_question_id: qqId,
+          is_correct: isCorrect,
+          points_earned: isCorrect ? pts : 0,
+          correct_option_ids: (allOpts as any[]).filter((o) => o.is_correct).map((o) => Number(o.id)),
+          selected_option_id: opt ? selId : null,
+        });
+      }
+
+      const pct = maxPts > 0 ? Math.round((earned / maxPts) * 10000) / 100 : 0;
+      const passThreshold = (quiz as any).passing_score != null ? Number((quiz as any).passing_score) : null;
+      const isPassed = passThreshold == null ? true : pct + 1e-9 >= passThreshold;
+
+      await attRepo.update(
+        { id: attemptId } as any,
+        {
+          score: pct,
+          is_passed: isPassed,
+          status: 'graded',
+        } as any
+      );
+
+      if (isPassed) {
+        const { orderedLessons } = await this.loadOrderedLessonsForCourse(courseId);
+        const idx = orderedLessons.findIndex((l) => Number((l as any).id) === Number(lessonId));
+        if (idx >= 0) {
+          const rules = await this.getTimeRulesForCourse(courseId);
+          const required = this.computeRequiredSecondsForLesson(orderedLessons[idx], rules);
+          const existing = await progressRepo.findOne({
+            where: { user_id: subjectUserId, course_id: courseId, lesson_id: lessonId } as any,
+          });
+          const entity = existing
+            ? existing
+            : progressRepo.create({
+                user_id: subjectUserId,
+                course_id: courseId,
+                lesson_id: lessonId,
+                time_spent_seconds: 0,
+              } as any);
+          (entity as any).time_spent_seconds = Math.max(
+            Number((entity as any).time_spent_seconds || 0),
+            required
+          );
+          await progressRepo.save(entity as any);
+        }
+        try {
+          await this.completeLesson(subjectUserId, courseId, lessonId);
+        } catch {
+          // ignore
+        }
+      }
+
+      return {
+        attempt_id: attemptId,
+        attempt_number: nextNum,
+        score_percent: pct,
+        earned_points: earned,
+        max_points: maxPts,
+        is_passed: isPassed,
+        show_correct_answers: (quiz as any).show_correct_answers !== false,
+        details,
+      };
+    });
+  }
+
+  async listQuizLearnerScoresForLesson(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number
+  ): Promise<QuizLearnerScoresResult> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
+    if (!lesson) throw new Error('Không tìm thấy bài học.');
+
+    const moduleRepo = AppDataSource.getRepository(Module);
+    const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id } as any });
+    if (!mod || Number((mod as any).course_id) !== courseId) {
+      throw new Error('Bài học không thuộc khóa học này.');
+    }
+
+    const quizRepo = AppDataSource.getRepository(Quiz);
+    const quiz = await quizRepo.findOne({ where: { lesson_id: lessonId } as any });
+    if (!quiz) {
+      return { quiz: null, learners: [] };
+    }
+
+    const enrollRepo = AppDataSource.getRepository(CourseEnrollment);
+    const enrollments = await enrollRepo.find({
+      where: { course_id: courseId, status: In(['active', 'completed']) } as any,
+    });
+    const userIds = [...new Set((enrollments as any[]).map((e) => Number(e.user_id)))].filter((x) => x > 0);
+    if (userIds.length === 0) {
+      return {
+        quiz: {
+          id: Number((quiz as any).id),
+          title: String((quiz as any).title ?? ''),
+          passing_score: (quiz as any).passing_score != null ? Number((quiz as any).passing_score) : null,
+          max_attempts: Number((quiz as any).max_attempts ?? 1),
+        },
+        learners: [],
+      };
+    }
+
+    const userRepo = AppDataSource.getRepository(User);
+    const users = await userRepo.find({ where: { id: In(userIds) } as any });
+    const userById = new Map<number, any>((users as any[]).map((u) => [Number(u.id), u]));
+
+    const attemptRepo = AppDataSource.getRepository(QuizAttempt);
+    const attempts = await attemptRepo.find({
+      where: { quiz_id: (quiz as any).id, user_id: In(userIds) } as any,
+      order: { user_id: 'ASC', attempt_number: 'ASC' } as any,
+    });
+
+    const groups = new Map<number, QuizLearnerAttemptRow[]>();
+    for (const uid of userIds) groups.set(uid, []);
+    for (const a of attempts as any[]) {
+      const uid = Number(a.user_id);
+      const arr = groups.get(uid) || [];
+      arr.push({
+        attempt_id: Number(a.id),
+        attempt_number: Number(a.attempt_number),
+        score: a.score != null ? Number(a.score) : null,
+        is_passed: a.is_passed != null ? Boolean(a.is_passed) : null,
+        submitted_at: a.submitted_at ? new Date(a.submitted_at).toISOString() : null,
+        status: String(a.status ?? ''),
+      });
+      groups.set(uid, arr);
+    }
+
+    const learners: QuizLearnerScoresRow[] = userIds.map((uid) => {
+      const u = userById.get(uid);
+      return {
+        user_id: uid,
+        email: String(u?.email ?? ''),
+        full_name: String(u?.full_name ?? ''),
+        attempts: groups.get(uid) || [],
+      };
+    });
+
+    learners.sort((a, b) => a.full_name.localeCompare(b.full_name, 'vi'));
+
+    return {
+      quiz: {
+        id: Number((quiz as any).id),
+        title: String((quiz as any).title ?? ''),
+        passing_score: (quiz as any).passing_score != null ? Number((quiz as any).passing_score) : null,
+        max_attempts: Number((quiz as any).max_attempts ?? 1),
+      },
+      learners,
+    };
   }
 }

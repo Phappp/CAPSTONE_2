@@ -28,6 +28,8 @@ type CourseContentTree = {
   }[];
 };
 
+type AssignmentKind = "file_prompt" | "short_answer";
+
 type AssignmentPreview = {
   assignment_id: number;
   lesson_id: number;
@@ -44,6 +46,8 @@ type AssignmentPreview = {
   allowed_formats: string[];
   attachments: { file_name: string; file_path: string; signed_url: string }[];
   created_at: string;
+  assignment_kind?: AssignmentKind;
+  short_answer_questions?: { id: string; question_text: string; order_index: number }[];
 };
 
 const DEFAULT_ALLOWED_FORMATS = [
@@ -78,8 +82,14 @@ function datetimeLocalToIso(localValue: string): string {
   return new Date(localValue).toISOString();
 }
 
-export default function AssignmentEditor(props: { courses: CourseBrief[]; token: string | null; loading: boolean }) {
-  const { courses, token, loading } = props;
+export default function AssignmentEditor(props: {
+  courses: CourseBrief[];
+  token: string | null;
+  loading: boolean;
+  /** Đồng bộ từ cây nội dung (menu ⋯ hoặc nút chương). */
+  pickedLessonId?: number | null;
+}) {
+  const { courses, token, loading, pickedLessonId } = props;
 
   const [selectedCourseId, setSelectedCourseId] = useState<number | "">(courses?.[0]?.id ?? "");
   const [lessonTree, setLessonTree] = useState<CourseContentTree | null>(null);
@@ -104,9 +114,33 @@ export default function AssignmentEditor(props: { courses: CourseBrief[]; token:
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [currentAssignmentId, setCurrentAssignmentId] = useState<number | null>(null);
 
+  /** Dạng 1: đề file + HV nộp file/văn bản. Dạng 2: câu trả lời ngắn. */
+  const [assignmentKind, setAssignmentKind] = useState<AssignmentKind>("file_prompt");
+  const [shortAnswerLines, setShortAnswerLines] = useState<string[]>([""]);
+
   const [preview, setPreview] = useState<AssignmentPreview | null>(null);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+
+  type SubmissionRow = {
+    submission_id: number;
+    user_email: string;
+    user_full_name: string;
+    status: string;
+    submitted_at: string | null;
+    is_late: boolean;
+    graded_score: number | null;
+    feedback_text: string | null;
+    content_preview: string;
+    attachment_count: number;
+  };
+
+  const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [submissionsError, setSubmissionsError] = useState<string | null>(null);
+  const [gradingId, setGradingId] = useState<number | null>(null);
+  const [scoreDraft, setScoreDraft] = useState<Record<number, string>>({});
+  const [feedbackDraft, setFeedbackDraft] = useState<Record<number, string>>({});
 
   const readOnly = Boolean(preview) && !editing;
 
@@ -153,11 +187,121 @@ export default function AssignmentEditor(props: { courses: CourseBrief[]; token:
   }, [selectedCourseId, authHeaders]);
 
   useEffect(() => {
+    if (pickedLessonId == null || !Number.isFinite(Number(pickedLessonId))) return;
+    if (!lessonTree) return;
+    const ok = (lessonTree.modules ?? []).some((mod) =>
+      (mod.lessons ?? []).some((l) => l.id === pickedLessonId)
+    );
+    if (ok) setLessonId(pickedLessonId);
+  }, [pickedLessonId, lessonTree]);
+
+  useEffect(() => {
     // Reset state when switching lesson (avoid editing wrong assignment).
     setPreview(null);
     setCurrentAssignmentId(null);
     setEditing(false);
+    setAssignmentKind("file_prompt");
+    setShortAnswerLines([""]);
+    setSubmissions([]);
+    setSubmissionsError(null);
+    setScoreDraft({});
+    setFeedbackDraft({});
   }, [lessonId]);
+
+  useEffect(() => {
+    if (!preview || !currentAssignmentId || !lessonId) {
+      setSubmissions([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setSubmissionsLoading(true);
+      setSubmissionsError(null);
+      try {
+        const res = await fetch(
+          `${url}${ASSIGNMENTS_API.assignmentSubmissions(lessonId, currentAssignmentId)}`,
+          {
+            headers: {
+              "Content-Type": "application/json",
+              ...authHeaders,
+            },
+          }
+        );
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json?.message || "Không tải được danh sách bài nộp.");
+        const list = (json?.data?.submissions ?? []) as SubmissionRow[];
+        if (cancelled) return;
+        setSubmissions(Array.isArray(list) ? list : []);
+        const sInit: Record<number, string> = {};
+        const fInit: Record<number, string> = {};
+        list.forEach((r) => {
+          sInit[r.submission_id] =
+            r.graded_score != null && !Number.isNaN(Number(r.graded_score)) ? String(r.graded_score) : "";
+          fInit[r.submission_id] = r.feedback_text ?? "";
+        });
+        setScoreDraft(sInit);
+        setFeedbackDraft(fInit);
+      } catch (e: any) {
+        if (!cancelled) {
+          setSubmissionsError(e?.message || "Lỗi tải bài nộp.");
+          setSubmissions([]);
+        }
+      } finally {
+        if (!cancelled) setSubmissionsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [preview, currentAssignmentId, lessonId, authHeaders]);
+
+  const submitGrade = async (submissionId: number) => {
+    const raw = scoreDraft[submissionId]?.trim();
+    if (raw === "" || Number.isNaN(Number(raw))) {
+      toast.error("Vui lòng nhập điểm hợp lệ.");
+      return;
+    }
+    const max = Number(preview?.max_score ?? 10);
+    const sc = Number(raw);
+    if (sc < 0 || sc > max) {
+      toast.error(`Điểm phải từ 0 đến ${max}.`);
+      return;
+    }
+    setGradingId(submissionId);
+    try {
+      const res = await fetch(`${url}${ASSIGNMENTS_API.gradeSubmission(submissionId)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders,
+        },
+        body: JSON.stringify({
+          submissionId,
+          score: sc,
+          feedbackText: feedbackDraft[submissionId] ?? "",
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.message || "Chấm điểm thất bại.");
+      toast.success("Đã lưu điểm và nhận xét.");
+      setSubmissions((prev) =>
+        prev.map((r) =>
+          r.submission_id === submissionId
+            ? { ...r, status: "graded", graded_score: sc, feedback_text: feedbackDraft[submissionId] ?? "" }
+            : r
+        )
+      );
+    } catch (e: any) {
+      toast.error(e?.message || "Lỗi khi chấm điểm.");
+    } finally {
+      setGradingId(null);
+    }
+  };
+
+  const buildShortAnswerPayload = () => {
+    const texts = shortAnswerLines.map((s) => s.trim()).filter(Boolean);
+    return texts.map((question_text) => ({ question_text }));
+  };
 
   const buildCreatePayload = () => {
     const passing = passingScore.trim() ? Number(passingScore) : null;
@@ -173,7 +317,8 @@ export default function AssignmentEditor(props: { courses: CourseBrief[]; token:
       allow_resubmission: allowResubmission,
       max_resubmissions: allowResubmission ? Number(maxResubmissions) : 1,
       allowed_formats: DEFAULT_ALLOWED_FORMATS,
-      // attachments: keep empty; we upload via multipart after create
+      assignment_kind: assignmentKind,
+      short_answer_questions: assignmentKind === "short_answer" ? buildShortAnswerPayload() : null,
     };
   };
 
@@ -207,6 +352,13 @@ export default function AssignmentEditor(props: { courses: CourseBrief[]; token:
     if (!dueDate) {
       toast.error("Vui lòng chọn hạn nộp.");
       return;
+    }
+    if (assignmentKind === "short_answer") {
+      const n = shortAnswerLines.map((s) => s.trim()).filter(Boolean).length;
+      if (n < 1) {
+        toast.error("Dạng trả lời ngắn cần ít nhất một câu hỏi.");
+        return;
+      }
     }
 
     setSaving(true);
@@ -276,6 +428,11 @@ export default function AssignmentEditor(props: { courses: CourseBrief[]; token:
 
     setAllowResubmission(Boolean(p.allow_resubmission));
     setMaxResubmissions(Number(p.max_resubmissions ?? 1));
+
+    const k = p.assignment_kind === "short_answer" ? "short_answer" : "file_prompt";
+    setAssignmentKind(k);
+    const qs = (p.short_answer_questions || []).map((q) => q.question_text).filter(Boolean);
+    setShortAnswerLines(qs.length ? qs : [""]);
   };
 
   const handleEditToggle = () => {
@@ -286,6 +443,13 @@ export default function AssignmentEditor(props: { courses: CourseBrief[]; token:
 
   const handleSaveEdit = async () => {
     if (!preview || !currentAssignmentId || !lessonId) return;
+    if (assignmentKind === "short_answer") {
+      const n = shortAnswerLines.map((s) => s.trim()).filter(Boolean).length;
+      if (n < 1) {
+        toast.error("Dạng trả lời ngắn cần ít nhất một câu hỏi.");
+        return;
+      }
+    }
     setSaving(true);
     try {
       const passing = passingScore.trim() ? Number(passingScore) : null;
@@ -300,6 +464,8 @@ export default function AssignmentEditor(props: { courses: CourseBrief[]; token:
         late_penalty_percent: allowLate ? Number(latePenalty) : 0,
         allow_resubmission: allowResubmission,
         max_resubmissions: allowResubmission ? Number(maxResubmissions) : 1,
+        assignment_kind: assignmentKind,
+        short_answer_questions: assignmentKind === "short_answer" ? buildShortAnswerPayload() : null,
         // allowed_formats: omitted so BE giữ nguyên cấu hình đã lưu
       };
 
@@ -367,15 +533,24 @@ export default function AssignmentEditor(props: { courses: CourseBrief[]; token:
           onChange={(e) => setLessonId(Number(e.target.value))}
           disabled={!lessonTree || lessonsLoading || courses.length === 0}
         >
-          {(lessonTree?.modules ?? []).flatMap((m) => m.lessons ?? []).map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.title} (#{l.id})
-            </option>
+          {(lessonTree?.modules ?? []).map((mod, mi) => (
+            <optgroup key={mod.id} label={`Chương ${mi + 1}: ${mod.title || "Không tên"}`}>
+              {(mod.lessons ?? []).map((l, li) => (
+                <option key={l.id} value={l.id}>
+                  Bài {li + 1}: {l.title} · {l.lesson_type}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </div>
 
       {lessonsError && <div className="error-box">{lessonsError}</div>}
+
+      <p className="editor-hint" style={{ margin: "0 0 12px", fontSize: 13, color: "#6b7280" }}>
+        Mở khóa theo thứ tự bài trong khóa: học viên cần hoàn thành các bài đứng trước (trong chương và toàn khóa) trước khi
+        làm bài tập.
+      </p>
 
       <div className="assignment-form">
         <h3>Thông tin bài tập</h3>
@@ -426,6 +601,77 @@ export default function AssignmentEditor(props: { courses: CourseBrief[]; token:
             />
           </div>
         </div>
+
+        <div className="field" style={{ marginBottom: 16 }}>
+          <label>Dạng bài tập</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            <label className="checkbox-row" style={{ fontWeight: 400 }}>
+              <input
+                type="radio"
+                name="assignmentKind"
+                checked={assignmentKind === "file_prompt"}
+                onChange={() => setAssignmentKind("file_prompt")}
+                disabled={saving || readOnly}
+              />
+              <span>
+                <strong>File / văn bản</strong> — tải đề kèm file; học viên nộp file đáp án và/hoặc ghi text.
+              </span>
+            </label>
+            <label className="checkbox-row" style={{ fontWeight: 400 }}>
+              <input
+                type="radio"
+                name="assignmentKind"
+                checked={assignmentKind === "short_answer"}
+                onChange={() => setAssignmentKind("short_answer")}
+                disabled={saving || readOnly}
+              />
+              <span>
+                <strong>Trả lời ngắn</strong> — bạn tạo từng câu hỏi; học viên điền đáp án cho mỗi câu.
+              </span>
+            </label>
+          </div>
+        </div>
+
+        {assignmentKind === "short_answer" ? (
+          <div className="field" style={{ marginBottom: 20 }}>
+            <label>Câu hỏi trả lời ngắn *</label>
+            <p style={{ fontSize: 13, color: "#6b7280", margin: "4px 0 10px" }}>
+              Ít nhất một câu. Hệ thống sẽ gán id q1, q2, … theo thứ tự khi lưu.
+            </p>
+            {shortAnswerLines.map((line, idx) => (
+              <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "flex-start" }}>
+                <span style={{ minWidth: 28, paddingTop: 8, color: "#6b7280" }}>{idx + 1}.</span>
+                <textarea
+                  rows={2}
+                  value={line}
+                  onChange={(e) =>
+                    setShortAnswerLines((prev) => prev.map((s, i) => (i === idx ? e.target.value : s)))
+                  }
+                  disabled={saving || readOnly}
+                  placeholder="Nội dung câu hỏi"
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={saving || readOnly || shortAnswerLines.length <= 1}
+                  onClick={() => setShortAnswerLines((prev) => prev.filter((_, i) => i !== idx))}
+                  style={{ marginTop: 4 }}
+                >
+                  Xóa
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={saving || readOnly}
+              onClick={() => setShortAnswerLines((prev) => [...prev, ""])}
+            >
+              Thêm câu
+            </button>
+          </div>
+        ) : null}
 
         <div className="policy-grid">
           <div className="policy">
@@ -557,7 +803,24 @@ export default function AssignmentEditor(props: { courses: CourseBrief[]; token:
               <div>
                 <b>Nộp lại:</b> {preview.allow_resubmission ? `tối đa ${preview.max_resubmissions} lần` : "Không"}
               </div>
+              <div>
+                <b>Dạng:</b>{" "}
+                {preview.assignment_kind === "short_answer" ? "Trả lời ngắn" : "File / văn bản"}
+              </div>
             </div>
+
+            {preview.assignment_kind === "short_answer" && (preview.short_answer_questions?.length ?? 0) > 0 ? (
+              <div className="preview-meta" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+                <div style={{ width: "100%" }}>
+                  <b>Câu hỏi:</b>
+                  <ol style={{ margin: "8px 0 0 18px" }}>
+                    {(preview.short_answer_questions || []).map((q) => (
+                      <li key={q.id}>{q.question_text}</li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            ) : null}
 
             <div className="preview-attachments">
               <h4>Đính kèm ({preview.attachments?.length ?? 0})</h4>
@@ -597,6 +860,94 @@ export default function AssignmentEditor(props: { courses: CourseBrief[]; token:
             )}
           </div>
         )}
+
+        {preview && currentAssignmentId && lessonId ? (
+          <div className="preview-box" style={{ marginTop: 16 }}>
+            <h3>Bài nộp &amp; chấm điểm</h3>
+            <p style={{ fontSize: 13, color: "#64748b", marginTop: 0 }}>
+              Xem nội dung tóm tắt, nhập điểm (0–{preview.max_score}) và nhận xét, rồi bấm Lưu điểm. Học viên xem kết quả trong màn hình làm bài tập.
+            </p>
+            {submissionsLoading ? <div style={{ color: "#64748b" }}>Đang tải danh sách…</div> : null}
+            {submissionsError ? <div className="error-box">{submissionsError}</div> : null}
+            {!submissionsLoading && !submissionsError && submissions.length === 0 ? (
+              <div className="muted">Chưa có học viên nộp bài.</div>
+            ) : null}
+
+            {submissions.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {submissions.map((row) => (
+                  <div
+                    key={row.submission_id}
+                    style={{
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 10,
+                      padding: 12,
+                      background: "#fafafa",
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, color: "#0f172a" }}>
+                      {row.user_full_name || "Học viên"}{" "}
+                      <span style={{ fontWeight: 400, color: "#64748b", fontSize: 13 }}>({row.user_email})</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>
+                      Nộp: {row.submitted_at ? new Date(row.submitted_at).toLocaleString("vi-VN") : "—"} · Trạng thái:{" "}
+                      <strong>{row.status}</strong>
+                      {row.is_late ? " · Nộp muộn" : ""}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "#334155",
+                        whiteSpace: "pre-wrap",
+                        marginBottom: 10,
+                        maxHeight: 120,
+                        overflow: "auto",
+                      }}
+                    >
+                      {row.content_preview}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+                      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+                        Điểm (max {preview.max_score})
+                        <input
+                          type="number"
+                          min={0}
+                          max={preview.max_score}
+                          step={0.01}
+                          value={scoreDraft[row.submission_id] ?? ""}
+                          onChange={(e) =>
+                            setScoreDraft((prev) => ({ ...prev, [row.submission_id]: e.target.value }))
+                          }
+                          style={{ width: 100, padding: "6px 8px", borderRadius: 8, border: "1px solid #e5e7eb" }}
+                        />
+                      </label>
+                      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, flex: "1 1 220px" }}>
+                        Nhận xét
+                        <textarea
+                          rows={2}
+                          value={feedbackDraft[row.submission_id] ?? ""}
+                          onChange={(e) =>
+                            setFeedbackDraft((prev) => ({ ...prev, [row.submission_id]: e.target.value }))
+                          }
+                          style={{ width: "100%", padding: "6px 8px", borderRadius: 8, border: "1px solid #e5e7eb" }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={gradingId === row.submission_id}
+                        onClick={() => void submitGrade(row.submission_id)}
+                        style={{ marginBottom: 2 }}
+                      >
+                        {gradingId === row.submission_id ? "Đang lưu…" : "Lưu điểm"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );

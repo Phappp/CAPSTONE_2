@@ -62,6 +62,10 @@ export type CourseLessonItem = {
   open_at?: string | null;
   is_free_preview?: boolean;
   duration_minutes?: number | null;
+  /** Có Quizz gắn với lesson (lesson vẫn có thể là video/text). */
+  has_quiz?: boolean;
+  /** Có bài tập gắn với lesson (lesson có thể không phải loại assignment). */
+  has_assignment?: boolean;
 };
 
 export type CourseModuleItem = {
@@ -249,6 +253,18 @@ export type CourseDashboardStats = {
   archived: number;
 };
 
+/** Tổng quan một khóa học cho màn hình quản lý (GV). */
+export type CourseManagerOverview = {
+  course: CourseListItem;
+  enrollment_by_status: Record<string, number>;
+  avg_progress_percent: number;
+  enrollment_trend: { labels: string[]; values: number[] };
+  lesson_type_counts: Record<string, number>;
+  lessons_with_quiz_count: number;
+  lessons_with_assignment_count: number;
+  progress_distribution: { label: string; count: number }[];
+};
+
 export type EnrollmentResult = {
   id: number;
   course_id: number;
@@ -363,6 +379,124 @@ export type CoursePrerequisiteGraph = {
   edges: CoursePrerequisiteGraphEdge[];
 };
 
+export type ManualQuizOptionInput = {
+  option_text: string;
+  is_correct: boolean;
+};
+
+export type ManualQuizQuestionInput = {
+  question_text: string;
+  explanation?: string | null;
+  points?: number;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  question_type: 'multiple_choice' | 'true_false';
+  options: ManualQuizOptionInput[];
+};
+
+export type ManualQuizUpsertRequest = {
+  title: string;
+  description?: string | null;
+  time_limit_minutes?: number | null;
+  passing_score?: number | null;
+  max_attempts?: number;
+  shuffle_questions?: boolean;
+  shuffle_options?: boolean;
+  show_results_immediately?: boolean;
+  show_correct_answers?: boolean;
+  questions: ManualQuizQuestionInput[];
+};
+
+export type ManualQuizDetailResult = {
+  quiz_id: number;
+  lesson_id: number;
+  title: string;
+  description: string | null;
+  time_limit_minutes: number | null;
+  passing_score: number | null;
+  max_attempts: number;
+  shuffle_questions: boolean;
+  shuffle_options: boolean;
+  show_results_immediately: boolean;
+  show_correct_answers: boolean;
+  questions: {
+    order_index: number;
+    points: number;
+    question_type: string;
+    question_text: string;
+    explanation: string | null;
+    difficulty: string;
+    options: { option_text: string; is_correct: boolean; order_index: number }[];
+  }[];
+};
+
+/** Quiz làm bài (học viên) — không chứa đáp án đúng. */
+export type LearnerQuizTakePayload = {
+  quiz_id: number;
+  lesson_id: number;
+  title: string;
+  description: string | null;
+  time_limit_minutes: number | null;
+  passing_score: number | null;
+  max_attempts: number;
+  attempts_used: number;
+  show_results_immediately: boolean;
+  show_correct_answers: boolean;
+  questions: {
+    quiz_question_id: number;
+    question_text: string;
+    question_type: string;
+    points: number;
+    options: { id: number; option_text: string }[];
+  }[];
+};
+
+export type LearnerQuizSubmitRequest = {
+  answers: { quiz_question_id: number; selected_option_id: number }[];
+};
+
+export type QuizLearnerAttemptRow = {
+  attempt_id: number;
+  attempt_number: number;
+  score: number | null;
+  is_passed: boolean | null;
+  submitted_at: string | null;
+  status: string;
+};
+
+export type QuizLearnerScoresRow = {
+  user_id: number;
+  email: string;
+  full_name: string;
+  attempts: QuizLearnerAttemptRow[];
+};
+
+export type QuizLearnerScoresResult = {
+  quiz: {
+    id: number;
+    title: string;
+    passing_score: number | null;
+    max_attempts: number;
+  } | null;
+  learners: QuizLearnerScoresRow[];
+};
+
+export type LearnerQuizSubmitResult = {
+  attempt_id: number;
+  attempt_number: number;
+  score_percent: number;
+  earned_points: number;
+  max_points: number;
+  is_passed: boolean;
+  show_correct_answers: boolean;
+  details: {
+    quiz_question_id: number;
+    is_correct: boolean;
+    points_earned: number;
+    correct_option_ids: number[];
+    selected_option_id: number | null;
+  }[];
+};
+
 export interface CourseService {
   // Public methods
   listPublishedCourses(subjectUserId: number | undefined, query: PublishedCourseListQuery): Promise<PublishedCourseListResult>;
@@ -382,6 +516,7 @@ export interface CourseService {
   listMyCourses(subjectUserId: number, query: CourseListQuery): Promise<CourseListResult>;
   getMyCourseDashboardStats(subjectUserId: number): Promise<CourseDashboardStats>;
   getMyCourseDetail(subjectUserId: number, courseId: number): Promise<CourseListItem>;
+  getMyCourseManagerOverview(subjectUserId: number, courseId: number): Promise<CourseManagerOverview>;
   getMyCoursePrerequisiteGraph(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteGraph>;
   listMyCoursePrerequisiteOptions(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteOption[]>;
   updateMyCourse(subjectUserId: number, courseId: number, request: UpdateCourseRequest): Promise<void>;
@@ -429,4 +564,32 @@ export interface CourseService {
     lessonId: number,
     request: { youtube_url: string; title?: string | null }
   ): Promise<{ id: number }>;
+
+  /** Quiz thủ công (ngân hàng câu + quiz_questions). */
+  getManualQuizForLesson(subjectUserId: number, courseId: number, lessonId: number): Promise<ManualQuizDetailResult | null>;
+  upsertManualQuizForLesson(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number,
+    request: ManualQuizUpsertRequest
+  ): Promise<{ quiz_id: number }>;
+
+  getLearnerQuizForLesson(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number
+  ): Promise<LearnerQuizTakePayload | null>;
+  submitLearnerQuiz(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number,
+    request: LearnerQuizSubmitRequest
+  ): Promise<LearnerQuizSubmitResult>;
+
+  /** Giảng viên: điểm các lần làm quiz theo học viên (ghi danh active/completed). */
+  listQuizLearnerScoresForLesson(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number
+  ): Promise<QuizLearnerScoresResult>;
 }

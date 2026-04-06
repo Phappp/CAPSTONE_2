@@ -26,6 +26,9 @@
     font-weight: var(--text-hero-title-weight);
     line-height: 1.1;
     letter-spacing: var(--text-hero-title-tracking);
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .course-detail-slug {

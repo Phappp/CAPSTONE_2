@@ -5,7 +5,7 @@ import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import { getAccessToken } from "../utils/authStorage";
 import CourseContentTreeEditor from "../components/CourseContentTreeEditor";
-import PrerequisiteGraph, { type PrerequisiteGraphData } from "../components/PrerequisiteGraph";
+import CourseAssessmentModal, { type CourseAssessmentModalTab } from "../components/CourseAssessmentModal";
 import "./TeacherCourseDetailPage.css";
 
 type CourseStatus = "draft" | "published" | "archived";
@@ -36,30 +36,6 @@ type CompletionRules = {
   video_min_seconds: number;
   video_min_percent: number;
   text_min_seconds: number;
-};
-
-type LearnerProgressItem = {
-  rank: number;
-  user_id: number;
-  full_name: string;
-  email: string;
-  avatar_url: string | null;
-  status: string;
-  enrolled_at: string;
-  last_accessed_at: string | null;
-  completed_at: string | null;
-  progress_percent: number;
-  completed_lessons: number;
-  time_spent_seconds: number;
-};
-
-type LearnerProgressResult = {
-  course_id: number;
-  total_lessons: number;
-  items: LearnerProgressItem[];
-  page: number;
-  page_size: number;
-  total: number;
 };
 
 type CourseOption = {
@@ -114,16 +90,25 @@ export default function TeacherCourseDetailPage() {
     text_min_seconds: "30",
   });
 
-  const [learnerLoading, setLearnerLoading] = useState(false);
-  const [learnerError, setLearnerError] = useState<string | null>(null);
-  const [learnerQ, setLearnerQ] = useState("");
-  const [learnerPage, setLearnerPage] = useState(1);
-  const [learnerPageSize] = useState(20);
-  const [learnerResult, setLearnerResult] = useState<LearnerProgressResult | null>(null);
   const [prerequisiteOptions, setPrerequisiteOptions] = useState<CourseOption[]>([]);
   const [legacyPrerequisites, setLegacyPrerequisites] = useState<string[]>([]);
-  const [prerequisiteGraph, setPrerequisiteGraph] = useState<PrerequisiteGraphData | null>(null);
-  const [graphModalOpen, setGraphModalOpen] = useState(false);
+  const [quizPanelCourseId, setQuizPanelCourseId] = useState<number | null>(null);
+  const [pickedLessonId, setPickedLessonId] = useState<number | null>(null);
+  const [assessmentModalOpen, setAssessmentModalOpen] = useState(false);
+  const [assessmentModalTab, setAssessmentModalTab] = useState<CourseAssessmentModalTab>("quiz");
+
+  const pickLessonForAssessment = (lessonId: number, tab: CourseAssessmentModalTab) => {
+    setPickedLessonId(lessonId);
+    setQuizPanelCourseId(course?.id ?? courseId);
+    setAssessmentModalTab(tab);
+    setAssessmentModalOpen(true);
+  };
+
+  const openAssessmentModal = (tab: CourseAssessmentModalTab) => {
+    setQuizPanelCourseId(course?.id ?? courseId);
+    setAssessmentModalTab(tab);
+    setAssessmentModalOpen(true);
+  };
 
   const isDirty = useMemo(() => {
     if (!initialForm) return false;
@@ -316,22 +301,6 @@ export default function TeacherCourseDetailPage() {
     }
   };
 
-  const fetchPrerequisiteGraph = async () => {
-    try {
-      const res = await fetch(`${url}${COURSES_API.prerequisiteGraph(courseId)}`, {
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-      const json = (await res.json().catch(() => null)) as PrerequisiteGraphData | null;
-      if (!res.ok || !json) return;
-      setPrerequisiteGraph(json);
-    } catch {
-      // ignore graph errors
-    }
-  };
-
   useEffect(() => {
     if (!prerequisiteOptions.length) return;
     const raw = (form.prerequisites || []).map((x) => String(x).trim()).filter(Boolean);
@@ -375,35 +344,6 @@ export default function TeacherCourseDetailPage() {
     }
   };
 
-  const fetchLearnerProgress = async (opts?: { page?: number; q?: string }) => {
-    if (!courseId || Number.isNaN(courseId)) return;
-    const page = opts?.page ?? learnerPage;
-    const q = opts?.q ?? learnerQ;
-    setLearnerLoading(true);
-    setLearnerError(null);
-    try {
-      const params = new URLSearchParams();
-      params.set("page", String(page));
-      params.set("page_size", String(learnerPageSize));
-      if (q.trim()) params.set("q", q.trim());
-
-      const res = await fetch(`${url}${COURSES_API.learnersProgress(courseId)}?${params.toString()}`, {
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-      const data = (await res.json().catch(() => ({}))) as Partial<LearnerProgressResult> & { message?: string };
-      if (!res.ok) throw new Error(data?.message || "Không thể tải tiến độ học viên.");
-      setLearnerResult(data as LearnerProgressResult);
-    } catch (e: any) {
-      setLearnerError(e?.message || "Không thể tải tiến độ học viên.");
-      setLearnerResult(null);
-    } finally {
-      setLearnerLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (!courseId || Number.isNaN(courseId)) {
       navigate("/teacher/dashboard");
@@ -416,17 +356,12 @@ export default function TeacherCourseDetailPage() {
       .finally(() => setLoading(false));
     void fetchCompletionRules();
     void fetchPrerequisiteOptions();
-    void fetchPrerequisiteGraph();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      void fetchLearnerProgress({ page: learnerPage, q: learnerQ });
-    }, 400);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [learnerPage, learnerQ, courseId]);
+    if (course?.id) setQuizPanelCourseId(course.id);
+  }, [course?.id]);
 
   const save = async () => {
     setLoading(true);
@@ -479,7 +414,6 @@ export default function TeacherCourseDetailPage() {
       }
 
       await fetchDetail();
-      await fetchPrerequisiteGraph();
       setSaveSuccessOpen(true);
     } catch (e: any) {
       setError(e?.message || "Đã xảy ra lỗi.");
@@ -504,7 +438,6 @@ export default function TeacherCourseDetailPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as any)?.message || "Không thể cập nhật trạng thái.");
       await fetchDetail();
-      await fetchPrerequisiteGraph();
       setSelectedStatus(nextStatus);
     } catch (e: any) {
       setError(e?.message || "Đã xảy ra lỗi.");
@@ -556,9 +489,9 @@ export default function TeacherCourseDetailPage() {
           <button
             type="button"
             className="secondary-button back-button"
-            onClick={() => navigate("/teacher/dashboard?section=course")}
+            onClick={() => navigate(`/teacher/courses/${courseId}`)}
           >
-            ← Quay lại
+            ← Tổng quan khóa học
           </button>
           <div className="course-detail-info">
             <div className="course-detail-title">
@@ -590,10 +523,10 @@ export default function TeacherCourseDetailPage() {
                   className="secondary-button"
                   onClick={() => {
                     setSaveSuccessOpen(false);
-                    navigate("/teacher/dashboard?section=course");
+                    navigate(`/teacher/courses/${courseId}`);
                   }}
                 >
-                  Quay trở về
+                  Về tổng quan
                 </button>
                 <button
                   type="button"
@@ -620,14 +553,6 @@ export default function TeacherCourseDetailPage() {
             ) : null}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setGraphModalOpen(true)}
-              disabled={loading}
-            >
-              Xem sơ đồ tiên quyết
-            </button>
           <div className="course-actions-menu">
             <button
               type="button"
@@ -968,31 +893,52 @@ export default function TeacherCourseDetailPage() {
         <div className="content-editor-header">
           <div className="content-editor-title">Nội dung khóa học</div>
         </div>
-        <CourseContentTreeEditor courseId={courseId} embedded />
+        <CourseContentTreeEditor
+          courseId={courseId}
+          embedded
+          assessmentShortcuts={{
+            onQuiz: (id) => pickLessonForAssessment(id, "quiz"),
+            onAssignment: (id) => pickLessonForAssessment(id, "assignment"),
+          }}
+        />
       </div>
 
-      {graphModalOpen ? (
-        <div className="save-success-modal-overlay" role="dialog" aria-modal="true">
-          <div className="save-success-modal" style={{ width: "min(1200px, 96vw)" }}>
-            <div className="save-success-modal-title">Sơ đồ tiên quyết</div>
-            <div style={{ maxHeight: "70vh", overflow: "auto", marginTop: 8 }}>
-              <PrerequisiteGraph
-                data={prerequisiteGraph}
-                showCompletionStatus={false}
-                onOpenCourse={(s) => {
-                  if (!s) return;
-                  window.open(`/courses/${s}`, "_blank");
-                }}
-              />
-            </div>
-            <div className="save-success-modal-actions">
-              <button type="button" className="primary-button" onClick={() => setGraphModalOpen(false)}>
-                Đóng
+      <div className="wizard-card content-editor-card">
+        <div className="content-editor-header" style={{ alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
+          <div style={{ flex: "1 1 280px" }}>
+            <div className="content-editor-title">Quizz &amp; bài tập</div>
+            <p className="course-stats" style={{ margin: "8px 0 0", maxWidth: 720, lineHeight: 1.5 }}>
+              Mở khung soạn toàn màn hình để tập trung. Chọn bài trong form, hoặc từ cây nội dung: menu <strong>⋯</strong> → &quot;Soạn Quizz&quot; / &quot;Soạn bài tập&quot;; trên mỗi chương có nút{" "}
+              <strong>bài đầu chương</strong>. Thêm/sắp xếp bài trong phần nội dung hoặc{" "}
+              <button type="button" className="secondary-button" style={{ padding: "4px 12px", fontSize: 13 }} onClick={() => navigate(`/teacher/courses/${courseId}/content`)}>
+                mở trang xây dựng nội dung
               </button>
-            </div>
+              .
+            </p>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, flexShrink: 0 }}>
+            <button type="button" className="primary-button" onClick={() => openAssessmentModal("quiz")}>
+              Mở soạn Quizz
+            </button>
+            <button type="button" className="secondary-button" onClick={() => openAssessmentModal("assignment")}>
+              Mở soạn bài tập
+            </button>
           </div>
         </div>
-      ) : null}
+      </div>
+
+      <CourseAssessmentModal
+        open={assessmentModalOpen}
+        onClose={() => setAssessmentModalOpen(false)}
+        tab={assessmentModalTab}
+        onTabChange={setAssessmentModalTab}
+        courses={course ? [{ id: course.id, title: course.title }] : []}
+        token={token}
+        loading={loading}
+        quizPanelCourseId={quizPanelCourseId}
+        onQuizPanelCourseIdChange={setQuizPanelCourseId}
+        pickedLessonId={pickedLessonId}
+      />
 
       <div className="wizard-card content-editor-card">
         <div className="content-editor-header">
@@ -1056,132 +1002,6 @@ export default function TeacherCourseDetailPage() {
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="wizard-card content-editor-card">
-        <div className="content-editor-header">
-          <div className="content-editor-title">Tiến độ học viên</div>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-            <input
-              className="form-input"
-              style={{ width: 280, maxWidth: "70vw" }}
-              placeholder="Tìm theo tên/email..."
-              value={learnerQ}
-              onChange={(e) => {
-                setLearnerPage(1);
-                setLearnerQ(e.target.value);
-              }}
-              disabled={learnerLoading}
-            />
-            <button type="button" className="secondary-button" onClick={() => fetchLearnerProgress()} disabled={learnerLoading}>
-              Tải lại
-            </button>
-          </div>
-        </div>
-
-        {learnerError ? <div className="error-box" style={{ marginTop: "0.75rem" }}>{learnerError}</div> : null}
-
-        <div className="teacherLearnersTableWrap" style={{ marginTop: "0.75rem" }}>
-          <table className="teacherLearnersTable">
-            <thead>
-              <tr>
-                <th>Hạng</th>
-                <th>Học viên</th>
-                <th>Tiến độ</th>
-                <th>Hoàn thành</th>
-                <th>Thời gian</th>
-                <th>Trạng thái</th>
-                <th>Lần truy cập</th>
-              </tr>
-            </thead>
-            <tbody>
-              {learnerLoading ? (
-                <tr>
-                  <td colSpan={7} style={{ padding: 12, color: "#6b7280", fontWeight: 800 }}>Đang tải...</td>
-                </tr>
-              ) : learnerResult?.items?.length ? (
-                learnerResult.items.map((it) => (
-                  <tr key={it.user_id}>
-                    <td style={{ fontWeight: 900, color: "#1d4ed8" }}>#{it.rank}</td>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        {it.avatar_url ? (
-                          <img
-                            src={it.avatar_url}
-                            alt={it.full_name}
-                            style={{ width: 34, height: 34, borderRadius: "999px", objectFit: "cover", border: "1px solid #e5e7eb" }}
-                          />
-                        ) : (
-                          <div
-                            aria-hidden="true"
-                            style={{
-                              width: 34,
-                              height: 34,
-                              borderRadius: "999px",
-                              background: "#e2e8f0",
-                              border: "1px solid #e5e7eb",
-                              display: "grid",
-                              placeItems: "center",
-                              fontSize: 12,
-                              fontWeight: 900,
-                              color: "#334155",
-                            }}
-                          >
-                            {String(it.full_name || "U").trim().charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <div>
-                          <div style={{ fontWeight: 900 }}>{it.full_name}</div>
-                          <div style={{ color: "#6b7280", fontSize: 13 }}>{it.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ fontWeight: 900 }}>{Number(it.progress_percent ?? 0)}%</td>
-                    <td>
-                      {it.completed_lessons}/{learnerResult.total_lessons}
-                    </td>
-                    <td>{Math.round(Number(it.time_spent_seconds ?? 0) / 60)} phút</td>
-                    <td>{it.status}</td>
-                    <td style={{ color: "#6b7280", fontSize: 13 }}>{it.last_accessed_at ? new Date(it.last_accessed_at).toLocaleString("vi-VN") : "--"}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={7} style={{ padding: 12, color: "#6b7280", fontWeight: 800 }}>Chưa có dữ liệu.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {learnerResult ? (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-            <div className="course-stats">
-              Tổng: <b>{learnerResult.total}</b>
-            </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setLearnerPage((p) => Math.max(1, p - 1))}
-                disabled={learnerLoading || learnerPage <= 1}
-              >
-                Trước
-              </button>
-              <span className="course-stats">
-                Trang <b>{learnerResult.page}</b>
-              </span>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setLearnerPage((p) => p + 1)}
-                disabled={learnerLoading || learnerResult.items.length < learnerResult.page_size}
-              >
-                Sau
-              </button>
-            </div>
-          </div>
-        ) : null}
       </div>
     </div>
   );

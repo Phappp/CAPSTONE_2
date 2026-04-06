@@ -242,3 +242,53 @@ export class UpdateCourseCompletionRulesBody extends RequestDto {
     if (body?.text_min_seconds != null) this.text_min_seconds = Number(body.text_min_seconds);
   }
 }
+
+/** Body tạo/cập nhật quiz thủ công (câu hỏi + đáp án). */
+export class UpsertManualQuizBody extends RequestDto {
+  title: string;
+  description?: string | null;
+  time_limit_minutes?: number | null;
+  passing_score?: number | null;
+  max_attempts?: number;
+  shuffle_questions?: boolean;
+  shuffle_options?: boolean;
+  show_results_immediately?: boolean;
+  show_correct_answers?: boolean;
+  questions: any[];
+
+  constructor(body: any) {
+    super();
+    this.title = String(body?.title || '').trim();
+    this.description = body?.description != null ? String(body.description) : null;
+    this.time_limit_minutes =
+      body?.time_limit_minutes != null && body.time_limit_minutes !== ''
+        ? Number(body.time_limit_minutes)
+        : null;
+    this.passing_score =
+      body?.passing_score != null && body.passing_score !== '' ? Number(body.passing_score) : null;
+    if (body?.max_attempts != null) this.max_attempts = Math.max(1, Math.floor(Number(body.max_attempts)));
+    if (body?.shuffle_questions != null) this.shuffle_questions = Boolean(body.shuffle_questions);
+    if (body?.shuffle_options != null) this.shuffle_options = Boolean(body.shuffle_options);
+    if (body?.show_results_immediately != null) {
+      this.show_results_immediately = Boolean(body.show_results_immediately);
+    }
+    if (body?.show_correct_answers != null) {
+      this.show_correct_answers = Boolean(body.show_correct_answers);
+    }
+    this.questions = Array.isArray(body?.questions) ? body.questions : [];
+  }
+}
+
+export class SubmitLearnerQuizBody extends RequestDto {
+  answers: { quiz_question_id: number; selected_option_id: number }[];
+
+  constructor(body: any) {
+    super();
+    this.answers = Array.isArray(body?.answers)
+      ? body.answers.map((x: any) => ({
+          quiz_question_id: Number(x?.quiz_question_id),
+          selected_option_id: Number(x?.selected_option_id),
+        }))
+      : [];
+  }
+}

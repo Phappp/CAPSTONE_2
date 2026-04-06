@@ -75,6 +75,15 @@ export class AssignmentController extends BaseController {
     });
   }
 
+  async getLearnerAssignmentForLesson(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const lessonId = Number(req.params.lessonId);
+      const data = await this.service.getLearnerAssignmentForLesson(uid, lessonId);
+      res.status(200).json(data);
+    });
+  }
+
   async updateAssignment(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
       const uid = Number(req.getSubject());
@@ -86,15 +95,34 @@ export class AssignmentController extends BaseController {
     })
   }
   
+  async listAssignmentSubmissions(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const lessonId = Number(req.params.lessonId);
+      const assignmentId = Number(req.params.assignmentId);
+      const rows = await this.service.listAssignmentSubmissions(uid, lessonId, assignmentId);
+      res.status(200).json({ success: true, data: { submissions: rows } });
+    });
+  }
+
+  async getAssignmentLearnerRoster(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const lessonId = Number(req.params.lessonId);
+      const data = await this.service.getAssignmentLearnerRosterByLesson(uid, lessonId);
+      res.status(200).json({ success: true, data });
+    });
+  }
+
   async gradeSubmission(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
-        const graderId = Number(req.getSubject()); // Lấy ID giảng viên từ token
-        const { submissionId, gradeItemId, userId, score, feedbackText } = req.body;
+        const graderId = Number(req.getSubject());
+        const submissionId = Number(req.body?.submissionId ?? req.params?.submissionId);
+        const score = Number(req.body?.score);
+        const feedbackText = req.body?.feedbackText != null ? String(req.body.feedbackText) : '';
 
         await this.service.gradeSubmission({
             submissionId,
-            gradeItemId,
-            userId,
             score,
             feedbackText,
             graderId

@@ -401,7 +401,13 @@ function ResourceViewer({ state, onClose }: { state: ResourceViewerState; onClos
 export default function CourseContentTreeEditor(props: {
   courseId: number;
   embedded?: boolean;
+  /** Khi có: menu ⋯ mỗi bài học có mục mở soạn quiz / bài tập cho đúng bài đó. */
+  assessmentShortcuts?: {
+    onQuiz: (lessonId: number) => void;
+    onAssignment: (lessonId: number) => void;
+  };
 }) {
+  const { courseId, embedded, assessmentShortcuts } = props;
   const token = useMemo(() => getAccessToken(), []);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -433,7 +439,7 @@ export default function CourseContentTreeEditor(props: {
   useEffect(() => {
     const fetchCourseThumbnail = async () => {
       try {
-        const res = await fetch(`${url}${COURSES_API.detail(props.courseId)}`, {
+        const res = await fetch(`${url}${COURSES_API.detail(courseId)}`, {
           headers: {
             "Content-Type": "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -454,10 +460,10 @@ export default function CourseContentTreeEditor(props: {
       }
     };
 
-    if (!props.courseId || Number.isNaN(props.courseId)) return;
+    if (!courseId || Number.isNaN(courseId)) return;
     void fetchCourseThumbnail();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.courseId]);
+  }, [courseId]);
 
   useEffect(() => {
     const onDocMouseDown = (e: MouseEvent) => {
@@ -521,7 +527,7 @@ export default function CourseContentTreeEditor(props: {
   };
 
   const computeUploadedVideoDurationSeconds = async (resourceId: number): Promise<number | null> => {
-    const viewUrl = `${url}${COURSES_API.viewLessonResource(props.courseId, resourceId)}`;
+    const viewUrl = `${url}${COURSES_API.viewLessonResource(courseId, resourceId)}`;
     const res = await fetch(viewUrl, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
     if (!res.ok) return null;
     const blob = await res.blob();
@@ -566,7 +572,7 @@ export default function CourseContentTreeEditor(props: {
   };
 
   const fetchTree = async () => {
-    const res = await fetch(`${url}${COURSES_API.contentTree(props.courseId)}`, {
+    const res = await fetch(`${url}${COURSES_API.contentTree(courseId)}`, {
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -581,7 +587,7 @@ export default function CourseContentTreeEditor(props: {
     if (inFlightResources.current.has(lessonId)) return;
     inFlightResources.current.add(lessonId);
     const res = await fetch(
-      `${url}${COURSES_API.listLessonResources(props.courseId, lessonId)}`,
+      `${url}${COURSES_API.listLessonResources(courseId, lessonId)}`,
       {
         headers: {
           "Content-Type": "application/json",
@@ -613,7 +619,7 @@ export default function CourseContentTreeEditor(props: {
     fetchTree()
       .catch((e: any) => setError(e?.message || "Đã xảy ra lỗi."))
       .finally(() => setLoading(false));
-  }, [props.courseId]);
+  }, [courseId]);
 
   useEffect(() => {
     if (!tree) return;
@@ -642,7 +648,7 @@ export default function CourseContentTreeEditor(props: {
         }))
       );
 
-      const res = await fetch(`${url}${COURSES_API.reorderContent(props.courseId)}`, {
+      const res = await fetch(`${url}${COURSES_API.reorderContent(courseId)}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -666,7 +672,7 @@ export default function CourseContentTreeEditor(props: {
     const nextTitle = newModule.title.trim() || `Chương ${(tree?.modules?.length ?? 0) + 1}`;
     setSaving(true);
     try {
-      const res = await fetch(`${url}${COURSES_API.createModule(props.courseId)}`, {
+      const res = await fetch(`${url}${COURSES_API.createModule(courseId)}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -714,7 +720,7 @@ export default function CourseContentTreeEditor(props: {
     setSaving(true);
     try {
       // Tạo bài học trước
-      const res = await fetch(`${url}${COURSES_API.createLesson(props.courseId, moduleId)}`, {
+      const res = await fetch(`${url}${COURSES_API.createLesson(courseId, moduleId)}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -752,7 +758,7 @@ export default function CourseContentTreeEditor(props: {
         } else if (payload.youtubeUrl) {
           // Gắn YouTube nếu có
           const ytUrl = payload.youtubeUrl;
-          const ytRes = await fetch(`${url}${COURSES_API.createYoutubeLessonResource(props.courseId, lessonId)}`, {
+          const ytRes = await fetch(`${url}${COURSES_API.createYoutubeLessonResource(courseId, lessonId)}`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -782,7 +788,7 @@ export default function CourseContentTreeEditor(props: {
     if (!next) return;
     setSaving(true);
     try {
-      const res = await fetch(`${url}${COURSES_API.updateModule(props.courseId, moduleId)}`, {
+      const res = await fetch(`${url}${COURSES_API.updateModule(courseId, moduleId)}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -806,7 +812,7 @@ export default function CourseContentTreeEditor(props: {
   const updateModuleOpenAt = async (moduleId: number, openAtValue: string) => {
     setSaving(true);
     try {
-      const res = await fetch(`${url}${COURSES_API.updateModule(props.courseId, moduleId)}`, {
+      const res = await fetch(`${url}${COURSES_API.updateModule(courseId, moduleId)}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -834,7 +840,7 @@ export default function CourseContentTreeEditor(props: {
     if (!next) return;
     setSaving(true);
     try {
-      const res = await fetch(`${url}${COURSES_API.updateLesson(props.courseId, lessonId)}`, {
+      const res = await fetch(`${url}${COURSES_API.updateLesson(courseId, lessonId)}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -858,7 +864,7 @@ export default function CourseContentTreeEditor(props: {
   const updateLessonOpenAt = async (lessonId: number, openAtValue: string) => {
     setSaving(true);
     try {
-      const res = await fetch(`${url}${COURSES_API.updateLesson(props.courseId, lessonId)}`, {
+      const res = await fetch(`${url}${COURSES_API.updateLesson(courseId, lessonId)}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -897,7 +903,7 @@ export default function CourseContentTreeEditor(props: {
     if (!ok) return;
     setSaving(true);
     try {
-      const res = await fetch(`${url}${COURSES_API.deleteModule(props.courseId, moduleId)}`, {
+      const res = await fetch(`${url}${COURSES_API.deleteModule(courseId, moduleId)}`, {
         method: "DELETE",
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -921,7 +927,7 @@ export default function CourseContentTreeEditor(props: {
     if (!ok) return;
     setSaving(true);
     try {
-      const res = await fetch(`${url}${COURSES_API.deleteLesson(props.courseId, lessonId)}`, {
+      const res = await fetch(`${url}${COURSES_API.deleteLesson(courseId, lessonId)}`, {
         method: "DELETE",
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -950,7 +956,7 @@ export default function CourseContentTreeEditor(props: {
     }
     setSaving(true);
     try {
-      const res = await fetch(`${url}${COURSES_API.createYoutubeLessonResource(props.courseId, lessonId)}`, {
+      const res = await fetch(`${url}${COURSES_API.createYoutubeLessonResource(courseId, lessonId)}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -971,7 +977,7 @@ export default function CourseContentTreeEditor(props: {
 
   const fetchLessonResourceList = async (lessonId: number): Promise<LessonResource[]> => {
     const res = await fetch(
-      `${url}${COURSES_API.listLessonResources(props.courseId, lessonId)}`,
+      `${url}${COURSES_API.listLessonResources(courseId, lessonId)}`,
       {
         headers: {
           "Content-Type": "application/json",
@@ -986,7 +992,7 @@ export default function CourseContentTreeEditor(props: {
 
   const deleteLessonResourceById = async (resourceId: number) => {
     const res = await fetch(
-      `${url}${COURSES_API.deleteLessonResource(props.courseId, resourceId)}`,
+      `${url}${COURSES_API.deleteLessonResource(courseId, resourceId)}`,
       {
         method: "DELETE",
         headers: {
@@ -1005,7 +1011,7 @@ export default function CourseContentTreeEditor(props: {
   const uploadLessonFile = async (lessonId: number, file: File) => {
     setSaving(true);
     setUploadProgress({ lessonId, percent: 0 });
-    const uploadUrl = `${url}${COURSES_API.uploadLessonResource(props.courseId, lessonId)}`;
+    const uploadUrl = `${url}${COURSES_API.uploadLessonResource(courseId, lessonId)}`;
     const form = new FormData();
     form.append("file", file);
 
@@ -1063,7 +1069,7 @@ export default function CourseContentTreeEditor(props: {
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(
-        `${url}${COURSES_API.uploadLessonResourcePreview(props.courseId, resourceId)}`,
+        `${url}${COURSES_API.uploadLessonResourcePreview(courseId, resourceId)}`,
         {
           method: "POST",
           headers: {
@@ -1088,7 +1094,7 @@ export default function CourseContentTreeEditor(props: {
     if (!ok) return;
     setSaving(true);
     try {
-      const res = await fetch(`${url}${COURSES_API.deleteLessonResource(props.courseId, resourceId)}`, {
+      const res = await fetch(`${url}${COURSES_API.deleteLessonResource(courseId, resourceId)}`, {
         method: "DELETE",
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -1141,7 +1147,7 @@ export default function CourseContentTreeEditor(props: {
       loading: true,
     });
 
-    const viewUrl = `${url}${COURSES_API.viewLessonResource(props.courseId, resource.id)}`;
+    const viewUrl = `${url}${COURSES_API.viewLessonResource(courseId, resource.id)}`;
 
     try {
       const res = await fetch(viewUrl, {
@@ -1436,7 +1442,7 @@ export default function CourseContentTreeEditor(props: {
 
   return (
     <div>
-      {props.embedded ? null : <Toaster position="top-right" />}
+      {embedded ? null : <Toaster position="top-right" />}
 
       {/* Resource Viewer Modal - dùng chung cho tất cả các loại */}
       {resourceViewer && (
@@ -1652,7 +1658,33 @@ export default function CourseContentTreeEditor(props: {
                         </div>
                       )}
                     </div>
-                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                      {assessmentShortcuts && m.lessons?.length ? (
+                        <>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            style={{ padding: "0.25rem 0.55rem", fontSize: "0.78rem", fontWeight: 700 }}
+                            title="Mở soạn Quizz cho bài học đầu tiên trong chương"
+                            onClick={() => assessmentShortcuts.onQuiz(m.lessons[0].id)}
+                            disabled={saving}
+                          >
+                            Quizz · bài đầu chương
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            style={{ padding: "0.25rem 0.55rem", fontSize: "0.78rem", fontWeight: 700 }}
+                            title="Mở soạn bài tập cho bài học đầu tiên trong chương"
+                            onClick={() => assessmentShortcuts.onAssignment(m.lessons[0].id)}
+                            disabled={saving}
+                          >
+                            Bài tập · bài đầu chương
+                          </button>
+                        </>
+                      ) : assessmentShortcuts && !m.lessons?.length ? (
+                        <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>Chưa có bài — thêm bài để soạn Quizz/tập</span>
+                      ) : null}
                       <IconButton
                         title="Xóa chương"
                         onClick={() => deleteModule(m.id)}
@@ -2021,11 +2053,42 @@ export default function CourseContentTreeEditor(props: {
                                         >
                                           Gắn YouTube
                                         </button>
+                                        {assessmentShortcuts ? (
+                                          <>
+                                            <div style={{ height: 1, background: "#e5e7eb", margin: "8px 0" }} />
+                                            <button
+                                              type="button"
+                                              role="menuitem"
+                                              className="secondary-button"
+                                              style={{ width: "100%", justifyContent: "flex-start" }}
+                                              onClick={() => {
+                                                assessmentShortcuts.onQuiz(l.id);
+                                                setOpenResourceMenuLessonId(null);
+                                              }}
+                                              disabled={saving}
+                                            >
+                                              Soạn Quizz cho bài này
+                                            </button>
+                                            <button
+                                              type="button"
+                                              role="menuitem"
+                                              className="secondary-button"
+                                              style={{ width: "100%", justifyContent: "flex-start", marginTop: 6 }}
+                                              onClick={() => {
+                                                assessmentShortcuts.onAssignment(l.id);
+                                                setOpenResourceMenuLessonId(null);
+                                              }}
+                                              disabled={saving}
+                                            >
+                                              Soạn bài tập cho bài này
+                                            </button>
+                                          </>
+                                        ) : null}
                                         <button
                                           type="button"
                                           role="menuitem"
                                           className="secondary-button"
-                                          style={{ width: "100%", justifyContent: "flex-start", color: "#b91c1c" }}
+                                          style={{ width: "100%", justifyContent: "flex-start", color: "#b91c1c", marginTop: assessmentShortcuts ? 8 : 0 }}
                                           onClick={() => {
                                             deleteLesson(l.id);
                                             setOpenResourceMenuLessonId(null);

@@ -1,0 +1,3 @@
+-- Chạy thủ công nếu DB đã tồn tại và không dùng TypeORM sync:
+-- ALTER TABLE assignments ADD COLUMN assignment_kind VARCHAR(32) NOT NULL DEFAULT 'file_prompt';
+-- ALTER TABLE assignments ADD COLUMN short_answer_questions JSON NULL;

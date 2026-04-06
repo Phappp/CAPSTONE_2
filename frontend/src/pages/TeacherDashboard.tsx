@@ -4,14 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import { getAccessToken } from "../utils/authStorage";
-import AssignmentEditor from "../components/AssignmentEditor";
 import "./TeacherDashboard.css";
+
+type CourseViewMode = "list" | "grid" | "compact";
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
   const TAB_STORAGE_KEY = "teacher_courses_tab";
   const SORT_STORAGE_KEY = "teacher_courses_sort";
+  const VIEW_STORAGE_KEY = "teacher_courses_view";
+
   const [openMenuCourseId, setOpenMenuCourseId] = useState<number | null>(null);
   const [stats, setStats] = useState<{
     total: number;
@@ -60,6 +63,15 @@ export default function TeacherDashboard() {
     }
     return { sort_by: "updated_at", sort_dir: "desc" };
   });
+  const [courseView, setCourseView] = useState<CourseViewMode>(() => {
+    try {
+      const saved = window.localStorage.getItem(VIEW_STORAGE_KEY);
+      if (saved === "list" || saved === "grid" || saved === "compact") return saved;
+    } catch {
+      // ignore
+    }
+    return "list";
+  });
   const [page, setPage] = useState(1);
   const [pageSize] = useState(12);
   const [loading, setLoading] = useState(false);
@@ -71,20 +83,22 @@ export default function TeacherDashboard() {
     total: number;
   } | null>(null);
 
-  type TeacherSection = "dashboard" | "course" | "quizz" | "assignment";
+  type TeacherSection = "dashboard" | "course";
+
+  const parseTeacherSection = (raw: string | null): TeacherSection => {
+    if (raw === "course") return "course";
+    if (raw === "activities" || raw === "quizz" || raw === "assignment") return "course";
+    return "dashboard";
+  };
+
   const [section, setSection] = useState<TeacherSection>(() => {
     const p = new URLSearchParams(location.search);
-    const s = p.get("section");
-    if (s === "course" || s === "quizz" || s === "assignment" || s === "dashboard") return s;
-    return "dashboard";
+    return parseTeacherSection(p.get("section"));
   });
 
   useEffect(() => {
     const p = new URLSearchParams(location.search);
-    const s = p.get("section");
-    if (s === "course" || s === "quizz" || s === "assignment" || s === "dashboard") {
-      setSection(s);
-    }
+    setSection(parseTeacherSection(p.get("section")));
   }, [location.search]);
 
   useEffect(() => {
@@ -95,13 +109,6 @@ export default function TeacherDashboard() {
       setPage(1);
     }
   }, [section]);
-
-  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
-  useEffect(() => {
-    if (selectedCourseId != null) return;
-    const first = result?.items?.[0]?.id;
-    if (typeof first === "number") setSelectedCourseId(first);
-  }, [result, selectedCourseId]);
 
   const [timeFilterEnabled, setTimeFilterEnabled] = useState(false);
   const [timeFrom, setTimeFrom] = useState<string>("");
@@ -188,6 +195,14 @@ export default function TeacherDashboard() {
       // ignore storage errors
     }
   }, [sort]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, courseView);
+    } catch {
+      // ignore
+    }
+  }, [courseView]);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -297,8 +312,6 @@ export default function TeacherDashboard() {
   const sections: { key: TeacherSection; label: string }[] = [
     { key: "dashboard", label: "Dashboard" },
     { key: "course", label: "Khóa học" },
-    { key: "quizz", label: "Bài kiểm tra" },
-    { key: "assignment", label: "Bài tập" },
   ];
 
   const filteredStatus = useMemo(() => {
@@ -396,7 +409,7 @@ export default function TeacherDashboard() {
     
     return (
       <div className="bar-chart-container">
-        <svg className="bar-chart-svg" viewBox={`0 0 ${w} ${h}`}>
+        <svg className="bar-chart-svg" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet">
           {data.map((d, i) => {
             const barHeight = (d.value / max) * (h - 40);
             const x = i * (w / data.length) + startX;
@@ -464,7 +477,7 @@ export default function TeacherDashboard() {
     
     return (
       <div className="pie-chart-container">
-        <svg className="pie-chart-svg" viewBox={`0 0 ${size} ${size}`}>
+        <svg className="pie-chart-svg" viewBox={`0 0 ${size} ${size}`} preserveAspectRatio="xMidYMid meet">
           {/* Nền khi không có dữ liệu */}
           {total === 0 ? (
             <>
@@ -533,7 +546,7 @@ export default function TeacherDashboard() {
     
     return (
       <div className="line-chart-container">
-        <svg className="line-chart-svg" viewBox={`0 0 ${w} ${h}`}>
+        <svg className="line-chart-svg" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet">
           {/* Grid lines */}
           {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
             const y = padding.top + innerH * (1 - ratio);
@@ -809,43 +822,66 @@ export default function TeacherDashboard() {
               ))}
             </div>
 
-            <div className="course-filters">
-              <div className="course-search">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="10" cy="10" r="7" />
-                  <line x1="15" y1="15" x2="21" y2="21" />
-                </svg>
-                <input
-                  placeholder="Tìm kiếm theo tên khóa học..."
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  disabled={loading}
-                />
+            <div className="course-toolbar">
+              <div className="course-filters">
+                <div className="course-search">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="10" cy="10" r="7" />
+                    <line x1="15" y1="15" x2="21" y2="21" />
+                  </svg>
+                  <input
+                    placeholder="Tìm kiếm theo tên khóa học..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+                <div className="course-sort">
+                  <select
+                    value={`${sort.sort_by}:${sort.sort_dir}`}
+                    onChange={(e) => {
+                      const [sb, sd] = e.target.value.split(":") as any;
+                      setSort({ sort_by: sb, sort_dir: sd });
+                    }}
+                    disabled={loading}
+                  >
+                    <option value="updated_at:desc">Mới cập nhật (gần nhất)</option>
+                    <option value="updated_at:asc">Mới cập nhật (cũ nhất)</option>
+                    <option value="created_at:desc">Mới tạo (gần nhất)</option>
+                    <option value="created_at:asc">Mới tạo (cũ nhất)</option>
+                    <option value="title:asc">Tên A → Z</option>
+                    <option value="title:desc">Tên Z → A</option>
+                    <option value="learners_count:desc">Học viên (nhiều → ít)</option>
+                    <option value="learners_count:asc">Học viên (ít → nhiều)</option>
+                  </select>
+                </div>
               </div>
-              <div className="course-sort">
-                <select
-                  value={`${sort.sort_by}:${sort.sort_dir}`}
-                  onChange={(e) => {
-                    const [sb, sd] = e.target.value.split(":") as any;
-                    setSort({ sort_by: sb, sort_dir: sd });
-                  }}
-                  disabled={loading}
-                >
-                  <option value="updated_at:desc">Mới cập nhật (gần nhất)</option>
-                  <option value="updated_at:asc">Mới cập nhật (cũ nhất)</option>
-                  <option value="created_at:desc">Mới tạo (gần nhất)</option>
-                  <option value="created_at:asc">Mới tạo (cũ nhất)</option>
-                  <option value="title:asc">Tên A → Z</option>
-                  <option value="title:desc">Tên Z → A</option>
-                  <option value="learners_count:desc">Học viên (nhiều → ít)</option>
-                  <option value="learners_count:asc">Học viên (ít → nhiều)</option>
-                </select>
+              <div className="course-view-toggle" role="group" aria-label="Kiểu xem danh sách khóa học">
+                <span className="course-view-toggle-label">Kiểu xem</span>
+                {(
+                  [
+                    { key: "list" as const, label: "Danh sách", hint: "Một cột, đầy đủ mô tả" },
+                    { key: "grid" as const, label: "Lưới", hint: "Nhiều cột dạng thẻ" },
+                    { key: "compact" as const, label: "Gọn", hint: "Hàng mỏng, ẩn mô tả" },
+                  ] as const
+                ).map((v) => (
+                  <button
+                    key={v.key}
+                    type="button"
+                    className={`course-view-btn ${courseView === v.key ? "is-active" : ""}`}
+                    title={v.hint}
+                    onClick={() => setCourseView(v.key)}
+                    disabled={loading}
+                  >
+                    {v.label}
+                  </button>
+                ))}
               </div>
             </div>
 
             {error && <div className="error-box">{error}</div>}
 
-            <div className="course-list">
+            <div className={`course-list course-list--${courseView}`}>
               {(result?.items || []).map((c: any) => (
                 <div
                   key={c.id}
@@ -990,42 +1026,6 @@ export default function TeacherDashboard() {
           </div>
         )}
 
-        {section === "quizz" && (
-          <div className="quiz-section">
-            <h2>📝 Bài kiểm tra (Quiz)</h2>
-            <p>Quiz được tạo và chỉnh sửa trong Content Builder của từng khóa học</p>
-            <div className="quiz-controls">
-              <select
-                value={selectedCourseId ?? ""}
-                onChange={(e) => setSelectedCourseId(Number(e.target.value))}
-                disabled={loading || !(result?.items?.length ?? 0)}
-              >
-                <option value="">Chọn khóa học</option>
-                {(result?.items ?? []).map((c: any) => (
-                  <option key={c.id} value={c.id}>{c.title}</option>
-                ))}
-              </select>
-              <button
-                className="section-tab active"
-                onClick={() => {
-                  if (!selectedCourseId) return;
-                  navigate(`/teacher/courses/${selectedCourseId}/content`);
-                }}
-                disabled={!selectedCourseId}
-              >
-                Mở Content Builder →
-              </button>
-            </div>
-          </div>
-        )}
-
-        {section === "assignment" && (
-          <div className="assignment-section">
-            <h2>📋 Bài tập (Assignment)</h2>
-            <p>Tạo bài tập theo bài học, upload file đính kèm, xem trước và chỉnh sửa.</p>
-            <AssignmentEditor courses={(result?.items ?? []) as any[]} token={token} loading={loading} />
-          </div>
-        )}
       </div>
     </div>
   );

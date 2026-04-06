@@ -9,6 +9,8 @@ import TeacherDashboard from "./pages/TeacherDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import CreateCoursePage from "./pages/CreateCoursePage";
 import TeacherCourseDetailPage from "./pages/TeacherCourseDetailPage";
+import TeacherCourseOverviewPage from "./pages/TeacherCourseOverviewPage";
+import TeacherCourseAssessmentsPage from "./pages/TeacherCourseAssessmentsPage";
 import TeacherCourseContentBuilderPage from "./pages/TeacherCourseContentBuilderPage";
 import CoursesCatalogPage from "./pages/CoursesCatalogPage";
 import CoursePublicDetailPage from "./pages/CoursePublicDetailPage";
@@ -102,7 +104,7 @@ export default function App() {
         }
       />
       <Route
-        path="/teacher/courses/:id"
+        path="/teacher/courses/:id/edit"
         element={
           <Authentication>
             <TeacherCourseDetailPage />
@@ -114,6 +116,22 @@ export default function App() {
         element={
           <Authentication>
             <TeacherCourseContentBuilderPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/courses/:id/assessments"
+        element={
+          <Authentication>
+            <TeacherCourseAssessmentsPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/courses/:id"
+        element={
+          <Authentication>
+            <TeacherCourseOverviewPage />
           </Authentication>
         }
       />

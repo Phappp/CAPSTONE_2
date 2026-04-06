@@ -18,6 +18,8 @@ import {
   UpdateCourseBody,
   UpdateLessonBody,
   UpdateModuleBody,
+  UpsertManualQuizBody,
+  SubmitLearnerQuizBody,
 } from './dto';
 
 export class CourseController extends BaseController {
@@ -194,6 +196,15 @@ export class CourseController extends BaseController {
       const courseId = Number(req.params.id);
       const course = await this.service.getMyCourseDetail(uid, courseId);
       res.status(200).json(course);
+    });
+  }
+
+  async getMyCourseManagerOverview(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const data = await this.service.getMyCourseManagerOverview(uid, courseId);
+      res.status(200).json(data);
     });
   }
 
@@ -442,6 +453,58 @@ export class CourseController extends BaseController {
       const safeName = (filename || 'file').replace(/"/g, '%22');
       res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
       axRes.data.pipe(res);
+    });
+  }
+
+  async getManualQuizForLesson(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const quiz = await this.service.getManualQuizForLesson(uid, courseId, lessonId);
+      res.status(200).json({ quiz });
+    });
+  }
+
+  async upsertManualQuizForLesson(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const body = new UpsertManualQuizBody(req.body);
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const result = await this.service.upsertManualQuizForLesson(uid, courseId, lessonId, body as any);
+      res.status(200).json(result);
+    });
+  }
+
+  async getLearnerQuizTake(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const payload = await this.service.getLearnerQuizForLesson(uid, courseId, lessonId);
+      res.status(200).json({ quiz: payload });
+    });
+  }
+
+  async submitLearnerQuizTake(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const body = new SubmitLearnerQuizBody(req.body);
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const result = await this.service.submitLearnerQuiz(uid, courseId, lessonId, { answers: body.answers });
+      res.status(200).json(result);
+    });
+  }
+
+  async listQuizLearnerScoresForLesson(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const data = await this.service.listQuizLearnerScoresForLesson(uid, courseId, lessonId);
+      res.status(200).json({ success: true, data });
     });
   }
 }

@@ -7,6 +7,8 @@ export const COURSES_API = {
   myStats: `${COURSES_API_BASE}/my/stats`,
   myList: `${COURSES_API_BASE}/my`,
   detail: (id: number | string) => `${COURSES_API_BASE}/${id}`,
+  /** GV: thống kê tổng quan một khóa học (biểu đồ, enrollment, …). */
+  managerOverview: (id: number | string) => `${COURSES_API_BASE}/${id}/manager-overview`,
   prerequisiteGraph: (id: number | string) => `${COURSES_API_BASE}/${id}/prerequisite-graph`,
   prerequisiteOptions: (id: number | string) => `${COURSES_API_BASE}/${id}/prerequisite-options`,
   update: (id: number | string) => `${COURSES_API_BASE}/${id}`,
@@ -48,6 +50,17 @@ export const COURSES_API = {
     `${COURSES_API_BASE}/${id}/resources/${resourceId}/preview`,
   lessonQuiz: (id: number | string, lessonId: number | string) =>
     `${COURSES_API_BASE}/${id}/lessons/${lessonId}/quiz`,
+  /** Quiz thủ công (GV): GET/PATCH body qua POST */
+  manualQuiz: (id: number | string, lessonId: number | string) =>
+    `${COURSES_API_BASE}/${id}/lessons/${lessonId}/quiz/manual`,
+  /** Học viên: làm bài quiz */
+  learnerQuizTake: (id: number | string, lessonId: number | string) =>
+    `${COURSES_API_BASE}/${id}/lessons/${lessonId}/quiz/take`,
+  learnerQuizSubmit: (id: number | string, lessonId: number | string) =>
+    `${COURSES_API_BASE}/${id}/lessons/${lessonId}/quiz/submit`,
+  /** Giảng viên: điểm quiz theo học viên */
+  quizLearnerScores: (courseId: number | string, lessonId: number | string) =>
+    `${COURSES_API_BASE}/${courseId}/lessons/${lessonId}/quiz/learner-scores`,
   uploadCourseThumbnail: () => `${COURSES_API_BASE}/thumbnails/upload`,
    // NEW: Catalog & Enrollment endpoints
   catalog: `${COURSES_API_BASE}/catalog`,
