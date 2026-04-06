@@ -18,6 +18,9 @@ import ProfilePage from "./pages/ProfilePage";
 import LearningPage from "./pages/LearningPage";
 import LearnerCourseHubPage from "./pages/LearnerCourseHubPage";
 import LearningModuleLessonsPage from "./pages/LearningModuleLessonsPage";
+import TeacherLessonRosterPage from "./pages/TeacherLessonRosterPage";
+import LearnerQuizTakePage from "./pages/LearnerQuizTakePage";
+import LearnerAssignmentSubmitPage from "./pages/LearnerAssignmentSubmitPage";
 import Authentication from "./router/Authentication";
 
 export default function App() {
@@ -124,6 +127,30 @@ export default function App() {
         element={
           <Authentication>
             <TeacherCourseAssessmentsPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/courses/:id/lessons/:lessonId/roster"
+        element={
+          <Authentication>
+            <TeacherLessonRosterPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/learner/quiz/:courseId/:lessonId"
+        element={
+          <Authentication>
+            <LearnerQuizTakePage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/learner/assignment/:lessonId"
+        element={
+          <Authentication>
+            <LearnerAssignmentSubmitPage />
           </Authentication>
         }
       />

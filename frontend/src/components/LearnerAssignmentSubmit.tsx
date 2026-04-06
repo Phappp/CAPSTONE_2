@@ -224,7 +224,7 @@ export default function LearnerAssignmentSubmit(props: {
 
   return (
     <div className="learner-quiz-overlay" role="dialog" aria-modal="true" aria-labelledby="learner-asg-title">
-      <div className="learner-quiz-modal" style={{ maxWidth: 760 }}>
+      <div className="learner-quiz-modal" style={{ maxWidth: 2000 }}>
         <div className="learner-quiz-header">
           <div>
             <h2 id="learner-asg-title">{assignment?.title || lessonTitle}</h2>

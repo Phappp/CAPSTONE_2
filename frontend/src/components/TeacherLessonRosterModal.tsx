@@ -21,6 +21,8 @@ type AssignmentRosterPayload = {
       feedback_text: string | null;
       content_preview: string;
       attachment_count: number;
+      attachment_files?: { file_name: string; file_path: string }[];
+      submission_short_answers?: { question_id: string; answer_text: string }[];
     } | null;
   }[];
 };
@@ -72,6 +74,7 @@ export default function TeacherLessonRosterModal(props: {
   const [scoreDraft, setScoreDraft] = useState<Record<number, string>>({});
   const [feedbackDraft, setFeedbackDraft] = useState<Record<number, string>>({});
   const [gradingId, setGradingId] = useState<number | null>(null);
+  const [searchText, setSearchText] = useState("");
 
   const authHeaders = useMemo(() => {
     const h: Record<string, string> = { "Content-Type": "application/json" };
@@ -196,6 +199,33 @@ export default function TeacherLessonRosterModal(props: {
 
   const maxScore = roster?.assignment?.max_score ?? 10;
   const showTabs = hasAssignment || hasQuiz;
+  const submittedCount = roster?.learners?.filter((x) => x.has_submitted).length ?? 0;
+  const totalLearners = roster?.learners?.length ?? 0;
+
+  const resolveAttachmentUrl = (path: string): string => {
+    if (!path) return "#";
+    if (/^https?:\/\//i.test(path)) return path;
+    return `${url}${path.startsWith("/") ? path : `/${path}`}`;
+  };
+  const normalizedSearch = searchText.trim().toLowerCase();
+  const assignmentLearners = useMemo(() => {
+    const list = roster?.learners ?? [];
+    if (!normalizedSearch) return list;
+    return list.filter((row) => {
+      const name = String(row.full_name || "").toLowerCase();
+      const email = String(row.email || "").toLowerCase();
+      return name.includes(normalizedSearch) || email.includes(normalizedSearch);
+    });
+  }, [roster?.learners, normalizedSearch]);
+  const quizLearners = useMemo(() => {
+    const list = quizData?.learners ?? [];
+    if (!normalizedSearch) return list;
+    return list.filter((row) => {
+      const name = String(row.full_name || "").toLowerCase();
+      const email = String(row.email || "").toLowerCase();
+      return name.includes(normalizedSearch) || email.includes(normalizedSearch);
+    });
+  }, [quizData?.learners, normalizedSearch]);
 
   return (
     <div className="tlr-overlay" role="presentation" onClick={onClose}>
@@ -254,9 +284,29 @@ export default function TeacherLessonRosterModal(props: {
                   <p className="tlr-meta">
                     <strong>{roster.assignment.title}</strong> · Thang điểm: {roster.assignment.max_score}
                   </p>
+                  <div className="tlr-searchRow">
+                    <input
+                      className="tlr-searchInput"
+                      type="text"
+                      placeholder="Tìm theo tên hoặc email..."
+                      value={searchText}
+                      onChange={(e) => setSearchText(e.target.value)}
+                    />
+                  </div>
+                  <div className="tlr-summary-cards">
+                    <div className="tlr-summary-card">
+                      <span>Đã nộp</span>
+                      <strong>{submittedCount}/{totalLearners}</strong>
+                    </div>
+                    <div className="tlr-summary-card">
+                      <span>Chưa nộp</span>
+                      <strong>{Math.max(0, totalLearners - submittedCount)}/{totalLearners}</strong>
+                    </div>
+                  </div>
                   <table className="tlr-table">
                     <thead>
                       <tr>
+                        <th style={{ width: 56 }}>STT</th>
                         <th>Học viên</th>
                         <th>Email</th>
                         <th>Trạng thái nộp</th>
@@ -264,22 +314,26 @@ export default function TeacherLessonRosterModal(props: {
                       </tr>
                     </thead>
                     <tbody>
-                      {roster.learners.map((row) => {
+                      {assignmentLearners.map((row, idx) => {
                         const sub = row.submission;
                         const key = row.user_id;
                         const openRow = expanded === key;
                         return (
                           <Fragment key={key}>
                             <tr>
+                              <td>{idx + 1}</td>
                               <td>{row.full_name || "—"}</td>
                               <td className="tlr-nowrap">{row.email}</td>
                               <td>
                                 {row.has_submitted ? (
-                                  <span className="tlr-badge tlr-badge--ok">Đã nộp</span>
+                                  <span className="tlr-badge tlr-badge--ok tlr-badge--submitted">Đã nộp</span>
                                 ) : (
                                   <span className="tlr-badge tlr-badge--no">Chưa nộp</span>
                                 )}
                                 {sub?.is_late ? <span className="tlr-late"> · Muộn</span> : null}
+                                {sub?.graded_score != null || sub?.status === "graded" ? (
+                                  <span className="tlr-badge tlr-badge--graded">Đã chấm</span>
+                                ) : null}
                               </td>
                               <td>
                                 {row.has_submitted && sub ? (
@@ -295,14 +349,41 @@ export default function TeacherLessonRosterModal(props: {
                             </tr>
                             {openRow && sub ? (
                               <tr key={`d-${key}`} className="tlr-detail-row">
-                                <td colSpan={4}>
+                                <td colSpan={5}>
                                   <div className="tlr-detail">
                                     <div className="tlr-preview">
                                       <strong>Nội dung nộp (tóm tắt)</strong>
                                       <div>{sub.content_preview}</div>
+                                      {sub.submission_short_answers && sub.submission_short_answers.length > 0 ? (
+                                        <div style={{ marginTop: 10 }}>
+                                          <strong>Đáp án trả lời ngắn</strong>
+                                          <div className="tlr-shortanswers">
+                                            {sub.submission_short_answers.map((ans, idx) => (
+                                              <div key={`${ans.question_id}-${idx}`} className="tlr-shortanswers__item">
+                                                <div className="tlr-shortanswers__q">Câu {idx + 1}</div>
+                                                <div className="tlr-shortanswers__a">{ans.answer_text || "—"}</div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ) : null}
                                       {sub.attachment_count > 0 ? (
                                         <div className="tlr-muted" style={{ marginTop: 8 }}>
-                                          Có {sub.attachment_count} file đính kèm (xem trên hệ thống lưu file nếu cần).
+                                          Có {sub.attachment_count} file đính kèm.
+                                        </div>
+                                      ) : null}
+                                      {sub.attachment_files && sub.attachment_files.length > 0 ? (
+                                        <div style={{ marginTop: 8 }}>
+                                          <strong>File đã nộp</strong>
+                                          <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                                            {sub.attachment_files.map((a, idx) => (
+                                              <li key={`${a.file_path}-${idx}`} style={{ marginBottom: 4 }}>
+                                                <a href={resolveAttachmentUrl(a.file_path)} target="_blank" rel="noreferrer">
+                                                  {a.file_name || `Tệp ${idx + 1}`}
+                                                </a>
+                                              </li>
+                                            ))}
+                                          </ul>
                                         </div>
                                       ) : null}
                                     </div>
@@ -373,17 +454,28 @@ export default function TeacherLessonRosterModal(props: {
                     {quizData.quiz.passing_score != null ? ` · Điểm đạt: ${quizData.quiz.passing_score}%` : ""}
                     {` · Tối đa ${quizData.quiz.max_attempts} lần làm`}
                   </p>
+                  <div className="tlr-searchRow">
+                    <input
+                      className="tlr-searchInput"
+                      type="text"
+                      placeholder="Tìm theo tên hoặc email..."
+                      value={searchText}
+                      onChange={(e) => setSearchText(e.target.value)}
+                    />
+                  </div>
                   <table className="tlr-table">
                     <thead>
                       <tr>
+                        <th style={{ width: 56 }}>STT</th>
                         <th>Học viên</th>
                         <th>Email</th>
                         <th>Điểm các lần làm (%)</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {quizData.learners.map((row) => (
+                      {quizLearners.map((row, idx) => (
                         <tr key={row.user_id}>
+                          <td>{idx + 1}</td>
                           <td>{row.full_name || "—"}</td>
                           <td className="tlr-nowrap">{row.email}</td>
                           <td>

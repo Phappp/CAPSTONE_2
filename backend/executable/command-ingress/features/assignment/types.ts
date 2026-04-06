@@ -72,6 +72,14 @@ export type AssignmentSubmissionListRow = {
   feedback_graded_at: string | null;
   content_preview: string;
   attachment_count: number;
+  attachment_files: {
+    file_name: string;
+    file_path: string;
+  }[];
+  submission_short_answers: {
+    question_id: string;
+    answer_text: string;
+  }[];
 };
 
 export type AssignmentLearnerRosterRow = {

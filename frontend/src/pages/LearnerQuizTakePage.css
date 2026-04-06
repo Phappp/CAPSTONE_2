@@ -1,0 +1,61 @@
+body.minimal-quiz-page {
+  background: #fff;
+  color: #111;
+}
+
+.minimal-page-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #111;
+  font-weight: 600;
+}
+
+body.minimal-quiz-page .learner-quiz-overlay {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  background: #fff;
+  backdrop-filter: none;
+  padding: 0;
+  overflow: visible;
+}
+
+body.minimal-quiz-page .learner-quiz-modal {
+  width: 100%;
+  max-width: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
+}
+
+body.minimal-quiz-page .learner-quiz-header,
+body.minimal-quiz-page .learner-quiz-meta,
+body.minimal-quiz-page .learner-quiz-footer {
+  background: #fff;
+  color: #111;
+  border-color: #d9d9d9;
+}
+
+body.minimal-quiz-page .learner-quiz-close,
+body.minimal-quiz-page .learner-quiz-btn-primary,
+body.minimal-quiz-page .learner-quiz-btn-ghost {
+  background: #fff;
+  color: #111;
+  border: 1px solid #222;
+}
+
+body.minimal-quiz-page .learner-quiz-q,
+body.minimal-quiz-page .learner-quiz-opt,
+body.minimal-quiz-page .learner-quiz-detail {
+  background: #fff;
+  border-color: #d9d9d9;
+}
+
+body.minimal-quiz-page .learner-quiz-opt--selected {
+  background: #f7f7f7;
+  border-color: #555;
+}
+
