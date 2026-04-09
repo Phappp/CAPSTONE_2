@@ -431,8 +431,21 @@ export default function LearnerCourseContentTree(props: {
   progress?: CourseProgress | null;
   refreshProgress?: () => Promise<void> | void;
   variant?: "full" | "module-lessons";
+  /** Mở bài học khi vào trang (ví dụ từ lộ trình: `?lesson=id`). */
+  initialLessonId?: number | null;
+  /** Ưu tiên mở assessment khi vào từ roadmap node vàng. */
+  initialAssessmentKind?: "quiz" | "assignment" | null;
 }) {
-  const { courseId, modules, courseThumbnailUrl, progress, refreshProgress, variant = "full" } = props;
+  const {
+    courseId,
+    modules,
+    courseThumbnailUrl,
+    progress,
+    refreshProgress,
+    variant = "full",
+    initialLessonId = null,
+    initialAssessmentKind = null,
+  } = props;
   const token = useMemo(() => getAccessToken(), []);
 
   const [loading, setLoading] = useState(false);
@@ -804,6 +817,56 @@ export default function LearnerCourseContentTree(props: {
     });
   };
 
+  const initialLessonHandledRef = useRef(false);
+
+  useEffect(() => {
+    initialLessonHandledRef.current = false;
+  }, [initialLessonId, initialAssessmentKind]);
+
+  useEffect(() => {
+    if (!initialLessonId || !Number.isFinite(initialLessonId)) return;
+    if (initialLessonHandledRef.current) return;
+
+    const lesson = modules.flatMap((m) => m.lessons || []).find((l) => l.id === initialLessonId);
+    if (!lesson) {
+      if (modules.length) initialLessonHandledRef.current = true;
+      return;
+    }
+
+    if (progress && !unlockedSet.has(lesson.id)) {
+      initialLessonHandledRef.current = true;
+      return;
+    }
+
+    if (initialAssessmentKind === "quiz" || lesson.lesson_type === "quiz") {
+      initialLessonHandledRef.current = true;
+      setSelectedLessonId(lesson.id);
+      const params = new URLSearchParams({ title: lesson.title || "" });
+      window.open(`/learner/quiz/${courseId}/${lesson.id}?${params}`, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (initialAssessmentKind === "assignment" || lesson.lesson_type === "assignment") {
+      initialLessonHandledRef.current = true;
+      setSelectedLessonId(lesson.id);
+      const params = new URLSearchParams({ title: lesson.title || "" });
+      window.open(`/learner/assignment/${lesson.id}?${params}`, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    const list = resourcesByLessonId[lesson.id];
+    if (list === undefined) return;
+
+    initialLessonHandledRef.current = true;
+    setSelectedLessonId(lesson.id);
+    const latest = list?.length ? list[0] : null;
+    if (latest) {
+      void openResource(latest);
+    } else {
+      openLessonFallback(lesson);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLessonId, modules, progress, unlockedSet, resourcesByLessonId, courseId]);
+
   type LessonCardOpts = {
     highlightKey: string;
     rowKey?: string;
@@ -1029,7 +1092,7 @@ export default function LearnerCourseContentTree(props: {
           <div className="learnerTreeLesson__meta">
             <div className="learnerTreeLesson__title">
               <span className="learnerTreeLesson__index">{displayIndexLabel}</span>
-              <span className="learnerTreeLesson__titleText">{l.title}</span>
+              {/* <span className="learnerTreeLesson__titleText">{l.title}</span> */}
               {l.lesson_type === "quiz" && !hideTypeBadge && !quizOnly ? (
                 <span className="learnerTreeLesson__typeBadge">Quiz</span>
               ) : null}

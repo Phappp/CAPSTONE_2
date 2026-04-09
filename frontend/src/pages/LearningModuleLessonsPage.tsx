@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import AvatarMenu from "../components/AvatarMenu";
 import LearnerCourseContentTree, { type ModuleItem } from "../components/LearnerCourseContentTree";
 import { url } from "../baseUrl";
@@ -42,9 +42,20 @@ function formatTimeVi(date: Date): string {
 export default function LearningModuleLessonsPage() {
   const navigate = useNavigate();
   const params = useParams();
+  const [searchParams] = useSearchParams();
   const courseId = Number(params.id);
   const slug = String(params.slug || "");
   const moduleId = Number(params.moduleId);
+  const initialLessonParam = searchParams.get("lesson");
+  const initialLessonId =
+    initialLessonParam != null && initialLessonParam !== ""
+      ? Number(initialLessonParam)
+      : null;
+  const initialLessonIdResolved =
+    initialLessonId != null && Number.isFinite(initialLessonId) && initialLessonId > 0 ? initialLessonId : null;
+  const initialAssessmentParam = searchParams.get("assessment");
+  const initialAssessmentKind =
+    initialAssessmentParam === "quiz" || initialAssessmentParam === "assignment" ? initialAssessmentParam : null;
 
   const token = useMemo(() => getAccessToken(), []);
 
@@ -220,6 +231,8 @@ export default function LearningModuleLessonsPage() {
             progress={progress}
             refreshProgress={fetchProgress}
             variant="module-lessons"
+            initialLessonId={initialLessonIdResolved}
+            initialAssessmentKind={initialAssessmentKind}
           />
         )}
       </div>
