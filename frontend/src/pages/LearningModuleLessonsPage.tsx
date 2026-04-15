@@ -226,6 +226,7 @@ export default function LearningModuleLessonsPage() {
         ) : (
           <LearnerCourseContentTree
             courseId={courseId}
+            courseSlug={slug}
             modules={[selectedModule]}
             courseThumbnailUrl={course.thumbnail_url}
             progress={progress}

@@ -17,13 +17,19 @@ export default function LearnerQuizTakePage() {
 
   const lessonTitle = search.get("title") || `Bài ${lid}`;
 
+  const learningSlug = search.get("slug");
+
   const closePage = () => {
     try {
       window.close();
     } catch {
       // ignore
     }
-    navigate(-1);
+    if (learningSlug) {
+      navigate(`/learning/${cid}/${encodeURIComponent(learningSlug)}`, { replace: true });
+    } else {
+      navigate(-1);
+    }
   };
 
   useLayoutEffect(() => {

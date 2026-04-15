@@ -426,6 +426,8 @@ function ResourceViewer({ state, onClose }: { state: ResourceViewerState; onClos
 
 export default function LearnerCourseContentTree(props: {
   courseId: number;
+  /** Slug khóa học — truyền vào tab quiz/bài tập để khi đóng quay về `/learning/:id/:slug`. */
+  courseSlug?: string | null;
   modules: ModuleItem[];
   courseThumbnailUrl?: string | null;
   progress?: CourseProgress | null;
@@ -438,6 +440,7 @@ export default function LearnerCourseContentTree(props: {
 }) {
   const {
     courseId,
+    courseSlug,
     modules,
     courseThumbnailUrl,
     progress,
@@ -842,13 +845,15 @@ export default function LearnerCourseContentTree(props: {
       initialLessonHandledRef.current = true;
       setSelectedLessonId(lesson.id);
       const params = new URLSearchParams({ title: lesson.title || "" });
+      if (courseSlug) params.set("slug", courseSlug);
       window.open(`/learner/quiz/${courseId}/${lesson.id}?${params}`, "_blank", "noopener,noreferrer");
       return;
     }
     if (initialAssessmentKind === "assignment" || lesson.lesson_type === "assignment") {
       initialLessonHandledRef.current = true;
       setSelectedLessonId(lesson.id);
-      const params = new URLSearchParams({ title: lesson.title || "" });
+      const params = new URLSearchParams({ title: lesson.title || "", courseId: String(courseId) });
+      if (courseSlug) params.set("slug", courseSlug);
       window.open(`/learner/assignment/${lesson.id}?${params}`, "_blank", "noopener,noreferrer");
       return;
     }
@@ -865,7 +870,7 @@ export default function LearnerCourseContentTree(props: {
       openLessonFallback(lesson);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialLessonId, modules, progress, unlockedSet, resourcesByLessonId, courseId]);
+  }, [initialLessonId, modules, progress, unlockedSet, resourcesByLessonId, courseId, courseSlug]);
 
   type LessonCardOpts = {
     highlightKey: string;
@@ -940,13 +945,15 @@ export default function LearnerCourseContentTree(props: {
     const runOpenQuiz = () => {
       setSelectedLessonId(l.id);
       const params = new URLSearchParams({ title: l.title || "" });
+      if (courseSlug) params.set("slug", courseSlug);
       const href = `/learner/quiz/${courseId}/${l.id}?${params.toString()}`;
       window.open(href, "_blank", "noopener,noreferrer");
     };
 
     const runOpenAssignment = () => {
       setSelectedLessonId(l.id);
-      const params = new URLSearchParams({ title: l.title || "" });
+      const params = new URLSearchParams({ title: l.title || "", courseId: String(courseId) });
+      if (courseSlug) params.set("slug", courseSlug);
       const href = `/learner/assignment/${l.id}?${params.toString()}`;
       window.open(href, "_blank", "noopener,noreferrer");
     };

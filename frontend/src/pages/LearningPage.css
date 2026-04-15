@@ -213,8 +213,8 @@
 }
 
 .learningPage__milestone:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.02);
+  transform: translateY(-2px) scale(1.04);
+  filter: brightness(1.06);
 }
 
 .learningPage__milestoneCore {
@@ -296,6 +296,20 @@
 .learningPage__assessmentPickBtn:hover {
   border-color: #334155;
   transform: translateY(-1px);
+}
+
+.learningPage__assessmentPickBtn--completed {
+  border-color: #22c55e;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.learningPage__assessmentPickBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  border-color: #e2e8f0;
+  color: #94a3b8;
 }
 
 .learningPage__lessonModalBackdrop {
@@ -402,7 +416,9 @@
   border-top: 1px solid #e5e7eb;
   padding: 10px 14px;
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 10px;
 }
 
 .learningPage__lessonModalNavBtn {
@@ -417,6 +433,98 @@
 .learningPage__lessonModalNavBtn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.learningPage__lessonModalNavPick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.learningPage__lessonModalNavPickLabel {
+  font-size: 12px;
+  font-weight: 800;
+  color: #475569;
+}
+
+.learningPage__lessonModalNavPickBtn {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.learningPage__lessonModalNavPickBtn:hover {
+  border-color: #60a5fa;
+  transform: translateY(-1px);
+}
+
+.learningPage__countdown {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 230;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.18);
+}
+
+.learningPage__countdownSvg {
+  width: 56px;
+  height: 56px;
+  display: block;
+}
+
+.learningPage__countdownTrack {
+  fill: transparent;
+  stroke: rgba(37, 99, 235, 0.18);
+  stroke-width: 4.5;
+}
+
+.learningPage__countdownRing {
+  fill: transparent;
+  stroke: #2563eb;
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 24px 24px;
+  stroke-dasharray: 125.66;
+  stroke-dashoffset: calc(125.66 * (var(--pct, 100) / 100));
+  transition: stroke-dashoffset 0.3s ease;
+}
+
+.learningPage__countdownTick {
+  fill: none;
+  stroke: #16a34a;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+}
+
+.learningPage__countdown--ready .learningPage__countdownRing {
+  opacity: 0.2;
+}
+
+.learningPage__countdown--ready .learningPage__countdownTick {
+  opacity: 1;
+  animation: learningPageTickDraw 450ms ease forwards;
+}
+
+@keyframes learningPageTickDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 .learningPage__lineTrack {
@@ -442,6 +550,7 @@
   stroke: #fff;
   stroke-width: 2.2;
   opacity: 0.98;
+  transition: transform 0.18s ease, filter 0.18s ease;
 }
 
 .learningPage__lessonNode--todo {

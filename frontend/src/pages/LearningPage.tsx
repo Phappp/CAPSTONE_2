@@ -40,6 +40,14 @@ type LessonResourceItem = {
   created_at?: string;
 };
 
+type LessonHeartbeatDto = {
+  lesson_id: number;
+  time_spent_seconds: number;
+  required_seconds: number;
+  can_complete: boolean;
+  progress_percent: number;
+};
+
 export default function LearningPage() {
   const navigate = useNavigate();
   const params = useParams();
@@ -64,9 +72,14 @@ export default function LearningPage() {
     lessonId: number;
     x: number;
     y: number;
-    options: ("lesson" | "quiz" | "assignment")[];
+    options: { kind: "lesson" | "quiz" | "assignment"; disabled?: boolean; completed?: boolean }[];
   } | null>(null);
   const [lessonModal, setLessonModal] = useState<{ moduleId: number; lessonId: number } | null>(null);
+  const [lessonModalNavPick, setLessonModalNavPick] = useState<{
+    moduleId: number;
+    lessonId: number;
+    options: ("quiz" | "assignment")[];
+  } | null>(null);
   const [lessonModalLoading, setLessonModalLoading] = useState(false);
   const [lessonModalError, setLessonModalError] = useState<string | null>(null);
   const [lessonModalResource, setLessonModalResource] = useState<{
@@ -74,6 +87,14 @@ export default function LearningPage() {
     filename: string;
     mime: string;
   } | null>(null);
+  const heartbeatTimerRef = useRef<number | null>(null);
+  const completedAttemptedRef = useRef<Set<number>>(new Set());
+  const [heartbeat, setHeartbeat] = useState<LessonHeartbeatDto | null>(null);
+  const [countdownRemainingPct, setCountdownRemainingPct] = useState<number>(100);
+  const countdownRequiredSecondsRef = useRef<number>(0);
+  const countdownBaselineTimeSpentRef = useRef<number>(0);
+  const countdownBaselineAtMsRef = useRef<number>(0);
+  const countdownAnimTimerRef = useRef<number | null>(null);
   const [linkGeoms, setLinkGeoms] = useState<
     {
       key: string;
@@ -183,7 +204,15 @@ export default function LearningPage() {
                   const gr = await fetch(`${url}${ASSIGNMENTS_API.myAssignmentGrade(assignmentId)}`, { headers });
                   if (gr.ok) {
                     const gd = await gr.json().catch(() => ({}));
-                    assignment = Boolean((gd as any)?.submission_id || (gd as any)?.submitted_at);
+                    const row = (gd as any)?.data ?? gd;
+                    const status = String((row as any)?.status || "").toLowerCase();
+                    assignment = Boolean(
+                      (row as any)?.submission_id ||
+                        (row as any)?.submitted_at ||
+                        (row as any)?.resubmission_count != null ||
+                        status === "submitted" ||
+                        status === "graded"
+                    );
                   }
                 }
               }
@@ -258,6 +287,129 @@ export default function LearningPage() {
       alive = false;
     };
   }, [lessonModal, courseId, token, course]);
+
+  const syncCountdownBaseline = (data: LessonHeartbeatDto) => {
+    const req = Number(data?.required_seconds || 0);
+    const spent = Number(data?.time_spent_seconds || 0);
+    if (!Number.isFinite(req) || req <= 0) return;
+    countdownRequiredSecondsRef.current = req;
+    countdownBaselineTimeSpentRef.current = Math.max(0, spent);
+    countdownBaselineAtMsRef.current = Date.now();
+
+    const elapsedSeconds = (Date.now() - countdownBaselineAtMsRef.current) / 1000;
+    const predictedSpent = countdownBaselineTimeSpentRef.current + elapsedSeconds;
+    const remaining = Math.max(0, Math.min(100, (1 - predictedSpent / req) * 100));
+    setCountdownRemainingPct(Math.round(remaining * 10) / 10);
+  };
+
+  const postHeartbeat = async (lessonId: number, deltaSeconds: number) => {
+    const res = await fetch(`${url}${COURSES_API.lessonHeartbeat(courseId, lessonId)}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ delta_seconds: deltaSeconds }),
+    });
+    const json = (await res.json().catch(() => ({}))) as Partial<LessonHeartbeatDto> & { message?: string };
+    if (!res.ok) throw new Error(json?.message || "Không thể cập nhật tiến độ bài học.");
+    return json as LessonHeartbeatDto;
+  };
+
+  const tryCompleteLesson = async (lessonId: number) => {
+    if (completedAttemptedRef.current.has(lessonId)) return;
+    completedAttemptedRef.current.add(lessonId);
+    try {
+      const res = await fetch(`${url}${COURSES_API.completeLesson(courseId, lessonId)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const json = (await res.json().catch(() => ({}))) as Partial<{ message?: string }>;
+      if (!res.ok) throw new Error(json?.message || "Không thể hoàn thành bài học.");
+      await fetchProgress();
+    } catch {
+      completedAttemptedRef.current.delete(lessonId);
+    }
+  };
+
+  useEffect(() => {
+    if (!lessonModal) {
+      setHeartbeat(null);
+      setCountdownRemainingPct(100);
+      countdownRequiredSecondsRef.current = 0;
+      countdownBaselineTimeSpentRef.current = 0;
+      countdownBaselineAtMsRef.current = Date.now();
+      return;
+    }
+
+    const lesson = course?.modules?.flatMap((m) => m.lessons || []).find((x) => x.id === lessonModal.lessonId);
+    if (!lesson || (lesson.lesson_type !== "video" && lesson.lesson_type !== "text")) return;
+    if (progress && !(progress.unlocked_lesson_ids || []).some((id) => Number(id) === lessonModal.lessonId)) return;
+
+    setHeartbeat(null);
+    setCountdownRemainingPct(100);
+    countdownRequiredSecondsRef.current = 0;
+    countdownBaselineTimeSpentRef.current = 0;
+    countdownBaselineAtMsRef.current = Date.now();
+    const lessonId = lessonModal.lessonId;
+
+    const tick = async (deltaSeconds: number) => {
+      try {
+        const data = await postHeartbeat(lessonId, deltaSeconds);
+        setHeartbeat(data);
+        syncCountdownBaseline(data);
+        if (data?.can_complete) {
+          void tryCompleteLesson(lessonId);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    void tick(1);
+    heartbeatTimerRef.current = window.setInterval(() => {
+      void tick(3);
+    }, 3000);
+
+    return () => {
+      if (heartbeatTimerRef.current != null) {
+        window.clearInterval(heartbeatTimerRef.current);
+        heartbeatTimerRef.current = null;
+      }
+      void tick(1);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessonModal, courseId, token, progress, course]);
+
+  useEffect(() => {
+    if (!lessonModal) return;
+    const req = countdownRequiredSecondsRef.current;
+    if (!req || req <= 0) return;
+
+    if (countdownAnimTimerRef.current != null) {
+      window.clearInterval(countdownAnimTimerRef.current);
+      countdownAnimTimerRef.current = null;
+    }
+
+    countdownAnimTimerRef.current = window.setInterval(() => {
+      const localReq = countdownRequiredSecondsRef.current;
+      if (!localReq || localReq <= 0) return;
+      const elapsedSeconds = (Date.now() - countdownBaselineAtMsRef.current) / 1000;
+      const predictedSpent = countdownBaselineTimeSpentRef.current + elapsedSeconds;
+      const remaining = Math.max(0, Math.min(100, (1 - predictedSpent / localReq) * 100));
+      setCountdownRemainingPct(Math.round(remaining * 10) / 10);
+    }, 120);
+
+    return () => {
+      if (countdownAnimTimerRef.current != null) {
+        window.clearInterval(countdownAnimTimerRef.current);
+        countdownAnimTimerRef.current = null;
+      }
+    };
+  }, [lessonModal, heartbeat]);
 
   // Trigger unlock animations when progress data arrives
   useEffect(() => {
@@ -554,6 +706,10 @@ export default function LearningPage() {
   const modalLessonIndex = lessonModal ? orderedLessonIds.indexOf(lessonModal.lessonId) : -1;
   const modalPrevLessonId = modalLessonIndex > 0 ? orderedLessonIds[modalLessonIndex - 1] : null;
   const modalNextLessonId = modalLessonIndex >= 0 && modalLessonIndex < orderedLessonIds.length - 1 ? orderedLessonIds[modalLessonIndex + 1] : null;
+  const modalPrevModuleId = modalPrevLessonId ? lessonModuleIdById.get(modalPrevLessonId) ?? null : null;
+  const modalNextModuleId = modalNextLessonId ? lessonModuleIdById.get(modalNextLessonId) ?? null : null;
+  const modalCanGoPrev = Boolean(modalPrevLessonId && modalPrevModuleId && canOpenLesson(modalPrevModuleId, modalPrevLessonId));
+  const modalCanGoNext = Boolean(modalNextLessonId && modalNextModuleId && canOpenLesson(modalNextModuleId, modalNextLessonId));
   const modalLesson = lessonModal ? lessonById.get(lessonModal.lessonId) || null : null;
 
   const parseYoutubeVideoId = (input?: string | null): string | null => {
@@ -593,6 +749,44 @@ export default function LearningPage() {
       return "";
     }
   }
+
+  /** Mở quiz/bài tập trong tab mới; giữ người dùng trên trang Learning (không điều hướng sang trang module lessons). */
+  const openLearnerAssessmentInNewTab = (kind: "quiz" | "assignment", lessonId: number, lessonTitle: string) => {
+    const params = new URLSearchParams({ title: lessonTitle || "" });
+    if (slug) params.set("slug", slug);
+    if (kind === "quiz") {
+      window.open(`/learner/quiz/${courseId}/${lessonId}?${params.toString()}`, "_blank", "noopener,noreferrer");
+    } else {
+      params.set("courseId", String(courseId));
+      window.open(`/learner/assignment/${lessonId}?${params.toString()}`, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const openLessonFromModalNav = (targetLessonId: number | null) => {
+    if (!targetLessonId) return;
+    const targetModuleId = lessonModuleIdById.get(targetLessonId);
+    if (!targetModuleId) return;
+    if (!canOpenLesson(targetModuleId, targetLessonId)) return;
+    const assessmentKinds = lessonAssessmentKindsById.get(targetLessonId) || [];
+    if (!assessmentKinds.length) {
+      setLessonModalNavPick(null);
+      setLessonModal({ moduleId: targetModuleId, lessonId: targetLessonId });
+      return;
+    }
+    if (assessmentKinds.length === 1) {
+      setLessonModalNavPick(null);
+      const le = lessonById.get(targetLessonId);
+      openLearnerAssessmentInNewTab(assessmentKinds[0], targetLessonId, le?.title || "");
+      setLessonModal(null);
+      void fetchProgress();
+      return;
+    }
+    setLessonModalNavPick({
+      moduleId: targetModuleId,
+      lessonId: targetLessonId,
+      options: assessmentKinds,
+    });
+  };
 
   return (
     <div className="learningPage">
@@ -684,47 +878,21 @@ export default function LearningPage() {
                       e.preventDefault();
                       e.stopPropagation();
                       setAssessmentQuickPick(null);
-
-                      if (!done && !warning) {
-                        setLessonModal({ moduleId: link.moduleId, lessonId });
-                        return;
-                      }
-
                       const assessmentKinds = lessonAssessmentKindsById.get(lessonId) || [];
-
-                      if (done && !warning) {
-                        if (!assessmentKinds.length) {
-                          navigate(`/learning/${courseId}/${slug}/modules/${link.moduleId}?lesson=${lessonId}`);
-                          return;
-                        }
-                        setAssessmentQuickPick({
-                          moduleId: link.moduleId,
-                          lessonId,
-                          x: p.x,
-                          y: p.y,
-                          options: ["lesson", ...assessmentKinds],
-                        });
-                        return;
-                      }
-
-                      const warningAssessmentKinds = warning ? assessmentKinds : [];
-                      if (warningAssessmentKinds.length === 1) {
-                        navigate(
-                          `/learning/${courseId}/${slug}/modules/${link.moduleId}?lesson=${lessonId}&assessment=${warningAssessmentKinds[0]}`
-                        );
-                        return;
-                      }
-                      if (warningAssessmentKinds.length >= 2) {
-                        setAssessmentQuickPick({
-                          moduleId: link.moduleId,
-                          lessonId,
-                          x: p.x,
-                          y: p.y,
-                          options: [...warningAssessmentKinds],
-                        });
-                        return;
-                      }
-                      navigate(`/learning/${courseId}/${slug}/modules/${link.moduleId}?lesson=${lessonId}`);
+                      const hasQuiz = assessmentKinds.includes("quiz");
+                      const hasAssignment = assessmentKinds.includes("assignment");
+                      const submitted = assessmentSubmittedByLessonId[lessonId];
+                      setAssessmentQuickPick({
+                        moduleId: link.moduleId,
+                        lessonId,
+                        x: p.x,
+                        y: p.y,
+                        options: [
+                          { kind: "lesson", completed: done },
+                          { kind: "quiz", disabled: !hasQuiz, completed: Boolean(submitted?.quiz) },
+                          { kind: "assignment", disabled: !hasAssignment, completed: Boolean(submitted?.assignment) },
+                        ],
+                      });
                     };
                     return (
                       <g key={`${link.key}-cp-${pointIdx}`}>
@@ -778,23 +946,35 @@ export default function LearningPage() {
             >
               {assessmentQuickPick.options.map((opt) => (
                 <button
-                  key={opt}
+                  key={opt.kind}
                   type="button"
-                  className="learningPage__assessmentPickBtn"
+                  className={[
+                    "learningPage__assessmentPickBtn",
+                    opt.completed ? "learningPage__assessmentPickBtn--completed" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  disabled={Boolean(opt.disabled)}
                   onClick={() => {
-                    if (opt === "lesson") {
-                      navigate(
-                        `/learning/${courseId}/${slug}/modules/${assessmentQuickPick.moduleId}?lesson=${assessmentQuickPick.lessonId}`
-                      );
+                    if (opt.disabled) return;
+                    if (opt.kind === "lesson") {
+                      setLessonModalNavPick(null);
+                      setLessonModal({
+                        moduleId: assessmentQuickPick.moduleId,
+                        lessonId: assessmentQuickPick.lessonId,
+                      });
                     } else {
-                      navigate(
-                        `/learning/${courseId}/${slug}/modules/${assessmentQuickPick.moduleId}?lesson=${assessmentQuickPick.lessonId}&assessment=${opt}`
+                      openLearnerAssessmentInNewTab(
+                        opt.kind,
+                        assessmentQuickPick.lessonId,
+                        lessonTitleById.get(assessmentQuickPick.lessonId) || ""
                       );
                     }
                     setAssessmentQuickPick(null);
                   }}
                 >
-                  {opt === "lesson" ? "Bài học" : opt === "quiz" ? "Quizz" : "Bài tập"}
+                  {opt.completed ? "✓ " : ""}
+                  {opt.kind === "lesson" ? "Bài học" : opt.kind === "quiz" ? "Quizz" : "Bài tập"}
                 </button>
               ))}
             </div>
@@ -876,6 +1056,7 @@ export default function LearningPage() {
         <div
           className="learningPage__lessonModalBackdrop"
           onClick={() => {
+            setLessonModalNavPick(null);
             setLessonModal(null);
             void fetchProgress();
           }}
@@ -885,6 +1066,7 @@ export default function LearningPage() {
               type="button"
               className="learningPage__lessonModalClose"
               onClick={() => {
+                setLessonModalNavPick(null);
                 setLessonModal(null);
                 void fetchProgress();
               }}
@@ -904,35 +1086,16 @@ export default function LearningPage() {
                       type="button"
                       className="learningPage__lessonModalActBtn"
                       onClick={() => {
-                        navigate(
-                          `/learning/${courseId}/${slug}/modules/${lessonModal.moduleId}?lesson=${lessonModal.lessonId}&assessment=${k}`
-                        );
+                        openLearnerAssessmentInNewTab(k, lessonModal.lessonId, modalLesson?.title || "");
+                        setLessonModalNavPick(null);
+                        setLessonModal(null);
+                        void fetchProgress();
                       }}
                     >
                       {k === "quiz" ? "Quizz" : "Bài tập"}
                     </button>
                   ));
                 })()}
-                <button
-                  type="button"
-                  className="learningPage__lessonModalActBtn learningPage__lessonModalActBtn--primary"
-                  onClick={async () => {
-                    try {
-                      const res = await fetch(`${url}${COURSES_API.completeLesson(courseId, lessonModal.lessonId)}`, {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                        },
-                      });
-                      if (res.ok) await fetchProgress();
-                    } catch {
-                      // ignore
-                    }
-                  }}
-                >
-                  Đánh dấu hoàn thành
-                </button>
               </div>
             </div>
 
@@ -985,31 +1148,62 @@ export default function LearningPage() {
               <button
                 type="button"
                 className="learningPage__lessonModalNavBtn"
-                disabled={!modalPrevLessonId}
+                disabled={!modalCanGoPrev}
                 onClick={() => {
-                  if (!modalPrevLessonId) return;
-                  const prevModuleId = lessonModuleIdById.get(modalPrevLessonId);
-                  if (!prevModuleId) return;
-                  setLessonModal({ moduleId: prevModuleId, lessonId: modalPrevLessonId });
+                  openLessonFromModalNav(modalPrevLessonId);
                 }}
               >
                 ← Previous
               </button>
+              {lessonModalNavPick ? (
+                <div className="learningPage__lessonModalNavPick">
+                  <span className="learningPage__lessonModalNavPickLabel">Chọn đích:</span>
+                  {lessonModalNavPick.options.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      className="learningPage__lessonModalNavPickBtn"
+                      onClick={() => {
+                        openLearnerAssessmentInNewTab(
+                          opt,
+                          lessonModalNavPick.lessonId,
+                          lessonById.get(lessonModalNavPick.lessonId)?.title || ""
+                        );
+                        setLessonModalNavPick(null);
+                        setLessonModal(null);
+                        void fetchProgress();
+                      }}
+                    >
+                      {opt === "quiz" ? "Quizz" : "Bài tập"}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <button
                 type="button"
                 className="learningPage__lessonModalNavBtn"
-                disabled={!modalNextLessonId}
+                disabled={!modalCanGoNext}
                 onClick={() => {
-                  if (!modalNextLessonId) return;
-                  const nextModuleId = lessonModuleIdById.get(modalNextLessonId);
-                  if (!nextModuleId) return;
-                  setLessonModal({ moduleId: nextModuleId, lessonId: modalNextLessonId });
+                  openLessonFromModalNav(modalNextLessonId);
                 }}
               >
                 Next →
               </button>
             </div>
           </div>
+        </div>
+      ) : null}
+      {lessonModal && heartbeat && heartbeat.required_seconds > 0 ? (
+        <div
+          className={`learningPage__countdown ${heartbeat.can_complete ? "learningPage__countdown--ready" : ""}`}
+          aria-hidden="true"
+          style={{ ["--pct" as any]: countdownRemainingPct }}
+        >
+          <svg className="learningPage__countdownSvg" viewBox="0 0 48 48">
+            <circle className="learningPage__countdownTrack" cx="24" cy="24" r="20" />
+            <circle className="learningPage__countdownRing" cx="24" cy="24" r="20" />
+            <path className="learningPage__countdownTick" d="M16.5 24.5l5.2 5.4L32.5 18.6" />
+          </svg>
         </div>
       ) : null}
     </div>

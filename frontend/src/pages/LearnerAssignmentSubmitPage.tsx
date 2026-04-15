@@ -15,6 +15,8 @@ export default function LearnerAssignmentSubmitPage() {
   if (!lid || Number.isNaN(lid)) return null;
 
   const lessonTitle = search.get("title") || `Bài ${lid}`;
+  const learningCourseId = Number(search.get("courseId"));
+  const learningSlug = search.get("slug");
 
   const closePage = () => {
     try {
@@ -22,7 +24,11 @@ export default function LearnerAssignmentSubmitPage() {
     } catch {
       // ignore
     }
-    navigate(-1);
+    if (learningSlug && learningCourseId > 0 && !Number.isNaN(learningCourseId)) {
+      navigate(`/learning/${learningCourseId}/${encodeURIComponent(learningSlug)}`, { replace: true });
+    } else {
+      navigate(-1);
+    }
   };
 
   useLayoutEffect(() => {
