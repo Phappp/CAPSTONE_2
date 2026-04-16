@@ -33,3 +33,21 @@ export interface ListAuditLogsDto {
   to?: string;
 }
 
+export interface UpdateOpenRouterConfigDto {
+  api_key?: string;
+  models?: string[];
+  default_model?: string;
+}
+
+export interface CreateOpenRouterKeyDto {
+  api_key: string;
+  label?: string;
+}
+
+export interface UpdateOpenRouterKeyDto {
+  label?: string;
+  is_active?: boolean;
+  cooldown_minutes?: number;
+  clear_cooldown?: boolean;
+}
+

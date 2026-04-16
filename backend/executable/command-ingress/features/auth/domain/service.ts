@@ -135,14 +135,7 @@ export class AuthServiceImpl implements AuthService {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(request.password, salt);
 
-    // Chuẩn hóa role: hệ thống hỗ trợ mặc định learner/course_manager/admin
-    // Nếu client gửi giá trị khác thì fallback về learner.
-    const normalizedRole =
-      request.role === 'course_manager'
-        ? 'course_manager'
-        : request.role === 'admin'
-          ? 'admin'
-          : 'learner';
+    const normalizedRole = request.role;
 
     // Tạo/ghi đè bản ghi đăng ký tạm với OTP
     const code = this.generateOtpCode();
@@ -226,9 +219,6 @@ export class AuthServiceImpl implements AuthService {
       } else if (pending.role_name === 'learner') {
         // role mới cho học viên; fallback về 'student' nếu DB đang dùng tên cũ
         targetNames = ['learner', 'student'];
-      } else if (pending.role_name === 'admin') {
-        // role admin: không cần fallback tên cũ (nếu có thể tự tạo)
-        targetNames = ['admin'];
       } else {
         targetNames = [pending.role_name];
       }

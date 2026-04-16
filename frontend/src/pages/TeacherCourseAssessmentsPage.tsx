@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AvatarMenu from "../components/AvatarMenu";
-import CourseAssessmentModal, { type CourseAssessmentModalTab } from "../components/CourseAssessmentModal";
 import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import { getAccessToken } from "../utils/authStorage";
@@ -29,11 +28,6 @@ export default function TeacherCourseAssessmentsPage() {
   const [rows, setRows] = useState<LessonRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalTab, setModalTab] = useState<CourseAssessmentModalTab>("quiz");
-  const [pickedLessonId, setPickedLessonId] = useState<number | null>(null);
-  const [quizPanelCourseId, setQuizPanelCourseId] = useState<number | null>(null);
 
   const authHeaders = useMemo(() => {
     const h: Record<string, string> = { "Content-Type": "application/json" };
@@ -85,11 +79,13 @@ export default function TeacherCourseAssessmentsPage() {
     void load();
   }, [load]);
 
-  const openModal = (lessonId: number, tab: CourseAssessmentModalTab) => {
-    setPickedLessonId(lessonId);
-    setQuizPanelCourseId(courseId);
-    setModalTab(tab);
-    setModalOpen(true);
+  const openEditorTab = (lessonId: number, type: "quiz" | "assignment") => {
+    const basePath =
+      type === "quiz"
+        ? `/teacher/courses/${courseId}/quiz-editor`
+        : `/teacher/courses/${courseId}/assignment-editor`;
+    const href = `${basePath}?lessonId=${encodeURIComponent(String(lessonId))}`;
+    window.open(href, "_blank", "noopener,noreferrer");
   };
 
   const openRoster = (r: LessonRow) => {
@@ -102,10 +98,6 @@ export default function TeacherCourseAssessmentsPage() {
     window.open(href, "_blank", "noopener,noreferrer");
   };
 
-  const courses = useMemo(
-    () => (courseTitle ? [{ id: courseId, title: courseTitle }] : []),
-    [courseId, courseTitle]
-  );
   const displayRows = useMemo(
     () =>
       rows.map((r, idx) => ({
@@ -185,10 +177,10 @@ export default function TeacherCourseAssessmentsPage() {
                     <td style={{ padding: "10px" }}>{r.has_assignment ? "Có" : "—"}</td>
                     <td style={{ padding: "10px" }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                        <button type="button" className="secondary-button" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => openModal(r.id, "quiz")}>
+                        <button type="button" className="secondary-button" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => openEditorTab(r.id, "quiz")}>
                           Soạn Quizz
                         </button>
-                        <button type="button" className="secondary-button" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => openModal(r.id, "assignment")}>
+                        <button type="button" className="secondary-button" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => openEditorTab(r.id, "assignment")}>
                           Soạn bài tập
                         </button>
                         {r.has_assignment || r.has_quiz ? (
@@ -211,19 +203,6 @@ export default function TeacherCourseAssessmentsPage() {
           </div>
         ) : null}
       </div>
-
-      <CourseAssessmentModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        tab={modalTab}
-        onTabChange={setModalTab}
-        courses={courses}
-        token={token}
-        loading={loading}
-        quizPanelCourseId={quizPanelCourseId}
-        onQuizPanelCourseIdChange={setQuizPanelCourseId}
-        pickedLessonId={pickedLessonId}
-      />
 
     </div>
   );

@@ -51,6 +51,9 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
     .route('/:id/lessons/:lessonId/quiz/manual')
     .get(requireAuthorizedUser, controller.getManualQuizForLesson.bind(controller))
     .post(requireAuthorizedUser, controller.upsertManualQuizForLesson.bind(controller));
+  router
+    .route('/:id/lessons/:lessonId/quiz/manual/ai-generate')
+    .post(requireAuthorizedUser, controller.generateManualQuizByAi.bind(controller));
   router.route('/:id/lessons/:lessonId/resources').get(requireAuthorizedUser, controller.listLessonResources.bind(controller));
   router.route('/:id/lessons/:lessonId/resources/youtube').post(requireAuthorizedUser, controller.createLessonYoutubeResource.bind(controller));
   router.route('/:id/resources/:resourceId').delete(requireAuthorizedUser, controller.deleteLessonResource.bind(controller));

@@ -1,14 +1,25 @@
-import { IsString, IsOptional, IsBoolean, IsInt, IsEnum, IsArray, IsNumber, ValidateNested } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsInt,
+  IsArray,
+  IsNumber,
+  ValidateNested,
+  IsIn,
+  Min,
+  IsNotEmpty,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { RequestDto } from '../../../shared/request-dto';
 
 // dto cho api tạo ngân hàng
 export class CreateQuestionBankBody extends RequestDto {
-    @IsOptional()
     @IsInt()
-    course_id?: number;
+    course_id: number;
 
     @IsString()
+    @IsNotEmpty()
     name: string;
 
     @IsOptional()
@@ -23,10 +34,10 @@ export class CreateQuestionBankBody extends RequestDto {
 
     constructor(body: any, userId: number) {
         super();
-        this.course_id = body.course_id;
-        this.name = body.name;
-        this.description = body.description;
-        this.is_shared = body.is_shared;
+        this.course_id = Number(body?.course_id);
+        this.name = String(body?.name ?? '');
+        this.description = body?.description != null ? String(body.description) : '';
+        this.is_shared = Boolean(body?.is_shared);
         this.user_id = userId;
     }
 }
@@ -34,6 +45,7 @@ export class CreateQuestionBankBody extends RequestDto {
 // dto cho api tạo câu hỏi
 export class BankQuestionOptionDto{
     @IsString()
+    @IsNotEmpty()
     option_text: string;
 
     @IsBoolean()
@@ -45,13 +57,14 @@ export class BankQuestionOptionDto{
 }
 
 export class AddBankQuestionBody extends RequestDto {
-    @IsEnum(['multiple_choice', 'true_false', 'short_answer', 'essay', 'fill_blank'])
+    @IsIn(['multiple_choice', 'true_false', 'short_answer', 'essay', 'fill_blank'])
     question_type: string;
 
     @IsString()
+    @IsNotEmpty()
     question_text: string;
 
-    @IsEnum(['easy', 'medium', 'hard'])
+    @IsIn(['easy', 'medium', 'hard'])
     difficulty: string;
 
     @IsOptional()
@@ -65,6 +78,7 @@ export class AddBankQuestionBody extends RequestDto {
 
     @IsOptional()
     @IsNumber()
+    @Min(0.25)
     points?: number;
 
     @IsOptional()
@@ -82,15 +96,138 @@ export class AddBankQuestionBody extends RequestDto {
 
     constructor(body: any, bankId: number, userId: number){
         super();
-        this.question_text = body.question_text;
-        this.question_type = body.question_type;
-        this.difficulty = body.difficulty;
-        this.category = body.category;
-        this.tags = body.tags;
-        this.points = body.points;
-        this.options = body.options;
-        this.explanation = body.explanation;
+        this.question_text = String(body?.question_text ?? '');
+        this.question_type = String(body?.question_type ?? '');
+        this.difficulty = String(body?.difficulty ?? '');
+        this.category = body?.category != null ? String(body.category) : undefined;
+        this.tags = Array.isArray(body?.tags) ? body.tags.map((item: any) => String(item)) : undefined;
+        this.points = body?.points != null ? Number(body.points) : undefined;
+        this.options = Array.isArray(body?.options) ? body.options : undefined;
+        this.explanation = body?.explanation != null ? String(body.explanation) : undefined;
         this.bank_id = bankId;
         this.user_id = userId;
+    }
+}
+
+export class UpdateQuestionBankBody extends RequestDto {
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty()
+    name?: string;
+
+    @IsOptional()
+    @IsString()
+    description?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    is_shared?: boolean;
+
+    constructor(body: any) {
+      super();
+      if (body?.name != null) this.name = String(body.name);
+      if (body?.description != null) this.description = String(body.description);
+      if (body?.is_shared != null) this.is_shared = Boolean(body.is_shared);
+    }
+}
+
+export class UpdateBankQuestionBody extends RequestDto {
+    @IsOptional()
+    @IsIn(['multiple_choice', 'true_false', 'short_answer', 'essay', 'fill_blank'])
+    question_type?: string;
+
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty()
+    question_text?: string;
+
+    @IsOptional()
+    @IsIn(['easy', 'medium', 'hard'])
+    difficulty?: string;
+
+    @IsOptional()
+    @IsString()
+    category?: string;
+
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    tags?: string[];
+
+    @IsOptional()
+    @IsNumber()
+    @Min(0.25)
+    points?: number;
+
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => BankQuestionOptionDto)
+    options?: BankQuestionOptionDto[];
+
+    @IsOptional()
+    @IsString()
+    explanation?: string;
+
+    constructor(body: any) {
+      super();
+      if (body?.question_type != null) this.question_type = String(body.question_type);
+      if (body?.question_text != null) this.question_text = String(body.question_text);
+      if (body?.difficulty != null) this.difficulty = String(body.difficulty);
+      if (body?.category != null) this.category = String(body.category);
+      if (Array.isArray(body?.tags)) this.tags = body.tags.map((item: any) => String(item));
+      if (body?.points != null) this.points = Number(body.points);
+      if (Array.isArray(body?.options)) this.options = body.options;
+      if (body?.explanation != null) this.explanation = String(body.explanation);
+    }
+}
+
+export class GenerateBankQuestionsAiBody extends RequestDto {
+    @IsString()
+    @IsNotEmpty()
+    topic: string;
+
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    question_count?: number;
+
+    @IsOptional()
+    @IsIn(['easy', 'medium', 'hard'])
+    difficulty?: 'easy' | 'medium' | 'hard';
+
+    @IsOptional()
+    @IsIn(['multiple_choice', 'true_false', 'mixed'])
+    question_type?: 'multiple_choice' | 'true_false' | 'mixed';
+
+    @IsOptional()
+    @IsString()
+    extra_instructions?: string;
+
+    @IsOptional()
+    @IsString()
+    attachment_name?: string;
+
+    @IsOptional()
+    @IsString()
+    attachment_text?: string;
+
+    constructor(body: any) {
+      super();
+      this.topic = String(body?.topic ?? '').trim();
+      if (body?.question_count != null) {
+        this.question_count = Math.max(1, Math.min(20, Number(body.question_count) || 1));
+      }
+      if (body?.difficulty != null) {
+        const d = String(body.difficulty).toLowerCase();
+        this.difficulty = d === 'easy' || d === 'hard' ? d : 'medium';
+      }
+      if (body?.question_type != null) {
+        const t = String(body.question_type).toLowerCase();
+        this.question_type = t === 'true_false' || t === 'mixed' ? t : 'multiple_choice';
+      }
+      if (body?.extra_instructions != null) this.extra_instructions = String(body.extra_instructions);
+      if (body?.attachment_name != null) this.attachment_name = String(body.attachment_name);
+      if (body?.attachment_text != null) this.attachment_text = String(body.attachment_text);
     }
 }

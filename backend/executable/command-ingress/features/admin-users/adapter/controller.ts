@@ -3,15 +3,21 @@ import { HttpRequest } from '../../../types';
 import { AdminUserService } from '../domain/service';
 import {
   BulkActionDto,
+  CreateOpenRouterKeyDto,
   ListAuditLogsDto,
   ListUsersDto,
+  UpdateOpenRouterKeyDto,
+  UpdateOpenRouterConfigDto,
   UpdateRoleDto,
   UpdateStatusDto,
 } from './dto';
 import {
   BulkUserActionRequest,
+  CreateOpenRouterKeyRequest,
   ListAuditLogsQuery,
   ListUsersQuery,
+  UpdateOpenRouterKeyRequest,
+  UpdateOpenRouterConfigRequest,
   UpdateUserRoleRequest,
   UpdateUserStatusRequest,
 } from '../types';
@@ -192,6 +198,97 @@ export class AdminUserController {
       };
 
       const result = await this.service.listAuditLogs(subject, query);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getOpenRouterConfig(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const subject = Number(req.getSubject());
+      const result = await this.service.getOpenRouterConfig(subject);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateOpenRouterConfig(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const subject = Number(req.getSubject());
+      const body = req.body as UpdateOpenRouterConfigDto;
+      const payload: UpdateOpenRouterConfigRequest = {
+        api_key: body.api_key,
+        models: Array.isArray(body.models) ? body.models : undefined,
+        default_model: body.default_model,
+      };
+      await this.service.updateOpenRouterConfig(subject, payload, {
+        ip: this.getRequestIp(req),
+      });
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createOpenRouterKey(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const subject = Number(req.getSubject());
+      const body = req.body as CreateOpenRouterKeyDto;
+      const payload: CreateOpenRouterKeyRequest = {
+        api_key: String(body.api_key || ''),
+        label: body.label,
+      };
+      await this.service.createOpenRouterKey(subject, payload, {
+        ip: this.getRequestIp(req),
+      });
+      res.status(201).json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateOpenRouterKey(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const subject = Number(req.getSubject());
+      const keyId = Number(req.params.keyId);
+      const body = req.body as UpdateOpenRouterKeyDto;
+      const payload: UpdateOpenRouterKeyRequest = {
+        label: body.label,
+        is_active: body.is_active,
+        cooldown_minutes: body.cooldown_minutes,
+        clear_cooldown: body.clear_cooldown,
+      };
+      await this.service.updateOpenRouterKey(subject, keyId, payload, {
+        ip: this.getRequestIp(req),
+      });
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteOpenRouterKey(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const subject = Number(req.getSubject());
+      const keyId = Number(req.params.keyId);
+      await this.service.deleteOpenRouterKey(subject, keyId, {
+        ip: this.getRequestIp(req),
+      });
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async testOpenRouterKey(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const subject = Number(req.getSubject());
+      const keyId = Number(req.params.keyId);
+      const result = await this.service.testOpenRouterKey(subject, keyId, {
+        ip: this.getRequestIp(req),
+      });
       res.json({ success: true, data: result });
     } catch (error) {
       next(error);

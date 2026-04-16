@@ -53,6 +53,8 @@ export const COURSES_API = {
   /** Quiz thủ công (GV): GET/PATCH body qua POST */
   manualQuiz: (id: number | string, lessonId: number | string) =>
     `${COURSES_API_BASE}/${id}/lessons/${lessonId}/quiz/manual`,
+  manualQuizAiGenerate: (id: number | string, lessonId: number | string) =>
+    `${COURSES_API_BASE}/${id}/lessons/${lessonId}/quiz/manual/ai-generate`,
   /** Học viên: làm bài quiz */
   learnerQuizTake: (id: number | string, lessonId: number | string) =>
     `${COURSES_API_BASE}/${id}/lessons/${lessonId}/quiz/take`,

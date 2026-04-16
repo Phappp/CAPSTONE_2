@@ -16,6 +16,20 @@ const initAdminUserRoute: (controller: AdminUserController) => express.Router = 
   router.route('/audit-logs')
     .get(controller.listAuditLogs.bind(controller));
 
+  router.route('/openrouter-config')
+    .get(controller.getOpenRouterConfig.bind(controller))
+    .put(controller.updateOpenRouterConfig.bind(controller));
+
+  router.route('/openrouter-config/keys')
+    .post(controller.createOpenRouterKey.bind(controller));
+
+  router.route('/openrouter-config/keys/:keyId')
+    .patch(controller.updateOpenRouterKey.bind(controller))
+    .delete(controller.deleteOpenRouterKey.bind(controller));
+
+  router.route('/openrouter-config/keys/:keyId/test')
+    .post(controller.testOpenRouterKey.bind(controller));
+
   router.route('/:userId/status')
     .put(controller.updateStatus.bind(controller));
 

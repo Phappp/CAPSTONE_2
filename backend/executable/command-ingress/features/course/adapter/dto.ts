@@ -279,6 +279,41 @@ export class UpsertManualQuizBody extends RequestDto {
   }
 }
 
+export class GenerateManualQuizAiBody extends RequestDto {
+  topic: string;
+  question_count?: number;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  question_type?: 'multiple_choice' | 'true_false' | 'mixed';
+  extra_instructions?: string | null;
+  attachment_name?: string | null;
+  attachment_text?: string | null;
+
+  constructor(body: any) {
+    super();
+    this.topic = String(body?.topic || '').trim();
+    if (body?.question_count != null) {
+      this.question_count = Math.max(1, Math.min(20, Math.floor(Number(body.question_count) || 0)));
+    }
+    if (body?.difficulty != null) {
+      const d = String(body.difficulty).toLowerCase();
+      this.difficulty = d === 'easy' || d === 'hard' ? d : 'medium';
+    }
+    if (body?.question_type != null) {
+      const t = String(body.question_type).toLowerCase();
+      this.question_type = t === 'true_false' || t === 'mixed' ? t : 'multiple_choice';
+    }
+    if (body?.extra_instructions != null) {
+      this.extra_instructions = String(body.extra_instructions);
+    }
+    if (body?.attachment_name != null) {
+      this.attachment_name = String(body.attachment_name).trim();
+    }
+    if (body?.attachment_text != null) {
+      this.attachment_text = String(body.attachment_text);
+    }
+  }
+}
+
 export class SubmitLearnerQuizBody extends RequestDto {
   answers: { quiz_question_id: number; selected_option_id: number }[];
 

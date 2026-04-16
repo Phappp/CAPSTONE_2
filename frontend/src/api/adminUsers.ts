@@ -14,4 +14,10 @@ export const ADMIN_USERS_API = {
   hardDelete: (userId: number | string) =>
     `${ADMIN_USERS_API_BASE}/${userId}/hard-delete`,
   auditLogs: `${ADMIN_USERS_API_BASE}/audit-logs`,
+  openrouterConfig: `${ADMIN_USERS_API_BASE}/openrouter-config`,
+  openrouterKeys: `${ADMIN_USERS_API_BASE}/openrouter-config/keys`,
+  openrouterKeyItem: (keyId: number | string) =>
+    `${ADMIN_USERS_API_BASE}/openrouter-config/keys/${keyId}`,
+  openrouterKeyTest: (keyId: number | string) =>
+    `${ADMIN_USERS_API_BASE}/openrouter-config/keys/${keyId}/test`,
 } as const;

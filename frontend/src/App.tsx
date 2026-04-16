@@ -10,8 +10,11 @@ import AdminDashboard from "./pages/AdminDashboard";
 import CreateCoursePage from "./pages/CreateCoursePage";
 import TeacherCourseDetailPage from "./pages/TeacherCourseDetailPage";
 import TeacherCourseOverviewPage from "./pages/TeacherCourseOverviewPage";
+import TeacherQuestionBankPage from "./pages/TeacherQuestionBankPage";
 import TeacherCourseAssessmentsPage from "./pages/TeacherCourseAssessmentsPage";
 import TeacherCourseContentBuilderPage from "./pages/TeacherCourseContentBuilderPage";
+import TeacherQuizEditorPage from "./pages/TeacherQuizEditorPage";
+import TeacherAssignmentEditorPage from "./pages/TeacherAssignmentEditorPage";
 import CoursesCatalogPage from "./pages/CoursesCatalogPage";
 import CoursePublicDetailPage from "./pages/CoursePublicDetailPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -119,6 +122,30 @@ export default function App() {
         element={
           <Authentication>
             <TeacherCourseContentBuilderPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/courses/:id/question-banks"
+        element={
+          <Authentication>
+            <TeacherQuestionBankPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/courses/:id/quiz-editor"
+        element={
+          <Authentication>
+            <TeacherQuizEditorPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/courses/:id/assignment-editor"
+        element={
+          <Authentication>
+            <TeacherAssignmentEditorPage />
           </Authentication>
         }
       />

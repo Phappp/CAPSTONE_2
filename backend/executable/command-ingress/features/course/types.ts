@@ -406,6 +406,21 @@ export type ManualQuizUpsertRequest = {
   questions: ManualQuizQuestionInput[];
 };
 
+export type ManualQuizAiGenerateRequest = {
+  topic: string;
+  question_count?: number;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  question_type?: 'multiple_choice' | 'true_false' | 'mixed';
+  extra_instructions?: string | null;
+  attachment_name?: string | null;
+  attachment_text?: string | null;
+};
+
+export type ManualQuizAiGenerateResult = {
+  model: string;
+  questions: ManualQuizQuestionInput[];
+};
+
 export type ManualQuizDetailResult = {
   quiz_id: number;
   lesson_id: number;
@@ -587,6 +602,12 @@ export interface CourseService {
     lessonId: number,
     request: ManualQuizUpsertRequest
   ): Promise<{ quiz_id: number }>;
+  generateManualQuizQuestionsWithAi(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number,
+    request: ManualQuizAiGenerateRequest
+  ): Promise<ManualQuizAiGenerateResult>;
 
   getLearnerQuizForLesson(
     subjectUserId: number,
