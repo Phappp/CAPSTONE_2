@@ -23,6 +23,9 @@ import QuestionOption from '../../../../../internal/model/question_option';
 import QuizResponse from '../../../../../internal/model/quiz_response';
 import QuizResponseOption from '../../../../../internal/model/quiz_response_options';
 import Assignment from '../../../../../internal/model/assignment';
+import OpenRouterKey from '../../../../../internal/model/openrouter_key';
+import OpenRouterSetting from '../../../../../internal/model/openrouter_setting';
+import crypto from 'crypto';
 
 import {
   CourseDashboardStats,
@@ -67,6 +70,8 @@ import {
   CoursePrerequisiteGraphNode,
   CoursePrerequisiteGraphEdge,
   ManualQuizDetailResult,
+  ManualQuizAiGenerateRequest,
+  ManualQuizAiGenerateResult,
   ManualQuizUpsertRequest,
   ManualQuizQuestionInput,
   LearnerQuizTakePayload,
@@ -191,6 +196,21 @@ async function isUserCourseManager(userId: number): Promise<boolean> {
 async function ensureUserIsCourseManager(userId: number) {
   const ok = await isUserCourseManager(userId);
   if (!ok) throw new Error('Bạn không có quyền thực hiện thao tác này.');
+}
+
+function getOpenRouterEncryptionKey(): Buffer {
+  const base = process.env.OPENROUTER_ENCRYPTION_SECRET || process.env.JWT_SECRET || 'mindbridge-openrouter-secret';
+  return crypto.createHash('sha256').update(base).digest();
+}
+
+function decryptOpenRouterKey(payload: string): string {
+  const [ivHex, encryptedHex] = String(payload || '').split(':');
+  if (!ivHex || !encryptedHex) return '';
+  const iv = Buffer.from(ivHex, 'hex');
+  const encrypted = Buffer.from(encryptedHex, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', getOpenRouterEncryptionKey(), iv);
+  const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+  return decrypted.toString('utf8');
 }
 
 function mapCourseRowToItem(row: any): CourseListItem {
@@ -1181,6 +1201,77 @@ export class CourseServiceImpl implements CourseService {
     return completedSet.has(Number((orderedLessons[globalIndex - 1] as any).id));
   }
 
+  private async loadEffectiveCompletedLessonSet(subjectUserId: number, orderedLessons: Lesson[]): Promise<Set<number>> {
+    const lessonIds = orderedLessons.map((l) => Number((l as any).id)).filter((x) => Number.isFinite(x) && x > 0);
+    if (!lessonIds.length) return new Set<number>();
+
+    const completionRepo = AppDataSource.getRepository(LessonCompletion);
+    const completionRows = await completionRepo
+      .createQueryBuilder('lc')
+      .select(['lc.lesson_id'])
+      .where('lc.user_id = :uid', { uid: subjectUserId })
+      .andWhere('lc.lesson_id IN (:...lessonIds)', { lessonIds })
+      .getRawMany();
+    const set = new Set<number>(completionRows.map((r: any) => Number(r.lc_lesson_id ?? r.lesson_id)));
+
+    // Backward-compatibility: với dữ liệu cũ, assignment đã nộp nhưng chưa ghi lesson_completion.
+    const submittedAssignments = await AppDataSource.query(
+      `
+      SELECT DISTINCT a.lesson_id
+      FROM submissions s
+      INNER JOIN assignments a ON a.id = s.assignment_id
+      WHERE s.user_id = ? AND s.status IN ('submitted', 'graded', 'returned') AND a.lesson_id IN (?)
+      `,
+      [subjectUserId, lessonIds]
+    ).catch(async () => {
+      // Fallback cho một số cấu hình driver không map IN (?) với mảng.
+      return await AppDataSource.query(
+        `
+        SELECT DISTINCT a.lesson_id
+        FROM submissions s
+        INNER JOIN assignments a ON a.id = s.assignment_id
+        WHERE s.user_id = ? AND s.status IN ('submitted', 'graded', 'returned') AND a.lesson_id IN (${lessonIds
+          .map(() => '?')
+          .join(',')})
+        `,
+        [subjectUserId, ...lessonIds]
+      );
+    });
+    for (const r of submittedAssignments as any[]) {
+      const lid = Number((r as any).lesson_id);
+      if (Number.isFinite(lid) && lid > 0) set.add(lid);
+    }
+
+    // Backward-compatibility: quiz đã đạt nhưng chưa ghi lesson_completion.
+    const passedQuizLessons = await AppDataSource.query(
+      `
+      SELECT DISTINCT q.lesson_id
+      FROM quiz_attempts qa
+      INNER JOIN quizzes q ON q.id = qa.quiz_id
+      WHERE qa.user_id = ? AND qa.is_passed = 1 AND q.lesson_id IN (?)
+      `,
+      [subjectUserId, lessonIds]
+    ).catch(async () => {
+      return await AppDataSource.query(
+        `
+        SELECT DISTINCT q.lesson_id
+        FROM quiz_attempts qa
+        INNER JOIN quizzes q ON q.id = qa.quiz_id
+        WHERE qa.user_id = ? AND qa.is_passed = 1 AND q.lesson_id IN (${lessonIds
+          .map(() => '?')
+          .join(',')})
+        `,
+        [subjectUserId, ...lessonIds]
+      );
+    });
+    for (const r of passedQuizLessons as any[]) {
+      const lid = Number((r as any).lesson_id);
+      if (Number.isFinite(lid) && lid > 0) set.add(lid);
+    }
+
+    return set;
+  }
+
   private async getTimeRulesForCourse(courseId: number): Promise<{ videoMinSeconds: number; videoMinPercent: number; textMinSeconds: number }> {
     const repo = AppDataSource.getRepository(CourseCompletionRequirement);
     const row = await repo.findOne({ where: { course_id: courseId } as any });
@@ -1245,16 +1336,7 @@ export class CourseServiceImpl implements CourseService {
       throw new Error('Không thể truy cập bài học.');
     }
 
-    const completionRepo = AppDataSource.getRepository(LessonCompletion);
-    const completedRows = orderedLessons.length
-      ? await completionRepo
-          .createQueryBuilder('lc')
-          .select(['lc.lesson_id'])
-          .where('lc.user_id = :uid', { uid: subjectUserId })
-          .andWhere('lc.lesson_id IN (:...lessonIds)', { lessonIds: orderedLessons.map((l) => (l as any).id) })
-          .getRawMany()
-      : [];
-    const completedSet = new Set<number>(completedRows.map((r: any) => Number(r.lc_lesson_id ?? r.lesson_id)));
+    const completedSet = await this.loadEffectiveCompletedLessonSet(subjectUserId, orderedLessons);
 
     const prereqOk = this.lessonProgressionPrerequisiteMet(
       targetLesson,
@@ -1274,16 +1356,7 @@ export class CourseServiceImpl implements CourseService {
     const now = new Date();
     const moduleById = new Map<number, any>((modules as any[]).map((m) => [Number(m.id), m]));
 
-    const completionRepo = AppDataSource.getRepository(LessonCompletion);
-    const completedRows = total
-      ? await completionRepo
-          .createQueryBuilder('lc')
-          .select(['lc.lesson_id'])
-          .where('lc.user_id = :uid', { uid: subjectUserId })
-          .andWhere('lc.lesson_id IN (:...lessonIds)', { lessonIds: orderedLessons.map((l) => (l as any).id) })
-          .getRawMany()
-      : [];
-    const completedSet = new Set<number>(completedRows.map((r: any) => Number(r.lc_lesson_id ?? r.lesson_id)));
+    const completedSet = await this.loadEffectiveCompletedLessonSet(subjectUserId, orderedLessons);
 
     const unlocked: number[] = [];
     let nextLocked: number | null = null;
@@ -1295,6 +1368,12 @@ export class CourseServiceImpl implements CourseService {
       const moduleOk = !openAt || openAt.getTime() <= now.getTime();
       const lessonOpenAt = parseNullableDateTime(lesson?.open_at);
       const lessonOk = !lessonOpenAt || lessonOpenAt.getTime() <= now.getTime();
+
+      // Always keep first lesson reachable once schedule window is open.
+      if (i === 0 && moduleOk && lessonOk) {
+        unlocked.push(lessonId);
+        continue;
+      }
 
       const prereqOk = this.lessonProgressionPrerequisiteMet(lesson, i, orderedLessons, modules, completedSet);
       if (prereqOk && moduleOk && lessonOk) {
@@ -1399,17 +1478,7 @@ export class CourseServiceImpl implements CourseService {
     }
 
     const completionRepo = AppDataSource.getRepository(LessonCompletion);
-    const completedRowsForPrereq = orderedLessons.length
-      ? await completionRepo
-          .createQueryBuilder('lc')
-          .select(['lc.lesson_id'])
-          .where('lc.user_id = :uid', { uid: subjectUserId })
-          .andWhere('lc.lesson_id IN (:...lessonIds)', { lessonIds: orderedLessons.map((l) => (l as any).id) })
-          .getRawMany()
-      : [];
-    const completedSetForPrereq = new Set<number>(
-      completedRowsForPrereq.map((r: any) => Number(r.lc_lesson_id ?? r.lesson_id))
-    );
+    const completedSetForPrereq = await this.loadEffectiveCompletedLessonSet(subjectUserId, orderedLessons);
     const prereqOk = this.lessonProgressionPrerequisiteMet(
       targetLesson,
       idx,
@@ -2892,6 +2961,218 @@ export class CourseServiceImpl implements CourseService {
     });
   }
 
+  async generateManualQuizQuestionsWithAi(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number,
+    request: ManualQuizAiGenerateRequest
+  ): Promise<ManualQuizAiGenerateResult> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const moduleRepo = AppDataSource.getRepository(Module);
+    const settingRepo = AppDataSource.getRepository(OpenRouterSetting);
+    const keyRepo = AppDataSource.getRepository(OpenRouterKey);
+
+    const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
+    if (!lesson) throw new Error('Không tìm thấy bài học.');
+    const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id, course_id: courseId } as any });
+    if (!mod) throw new Error('Không tìm thấy bài học.');
+
+    const topic = String(request?.topic || '').trim();
+    if (!topic) throw new Error('Vui lòng nhập chủ đề để AI tạo quiz.');
+
+    const questionCount = Math.max(1, Math.min(20, Number(request?.question_count) || 5));
+    const difficulty = request?.difficulty === 'easy' || request?.difficulty === 'hard' ? request.difficulty : 'medium';
+    const questionType =
+      request?.question_type === 'true_false' || request?.question_type === 'mixed'
+        ? request.question_type
+        : 'multiple_choice';
+
+    const settings = await settingRepo.findOne({ where: {} });
+    const defaultModel =
+      String(settings?.default_model || '').trim() ||
+      (Array.isArray(settings?.models) && settings?.models.length ? String(settings.models[0]) : '') ||
+      'openai/gpt-4o-mini';
+
+    const modelCandidatesRaw: string[] = Array.isArray(settings?.models) ? settings!.models!.map(String) : [];
+    let modelCandidates: string[] = [defaultModel, ...modelCandidatesRaw].map(String).filter(Boolean);
+    modelCandidates = Array.from(new Set(modelCandidates));
+    if (!modelCandidates.length) modelCandidates = [defaultModel];
+
+    const now = new Date();
+    const availableKeys = await keyRepo.find({
+      where: { is_active: true } as any,
+      order: { last_used_at: 'ASC', id: 'ASC' } as any,
+    });
+    const picked = availableKeys.find((k) => !k.cooldown_until || new Date(k.cooldown_until) <= now);
+    if (!picked) {
+      throw new Error('Không có OpenRouter key khả dụng. Hãy kiểm tra tab Admin > Keys.');
+    }
+
+    const openRouterKey = decryptOpenRouterKey(String((picked as any).key_encrypted || ''));
+    if (!openRouterKey) {
+      throw new Error('Không thể giải mã OpenRouter key. Hãy cập nhật lại key trong Admin.');
+    }
+
+      const systemPrompt =
+      'Bạn là trợ lý tạo câu hỏi trắc nghiệm cho LMS. Trả về DUY NHẤT 1 JSON object hợp lệ. Không markdown, không code block, không giải thích, không chữ nào khác ngoài JSON. Bắt buộc dùng cú pháp JSON chuẩn: `"key": value` (không được viết `"key:"value"`).';
+    const userPrompt = [
+      'Tạo bộ câu hỏi quiz theo yêu cầu sau và trả về JSON object có dạng:',
+      '{ "questions": [{ "question_text": string, "question_type": "multiple_choice"|"true_false", "explanation": string|null, "points": number, "difficulty": "easy"|"medium"|"hard", "options": [{ "option_text": string, "is_correct": boolean }] }] }',
+      `Số câu: ${questionCount}`,
+      `Chủ đề: ${topic}`,
+      `Độ khó ưu tiên: ${difficulty}`,
+      `Loại câu hỏi: ${questionType}`,
+      'Ràng buộc:',
+      '- Mỗi câu phải có ít nhất 2 options.',
+      '- Mỗi câu phải có ít nhất 1 đáp án đúng.',
+      '- Nếu question_type=true_false, options phải là "Đúng" và "Sai".',
+      '- Nội dung bằng tiếng Việt, ngắn gọn, rõ nghĩa.',
+      request?.extra_instructions ? `Yêu cầu bổ sung: ${String(request.extra_instructions)}` : '',
+      request?.attachment_text
+        ? `Nội dung tham chiếu từ file "${String(request.attachment_name || 'attachment')}":\n${String(
+            request.attachment_text
+          )
+            .slice(0, 12000)
+            .trim()}`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    let lastError: any = null;
+    for (const modelTry of modelCandidates) {
+      try {
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${openRouterKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: modelTry,
+            response_format: { type: 'json_object' },
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+            temperature: 0.6,
+          }),
+        });
+
+        if (!response.ok) {
+          const raw = await response.text().catch(() => '');
+
+          // 429 thường là rate limit theo model/provider upstream.
+          if (response.status === 429) {
+            const cooldownMinutes = 10;
+            (picked as any).last_error_at = new Date();
+            (picked as any).error_count = Number((picked as any).error_count || 0) + 1;
+            (picked as any).last_test_status = 'rate_limited';
+            (picked as any).last_test_message = String(raw || 'HTTP 429').slice(0, 255);
+            (picked as any).cooldown_until = new Date(Date.now() + cooldownMinutes * 60 * 1000);
+            await keyRepo.save(picked as any);
+
+            lastError = new Error(`OpenRouter 429 (model ${modelTry}): ${raw?.slice(0, 160) || 'rate limited'}`);
+            continue;
+          }
+
+          (picked as any).last_error_at = new Date();
+          (picked as any).error_count = Number((picked as any).error_count || 0) + 1;
+          (picked as any).last_test_status = 'unknown_error';
+          (picked as any).last_test_message = `HTTP ${response.status}`.slice(0, 255);
+          await keyRepo.save(picked as any);
+
+          lastError = new Error(`OpenRouter lỗi HTTP ${response.status}: ${raw?.slice(0, 160) || 'Unknown error'}`);
+          continue;
+        }
+
+        const data: any = await response.json();
+        const choice0 = data?.choices?.[0] ?? null;
+        const contentRaw = choice0?.message?.content;
+        const textRaw = choice0?.text;
+        const contentString =
+          typeof contentRaw === "string"
+            ? contentRaw
+            : contentRaw != null
+              ? JSON.stringify(contentRaw)
+              : typeof textRaw === "string"
+                ? textRaw
+                : "";
+
+        if (!contentString || !contentString.trim()) {
+          throw new Error(
+            `OpenRouter không trả về nội dung. choice0=${JSON.stringify(choice0).slice(0, 400)}`
+          );
+        }
+
+      const repairJsonLikeText = (input: string): string => {
+        let t = String(input || '');
+        // Fix common issues like: {"questions:[{ ... }] -> {"questions":[{ ... }]
+        t = t.replace(/"(\w+)":?\[/g, (_m, key) => `"${key}":[`);
+        t = t.replace(/"(\w+):\[/g, (_m, key) => `"${key}":[`);
+
+        // Fix: "question_type:"multiple_choice" -> "question_type":"multiple_choice"
+        t = t.replace(/"(\w+):"([^"]*)"/g, (_m, k, v) => `"${k}":"${v}"`);
+
+        // Fix numeric/boolean/null when value not quoted: "points:2" -> "points":2
+        t = t.replace(/"(\w+):(true|false|null|\d+(?:\.\d+)?)"/g, (_m, k, v) => `"${k}":${v}`);
+        return t;
+      };
+
+      const tryParseJsonObject = (rawText: string): any | null => {
+        let t = String(rawText || '').trim();
+        // Remove markdown/code fences if AI still wraps the JSON
+        t = t.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+        t = repairJsonLikeText(t);
+
+        // First try: whole string
+        try { return JSON.parse(t); } catch { /* continue */ }
+        // Fallback: extract {...} region
+        const first = t.indexOf('{');
+        const last = t.lastIndexOf('}');
+        if (first !== -1 && last !== -1 && last > first) {
+          const sub = t.slice(first, last + 1);
+          try {
+            return JSON.parse(sub);
+          } catch {
+            return null;
+          }
+        }
+        return null;
+      };
+
+      const parsed = tryParseJsonObject(String(contentString));
+      if (!parsed) {
+        throw new Error(`AI trả về dữ liệu không đúng JSON. Raw=${String(contentString).slice(0, 400)}`);
+      }
+
+        const rawQuestions = Array.isArray(parsed?.questions) ? parsed.questions : [];
+        const validated = validateManualQuizQuestions(rawQuestions as ManualQuizQuestionInput[]);
+        const trimmed = validated.slice(0, questionCount);
+
+        (picked as any).last_used_at = new Date();
+        await keyRepo.save(picked as any);
+
+        return {
+          model: modelTry,
+          questions: trimmed,
+        };
+      } catch (error: any) {
+        (picked as any).last_error_at = new Date();
+        (picked as any).error_count = Number((picked as any).error_count || 0) + 1;
+        (picked as any).last_test_status = 'network_error';
+        (picked as any).last_test_message = String(error?.message || error).slice(0, 255);
+        await keyRepo.save(picked as any);
+        lastError = error;
+      }
+    }
+
+    throw new Error(String(lastError?.message || lastError || 'OpenRouter AI generation failed.'));
+  }
+
   async getLearnerQuizForLesson(
     subjectUserId: number,
     courseId: number,
@@ -2963,6 +3244,78 @@ export class CourseServiceImpl implements CourseService {
 
     if (!questions.length) return null;
 
+    const recentAttemptsRaw = await attemptRepo.find({
+      where: { quiz_id: (quiz as any).id, user_id: subjectUserId } as any,
+      order: { attempt_number: 'DESC' } as any,
+      take: 5,
+    });
+    const recentAttemptIds = (recentAttemptsRaw as any[]).map((a) => Number(a.id)).filter((x) => x > 0);
+
+    const respRepo = AppDataSource.getRepository(QuizResponse);
+    const roRepo = AppDataSource.getRepository(QuizResponseOption);
+    const responses = recentAttemptIds.length
+      ? await respRepo.find({
+          where: { attempt_id: In(recentAttemptIds) } as any,
+          order: { id: 'ASC' } as any,
+        })
+      : [];
+
+    const responseIds = (responses as any[]).map((r) => Number((r as any).id)).filter((x) => x > 0);
+    const roRows = responseIds.length
+      ? await roRepo.find({
+          where: { response_id: In(responseIds) } as any,
+        })
+      : [];
+    const optionIds = [...new Set((roRows as any[]).map((x) => Number((x as any).option_id)).filter((x) => x > 0))];
+    const optionRows = optionIds.length
+      ? await qOptRepo.find({
+          where: { id: In(optionIds) } as any,
+        })
+      : [];
+    const optionTextById = new Map<number, string>(
+      (optionRows as any[]).map((o) => [Number((o as any).id), String((o as any).option_text || '')])
+    );
+    const optionByResponseId = new Map<number, number>();
+    for (const row of roRows as any[]) {
+      const rid = Number((row as any).response_id);
+      const oid = Number((row as any).option_id);
+      if (!optionByResponseId.has(rid)) optionByResponseId.set(rid, oid);
+    }
+
+    const qTextByQqId = new Map<number, string>(questions.map((q) => [q.quiz_question_id, q.question_text]));
+    const respByAttemptId = new Map<number, any[]>();
+    for (const r of responses as any[]) {
+      const aid = Number((r as any).attempt_id);
+      const arr = respByAttemptId.get(aid) || [];
+      arr.push(r);
+      respByAttemptId.set(aid, arr);
+    }
+
+    const recent_attempts: LearnerQuizTakePayload['recent_attempts'] = (recentAttemptsRaw as any[]).map((a) => {
+      const aid = Number((a as any).id);
+      const resps = respByAttemptId.get(aid) || [];
+      const answers = resps.map((r) => {
+        const qqId = Number((r as any).quiz_question_id);
+        const selectedOptionId = optionByResponseId.get(Number((r as any).id)) ?? null;
+        return {
+          quiz_question_id: qqId,
+          question_text: String(qTextByQqId.get(qqId) ?? ''),
+          selected_option_id: selectedOptionId,
+          selected_option_text:
+            selectedOptionId != null ? String(optionTextById.get(selectedOptionId) ?? '') : null,
+        };
+      });
+      return {
+        attempt_id: aid,
+        attempt_number: Number((a as any).attempt_number),
+        submitted_at: (a as any).submitted_at ? new Date((a as any).submitted_at).toISOString() : null,
+        score_percent: (a as any).score != null ? Number((a as any).score) : null,
+        is_passed: (a as any).is_passed != null ? Boolean((a as any).is_passed) : null,
+        status: String((a as any).status ?? ''),
+        answers,
+      };
+    });
+
     return {
       quiz_id: Number((quiz as any).id),
       lesson_id: lessonId,
@@ -2975,6 +3328,7 @@ export class CourseServiceImpl implements CourseService {
       attempts_used: Number(attemptsUsed),
       show_results_immediately: (quiz as any).show_results_immediately !== false,
       show_correct_answers: (quiz as any).show_correct_answers !== false,
+      recent_attempts,
       questions,
     };
   }

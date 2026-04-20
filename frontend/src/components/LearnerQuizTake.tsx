@@ -14,6 +14,20 @@ type QuizPayload = {
   attempts_used: number;
   show_results_immediately: boolean;
   show_correct_answers: boolean;
+  recent_attempts: {
+    attempt_id: number;
+    attempt_number: number;
+    submitted_at: string | null;
+    score_percent: number | null;
+    is_passed: boolean | null;
+    status: string;
+    answers: {
+      quiz_question_id: number;
+      question_text: string;
+      selected_option_id: number | null;
+      selected_option_text: string | null;
+    }[];
+  }[];
   questions: {
     quiz_question_id: number;
     question_text: string;
@@ -162,6 +176,47 @@ export default function LearnerQuizTake(props: {
         ) : null}
 
         {error && !loading ? <div className="learner-quiz-error">{error}</div> : null}
+
+        {!loading && quiz && quiz.recent_attempts?.length ? (
+          <div className="learner-quiz-body" style={{ paddingTop: 6, paddingBottom: 10 }}>
+            <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>Lịch sử bài đã nộp</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {quiz.recent_attempts.map((att) => (
+                <details
+                  key={att.attempt_id}
+                  style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: "8px 10px" }}
+                >
+                  <summary style={{ cursor: "pointer", color: "#334155", fontWeight: 600 }}>
+                    Lần {att.attempt_number}
+                    {att.score_percent != null ? ` · ${att.score_percent}%` : ""}
+                    {att.is_passed != null ? ` · ${att.is_passed ? "Đạt" : "Chưa đạt"}` : ""}
+                    {att.submitted_at ? ` · ${new Date(att.submitted_at).toLocaleString("vi-VN")}` : ""}
+                  </summary>
+                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                    {att.answers?.length ? (
+                      att.answers.map((ans, idx) => (
+                        <div
+                          key={`${att.attempt_id}-${ans.quiz_question_id}-${idx}`}
+                          style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 10px" }}
+                        >
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                            Câu {idx + 1}: {ans.question_text}
+                          </div>
+                          <div style={{ color: "#475569" }}>
+                            Đáp án đã chọn:{" "}
+                            <strong>{ans.selected_option_text || (ans.selected_option_id != null ? `#${ans.selected_option_id}` : "—")}</strong>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <span style={{ color: "#64748b" }}>Không có dữ liệu câu trả lời.</span>
+                    )}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {!loading && quiz && attemptsLeft <= 0 && !result ? (
           <div className="learner-quiz-body" style={{ textAlign: "center", color: "#b45309" }}>

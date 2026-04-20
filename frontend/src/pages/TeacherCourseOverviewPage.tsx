@@ -410,6 +410,13 @@ export default function TeacherCourseOverviewPage() {
                 >
                   Quản lý Quizz &amp; bài tập
                 </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => navigate(`/teacher/courses/${courseId}/question-banks`)}
+                >
+                  Quản lý Question Bank
+                </button>
               </div>
             </div>
 

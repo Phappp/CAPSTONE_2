@@ -22,8 +22,7 @@ type RegisterRequest = {
   email: string;
   password: string;
   fullName: string;
-  // 'learner' hoặc 'course_manager'
-  role: string;
+  role: 'learner' | 'course_manager';
 };
 
 type LoginRequest = {

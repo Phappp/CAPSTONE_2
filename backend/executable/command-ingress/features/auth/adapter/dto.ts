@@ -1,4 +1,4 @@
-import { IsEmail, Length, MinLength, ValidationError } from 'class-validator';
+import { IsEmail, IsIn, Length, MinLength, ValidationError } from 'class-validator';
 import { ValidationResult } from '../../../shared/validation';
 import { RequestDto } from '../../../shared/request-dto';
 
@@ -24,9 +24,8 @@ export class RegisterRequestBody extends RequestDto {
   @MinLength(6)
   password: string;
 
-  // 'learner' hoặc 'course_manager'
-  @Length(1, 50)
-  role: string;
+  @IsIn(['learner', 'course_manager'])
+  role: 'learner' | 'course_manager';
 
   constructor(body: any) {
     super();
@@ -34,7 +33,10 @@ export class RegisterRequestBody extends RequestDto {
       this.email = String(body.email || '');
       this.fullName = String(body.full_name || body.fullName || '');
       this.password = String(body.password || '');
-      this.role = String(body.role || 'learner');
+      this.role =
+        body.role === 'course_manager'
+          ? 'course_manager'
+          : 'learner';
     }
   }
 }

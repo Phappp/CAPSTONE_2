@@ -12,6 +12,12 @@ import {
   apiResetUserPassword,
   apiRestoreUser,
   apiSoftDeleteUser,
+  apiGetOpenRouterConfig,
+  apiCreateOpenRouterKey,
+  apiDeleteOpenRouterKey,
+  apiTestOpenRouterKey,
+  apiUpdateOpenRouterKey,
+  apiUpdateOpenRouterConfig,
   apiUpdateUserRole,
   apiUpdateUserStatus,
   AuditLogItem,
@@ -20,7 +26,7 @@ import { toTitleCase } from "../utils/helper";
 
 type RoleFilter = "all" | "learner" | "course_manager" | "admin";
 type StatusFilter = "all" | "active" | "pending" | "banned" | "deleted";
-type AdminView = "users" | "audit_logs";
+type AdminView = "users" | "audit_logs" | "keys";
 type AdminTier = "admin" | "non_admin";
 
 export default function AdminDashboard() {
@@ -69,6 +75,36 @@ export default function AdminDashboard() {
   const [auditAction, setAuditAction] = useState("");
   const [auditFrom, setAuditFrom] = useState("");
   const [auditTo, setAuditTo] = useState("");
+  const [newOpenRouterApiKey, setNewOpenRouterApiKey] = useState("");
+  const [newOpenRouterKeyLabel, setNewOpenRouterKeyLabel] = useState("");
+  const [openRouterModelsInput, setOpenRouterModelsInput] = useState("");
+  const [openRouterDefaultModel, setOpenRouterDefaultModel] = useState("");
+  const [openRouterSaving, setOpenRouterSaving] = useState(false);
+  const [openRouterMessage, setOpenRouterMessage] = useState<string | null>(null);
+  const [openRouterCooldownMinutes, setOpenRouterCooldownMinutes] = useState("10");
+  const [testingKeyId, setTestingKeyId] = useState<number | null>(null);
+  const [keyHealthFilter, setKeyHealthFilter] = useState<"all" | "healthy" | "limited" | "auth_error" | "inactive">("all");
+
+  const openRouterQuery = useQuery({
+    queryKey: ["admin-openrouter-config"],
+    queryFn: () => apiGetOpenRouterConfig({ accessToken: accessToken || "" }),
+    enabled: !!accessToken && view === "keys",
+  });
+
+  useEffect(() => {
+    const cfg = openRouterQuery.data;
+    if (!cfg) return;
+    setOpenRouterModelsInput((cfg.models || []).join("\n"));
+    setOpenRouterDefaultModel(cfg.default_model || "");
+  }, [openRouterQuery.data]);
+
+  useEffect(() => {
+    if (!openRouterMessage) return;
+    const timer = window.setTimeout(() => {
+      setOpenRouterMessage(null);
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [openRouterMessage]);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["admin-users", { page, limit, search: fuzzy ? "" : search, role, status, includeDeleted }],
@@ -361,6 +397,165 @@ export default function AdminDashboard() {
     }
   }
 
+  async function saveOpenRouterConfig() {
+    if (!accessToken) return;
+    if (!can(adminTier, "change_status")) {
+      alert("Bạn không có quyền cập nhật cấu hình OpenRouter.");
+      return;
+    }
+    setOpenRouterSaving(true);
+    setOpenRouterMessage(null);
+    try {
+      const models = openRouterModelsInput
+        .split(/\r?\n/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+      await apiUpdateOpenRouterConfig({
+        accessToken,
+        models,
+        defaultModel: openRouterDefaultModel.trim() || undefined,
+      });
+      setOpenRouterMessage("Đã lưu cấu hình OpenRouter.");
+      await queryClient.invalidateQueries({ queryKey: ["admin-openrouter-config"] });
+    } catch (e: any) {
+      setOpenRouterMessage(`Lỗi lưu cấu hình: ${String(e?.message || e)}`);
+    } finally {
+      setOpenRouterSaving(false);
+    }
+  }
+
+  async function createOpenRouterKey() {
+    if (!accessToken) return;
+    const key = newOpenRouterApiKey.trim();
+    if (!key) {
+      setOpenRouterMessage("Vui lòng nhập API key trước khi thêm.");
+      return;
+    }
+    setOpenRouterSaving(true);
+    setOpenRouterMessage(null);
+    try {
+      await apiCreateOpenRouterKey({
+        accessToken,
+        apiKey: key,
+        label: newOpenRouterKeyLabel.trim() || undefined,
+      });
+      setNewOpenRouterApiKey("");
+      setNewOpenRouterKeyLabel("");
+      setOpenRouterMessage("Đã thêm OpenRouter key mới.");
+      await queryClient.invalidateQueries({ queryKey: ["admin-openrouter-config"] });
+    } catch (e: any) {
+      setOpenRouterMessage(`Lỗi thêm key: ${String(e?.message || e)}`);
+    } finally {
+      setOpenRouterSaving(false);
+    }
+  }
+
+  async function toggleOpenRouterKeyActive(keyId: number, next: boolean) {
+    if (!accessToken) return;
+    setOpenRouterSaving(true);
+    setOpenRouterMessage(null);
+    try {
+      await apiUpdateOpenRouterKey({
+        accessToken,
+        keyId,
+        isActive: next,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["admin-openrouter-config"] });
+    } catch (e: any) {
+      setOpenRouterMessage(`Lỗi cập nhật key: ${String(e?.message || e)}`);
+    } finally {
+      setOpenRouterSaving(false);
+    }
+  }
+
+  async function setOpenRouterKeyCooldown(keyId: number) {
+    if (!accessToken) return;
+    const minutes = Number(openRouterCooldownMinutes);
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      setOpenRouterMessage("Cooldown minutes phải > 0.");
+      return;
+    }
+    setOpenRouterSaving(true);
+    setOpenRouterMessage(null);
+    try {
+      await apiUpdateOpenRouterKey({
+        accessToken,
+        keyId,
+        cooldownMinutes: minutes,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["admin-openrouter-config"] });
+    } catch (e: any) {
+      setOpenRouterMessage(`Lỗi set cooldown: ${String(e?.message || e)}`);
+    } finally {
+      setOpenRouterSaving(false);
+    }
+  }
+
+  async function clearOpenRouterKeyCooldown(keyId: number) {
+    if (!accessToken) return;
+    setOpenRouterSaving(true);
+    setOpenRouterMessage(null);
+    try {
+      await apiUpdateOpenRouterKey({
+        accessToken,
+        keyId,
+        clearCooldown: true,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["admin-openrouter-config"] });
+    } catch (e: any) {
+      setOpenRouterMessage(`Lỗi clear cooldown: ${String(e?.message || e)}`);
+    } finally {
+      setOpenRouterSaving(false);
+    }
+  }
+
+  async function deleteOpenRouterKey(keyId: number) {
+    if (!accessToken) return;
+    const ok = confirmSensitive(`Xóa key #${keyId}?`);
+    if (!ok) return;
+    setOpenRouterSaving(true);
+    setOpenRouterMessage(null);
+    try {
+      await apiDeleteOpenRouterKey({ accessToken, keyId });
+      await queryClient.invalidateQueries({ queryKey: ["admin-openrouter-config"] });
+    } catch (e: any) {
+      setOpenRouterMessage(`Lỗi xóa key: ${String(e?.message || e)}`);
+    } finally {
+      setOpenRouterSaving(false);
+    }
+  }
+
+  async function testOpenRouterKey(keyId: number) {
+    if (!accessToken) return;
+    setTestingKeyId(keyId);
+    setOpenRouterMessage(null);
+    try {
+      const result = await apiTestOpenRouterKey({ accessToken, keyId });
+      const suffix = result.cooldown_applied_minutes
+        ? ` (cooldown ${result.cooldown_applied_minutes} phút)`
+        : "";
+      setOpenRouterMessage(`Key #${keyId}: ${result.message}${suffix}`);
+      await queryClient.invalidateQueries({ queryKey: ["admin-openrouter-config"] });
+    } catch (e: any) {
+      setOpenRouterMessage(`Lỗi test key #${keyId}: ${String(e?.message || e)}`);
+    } finally {
+      setTestingKeyId(null);
+    }
+  }
+
+  const filteredOpenRouterKeys = useMemo(() => {
+    const all = openRouterQuery.data?.keys ?? [];
+    if (keyHealthFilter === "all") return all;
+    return all.filter((key) => {
+      const status = getKeyHealthStatus(key);
+      if (keyHealthFilter === "healthy") return status === "healthy";
+      if (keyHealthFilter === "limited") return status === "limited";
+      if (keyHealthFilter === "auth_error") return status === "auth_error";
+      if (keyHealthFilter === "inactive") return status === "inactive";
+      return true;
+    });
+  }, [openRouterQuery.data?.keys, keyHealthFilter]);
+
   async function undoLastBulk() {
     if (!accessToken || !lastUndo) return;
     if (!can(adminTier, "bulk")) return;
@@ -484,6 +679,19 @@ export default function AdminDashboard() {
           >
             Audit Logs
           </button>
+          <button
+            type="button"
+            className={view === "keys" ? "primary-button" : "secondary-button"}
+            onClick={() => setView("keys")}
+            disabled={!can(adminTier, "change_status")}
+            title={
+              can(adminTier, "change_status")
+                ? "Cấu hình API keys và model"
+                : "Bạn không có quyền cấu hình keys"
+            }
+          >
+            Keys
+          </button>
           <div
             style={{
               marginLeft: "auto",
@@ -512,6 +720,180 @@ export default function AdminDashboard() {
             to={auditTo}
             setTo={setAuditTo}
           />
+        ) : null}
+        {view === "keys" ? (
+          <section style={{ marginBottom: "1.5rem" }}>
+            <h2
+              style={{
+                fontSize: "0.95rem",
+                fontWeight: 600,
+                color: "#1f2933",
+                marginBottom: "0.75rem",
+              }}
+            >
+              🤖 OpenRouter Config
+            </h2>
+            <div style={{ border: "1px solid rgba(15,23,42,0.08)", borderRadius: 12, padding: 12, background: "#fff", marginBottom: 12 }}>
+              <div style={{ display: "grid", gap: 10 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>Danh sách model (mỗi dòng 1 model)</label>
+                  <textarea
+                    className="form-input"
+                    rows={5}
+                    value={openRouterModelsInput}
+                    onChange={(e) => setOpenRouterModelsInput(e.target.value)}
+                    placeholder={"openai/gpt-4o-mini\nanthropic/claude-3.5-sonnet\ngoogle/gemini-2.0-flash-001"}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>Default model</label>
+                  <input
+                    className="form-input"
+                    value={openRouterDefaultModel}
+                    onChange={(e) => setOpenRouterDefaultModel(e.target.value)}
+                    placeholder="openai/gpt-4o-mini"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>Cooldown phút khi key bị limit</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    min={1}
+                    value={openRouterCooldownMinutes}
+                    onChange={(e) => setOpenRouterCooldownMinutes(e.target.value)}
+                    placeholder="10"
+                  />
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <button type="button" className="secondary-button" onClick={saveOpenRouterConfig} disabled={openRouterSaving}>
+                    {openRouterSaving ? "Đang lưu..." : "Lưu OpenRouter config"}
+                  </button>
+                  {openRouterMessage ? <span style={{ fontSize: 13, color: "#475569" }}>{openRouterMessage}</span> : null}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ border: "1px solid rgba(15,23,42,0.08)", borderRadius: 12, padding: 12, background: "#fff", marginBottom: 12 }}>
+              <h3 style={{ margin: "0 0 8px", fontSize: 16 }}>Thêm key mới</h3>
+              <div style={{ display: "grid", gap: 8 }}>
+                <input
+                  className="form-input"
+                  value={newOpenRouterKeyLabel}
+                  onChange={(e) => setNewOpenRouterKeyLabel(e.target.value)}
+                  placeholder="Label (vd: key backup #2)"
+                />
+                <input
+                  className="form-input"
+                  type="password"
+                  value={newOpenRouterApiKey}
+                  onChange={(e) => setNewOpenRouterApiKey(e.target.value)}
+                  placeholder="Nhập OpenRouter API key"
+                />
+                <div>
+                  <button type="button" className="secondary-button" onClick={createOpenRouterKey} disabled={openRouterSaving}>
+                    Thêm key
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ border: "1px solid rgba(15,23,42,0.08)", borderRadius: 12, padding: 12, background: "#fff" }}>
+              <h3 style={{ margin: "0 0 8px", fontSize: 16 }}>
+                Danh sách keys (khả dụng: {openRouterQuery.data?.active_available_keys ?? 0})
+              </h3>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                {[
+                  { id: "all", label: "All" },
+                  { id: "healthy", label: "Healthy" },
+                  { id: "limited", label: "Limited" },
+                  { id: "auth_error", label: "Auth Error" },
+                  { id: "inactive", label: "Inactive" },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={keyHealthFilter === item.id ? "primary-button" : "secondary-button"}
+                    onClick={() => setKeyHealthFilter(item.id as any)}
+                    style={{ padding: "6px 10px", fontSize: 13 }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: "grid", gap: 8 }}>
+                {filteredOpenRouterKeys.map((k) => (
+                  <div key={k.id} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                      <div>
+                        <div style={{ marginBottom: 4 }}>
+                          {renderKeyHealthBadge(k)}
+                        </div>
+                        <div style={{ fontWeight: 600 }}>
+                          #{k.id} {k.label ? `- ${k.label}` : ""}
+                        </div>
+                        <div style={{ fontSize: 13, color: "#64748b" }}>
+                          {k.key_preview} · {k.is_active ? "active" : "inactive"} ·{" "}
+                          {k.is_available_now ? "available" : "cooldown/unavailable"}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#64748b" }}>
+                          cooldown_until: {k.cooldown_until ? new Date(k.cooldown_until).toLocaleString("vi-VN") : "—"} ·
+                          last_used: {k.last_used_at ? new Date(k.last_used_at).toLocaleString("vi-VN") : "—"} ·
+                          errors: {k.error_count}
+                        </div>
+                        {k.last_test_message ? (
+                          <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                            last test: {k.last_test_message}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => void toggleOpenRouterKeyActive(k.id, !k.is_active)}
+                        >
+                          {k.is_active ? "Disable" : "Enable"}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => void setOpenRouterKeyCooldown(k.id)}
+                        >
+                          Set cooldown
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => void clearOpenRouterKeyCooldown(k.id)}
+                        >
+                          Clear cooldown
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => void testOpenRouterKey(k.id)}
+                          disabled={testingKeyId === k.id}
+                        >
+                          {testingKeyId === k.id ? "Testing..." : "Test key"}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => void deleteOpenRouterKey(k.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {filteredOpenRouterKeys.length === 0 ? (
+                  <div style={{ color: "#64748b", fontSize: 13 }}>Chưa có key nào.</div>
+                ) : null}
+              </div>
+            </div>
+          </section>
         ) : null}
       </section>
 
@@ -1238,6 +1620,47 @@ function confirmSensitive(message: string): boolean {
 function confirmTyped(message: string, expected: string): boolean {
   const input = window.prompt(`${message}\n\nNhập "${expected}" để xác nhận:`, "");
   return (input || "").trim().toUpperCase() === expected.toUpperCase();
+}
+
+function renderKeyHealthBadge(key: {
+  is_active: boolean;
+  is_available_now: boolean;
+  last_test_status: string | null;
+}) {
+  const baseStyle: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "2px 8px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 600,
+  };
+
+  if (!key.is_active) {
+    return <span style={{ ...baseStyle, background: "#e5e7eb", color: "#334155" }}>Inactive</span>;
+  }
+  if (key.last_test_status === "unauthorized") {
+    return <span style={{ ...baseStyle, background: "#fee2e2", color: "#b91c1c" }}>Auth Error</span>;
+  }
+  if (key.last_test_status === "rate_limited" || !key.is_available_now) {
+    return <span style={{ ...baseStyle, background: "#fef3c7", color: "#92400e" }}>Limited</span>;
+  }
+  if (key.last_test_status === "ok") {
+    return <span style={{ ...baseStyle, background: "#dcfce7", color: "#166534" }}>Healthy</span>;
+  }
+  return <span style={{ ...baseStyle, background: "#e0f2fe", color: "#0c4a6e" }}>Unknown</span>;
+}
+
+function getKeyHealthStatus(key: {
+  is_active: boolean;
+  is_available_now: boolean;
+  last_test_status: string | null;
+}): "inactive" | "auth_error" | "limited" | "healthy" | "unknown" {
+  if (!key.is_active) return "inactive";
+  if (key.last_test_status === "unauthorized") return "auth_error";
+  if (key.last_test_status === "rate_limited" || !key.is_available_now) return "limited";
+  if (key.last_test_status === "ok") return "healthy";
+  return "unknown";
 }
 
 function AuditLogsPanel(props: {

@@ -10,14 +10,20 @@ import AdminDashboard from "./pages/AdminDashboard";
 import CreateCoursePage from "./pages/CreateCoursePage";
 import TeacherCourseDetailPage from "./pages/TeacherCourseDetailPage";
 import TeacherCourseOverviewPage from "./pages/TeacherCourseOverviewPage";
+import TeacherQuestionBankPage from "./pages/TeacherQuestionBankPage";
 import TeacherCourseAssessmentsPage from "./pages/TeacherCourseAssessmentsPage";
 import TeacherCourseContentBuilderPage from "./pages/TeacherCourseContentBuilderPage";
+import TeacherQuizEditorPage from "./pages/TeacherQuizEditorPage";
+import TeacherAssignmentEditorPage from "./pages/TeacherAssignmentEditorPage";
 import CoursesCatalogPage from "./pages/CoursesCatalogPage";
 import CoursePublicDetailPage from "./pages/CoursePublicDetailPage";
 import ProfilePage from "./pages/ProfilePage";
 import LearningPage from "./pages/LearningPage";
 import LearnerCourseHubPage from "./pages/LearnerCourseHubPage";
 import LearningModuleLessonsPage from "./pages/LearningModuleLessonsPage";
+import TeacherLessonRosterPage from "./pages/TeacherLessonRosterPage";
+import LearnerQuizTakePage from "./pages/LearnerQuizTakePage";
+import LearnerAssignmentSubmitPage from "./pages/LearnerAssignmentSubmitPage";
 import Authentication from "./router/Authentication";
 
 export default function App() {
@@ -120,10 +126,58 @@ export default function App() {
         }
       />
       <Route
+        path="/teacher/courses/:id/question-banks"
+        element={
+          <Authentication>
+            <TeacherQuestionBankPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/courses/:id/quiz-editor"
+        element={
+          <Authentication>
+            <TeacherQuizEditorPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/courses/:id/assignment-editor"
+        element={
+          <Authentication>
+            <TeacherAssignmentEditorPage />
+          </Authentication>
+        }
+      />
+      <Route
         path="/teacher/courses/:id/assessments"
         element={
           <Authentication>
             <TeacherCourseAssessmentsPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/courses/:id/lessons/:lessonId/roster"
+        element={
+          <Authentication>
+            <TeacherLessonRosterPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/learner/quiz/:courseId/:lessonId"
+        element={
+          <Authentication>
+            <LearnerQuizTakePage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/learner/assignment/:lessonId"
+        element={
+          <Authentication>
+            <LearnerAssignmentSubmitPage />
           </Authentication>
         }
       />

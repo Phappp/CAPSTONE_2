@@ -19,6 +19,7 @@ import {
   UpdateLessonBody,
   UpdateModuleBody,
   UpsertManualQuizBody,
+  GenerateManualQuizAiBody,
   SubmitLearnerQuizBody,
 } from './dto';
 
@@ -474,6 +475,17 @@ export class CourseController extends BaseController {
       const lessonId = Number(req.params.lessonId);
       const result = await this.service.upsertManualQuizForLesson(uid, courseId, lessonId, body as any);
       res.status(200).json(result);
+    });
+  }
+
+  async generateManualQuizByAi(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const body = new GenerateManualQuizAiBody(req.body);
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const result = await this.service.generateManualQuizQuestionsWithAi(uid, courseId, lessonId, body as any);
+      res.status(200).json({ success: true, data: result });
     });
   }
 

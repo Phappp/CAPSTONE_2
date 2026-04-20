@@ -3,17 +3,64 @@ import User from '../../../../../internal/model/user';
 import UserRole from '../../../../../internal/model/user_roles';
 import Role from '../../../../../internal/model/role';
 import AuditLog from '../../../../../internal/model/audit_log';
+import OpenRouterSetting from '../../../../../internal/model/openrouter_setting';
+import OpenRouterKey from '../../../../../internal/model/openrouter_key';
 import {
   BulkUserActionRequest,
   ListAuditLogsQuery,
   ListUsersQuery,
+  CreateOpenRouterKeyRequest,
+  UpdateOpenRouterConfigRequest,
+  UpdateOpenRouterKeyRequest,
   UpdateUserRoleRequest,
   UpdateUserStatusRequest,
 } from '../types';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 export class AdminUserService {
   private static readonly rateLimitStore = new Map<string, { count: number; windowStartMs: number }>();
+  private static openRouterKeySchemaEnsured = false;
+
+  private async ensureOpenRouterKeySchema(): Promise<void> {
+    if (AdminUserService.openRouterKeySchemaEnsured) return;
+
+    const hasStatus = await AppDataSource.query(
+      `
+      SELECT 1
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'openrouter_keys'
+        AND COLUMN_NAME = 'last_test_status'
+      LIMIT 1
+      `,
+    );
+
+    if (!Array.isArray(hasStatus) || hasStatus.length === 0) {
+      await AppDataSource.query(
+        `ALTER TABLE openrouter_keys ADD COLUMN last_test_status VARCHAR(50) NULL`,
+      );
+    }
+
+    const hasMessage = await AppDataSource.query(
+      `
+      SELECT 1
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'openrouter_keys'
+        AND COLUMN_NAME = 'last_test_message'
+      LIMIT 1
+      `,
+    );
+
+    if (!Array.isArray(hasMessage) || hasMessage.length === 0) {
+      await AppDataSource.query(
+        `ALTER TABLE openrouter_keys ADD COLUMN last_test_message VARCHAR(255) NULL`,
+      );
+    }
+
+    AdminUserService.openRouterKeySchemaEnsured = true;
+  }
 
   private async assertAdmin(userId: number): Promise<void> {
     const userRoleRepo = AppDataSource.getRepository(UserRole);
@@ -65,6 +112,28 @@ export class AdminUserService {
     const roles = await roleRepo.findByIds(roleIds);
     const names = roles.map((r) => r.name.toLowerCase());
     return names.includes('admin');
+  }
+
+  private getEncryptionKey(): Buffer {
+    const base = process.env.OPENROUTER_ENCRYPTION_SECRET || process.env.JWT_SECRET || 'mindbridge-openrouter-secret';
+    return crypto.createHash('sha256').update(base).digest();
+  }
+
+  private encrypt(text: string): string {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', this.getEncryptionKey(), iv);
+    const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
+    return `${iv.toString('hex')}:${encrypted.toString('hex')}`;
+  }
+
+  private decrypt(payload: string): string {
+    const [ivHex, encryptedHex] = String(payload || '').split(':');
+    if (!ivHex || !encryptedHex) return '';
+    const iv = Buffer.from(ivHex, 'hex');
+    const encrypted = Buffer.from(encryptedHex, 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-cbc', this.getEncryptionKey(), iv);
+    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    return decrypted.toString('utf8');
   }
 
   private async logAction(
@@ -589,6 +658,306 @@ export class AdminUserService {
       })),
       pagination: { total, page, limit, pages },
     };
+  }
+
+  async getOpenRouterConfig(actorUserId: number): Promise<{
+    models: string[];
+    default_model: string | null;
+    keys: Array<{
+      id: number;
+      label: string | null;
+      key_preview: string;
+      is_active: boolean;
+      cooldown_until: Date | null;
+      error_count: number;
+      last_used_at: Date | null;
+      last_error_at: Date | null;
+      is_available_now: boolean;
+    }>;
+    active_available_keys: number;
+  }> {
+    await this.assertAdmin(actorUserId);
+    await this.ensureOpenRouterKeySchema();
+    const settingsRepo = AppDataSource.getRepository(OpenRouterSetting);
+    const keyRepo = AppDataSource.getRepository(OpenRouterKey);
+    const current = await settingsRepo.findOne({ where: {} });
+    const keys = await keyRepo.find({ order: { id: 'ASC' } });
+    const now = new Date();
+    const mappedKeys = keys.map((key) => {
+      const decrypted = this.decrypt(key.key_encrypted);
+      const keyPreview =
+        decrypted.length <= 8 ? '********' : `${decrypted.slice(0, 4)}...${decrypted.slice(-4)}`;
+      const isAvailableNow =
+        key.is_active && (!key.cooldown_until || new Date(key.cooldown_until) <= now);
+      return {
+        id: key.id,
+        label: key.label,
+        key_preview: keyPreview,
+        is_active: key.is_active,
+        cooldown_until: key.cooldown_until,
+        error_count: Number(key.error_count || 0),
+        last_used_at: key.last_used_at,
+        last_error_at: key.last_error_at,
+        last_test_status: key.last_test_status ?? null,
+        last_test_message: key.last_test_message ?? null,
+        is_available_now: isAvailableNow,
+      };
+    });
+
+    return {
+      models: Array.isArray(current?.models) ? (current?.models as string[]) : [],
+      default_model: current?.default_model ?? null,
+      keys: mappedKeys,
+      active_available_keys: mappedKeys.filter((k) => k.is_available_now).length,
+    };
+  }
+
+  async updateOpenRouterConfig(
+    actorUserId: number,
+    payload: UpdateOpenRouterConfigRequest,
+    context?: { ip?: string | null },
+  ): Promise<void> {
+    await this.assertAdmin(actorUserId);
+    const repo = AppDataSource.getRepository(OpenRouterSetting);
+    let current = await repo.findOne({ where: {} });
+    if (!current) {
+      current = repo.create({
+        api_key_encrypted: null,
+        models: [],
+        default_model: null,
+        updated_by: actorUserId,
+      });
+    }
+
+    if (payload.api_key !== undefined) {
+      const key = String(payload.api_key || '').trim();
+      current.api_key_encrypted = key ? this.encrypt(key) : current.api_key_encrypted;
+    }
+    if (payload.models !== undefined) {
+      const normalized = (payload.models || [])
+        .map((item) => String(item).trim())
+        .filter(Boolean);
+      current.models = normalized;
+    }
+    if (payload.default_model !== undefined) {
+      const model = String(payload.default_model || '').trim();
+      current.default_model = model || null;
+    }
+    current.updated_by = actorUserId;
+    await repo.save(current);
+
+    await this.logAction(actorUserId, 'openrouter_config_updated', null, {
+      has_api_key: Boolean(current.api_key_encrypted),
+      models_count: Array.isArray(current.models) ? current.models.length : 0,
+      default_model: current.default_model ?? null,
+      ip_address: context?.ip ?? null,
+    });
+  }
+
+  async createOpenRouterKey(
+    actorUserId: number,
+    payload: CreateOpenRouterKeyRequest,
+    context?: { ip?: string | null },
+  ): Promise<void> {
+    await this.assertAdmin(actorUserId);
+    await this.ensureOpenRouterKeySchema();
+    const key = String(payload.api_key || '').trim();
+    if (!key) throw new Error('OpenRouter API key không được rỗng.');
+    const repo = AppDataSource.getRepository(OpenRouterKey);
+    const created = repo.create({
+      key_encrypted: this.encrypt(key),
+      label: payload.label ? String(payload.label).trim() : null,
+      is_active: true,
+      cooldown_until: null,
+      error_count: 0,
+      last_used_at: null,
+      last_error_at: null,
+      last_test_status: null,
+      last_test_message: null,
+      created_by: actorUserId,
+      updated_by: actorUserId,
+    });
+    await repo.save(created);
+    await this.logAction(actorUserId, 'openrouter_key_created', null, {
+      key_id: created.id,
+      label: created.label,
+      ip_address: context?.ip ?? null,
+    });
+  }
+
+  async updateOpenRouterKey(
+    actorUserId: number,
+    keyId: number,
+    payload: UpdateOpenRouterKeyRequest,
+    context?: { ip?: string | null },
+  ): Promise<void> {
+    await this.assertAdmin(actorUserId);
+    await this.ensureOpenRouterKeySchema();
+    const repo = AppDataSource.getRepository(OpenRouterKey);
+    const key = await repo.findOne({ where: { id: keyId } });
+    if (!key) throw new Error('OpenRouter key not found.');
+
+    if (payload.label !== undefined) key.label = String(payload.label || '').trim() || null;
+    if (payload.is_active !== undefined) key.is_active = Boolean(payload.is_active);
+    if (payload.clear_cooldown) key.cooldown_until = null;
+    if (payload.cooldown_minutes !== undefined && Number(payload.cooldown_minutes) > 0) {
+      key.cooldown_until = new Date(Date.now() + Number(payload.cooldown_minutes) * 60 * 1000);
+      key.error_count = Number(key.error_count || 0) + 1;
+      key.last_error_at = new Date();
+    }
+    key.updated_by = actorUserId;
+    await repo.save(key);
+
+    await this.logAction(actorUserId, 'openrouter_key_updated', null, {
+      key_id: key.id,
+      is_active: key.is_active,
+      cooldown_until: key.cooldown_until,
+      ip_address: context?.ip ?? null,
+    });
+  }
+
+  async deleteOpenRouterKey(
+    actorUserId: number,
+    keyId: number,
+    context?: { ip?: string | null },
+  ): Promise<void> {
+    await this.assertAdmin(actorUserId);
+    await this.ensureOpenRouterKeySchema();
+    const repo = AppDataSource.getRepository(OpenRouterKey);
+    const key = await repo.findOne({ where: { id: keyId } });
+    if (!key) throw new Error('OpenRouter key not found.');
+    await repo.delete({ id: keyId });
+
+    await this.logAction(actorUserId, 'openrouter_key_deleted', null, {
+      key_id: key.id,
+      label: key.label,
+      ip_address: context?.ip ?? null,
+    });
+  }
+
+  async testOpenRouterKey(
+    actorUserId: number,
+    keyId: number,
+    context?: { ip?: string | null },
+  ): Promise<{
+    ok: boolean;
+    status: 'ok' | 'rate_limited' | 'unauthorized' | 'network_error' | 'unknown_error';
+    message: string;
+    cooldown_applied_minutes?: number;
+  }> {
+    await this.assertAdmin(actorUserId);
+    await this.ensureOpenRouterKeySchema();
+    const repo = AppDataSource.getRepository(OpenRouterKey);
+    const key = await repo.findOne({ where: { id: keyId } });
+    if (!key) throw new Error('OpenRouter key not found.');
+
+    const plain = this.decrypt(key.key_encrypted);
+    if (!plain) {
+      return {
+        ok: false,
+        status: 'unknown_error',
+        message: 'Không thể giải mã key.',
+      };
+    }
+
+    const endpoint = 'https://openrouter.ai/api/v1/models';
+    try {
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${plain}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        key.last_used_at = new Date();
+        key.last_test_status = 'ok';
+        key.last_test_message = 'Key hoạt động bình thường.';
+        await repo.save(key);
+        await this.logAction(actorUserId, 'openrouter_key_tested', null, {
+          key_id: key.id,
+          result: 'ok',
+          ip_address: context?.ip ?? null,
+        });
+        return {
+          ok: true,
+          status: 'ok',
+          message: 'Key hoạt động bình thường.',
+        };
+      }
+
+      if (response.status === 401 || response.status === 403) {
+        key.last_error_at = new Date();
+        key.error_count = Number(key.error_count || 0) + 1;
+        key.last_test_status = 'unauthorized';
+        key.last_test_message = 'Key không hợp lệ hoặc không có quyền.';
+        await repo.save(key);
+        return {
+          ok: false,
+          status: 'unauthorized',
+          message: 'Key không hợp lệ hoặc không có quyền.',
+        };
+      }
+
+      if (response.status === 429) {
+        const cooldownMinutes = 10;
+        key.last_error_at = new Date();
+        key.error_count = Number(key.error_count || 0) + 1;
+        key.cooldown_until = new Date(Date.now() + cooldownMinutes * 60 * 1000);
+        key.last_test_status = 'rate_limited';
+        key.last_test_message = 'Key đang bị rate limit.';
+        await repo.save(key);
+        return {
+          ok: false,
+          status: 'rate_limited',
+          message: 'Key đang bị rate limit, đã đưa vào cooldown 10 phút.',
+          cooldown_applied_minutes: cooldownMinutes,
+        };
+      }
+
+      key.last_error_at = new Date();
+      key.error_count = Number(key.error_count || 0) + 1;
+      key.last_test_status = 'unknown_error';
+      key.last_test_message = `HTTP ${response.status}`;
+      await repo.save(key);
+      return {
+        ok: false,
+        status: 'unknown_error',
+        message: `OpenRouter trả về HTTP ${response.status}.`,
+      };
+    } catch (error: any) {
+      key.last_error_at = new Date();
+      key.error_count = Number(key.error_count || 0) + 1;
+      key.last_test_status = 'network_error';
+      key.last_test_message = String(error?.message || error);
+      await repo.save(key);
+      return {
+        ok: false,
+        status: 'network_error',
+        message: `Lỗi mạng khi test key: ${String(error?.message || error)}`,
+      };
+    }
+  }
+
+  async pickOpenRouterKeyForUsage(actorUserId: number): Promise<{ key: string; key_id: number }> {
+    await this.assertAdmin(actorUserId);
+    await this.ensureOpenRouterKeySchema();
+    const repo = AppDataSource.getRepository(OpenRouterKey);
+    const now = new Date();
+    const candidates = await repo.find({
+      where: { is_active: true },
+      order: { last_used_at: 'ASC', id: 'ASC' },
+    });
+    const available = candidates.filter((item) => !item.cooldown_until || new Date(item.cooldown_until) <= now);
+    if (!available.length) {
+      throw new Error('Không còn OpenRouter key khả dụng (có thể tất cả đang cooldown).');
+    }
+    const picked = available[0];
+    picked.last_used_at = now;
+    await repo.save(picked);
+    const plain = this.decrypt(picked.key_encrypted);
+    return { key: plain, key_id: picked.id };
   }
 }
 

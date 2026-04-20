@@ -3,8 +3,6 @@ import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import { getAccessToken } from "../utils/authStorage";
 import "./LearnerCourseContentTree.css";
-import LearnerQuizTake from "./LearnerQuizTake";
-import LearnerAssignmentSubmit from "./LearnerAssignmentSubmit";
 
 type LessonType = "video" | "text" | "quiz" | "assignment";
 
@@ -218,7 +216,7 @@ function learnerUnlockHintAttachedAssessment(moduleIdx: number, host: LessonItem
   const ch = moduleIdx + 1;
   const core = learnerCoreLessonsInOrder(sorted);
   const n = core.findIndex((x) => x.id === host.id) + 1;
-  if (n > 0) return `Ch.${ch} · Mở sau Bài học ${n}`;
+  if (n > 0) return `Mở sau Bài học ${n}`;
   return `Ch.${ch} · Mở sau bài học đi kèm`;
 }
 
@@ -428,13 +426,29 @@ function ResourceViewer({ state, onClose }: { state: ResourceViewerState; onClos
 
 export default function LearnerCourseContentTree(props: {
   courseId: number;
+  /** Slug khóa học — truyền vào tab quiz/bài tập để khi đóng quay về `/learning/:id/:slug`. */
+  courseSlug?: string | null;
   modules: ModuleItem[];
   courseThumbnailUrl?: string | null;
   progress?: CourseProgress | null;
   refreshProgress?: () => Promise<void> | void;
   variant?: "full" | "module-lessons";
+  /** Mở bài học khi vào trang (ví dụ từ lộ trình: `?lesson=id`). */
+  initialLessonId?: number | null;
+  /** Ưu tiên mở assessment khi vào từ roadmap node vàng. */
+  initialAssessmentKind?: "quiz" | "assignment" | null;
 }) {
-  const { courseId, modules, courseThumbnailUrl, progress, refreshProgress, variant = "full" } = props;
+  const {
+    courseId,
+    courseSlug,
+    modules,
+    courseThumbnailUrl,
+    progress,
+    refreshProgress,
+    variant = "full",
+    initialLessonId = null,
+    initialAssessmentKind = null,
+  } = props;
   const token = useMemo(() => getAccessToken(), []);
 
   const [loading, setLoading] = useState(false);
@@ -451,8 +465,6 @@ export default function LearnerCourseContentTree(props: {
 
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
-  const [quizTake, setQuizTake] = useState<{ lessonId: number; title: string } | null>(null);
-  const [assignmentTake, setAssignmentTake] = useState<{ lessonId: number; title: string } | null>(null);
   const completedSet = useMemo(() => new Set<number>((progress?.completed_lesson_ids || []).map((x) => Number(x))), [progress]);
   const unlockedSet = useMemo(() => new Set<number>((progress?.unlocked_lesson_ids || []).map((x) => Number(x))), [progress]);
 
@@ -808,6 +820,58 @@ export default function LearnerCourseContentTree(props: {
     });
   };
 
+  const initialLessonHandledRef = useRef(false);
+
+  useEffect(() => {
+    initialLessonHandledRef.current = false;
+  }, [initialLessonId, initialAssessmentKind]);
+
+  useEffect(() => {
+    if (!initialLessonId || !Number.isFinite(initialLessonId)) return;
+    if (initialLessonHandledRef.current) return;
+
+    const lesson = modules.flatMap((m) => m.lessons || []).find((l) => l.id === initialLessonId);
+    if (!lesson) {
+      if (modules.length) initialLessonHandledRef.current = true;
+      return;
+    }
+
+    if (progress && !unlockedSet.has(lesson.id)) {
+      initialLessonHandledRef.current = true;
+      return;
+    }
+
+    if (initialAssessmentKind === "quiz" || lesson.lesson_type === "quiz") {
+      initialLessonHandledRef.current = true;
+      setSelectedLessonId(lesson.id);
+      const params = new URLSearchParams({ title: lesson.title || "" });
+      if (courseSlug) params.set("slug", courseSlug);
+      window.open(`/learner/quiz/${courseId}/${lesson.id}?${params}`, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (initialAssessmentKind === "assignment" || lesson.lesson_type === "assignment") {
+      initialLessonHandledRef.current = true;
+      setSelectedLessonId(lesson.id);
+      const params = new URLSearchParams({ title: lesson.title || "", courseId: String(courseId) });
+      if (courseSlug) params.set("slug", courseSlug);
+      window.open(`/learner/assignment/${lesson.id}?${params}`, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    const list = resourcesByLessonId[lesson.id];
+    if (list === undefined) return;
+
+    initialLessonHandledRef.current = true;
+    setSelectedLessonId(lesson.id);
+    const latest = list?.length ? list[0] : null;
+    if (latest) {
+      void openResource(latest);
+    } else {
+      openLessonFallback(lesson);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLessonId, modules, progress, unlockedSet, resourcesByLessonId, courseId, courseSlug]);
+
   type LessonCardOpts = {
     highlightKey: string;
     rowKey?: string;
@@ -880,12 +944,18 @@ export default function LearnerCourseContentTree(props: {
 
     const runOpenQuiz = () => {
       setSelectedLessonId(l.id);
-      setQuizTake({ lessonId: l.id, title: l.title });
+      const params = new URLSearchParams({ title: l.title || "" });
+      if (courseSlug) params.set("slug", courseSlug);
+      const href = `/learner/quiz/${courseId}/${l.id}?${params.toString()}`;
+      window.open(href, "_blank", "noopener,noreferrer");
     };
 
     const runOpenAssignment = () => {
       setSelectedLessonId(l.id);
-      setAssignmentTake({ lessonId: l.id, title: l.title });
+      const params = new URLSearchParams({ title: l.title || "", courseId: String(courseId) });
+      if (courseSlug) params.set("slug", courseSlug);
+      const href = `/learner/assignment/${l.id}?${params.toString()}`;
+      window.open(href, "_blank", "noopener,noreferrer");
     };
 
     const pillTitleLocked =
@@ -1029,7 +1099,7 @@ export default function LearnerCourseContentTree(props: {
           <div className="learnerTreeLesson__meta">
             <div className="learnerTreeLesson__title">
               <span className="learnerTreeLesson__index">{displayIndexLabel}</span>
-              <span className="learnerTreeLesson__titleText">{l.title}</span>
+              {/* <span className="learnerTreeLesson__titleText">{l.title}</span> */}
               {l.lesson_type === "quiz" && !hideTypeBadge && !quizOnly ? (
                 <span className="learnerTreeLesson__typeBadge">Quiz</span>
               ) : null}
@@ -1037,7 +1107,9 @@ export default function LearnerCourseContentTree(props: {
                 <span className="learnerTreeLesson__typeBadge learnerTreeLesson__typeBadge--assign">Bài tập</span>
               ) : null}
             </div>
-            {options.unlockHint ? <p className="learnerTreeLesson__unlockHint">{options.unlockHint}</p> : null}
+            {isLocked && options.unlockHint ? (
+              <p className="learnerTreeLesson__unlockHint">{options.unlockHint}</p>
+            ) : null}
           </div>
 
           <div className="learnerTreeLesson__right" aria-hidden="true">
@@ -1194,7 +1266,7 @@ export default function LearnerCourseContentTree(props: {
                         {quizEntries.length ? (
                           <aside className="learnerTreeModule__quizColumn" aria-label="Quizz trong chương">
                             <h3 className="learnerTreeModule__quizHeading">Quizz</h3>
-                            <p className="learnerTreeModule__quizHint">Điều kiện mở khóa xem trên từng thẻ (Ch. + bài trước).</p>
+                            {/* <p className="learnerTreeModule__quizHint">Điều kiện mở khóa xem trên từng thẻ (Ch. + bài trước).</p> */}
                             <div className="learnerTreeLessons learnerTreeLessons--quizzes">
                               {quizEntries.map((entry, i) => {
                                 const le = entry.lesson;
@@ -1219,7 +1291,7 @@ export default function LearnerCourseContentTree(props: {
                         {asgEntries.length ? (
                           <aside className="learnerTreeModule__assignColumn" aria-label="Bài tập trong chương">
                             <h3 className="learnerTreeModule__assignHeading">Bài tập</h3>
-                            <p className="learnerTreeModule__assignHint">Điều kiện mở khóa xem trên từng thẻ (Ch. + bài trước).</p>
+                            {/* <p className="learnerTreeModule__assignHint">Điều kiện mở khóa xem trên từng thẻ (Ch. + bài trước).</p> */}
                             <div className="learnerTreeLessons learnerTreeLessons--assignments">
                               {asgEntries.map((entry, i) => {
                                 const le = entry.lesson;
@@ -1253,26 +1325,6 @@ export default function LearnerCourseContentTree(props: {
 
       {viewer ? <ResourceViewer state={viewer} onClose={closeViewer} /> : null}
 
-      {quizTake ? (
-        <LearnerQuizTake
-          courseId={courseId}
-          lessonId={quizTake.lessonId}
-          lessonTitle={quizTake.title}
-          token={token}
-          onClose={() => setQuizTake(null)}
-          onCompleted={() => void refreshProgress?.()}
-        />
-      ) : null}
-
-      {assignmentTake ? (
-        <LearnerAssignmentSubmit
-          lessonId={assignmentTake.lessonId}
-          lessonTitle={assignmentTake.title}
-          token={token}
-          onClose={() => setAssignmentTake(null)}
-          onSubmitted={() => void refreshProgress?.()}
-        />
-      ) : null}
     </div>
   );
 }

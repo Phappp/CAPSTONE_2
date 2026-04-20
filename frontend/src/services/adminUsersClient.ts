@@ -318,3 +318,151 @@ export async function apiBulkAction(params: {
   }
 }
 
+export type OpenRouterConfig = {
+  models: string[];
+  default_model: string | null;
+  keys: Array<{
+    id: number;
+    label: string | null;
+    key_preview: string;
+    is_active: boolean;
+    cooldown_until: string | null;
+    error_count: number;
+    last_used_at: string | null;
+    last_error_at: string | null;
+    last_test_status: string | null;
+    last_test_message: string | null;
+    is_available_now: boolean;
+  }>;
+  active_available_keys: number;
+};
+
+export async function apiGetOpenRouterConfig(params: {
+  accessToken: string;
+}): Promise<OpenRouterConfig> {
+  const res = await fetch(`${API_BASE_URL}${ADMIN_USERS_API.openrouterConfig}`, {
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.success) {
+    throw new Error((data as any)?.code || "ADMIN_OPENROUTER_FETCH_FAILED");
+  }
+  return data.data as OpenRouterConfig;
+}
+
+export async function apiUpdateOpenRouterConfig(params: {
+  accessToken: string;
+  models: string[];
+  defaultModel?: string;
+}): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${ADMIN_USERS_API.openrouterConfig}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+    body: JSON.stringify({
+      models: params.models,
+      default_model: params.defaultModel || undefined,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.success === false) {
+    throw new Error((data as any)?.code || "ADMIN_OPENROUTER_UPDATE_FAILED");
+  }
+}
+
+export async function apiCreateOpenRouterKey(params: {
+  accessToken: string;
+  apiKey: string;
+  label?: string;
+}): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${ADMIN_USERS_API.openrouterKeys}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+    body: JSON.stringify({
+      api_key: params.apiKey,
+      label: params.label || undefined,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.success === false) {
+    throw new Error((data as any)?.code || "ADMIN_OPENROUTER_KEY_CREATE_FAILED");
+  }
+}
+
+export async function apiUpdateOpenRouterKey(params: {
+  accessToken: string;
+  keyId: number;
+  label?: string;
+  isActive?: boolean;
+  cooldownMinutes?: number;
+  clearCooldown?: boolean;
+}): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${ADMIN_USERS_API.openrouterKeyItem(params.keyId)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+    body: JSON.stringify({
+      label: params.label,
+      is_active: params.isActive,
+      cooldown_minutes: params.cooldownMinutes,
+      clear_cooldown: params.clearCooldown,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.success === false) {
+    throw new Error((data as any)?.code || "ADMIN_OPENROUTER_KEY_UPDATE_FAILED");
+  }
+}
+
+export async function apiDeleteOpenRouterKey(params: {
+  accessToken: string;
+  keyId: number;
+}): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${ADMIN_USERS_API.openrouterKeyItem(params.keyId)}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.success === false) {
+    throw new Error((data as any)?.code || "ADMIN_OPENROUTER_KEY_DELETE_FAILED");
+  }
+}
+
+export async function apiTestOpenRouterKey(params: {
+  accessToken: string;
+  keyId: number;
+}): Promise<{
+  ok: boolean;
+  status: "ok" | "rate_limited" | "unauthorized" | "network_error" | "unknown_error";
+  message: string;
+  cooldown_applied_minutes?: number;
+}> {
+  const res = await fetch(`${API_BASE_URL}${ADMIN_USERS_API.openrouterKeyTest(params.keyId)}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.success === false) {
+    throw new Error(
+      (data as any)?.message ||
+      (data as any)?.error ||
+      (data as any)?.code ||
+      "ADMIN_OPENROUTER_KEY_TEST_FAILED"
+    );
+  }
+  return data.data;
+}
+

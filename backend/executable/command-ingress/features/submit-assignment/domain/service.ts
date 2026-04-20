@@ -8,6 +8,9 @@ import CourseEnrollment from '../../../../../internal/model/course_enrollment';
 import Submission from '../../../../../internal/model/submissions';
 import SubmissionText from '../../../../../internal/model/submission_text';
 import SubmissionAttachment from '../../../../../internal/model/submission_attachment';
+import LessonProgress from '../../../../../internal/model/lesson_progress';
+import LessonCompletion from '../../../../../internal/model/lesson_completion';
+import CourseCompletionRequirement from '../../../../../internal/model/course_completion_requirements';
 import { SubmitAssignmentBody } from '../adapter/dto';
 import { SubmissionService } from '../types';
 import { FileService } from '../../../utils/file.service';
@@ -153,6 +156,83 @@ export class SubmissionServiceImpl implements SubmissionService {
             });
           }
         }
+      }
+
+      // Assignment được nộp => coi như đã hoàn thành lesson assessment để mở khóa bài tiếp theo.
+      // Đồng bộ lesson_progress + lesson_completions tương tự luồng completeLesson.
+      const courseId = Number((mod as any).course_id);
+      const rules = await queryRunner.manager.findOne(CourseCompletionRequirement, {
+        where: { course_id: courseId } as any,
+      });
+      const requiredSeconds = Number((rules as any)?.text_min_seconds ?? 30);
+
+      let progress = await queryRunner.manager.findOne(LessonProgress, {
+        where: { user_id: req.user_id, course_id: courseId, lesson_id: Number((lesson as any).id) } as any,
+      });
+      if (!progress) {
+        progress = queryRunner.manager.create(LessonProgress, {
+          user_id: req.user_id,
+          course_id: courseId,
+          lesson_id: Number((lesson as any).id),
+          time_spent_seconds: requiredSeconds,
+        } as any);
+      } else {
+        (progress as any).time_spent_seconds = Math.max(
+          Number((progress as any).time_spent_seconds || 0),
+          requiredSeconds
+        );
+      }
+      await queryRunner.manager.save(progress as any);
+
+      const completion = await queryRunner.manager.findOne(LessonCompletion, {
+        where: { user_id: req.user_id, lesson_id: Number((lesson as any).id) } as any,
+      });
+      if (!completion) {
+        await queryRunner.manager.save(
+          queryRunner.manager.create(LessonCompletion, {
+            user_id: req.user_id,
+            lesson_id: Number((lesson as any).id),
+            time_spent_seconds: Number((progress as any).time_spent_seconds || requiredSeconds),
+          } as any)
+        );
+      }
+
+      // Best-effort sync progress_percent cho enrollment.
+      const lessonCountRows = await queryRunner.manager.query(
+        `
+        SELECT COUNT(*) AS total_lessons
+        FROM lessons l
+        INNER JOIN modules m ON m.id = l.module_id
+        WHERE m.course_id = ?
+        `,
+        [courseId]
+      );
+      const totalLessons = Number(lessonCountRows?.[0]?.total_lessons ?? 0);
+      if (totalLessons > 0) {
+        const completedCountRows = await queryRunner.manager.query(
+          `
+          SELECT COUNT(*) AS completed_lessons
+          FROM lesson_completions lc
+          INNER JOIN lessons l ON l.id = lc.lesson_id
+          INNER JOIN modules m ON m.id = l.module_id
+          WHERE lc.user_id = ? AND m.course_id = ?
+          `,
+          [req.user_id, courseId]
+        );
+        const completedLessons = Number(completedCountRows?.[0]?.completed_lessons ?? 0);
+        const progressPercent = Math.max(
+          0,
+          Math.min(100, Math.round(((completedLessons / totalLessons) * 100) * 100) / 100)
+        );
+        await queryRunner.manager.update(
+          CourseEnrollment,
+          { user_id: req.user_id, course_id: courseId } as any,
+          {
+            progress_percent: progressPercent,
+            last_accessed_at: new Date(),
+            ...(progressPercent >= 100 ? { status: 'completed', completed_at: new Date() } : {}),
+          } as any
+        );
       }
 
       await queryRunner.commitTransaction();

@@ -6,6 +6,7 @@ import Lesson from '../../../../../internal/model/lesson';
 import Assignment from '../../../../../internal/model/assignment';
 import GradeItem from '../../../../../internal/model/grade_items';
 import Submission from '../../../../../internal/model/submissions';
+import SubmissionAttachment from '../../../../../internal/model/submission_attachment';
 import CourseEnrollment from '../../../../../internal/model/course_enrollment';
 import { uploadBufferToCloudinary, getSignedDeliveryUrl, isCloudinaryEnabled } from '../../../lib/cloudinary';
 import type {
@@ -79,6 +80,22 @@ function getFormatFromFileName(fileName: string): AssignmentFormat | null {
 }
 
 function mapRawToAssignmentSubmissionRow(r: any): AssignmentSubmissionListRow {
+  let submissionShortAnswers: { question_id: string; answer_text: string }[] = [];
+  const rawText = r.text_content != null ? String(r.text_content) : '';
+  if (rawText) {
+    try {
+      const j = JSON.parse(rawText);
+      if (j && j.kind === 'short_answer' && Array.isArray(j.answers)) {
+        submissionShortAnswers = (j.answers as any[]).map((a) => ({
+          question_id: String((a as any)?.question_id ?? ''),
+          answer_text: String((a as any)?.answer_text ?? ''),
+        }));
+      }
+    } catch {
+      // plain text submission
+    }
+  }
+
   return {
     submission_id: Number(r.submission_id),
     user_id: Number(r.user_id),
@@ -94,7 +111,24 @@ function mapRawToAssignmentSubmissionRow(r: any): AssignmentSubmissionListRow {
     feedback_graded_at: r.feedback_graded_at ? new Date(r.feedback_graded_at).toISOString() : null,
     content_preview: buildSubmissionContentPreview(r.text_content, Number(r.attachment_count ?? 0)),
     attachment_count: Number(r.attachment_count ?? 0),
+    attachment_files: [],
+    submission_short_answers: submissionShortAnswers,
   };
+}
+
+function mapAttachmentRowsBySubmission(rows: any[]): Map<number, { file_name: string; file_path: string }[]> {
+  const out = new Map<number, { file_name: string; file_path: string }[]>();
+  for (const r of rows as any[]) {
+    const sid = Number(r.submission_id);
+    if (!Number.isFinite(sid)) continue;
+    const cur = out.get(sid) ?? [];
+    cur.push({
+      file_name: String(r.file_name ?? ''),
+      file_path: String(r.file_path ?? ''),
+    });
+    out.set(sid, cur);
+  }
+  return out;
 }
 
 function buildSubmissionContentPreview(textContent: string | null | undefined, attachmentCount: number): string {
@@ -614,7 +648,20 @@ export class AssignmentServiceImpl implements AssignmentService {
       [assignmentId, lessonId, (course as any).id, subjectUserId]
     );
 
-    return (rows as any[]).map((r) => mapRawToAssignmentSubmissionRow(r));
+    const mapped = (rows as any[]).map((r) => mapRawToAssignmentSubmissionRow(r));
+    const submissionIds = mapped.map((r) => r.submission_id).filter((x) => Number.isFinite(Number(x)));
+    if (!submissionIds.length) return mapped;
+
+    const attRows = await AppDataSource.getRepository(SubmissionAttachment).find({
+      where: { submission_id: In(submissionIds) } as any,
+      order: { uploaded_at: 'ASC', id: 'ASC' } as any,
+      select: ['submission_id', 'file_name', 'file_path'] as any,
+    });
+    const attMap = mapAttachmentRowsBySubmission(attRows as any[]);
+    return mapped.map((r) => ({
+      ...r,
+      attachment_files: attMap.get(r.submission_id) ?? [],
+    }));
   }
 
   async getAssignmentLearnerRosterByLesson(
@@ -693,6 +740,23 @@ export class AssignmentServiceImpl implements AssignmentService {
         submission: has ? mapRawToAssignmentSubmissionRow(r) : null,
       };
     });
+
+    const submissionIds = learners
+      .map((x) => x.submission?.submission_id)
+      .filter((x): x is number => x != null && Number.isFinite(Number(x)));
+    if (submissionIds.length) {
+      const attRows = await AppDataSource.getRepository(SubmissionAttachment).find({
+        where: { submission_id: In(submissionIds) } as any,
+        order: { uploaded_at: 'ASC', id: 'ASC' } as any,
+        select: ['submission_id', 'file_name', 'file_path'] as any,
+      });
+      const attMap = mapAttachmentRowsBySubmission(attRows as any[]);
+      for (const row of learners) {
+        if (row.submission) {
+          row.submission.attachment_files = attMap.get(row.submission.submission_id) ?? [];
+        }
+      }
+    }
 
     return {
       assignment: {
@@ -876,7 +940,7 @@ export class AssignmentServiceImpl implements AssignmentService {
     const data = await AppDataSource.query(`
         SELECT 
             a.title, a.description, a.due_date, a.max_score,
-            s.id as submission_id, s.status, s.created_at as submitted_at,
+            s.id as submission_id, s.status, s.resubmission_count, s.created_at as submitted_at,
             sf.score, sf.feedback_text, sf.graded_at
         FROM assignments a
         LEFT JOIN submissions s ON s.assignment_id = a.id AND s.user_id = ?
@@ -886,7 +950,63 @@ export class AssignmentServiceImpl implements AssignmentService {
     `, [studentId, assignmentId]);
 
     if (!data.length) throw new Error('Không tìm thấy thông tin bài tập!');
-    return data[0];
+    const row = data[0];
+    const submissionId = row?.submission_id != null ? Number(row.submission_id) : null;
+    if (!submissionId) {
+      return {
+        ...row,
+        submission_text: null,
+        submission_short_answers: [],
+        submission_attachments: [],
+      };
+    }
+
+    const texts = await AppDataSource.query(
+      `SELECT content FROM submission_text WHERE submission_id = ? ORDER BY id DESC LIMIT 1`,
+      [submissionId]
+    );
+    const textContent = texts?.[0]?.content != null ? String(texts[0].content) : null;
+    let submissionText: string | null = textContent;
+    let submissionShortAnswers: { question_id: string; answer_text: string }[] = [];
+    if (textContent) {
+      try {
+        const j = JSON.parse(textContent);
+        if (j && j.kind === 'short_answer' && Array.isArray(j.answers)) {
+          submissionText = null;
+          submissionShortAnswers = (j.answers as any[]).map((a) => ({
+            question_id: String((a as any)?.question_id ?? ''),
+            answer_text: String((a as any)?.answer_text ?? ''),
+          }));
+        }
+      } catch {
+        // text submission dạng tự do
+      }
+    }
+
+    const atts = await AppDataSource.query(
+      `
+      SELECT file_name, file_path, file_size, mime_type, uploaded_at
+      FROM submission_attachments
+      WHERE submission_id = ?
+      ORDER BY uploaded_at ASC, id ASC
+      `,
+      [submissionId]
+    );
+    const submissionAttachments = (atts as any[]).map((a) => ({
+      file_name: String(a.file_name ?? ''),
+      file_path: String(a.file_path ?? ''),
+      signed_url: getSignedDeliveryUrl(String(a.file_path ?? '')),
+      file_size: Number(a.file_size ?? 0),
+      mime_type: String(a.mime_type ?? ''),
+      uploaded_at: a.uploaded_at ? new Date(a.uploaded_at).toISOString() : null,
+    }));
+
+    return {
+      ...row,
+      submission_text: submissionText,
+      submission_short_answers: submissionShortAnswers,
+      submission_attachments: submissionAttachments,
+    };
   }
 
   async createGradeAppeal(studentId: number, submissionId: number, content: string): Promise<void> {

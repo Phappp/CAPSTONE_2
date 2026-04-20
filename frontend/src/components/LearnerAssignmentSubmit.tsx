@@ -9,9 +9,18 @@ export type MyAssignmentGradeRow = {
   submission_id: number | null;
   status?: string | null;
   submitted_at?: string | null;
+  resubmission_count?: number | null;
   score?: number | string | null;
   feedback_text?: string | null;
   graded_at?: string | null;
+  submission_text?: string | null;
+  submission_short_answers?: { question_id: string; answer_text: string }[];
+  submission_attachments?: {
+    file_name: string;
+    file_path: string;
+    signed_url?: string;
+    file_size?: number;
+  }[];
 };
 
 export type LearnerAssignmentPayload = {
@@ -182,9 +191,40 @@ export default function LearnerAssignmentSubmit(props: {
     ? new Date(assignment.due_date).toLocaleString("vi-VN")
     : "Không giới hạn";
 
+  const maxSubmitAttempts = useMemo(() => {
+    if (!assignment) return 1;
+    if (!assignment.allow_resubmission) return 1;
+    return Math.max(1, Number(assignment.max_resubmissions || 0) + 1);
+  }, [assignment]);
+
+  const usedSubmitAttempts = useMemo(() => {
+    if (!gradeRow?.submission_id) return 0;
+    const cnt = Number(gradeRow.resubmission_count ?? 0);
+    if (!Number.isFinite(cnt) || cnt < 0) return 1;
+    return cnt + 1;
+  }, [gradeRow]);
+
+  const submitClosedReason = useMemo(() => {
+    if (usedSubmitAttempts >= maxSubmitAttempts && maxSubmitAttempts > 0) {
+      return "Bạn đã dùng hết lượt nộp cho bài tập này.";
+    }
+    if (!assignment?.due_date) return null;
+    const due = new Date(assignment.due_date);
+    if (Number.isNaN(due.getTime())) return null;
+    let closeAt = due.getTime();
+    if (assignment.allow_late_submission) {
+      const lateDays = Math.max(0, Number(assignment.late_submission_days || 0));
+      closeAt += lateDays * 24 * 60 * 60 * 1000;
+    }
+    if (Date.now() > closeAt) {
+      return "Đã hết thời hạn nộp bài. Form nộp đã được đóng.";
+    }
+    return null;
+  }, [assignment, maxSubmitAttempts, usedSubmitAttempts]);
+
   return (
     <div className="learner-quiz-overlay" role="dialog" aria-modal="true" aria-labelledby="learner-asg-title">
-      <div className="learner-quiz-modal" style={{ maxWidth: 760 }}>
+      <div className="learner-quiz-modal" style={{ maxWidth: 2000 }}>
         <div className="learner-quiz-header">
           <div>
             <h2 id="learner-asg-title">{assignment?.title || lessonTitle}</h2>
@@ -211,6 +251,9 @@ export default function LearnerAssignmentSubmit(props: {
             <span>
               Dạng:{" "}
               <strong>{assignment.assignment_kind === "short_answer" ? "Trả lời ngắn" : "File / văn bản"}</strong>
+            </span>
+            <span>
+              Lượt nộp: <strong>{usedSubmitAttempts}/{maxSubmitAttempts}</strong>
             </span>
           </div>
         ) : null}
@@ -277,13 +320,85 @@ export default function LearnerAssignmentSubmit(props: {
             )}
           </div>
         ) : null}
+        {assignment && !gradeLoading && gradeRow?.submission_id ? (
+          <div
+            className="learner-quiz-body"
+            style={{
+              marginBottom: 12,
+              padding: "12px 14px",
+              borderRadius: 10,
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
+              fontSize: "0.92rem",
+              color: "#334155",
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 8, color: "#0f172a" }}>Bài đã nộp gần nhất</div>
+            {gradeRow?.submitted_at ? (
+              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>
+                Nộp lúc: {new Date(gradeRow.submitted_at).toLocaleString("vi-VN")}
+              </div>
+            ) : null}
+
+            {gradeRow.submission_short_answers && gradeRow.submission_short_answers.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+                {gradeRow.submission_short_answers.map((ans, idx) => (
+                  <div key={`${ans.question_id}-${idx}`} style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 10px" }}>
+                    <div style={{ fontWeight: 600, color: "#334155", marginBottom: 3 }}>
+                      Câu {idx + 1}
+                    </div>
+                    <div style={{ whiteSpace: "pre-wrap" }}>{ans.answer_text || "—"}</div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {gradeRow.submission_text ? (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>Nội dung văn bản</div>
+                <div
+                  style={{
+                    whiteSpace: "pre-wrap",
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 8,
+                    padding: "8px 10px",
+                  }}
+                >
+                  {gradeRow.submission_text}
+                </div>
+              </div>
+            ) : null}
+
+            {gradeRow.submission_attachments && gradeRow.submission_attachments.length > 0 ? (
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>File đã nộp</div>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {gradeRow.submission_attachments.map((a, idx) => (
+                    <li key={`${a.file_path}-${idx}`} style={{ marginBottom: 6 }}>
+                      <a href={a.signed_url || a.file_path} target="_blank" rel="noreferrer">
+                        {a.file_name || "Tải file"}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {doneMsg ? (
           <div className="learner-quiz-body" style={{ textAlign: "center", color: "#15803d", fontWeight: 600 }}>
             {doneMsg}
           </div>
         ) : null}
 
-        {!loading && assignment && !doneMsg ? (
+        {!loading && assignment && !doneMsg && submitClosedReason ? (
+          <div className="learner-quiz-body" style={{ textAlign: "center", color: "#b45309", fontWeight: 600 }}>
+            {submitClosedReason}
+          </div>
+        ) : null}
+
+        {!loading && assignment && !doneMsg && !submitClosedReason ? (
           <div className="learner-quiz-body">
             {assignment.description ? (
               <div style={{ marginBottom: 16, color: "#334155", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>

@@ -39,3 +39,21 @@ export interface ListAuditLogsQuery {
   to?: Date | null;
 }
 
+export interface UpdateOpenRouterConfigRequest {
+  api_key?: string;
+  models?: string[];
+  default_model?: string;
+}
+
+export interface CreateOpenRouterKeyRequest {
+  api_key: string;
+  label?: string;
+}
+
+export interface UpdateOpenRouterKeyRequest {
+  label?: string;
+  is_active?: boolean;
+  cooldown_minutes?: number;
+  clear_cooldown?: boolean;
+}
+

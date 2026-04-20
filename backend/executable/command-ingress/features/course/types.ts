@@ -406,6 +406,21 @@ export type ManualQuizUpsertRequest = {
   questions: ManualQuizQuestionInput[];
 };
 
+export type ManualQuizAiGenerateRequest = {
+  topic: string;
+  question_count?: number;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  question_type?: 'multiple_choice' | 'true_false' | 'mixed';
+  extra_instructions?: string | null;
+  attachment_name?: string | null;
+  attachment_text?: string | null;
+};
+
+export type ManualQuizAiGenerateResult = {
+  model: string;
+  questions: ManualQuizQuestionInput[];
+};
+
 export type ManualQuizDetailResult = {
   quiz_id: number;
   lesson_id: number;
@@ -441,6 +456,20 @@ export type LearnerQuizTakePayload = {
   attempts_used: number;
   show_results_immediately: boolean;
   show_correct_answers: boolean;
+  recent_attempts: {
+    attempt_id: number;
+    attempt_number: number;
+    submitted_at: string | null;
+    score_percent: number | null;
+    is_passed: boolean | null;
+    status: string;
+    answers: {
+      quiz_question_id: number;
+      question_text: string;
+      selected_option_id: number | null;
+      selected_option_text: string | null;
+    }[];
+  }[];
   questions: {
     quiz_question_id: number;
     question_text: string;
@@ -573,6 +602,12 @@ export interface CourseService {
     lessonId: number,
     request: ManualQuizUpsertRequest
   ): Promise<{ quiz_id: number }>;
+  generateManualQuizQuestionsWithAi(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number,
+    request: ManualQuizAiGenerateRequest
+  ): Promise<ManualQuizAiGenerateResult>;
 
   getLearnerQuizForLesson(
     subjectUserId: number,

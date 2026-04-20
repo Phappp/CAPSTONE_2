@@ -38,7 +38,7 @@ type AuthContextValue = {
   clearAuth: () => void;
 };
 
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 phút không tương tác thì tự động đăng xuất
+const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 phút không tương tác thì tự động đăng xuất
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
