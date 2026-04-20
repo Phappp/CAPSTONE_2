@@ -3017,7 +3017,7 @@ export class CourseServiceImpl implements CourseService {
     }
 
       const systemPrompt =
-      'Bạn là trợ lý tạo câu hỏi trắc nghiệm cho LMS. Chỉ trả về 1 JSON object duy nhất. Không markdown, không code block, không giải thích, không chữ nào khác ngoài JSON.';
+      'Bạn là trợ lý tạo câu hỏi trắc nghiệm cho LMS. Trả về DUY NHẤT 1 JSON object hợp lệ. Không markdown, không code block, không giải thích, không chữ nào khác ngoài JSON. Bắt buộc dùng cú pháp JSON chuẩn: `"key": value` (không được viết `"key:"value"`).';
     const userPrompt = [
       'Tạo bộ câu hỏi quiz theo yêu cầu sau và trả về JSON object có dạng:',
       '{ "questions": [{ "question_text": string, "question_type": "multiple_choice"|"true_false", "explanation": string|null, "points": number, "difficulty": "easy"|"medium"|"hard", "options": [{ "option_text": string, "is_correct": boolean }] }] }',
@@ -3108,16 +3108,28 @@ export class CourseServiceImpl implements CourseService {
           );
         }
 
+      const repairJsonLikeText = (input: string): string => {
+        let t = String(input || '');
+        // Fix common issues like: {"questions:[{ ... }] -> {"questions":[{ ... }]
+        t = t.replace(/"(\w+)":?\[/g, (_m, key) => `"${key}":[`);
+        t = t.replace(/"(\w+):\[/g, (_m, key) => `"${key}":[`);
+
+        // Fix: "question_type:"multiple_choice" -> "question_type":"multiple_choice"
+        t = t.replace(/"(\w+):"([^"]*)"/g, (_m, k, v) => `"${k}":"${v}"`);
+
+        // Fix numeric/boolean/null when value not quoted: "points:2" -> "points":2
+        t = t.replace(/"(\w+):(true|false|null|\d+(?:\.\d+)?)"/g, (_m, k, v) => `"${k}":${v}`);
+        return t;
+      };
+
       const tryParseJsonObject = (rawText: string): any | null => {
         let t = String(rawText || '').trim();
         // Remove markdown/code fences if AI still wraps the JSON
         t = t.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+        t = repairJsonLikeText(t);
+
         // First try: whole string
-        try {
-          return JSON.parse(t);
-        } catch {
-          // continue
-        }
+        try { return JSON.parse(t); } catch { /* continue */ }
         // Fallback: extract {...} region
         const first = t.indexOf('{');
         const last = t.lastIndexOf('}');

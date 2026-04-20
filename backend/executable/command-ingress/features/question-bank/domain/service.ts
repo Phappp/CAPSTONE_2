@@ -310,7 +310,7 @@ export class QuestionBankServiceImpl implements QuestionBankService {
         if (!apiKey) throw new Error('Không thể giải mã OpenRouter key.');
 
         const systemPrompt =
-          'Bạn là trợ lý tạo câu hỏi trắc nghiệm cho LMS. Chỉ trả về 1 JSON object duy nhất. Không markdown, không code block, không giải thích, không chữ nào khác ngoài JSON.';
+          'Bạn là trợ lý tạo câu hỏi trắc nghiệm cho LMS. Trả về DUY NHẤT 1 JSON object hợp lệ. Không markdown, không code block, không giải thích, không chữ nào khác ngoài JSON. Bắt buộc dùng cú pháp JSON chuẩn: `"key": value` (không được viết `"key:"value"`).';
         const userPrompt = [
           'Hãy tạo JSON object theo format:',
           '{ "questions": [{ "question_type":"multiple_choice|true_false", "question_text": string, "difficulty":"easy|medium|hard", "points": number, "explanation": string|null, "options":[{"option_text":string,"is_correct":boolean}] }] }',
@@ -355,9 +355,20 @@ export class QuestionBankServiceImpl implements QuestionBankService {
           const content = data?.choices?.[0]?.message?.content;
           if (!content) throw new Error('OpenRouter không trả về nội dung.');
 
+          const repairJsonLikeText = (input: string): string => {
+            let t = String(input || '');
+            t = t.replace(/"(\w+)":?\[/g, (_m, key) => `"${key}":[`);
+            t = t.replace(/"(\w+):\[/g, (_m, key) => `"${key}":[`);
+
+            t = t.replace(/"(\w+):"([^"]*)"/g, (_m, k, v) => `"${k}":"${v}"`);
+            t = t.replace(/"(\w+):(true|false|null|\d+(?:\.\d+)?)"/g, (_m, k, v) => `"${k}":${v}`);
+            return t;
+          };
+
           const tryParseJsonObject = (rawText: string): any | null => {
             let t = String(rawText || '').trim();
             t = t.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+            t = repairJsonLikeText(t);
             try {
               return JSON.parse(t);
             } catch {
