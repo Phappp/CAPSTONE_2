@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import AvatarMenu from "../components/AvatarMenu";
-import LearnerCourseContentTree, { type ModuleItem } from "../components/LearnerCourseContentTree";
-import { url } from "../baseUrl";
-import { COURSES_API } from "../api/courses";
-import { getAccessToken } from "../utils/authStorage";
+import AvatarMenu from "../../components/AvatarMenu";
+import LearnerCourseContentTree, { type ModuleItem } from "../../components/LearnerCourseContentTree";
+import { url } from "../../baseUrl";
+import { COURSES_API } from "../../api/courses";
+import { getAccessToken } from "../../utils/authStorage";
 import "./LearningModuleLessonsPage.css";
 
 type CourseDetail = {

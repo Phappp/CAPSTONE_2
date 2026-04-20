@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import AvatarMenu from "../components/AvatarMenu";
-import { url } from "../baseUrl";
-import { COURSES_API } from "../api/courses";
-import { ASSIGNMENTS_API } from "../api/assignments";
-import { getAccessToken } from "../utils/authStorage";
-import type { ModuleItem } from "../components/LearnerCourseContentTree";
+import AvatarMenu from "../../components/AvatarMenu";
+import { url } from "../../baseUrl";
+import { COURSES_API } from "../../api/courses";
+import { ASSIGNMENTS_API } from "../../api/assignments";
+import { getAccessToken } from "../../utils/authStorage";
+import type { ModuleItem } from "../../components/LearnerCourseContentTree";
 import "./LearningPage.css";
 
 type CourseDetail = {

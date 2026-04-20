@@ -1661,7 +1661,7 @@ export default function CourseContentTreeEditor(props: {
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
                       {assessmentShortcuts && m.lessons?.length ? (
                         <>
-                          <button
+                          {/* <button
                             type="button"
                             className="secondary-button"
                             style={{ padding: "0.25rem 0.55rem", fontSize: "0.78rem", fontWeight: 700 }}
@@ -1680,7 +1680,7 @@ export default function CourseContentTreeEditor(props: {
                             disabled={saving}
                           >
                             Bài tập · bài đầu chương
-                          </button>
+                          </button> */}
                         </>
                       ) : assessmentShortcuts && !m.lessons?.length ? (
                         <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>Chưa có bài — thêm bài để soạn Quizz/tập</span>
@@ -2067,7 +2067,7 @@ export default function CourseContentTreeEditor(props: {
                                               }}
                                               disabled={saving}
                                             >
-                                              Soạn Quizz cho bài này
+                                              Soạn Quizz
                                             </button>
                                             <button
                                               type="button"
@@ -2080,7 +2080,7 @@ export default function CourseContentTreeEditor(props: {
                                               }}
                                               disabled={saving}
                                             >
-                                              Soạn bài tập cho bài này
+                                              Soạn bài tập
                                             </button>
                                           </>
                                         ) : null}

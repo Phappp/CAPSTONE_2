@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import AvatarMenu from "../components/AvatarMenu";
-import { url } from "../baseUrl";
-import { COURSES_API } from "../api/courses";
-import { getAccessToken } from "../utils/authStorage";
+import AvatarMenu from "../../components/AvatarMenu";
+import { url } from "../../baseUrl";
+import { COURSES_API } from "../../api/courses";
+import { getAccessToken } from "../../utils/authStorage";
 import "./CreateCoursePage.css";
 
 type Level = "beginner" | "intermediate" | "advanced";
@@ -562,7 +562,7 @@ export default function CreateCoursePage() {
         <AvatarMenu />
       </div>
 
-      <div className="wizard-card">
+      <div className="wizard-card" style={{ maxWidth: 1600 }}>
         {renderStepIndicator()}
 
         <div className="wizard-body">{renderStepContent()}</div>

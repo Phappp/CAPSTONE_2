@@ -1,9 +1,10 @@
-import AvatarMenu from "../components/AvatarMenu";
+// TeacherDashboard.tsx
+import AvatarMenu from "../../components/AvatarMenu";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { url } from "../baseUrl";
-import { COURSES_API } from "../api/courses";
-import { getAccessToken } from "../utils/authStorage";
+import { url } from "../../baseUrl";
+import { COURSES_API } from "../../api/courses";
+import { getAccessToken } from "../../utils/authStorage";
 import "./TeacherDashboard.css";
 
 type CourseViewMode = "list" | "grid" | "compact";
@@ -302,16 +303,9 @@ export default function TeacherDashboard() {
     }
   };
 
-  const statCards = [
-    { label: "Tổng số", value: stats?.total ?? 0, key: "total", icon: "📚", color: "#2563eb" },
-    { label: "Đã xuất bản", value: stats?.published ?? 0, key: "published", icon: "✅", color: "#10b981" },
-    { label: "Bản nháp", value: stats?.draft ?? 0, key: "draft", icon: "✏️", color: "#f59e0b" },
-    { label: "Đã lưu trữ", value: stats?.archived ?? 0, key: "archived", icon: "📦", color: "#6b7280" },
-  ];
-
   const sections: { key: TeacherSection; label: string }[] = [
-    { key: "dashboard", label: "Dashboard" },
-    { key: "course", label: "Khóa học" },
+    { key: "dashboard", label: "Tổng quan" },
+    { key: "course", label: "Quản lý khóa học" },
   ];
 
   const filteredStatus = useMemo(() => {
@@ -342,10 +336,10 @@ export default function TeacherDashboard() {
     }
 
     return [
-      { label: "Cơ bản", value: counts.beginner, color: "#2563eb" },
+      { label: "Cơ bản", value: counts.beginner, color: "#10b981" },
       { label: "Trung cấp", value: counts.intermediate, color: "#f59e0b" },
       { label: "Nâng cao", value: counts.advanced, color: "#ef4444" },
-      { label: "Khác", value: counts.other, color: "#6b7280" },
+      { label: "Khác", value: counts.other, color: "#8b5cf6" },
     ].filter((d) => d.value > 0);
   }, [filteredCourses]);
 
@@ -408,8 +402,8 @@ export default function TeacherDashboard() {
     const startX = (w / data.length - barW) / 2;
     
     return (
-      <div className="bar-chart-container">
-        <svg className="bar-chart-svg" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet">
+      <div className="chart-container">
+        <svg className="chart-svg chart-svg--bar" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet">
           {data.map((d, i) => {
             const barHeight = (d.value / max) * (h - 40);
             const x = i * (w / data.length) + startX;
@@ -417,20 +411,20 @@ export default function TeacherDashboard() {
             return (
               <g key={d.label}>
                 <rect
-                  className="bar-rect"
+                  className="chart-bar"
                   x={x}
                   y={y}
                   width={barW}
                   height={barHeight}
                   fill={d.color}
-                  rx="6"
+                  rx="8"
                 />
                 <text
                   x={x + barW / 2}
                   y={h - 8}
                   textAnchor="middle"
                   fontSize="11"
-                  fill="#6b7280"
+                  fill="#94a3b8"
                 >
                   {d.label}
                 </text>
@@ -439,26 +433,26 @@ export default function TeacherDashboard() {
                   y={y - 6}
                   textAnchor="middle"
                   fontSize="12"
-                  fill="#374151"
-                  fontWeight="500"
+                  fill="#334155"
+                  fontWeight="600"
                 >
                   {d.value}
                 </text>
               </g>
             );
           })}
-          <line x1="0" y1={h - 20} x2={w} y2={h - 20} stroke="#e5e7eb" strokeWidth="1" />
+          <line x1="0" y1={h - 20} x2={w} y2={h - 20} stroke="#e2e8f0" strokeWidth="1" />
         </svg>
       </div>
     );
   };
 
   const PieChart = ({ data }: { data: { label: string; value: number; color: string }[] }) => {
-    const size = 180;
+    const size = 200;
     const cx = size / 2;
     const cy = size / 2;
-    const r = 70;
-    const innerR = 36; // bán kính lỗ giữa (để nhìn thấy "vòng")
+    const r = 72;
+    const innerR = 40;
     const sum = data.reduce((s, d) => s + d.value, 0);
     const total = sum <= 0 ? 0 : sum;
     let startAngle = -90;
@@ -476,12 +470,11 @@ export default function TeacherDashboard() {
     };
     
     return (
-      <div className="pie-chart-container">
-        <svg className="pie-chart-svg" viewBox={`0 0 ${size} ${size}`} preserveAspectRatio="xMidYMid meet">
-          {/* Nền khi không có dữ liệu */}
+      <div className="pie-container">
+        <svg className="chart-svg chart-svg--pie" viewBox={`0 0 ${size} ${size}`} preserveAspectRatio="xMidYMid meet">
           {total === 0 ? (
             <>
-              <circle cx={cx} cy={cy} r={r} fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="2" />
+              <circle cx={cx} cy={cy} r={r} fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="2" />
               <circle cx={cx} cy={cy} r={innerR} fill="#ffffff" />
             </>
           ) : (
@@ -496,22 +489,20 @@ export default function TeacherDashboard() {
                     d={path}
                     fill={d.color}
                     stroke="#ffffff"
-                    strokeWidth="1"
+                    strokeWidth="2"
                   />
                 );
                 startAngle = endAngle;
                 return element;
               })}
-              {/* Vòng trong (để thấy hình tròn rõ hơn) */}
-              <circle cx={cx} cy={cy} r={innerR} fill="#ffffff" stroke="#ffffff" strokeWidth="1" />
-              {/* Viền ngoài */}
-              <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e5e7eb" strokeWidth="2" />
+              <circle cx={cx} cy={cy} r={innerR} fill="#ffffff" stroke="#ffffff" strokeWidth="2" />
+              <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e2e8f0" strokeWidth="2" />
             </>
           )}
-          <text x={cx} y={cy - 4} textAnchor="middle" fontSize="18" fontWeight="700" fill="#111827">
+          <text x={cx} y={cy - 4} textAnchor="middle" fontSize="20" fontWeight="700" fill="#0f172a">
             {total}
           </text>
-          <text x={cx} y={cy + 14} textAnchor="middle" fontSize="10" fill="#6b7280">
+          <text x={cx} y={cy + 14} textAnchor="middle" fontSize="10" fill="#64748b">
             tổng số
           </text>
         </svg>
@@ -519,7 +510,7 @@ export default function TeacherDashboard() {
           {data.map((d) => (
             <div key={d.label} className="pie-legend-item">
               <div className="pie-legend-color" style={{ background: d.color }} />
-              <span>{d.label}:</span>
+              <span>{d.label}</span>
               <span className="pie-legend-value">{d.value}</span>
             </div>
           ))}
@@ -532,7 +523,7 @@ export default function TeacherDashboard() {
     const w = 500;
     const h = 180;
     const max = Math.max(1, ...values);
-    const padding = { top: 20, right: 20, bottom: 30, left: 30 };
+    const padding = { top: 20, right: 20, bottom: 30, left: 35 };
     const innerW = w - padding.left - padding.right;
     const innerH = h - padding.top - padding.bottom;
     
@@ -545,9 +536,8 @@ export default function TeacherDashboard() {
     const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
     
     return (
-      <div className="line-chart-container">
-        <svg className="line-chart-svg" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet">
-          {/* Grid lines */}
+      <div className="chart-container">
+        <svg className="chart-svg chart-svg--line" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet">
           {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
             const y = padding.top + innerH * (1 - ratio);
             return (
@@ -557,39 +547,37 @@ export default function TeacherDashboard() {
                   y1={y}
                   x2={w - padding.right}
                   y2={y}
-                  stroke="#e5e7eb"
+                  stroke="#e2e8f0"
                   strokeWidth="1"
                   strokeDasharray="4 4"
                 />
-                <text x={padding.left - 6} y={y + 3} fontSize="10" fill="#9ca3af">
+                <text x={padding.left - 8} y={y + 3} fontSize="10" fill="#94a3b8">
                   {Math.round(max * ratio)}
                 </text>
               </g>
             );
           })}
           
-          {/* Line */}
           <path
             d={linePath}
             fill="none"
-            stroke="#2563eb"
-            strokeWidth="2.5"
-            className="line-path"
+            stroke="#3b82f6"
+            strokeWidth="3"
+            className="chart-line"
           />
           
-          {/* Points */}
           {points.map((p, i) => (
             <g key={i}>
-              <circle cx={p.x} cy={p.y} r="5" fill="#2563eb" stroke="white" strokeWidth="2" />
-              <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize="11" fill="#374151">
+              <circle cx={p.x} cy={p.y} r="5" fill="#3b82f6" stroke="white" strokeWidth="2.5" />
+              <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize="11" fill="#334155" fontWeight="500">
                 {p.v}
               </text>
               <text
                 x={p.x}
-                y={h - 8}
+                y={h - 6}
                 textAnchor="middle"
                 fontSize="10"
-                fill="#6b7280"
+                fill="#94a3b8"
               >
                 {labels[i]}
               </text>
@@ -601,14 +589,18 @@ export default function TeacherDashboard() {
   };
 
   return (
-    <div className="dashboard-page">
+    <div className="teacher-dashboard">
       <div className="dashboard-container">
+        {/* Header */}
         <div className="dashboard-header">
-          <div>
+          <div className="header-title-section">
+            <h1 className="dashboard-title">Teacher Hub</h1>
+            <p className="dashboard-subtitle">Quản lý khóa học và theo dõi hiệu suất giảng dạy</p>
           </div>
           <AvatarMenu />
         </div>
 
+        {/* Section Tabs */}
         <div className="section-tabs">
           {sections.map((s) => (
             <button
@@ -621,48 +613,16 @@ export default function TeacherDashboard() {
           ))}
         </div>
 
+        {/* Dashboard Section */}
         {section === "dashboard" && (
           <>
-            <div className="stats-grid">
-              {[
-                { label: "Tổng số", value: filteredStatus.total, key: "total", icon: "📚" },
-                { label: "Đã xuất bản", value: filteredStatus.published, key: "published", icon: "✅" },
-                { label: "Bản nháp", value: filteredStatus.draft, key: "draft", icon: "✏️" },
-                { label: "Đã lưu trữ", value: filteredStatus.archived, key: "archived", icon: "📦" },
-              ].map((c) => (
-                <div key={c.key} className="stat-card">
-                  <div className="stat-card-header">
-                    <span className="stat-card-title">{c.label}</span>
-                    <div className="stat-card-icon">{c.icon}</div>
-                  </div>
-                  <div className="stat-card-value">{c.value}</div>
-                </div>
-              ))}
-            </div>
-
-            <div className="chart-card" style={{ marginBottom: 16 }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 12,
-                  flexWrap: "wrap",
-                }}
-              >
-                <label
-                  style={{
-                    display: "flex",
-                    gap: 10,
-                    alignItems: "center",
-                    fontWeight: 700,
-                    color: "#111827",
-                    cursor: "pointer",
-                  }}
-                >
+            {/* Time Filter */}
+            <div className="filter-card">
+              <div className="filter-card-content">
+                <label className="filter-checkbox-label">
                   <input
                     type="checkbox"
-                    className="time-filter-checkbox"
+                    className="filter-checkbox"
                     checked={timeFilterEnabled}
                     onChange={(e) => {
                       const checked = e.target.checked;
@@ -673,35 +633,31 @@ export default function TeacherDashboard() {
                       }
                     }}
                   />
-                  Áp dụng lọc thời gian
+                  <span className="material-symbols-outlined">schedule</span>
+                  <span>Lọc theo thời gian</span>
                 </label>
 
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 10,
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                  }}
-                >
+                <div className="date-range-group">
                   <input
                     type="date"
-                    className="time-filter-input"
+                    className="date-input"
                     value={timeFrom}
                     onChange={(e) => setTimeFrom(e.target.value)}
                     disabled={!timeFilterEnabled}
                   />
-                  <span style={{ color: "#6b7280", fontWeight: 700 }}>→</span>
+                  <span className="date-separator">
+                    <span className="material-symbols-outlined">arrow_forward</span>
+                  </span>
                   <input
                     type="date"
-                    className="time-filter-input"
+                    className="date-input"
                     value={timeTo}
                     onChange={(e) => setTimeTo(e.target.value)}
                     disabled={!timeFilterEnabled}
                   />
                   <button
                     type="button"
-                    className="secondary-button time-filter-reset"
+                    className="btn-secondary btn-sm"
                     onClick={() => {
                       setTimeFilterEnabled(false);
                       setTimeFrom("");
@@ -709,58 +665,82 @@ export default function TeacherDashboard() {
                     }}
                     disabled={!timeFilterEnabled && !timeFrom && !timeTo}
                   >
-                    Reset
+                    <span className="material-symbols-outlined">refresh</span>
+                    Đặt lại
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="charts-grid">
+            {/* Stats Grid */}
+            <div className="stats-grid">
+              {[
+                { label: "Tổng số", value: filteredStatus.total, key: "total", icon: "dashboard", color: "#3b82f6" },
+                { label: "Đã xuất bản", value: filteredStatus.published, key: "published", icon: "check_circle", color: "#10b981" },
+                { label: "Bản nháp", value: filteredStatus.draft, key: "draft", icon: "edit_note", color: "#f59e0b" },
+                { label: "Đã lưu trữ", value: filteredStatus.archived, key: "archived", icon: "archive", color: "#8b5cf6" },
+              ].map((c) => (
+                <div key={c.key} className="stat-card">
+                  <div className="stat-card-icon" style={{ background: `${c.color}10`, color: c.color }}>
+                    <span className="material-symbols-outlined">{c.icon}</span>
+                  </div>
+                  <div className="stat-card-content">
+                    <div className="stat-card-value">{c.value}</div>
+                    <div className="stat-card-title">{c.label}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Charts Row 1 */}
+            <div className="charts-row">
               <div className="chart-card">
-                <div className="chart-card-title">
-                  📊 Phân bố khóa học
+                <div className="chart-card-header">
+                  <span className="chart-card-icon material-symbols-outlined">bar_chart</span>
+                  <h3 className="chart-card-title">Phân bố trạng thái</h3>
                 </div>
                 <BarChart
                   data={[
                     { label: "Đã xuất bản", value: filteredStatus.published ?? 0, color: "#10b981" },
                     { label: "Bản nháp", value: filteredStatus.draft ?? 0, color: "#f59e0b" },
-                    { label: "Đã lưu trữ", value: filteredStatus.archived ?? 0, color: "#6b7280" },
+                    { label: "Đã lưu trữ", value: filteredStatus.archived ?? 0, color: "#8b5cf6" },
                   ]}
                 />
               </div>
 
               <div className="chart-card">
-                <div className="chart-card-title">
-                  🥧 Tỷ lệ theo cấp độ
+                <div className="chart-card-header">
+                  <span className="chart-card-icon material-symbols-outlined">pie_chart</span>
+                  <h3 className="chart-card-title">Phân bố theo cấp độ</h3>
                 </div>
                 <PieChart
                   data={
                     levelPieData.length
                       ? levelPieData
-                      : [{ label: "Cơ bản", value: 0, color: "#2563eb" }]
+                      : [{ label: "Chưa có dữ liệu", value: 0, color: "#e2e8f0" }]
                   }
                 />
               </div>
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 16,
-                marginBottom: 32,
-              }}
-            >
-              <div className="chart-card" style={{ marginBottom: 0 }}>
-                <div className="chart-card-title">📈 Xu hướng tạo khóa học</div>
+            {/* Charts Row 2 */}
+            <div className="charts-row">
+              <div className="chart-card">
+                <div className="chart-card-header">
+                  <span className="chart-card-icon material-symbols-outlined">trending_up</span>
+                  <h3 className="chart-card-title">Xu hướng tạo khóa học</h3>
+                </div>
                 <LineChart
                   labels={createdSeries.labels}
                   values={createdSeries.buckets}
                 />
               </div>
 
-              <div className="chart-card" style={{ marginBottom: 0 }}>
-                <div className="chart-card-title">👥 Xu hướng học viên đăng ký</div>
+              <div className="chart-card">
+                <div className="chart-card-header">
+                  <span className="chart-card-icon material-symbols-outlined">people</span>
+                  <h3 className="chart-card-title">Xu hướng học viên đăng ký</h3>
+                </div>
                 <LineChart
                   labels={learnersSeries.labels}
                   values={learnersSeries.buckets}
@@ -768,48 +748,64 @@ export default function TeacherDashboard() {
               </div>
             </div>
 
+            {/* Quick Stats */}
             <div className="quick-stats-grid">
               <div className="quick-stat-card">
-                <div className="quick-stat-label">📚 Tổng số khóa học</div>
+                <div className="quick-stat-icon material-symbols-outlined">menu_book</div>
+                <div className="quick-stat-content">
                   <div className="quick-stat-value">{filteredStatus.total}</div>
+                  <div className="quick-stat-label">Tổng khóa học</div>
+                </div>
               </div>
               <div className="quick-stat-card">
-                <div className="quick-stat-label">👥 Tổng số học viên</div>
-                <div className="quick-stat-value">{totalLearners}</div>
+                <div className="quick-stat-icon material-symbols-outlined">group</div>
+                <div className="quick-stat-content">
+                  <div className="quick-stat-value">{totalLearners.toLocaleString()}</div>
+                  <div className="quick-stat-label">Học viên</div>
+                </div>
               </div>
               <div className="quick-stat-card">
-                <div className="quick-stat-label">✅ Tỷ lệ xuất bản</div>
-                <div className="quick-stat-value">{completionRate}%</div>
-                <div className="quick-stat-note">Khóa học đã xuất bản / Tổng số</div>
+                <div className="quick-stat-icon material-symbols-outlined">verified</div>
+                <div className="quick-stat-content">
+                  <div className="quick-stat-value">{completionRate}%</div>
+                  <div className="quick-stat-label">Tỷ lệ xuất bản</div>
+                </div>
               </div>
               <div className="quick-stat-card">
-                <div className="quick-stat-label">⭐ Điểm trung bình</div>
-                <div className="quick-stat-value">N/A</div>
-                <div className="quick-stat-note">Cần API bổ sung</div>
+                <div className="quick-stat-icon material-symbols-outlined">star</div>
+                <div className="quick-stat-content">
+                  <div className="quick-stat-value">—</div>
+                  <div className="quick-stat-label">Đánh giá TB</div>
+                </div>
               </div>
             </div>
           </>
         )}
 
+        {/* Course Management Section */}
         {section === "course" && (
-          <div className="chart-card">
+          <div className="course-management">
             <div className="course-header">
-              <h2>Khóa học của tôi</h2>
+              <div>
+                <h2 className="section-title">Khóa học của tôi</h2>
+                <p className="section-subtitle">Quản lý, xuất bản và theo dõi tất cả khóa học</p>
+              </div>
               <button
-                className="section-tab active"
-                style={{ padding: "10px 24px" }}
+                className="btn-primary"
                 onClick={() => navigate("/teacher/courses/new")}
               >
-                + Tạo khóa học mới
+                <span className="material-symbols-outlined">add</span>
+                Tạo khóa học mới
               </button>
             </div>
 
+            {/* Course Tabs */}
             <div className="course-tabs">
               {[
-                { key: "all", label: "Tất cả" },
-                { key: "published", label: "Đã xuất bản" },
-                { key: "draft", label: "Bản nháp" },
-                { key: "archived", label: "Đã lưu trữ" },
+                { key: "all", label: "Tất cả", count: stats?.total, icon: "apps" },
+                { key: "published", label: "Đã xuất bản", count: stats?.published, icon: "check_circle" },
+                { key: "draft", label: "Bản nháp", count: stats?.draft, icon: "edit" },
+                { key: "archived", label: "Đã lưu trữ", count: stats?.archived, icon: "inventory" },
               ].map((t) => (
                 <button
                   key={t.key}
@@ -817,109 +813,126 @@ export default function TeacherDashboard() {
                   onClick={() => setTab(t.key as any)}
                   disabled={loading}
                 >
+                  <span className="material-symbols-outlined">{t.icon}</span>
                   {t.label}
+                  {t.count !== undefined && <span className="tab-count">{t.count}</span>}
                 </button>
               ))}
             </div>
 
+            {/* Toolbar */}
             <div className="course-toolbar">
-              <div className="course-filters">
-                <div className="course-search">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="10" cy="10" r="7" />
-                    <line x1="15" y1="15" x2="21" y2="21" />
-                  </svg>
-                  <input
-                    placeholder="Tìm kiếm theo tên khóa học..."
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    disabled={loading}
-                  />
-                </div>
-                <div className="course-sort">
-                  <select
-                    value={`${sort.sort_by}:${sort.sort_dir}`}
-                    onChange={(e) => {
-                      const [sb, sd] = e.target.value.split(":") as any;
-                      setSort({ sort_by: sb, sort_dir: sd });
-                    }}
-                    disabled={loading}
-                  >
-                    <option value="updated_at:desc">Mới cập nhật (gần nhất)</option>
-                    <option value="updated_at:asc">Mới cập nhật (cũ nhất)</option>
-                    <option value="created_at:desc">Mới tạo (gần nhất)</option>
-                    <option value="created_at:asc">Mới tạo (cũ nhất)</option>
-                    <option value="title:asc">Tên A → Z</option>
-                    <option value="title:desc">Tên Z → A</option>
-                    <option value="learners_count:desc">Học viên (nhiều → ít)</option>
-                    <option value="learners_count:asc">Học viên (ít → nhiều)</option>
-                  </select>
-                </div>
+              <div className="search-wrapper">
+                <span className="material-symbols-outlined search-icon">search</span>
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Tìm kiếm khóa học..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  disabled={loading}
+                />
               </div>
-              <div className="course-view-toggle" role="group" aria-label="Kiểu xem danh sách khóa học">
-                <span className="course-view-toggle-label">Kiểu xem</span>
-                {(
-                  [
-                    { key: "list" as const, label: "Danh sách", hint: "Một cột, đầy đủ mô tả" },
-                    { key: "grid" as const, label: "Lưới", hint: "Nhiều cột dạng thẻ" },
-                    { key: "compact" as const, label: "Gọn", hint: "Hàng mỏng, ẩn mô tả" },
-                  ] as const
-                ).map((v) => (
-                  <button
-                    key={v.key}
-                    type="button"
-                    className={`course-view-btn ${courseView === v.key ? "is-active" : ""}`}
-                    title={v.hint}
-                    onClick={() => setCourseView(v.key)}
-                    disabled={loading}
-                  >
-                    {v.label}
-                  </button>
-                ))}
+
+              <div className="sort-wrapper">
+                <select
+                  className="sort-select"
+                  value={`${sort.sort_by}:${sort.sort_dir}`}
+                  onChange={(e) => {
+                    const [sb, sd] = e.target.value.split(":") as any;
+                    setSort({ sort_by: sb, sort_dir: sd });
+                  }}
+                  disabled={loading}
+                >
+                  <option value="updated_at:desc">
+                    <span className="material-symbols-outlined">update</span> Mới cập nhật
+                  </option>
+                  <option value="updated_at:asc">Cũ nhất</option>
+                  <option value="created_at:desc">Mới tạo</option>
+                  <option value="created_at:asc">Tạo sớm nhất</option>
+                  <option value="title:asc">Tên A → Z</option>
+                  <option value="title:desc">Tên Z → A</option>
+                  <option value="learners_count:desc">Học viên nhiều nhất</option>
+                  <option value="learners_count:asc">Học viên ít nhất</option>
+                </select>
+              </div>
+
+              <div className="view-toggle">
+                <span className="view-toggle-label">Hiển thị:</span>
+                <button
+                  className={`view-btn ${courseView === "list" ? "active" : ""}`}
+                  onClick={() => setCourseView("list")}
+                  title="Danh sách"
+                >
+                  <span className="material-symbols-outlined">view_list</span>
+                </button>
+                <button
+                  className={`view-btn ${courseView === "grid" ? "active" : ""}`}
+                  onClick={() => setCourseView("grid")}
+                  title="Lưới"
+                >
+                  <span className="material-symbols-outlined">grid_view</span>
+                </button>
+                <button
+                  className={`view-btn ${courseView === "compact" ? "active" : ""}`}
+                  onClick={() => setCourseView("compact")}
+                  title="Gọn"
+                >
+                  <span className="material-symbols-outlined">view_compact</span>
+                </button>
               </div>
             </div>
 
-            {error && <div className="error-box">{error}</div>}
+            {error && <div className="error-message">{error}</div>}
 
+            {/* Course List */}
             <div className={`course-list course-list--${courseView}`}>
               {(result?.items || []).map((c: any) => (
                 <div
                   key={c.id}
-                  className="course-item"
+                  className="course-card-item"
                   onClick={() => !loading && navigate(`/teacher/courses/${c.id}`)}
                 >
-                  <div className="course-item-content">
+                  <div className="course-card-content">
+                    <div className="course-thumbnail">
+                      {c.thumbnail_url ? (
+                        <img src={c.thumbnail_url} alt={c.title} />
+                      ) : (
+                        <div className="thumbnail-placeholder">
+                          <span className="material-symbols-outlined">menu_book</span>
+                        </div>
+                      )}
+                    </div>
+                    
                     <div className="course-info">
-                      <div className="course-thumbnail">
-                        {c.thumbnail_url ? (
-                          <img src={c.thumbnail_url} alt={c.title} />
-                        ) : (
-                          <div style={{ width: "100%", height: "100%", background: "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
-                            📘
-                          </div>
-                        )}
+                      <div className="course-title-row">
+                        <h6 className="course-title">{c.title}</h6>
+                        <span className={`status-badge status-badge--${c.status}`}>
+                          {c.status === "published" ? "Đã xuất bản" : c.status === "draft" ? "Bản nháp" : "Đã lưu trữ"}
+                        </span>
                       </div>
-                      <div className="course-details">
-                        <div className="course-title-row">
-                          <span className="course-title">{c.title}</span>
-                          <span className={`course-status ${c.status}`}>
-                            {c.status === "published" ? "Đã xuất bản" : c.status === "draft" ? "Bản nháp" : "Đã lưu trữ"}
-                          </span>
-                        </div>
-                        <div className="course-description">
-                          {c.short_description || "Chưa có mô tả"}
-                        </div>
-                        <div className="course-meta">
-                          <span>👥 {c.learners_count ?? 0} học viên</span>
-                          <span>📚 {c.modules_count ?? 0} chương</span>
-                          <span>📖 {c.lessons_count ?? 0} bài học</span>
-                        </div>
+                      <p className="course-description">
+                        {c.short_description || "Chưa có mô tả"}
+                      </p>
+                      <div className="course-meta">
+                        <span className="meta-item">
+                          <span className="material-symbols-outlined meta-icon">group</span>
+                          {c.learners_count ?? 0} học viên
+                        </span>
+                        <span className="meta-item">
+                          <span className="material-symbols-outlined meta-icon">library_books</span>
+                          {c.modules_count ?? 0} chương
+                        </span>
+                        <span className="meta-item">
+                          <span className="material-symbols-outlined meta-icon">menu_book</span>
+                          {c.lessons_count ?? 0} bài học
+                        </span>
                       </div>
                     </div>
 
                     <div className="course-actions" data-course-actions-menu="root">
                       <button
-                        className="actions-trigger"
+                        className="action-trigger"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -927,11 +940,11 @@ export default function TeacherDashboard() {
                         }}
                         disabled={loading}
                       >
-                        ⋯
+                        <span className="material-symbols-outlined">more_horiz</span>
                       </button>
 
                       {openMenuCourseId === c.id && (
-                        <div className="actions-menu">
+                        <div className="action-menu">
                           {c.status !== "archived" && (
                             c.status !== "published" ? (
                               <button onClick={async (e) => {
@@ -939,7 +952,8 @@ export default function TeacherDashboard() {
                                 setOpenMenuCourseId(null);
                                 await handleSetStatus(c.id, "published");
                               }} disabled={loading}>
-                                ✨ Xuất bản
+                                <span className="material-symbols-outlined">publish</span>
+                                Xuất bản
                               </button>
                             ) : (
                               <button className="danger" onClick={async (e) => {
@@ -947,7 +961,8 @@ export default function TeacherDashboard() {
                                 setOpenMenuCourseId(null);
                                 await handleUnpublish(c.id);
                               }} disabled={loading}>
-                                📤 Bỏ xuất bản
+                                <span className="material-symbols-outlined">unpublish</span>
+                                Bỏ xuất bản
                               </button>
                             )
                           )}
@@ -958,7 +973,8 @@ export default function TeacherDashboard() {
                               setOpenMenuCourseId(null);
                               await handleSetStatus(c.id, "archived");
                             }} disabled={loading}>
-                              📦 Lưu trữ
+                              <span className="material-symbols-outlined">archive</span>
+                              Lưu trữ
                             </button>
                           ) : (
                             <button onClick={async (e) => {
@@ -966,7 +982,8 @@ export default function TeacherDashboard() {
                               setOpenMenuCourseId(null);
                               await handleSetStatus(c.id, "draft");
                             }} disabled={loading}>
-                              🔓 Bỏ lưu trữ
+                              <span className="material-symbols-outlined">unarchive</span>
+                              Khôi phục
                             </button>
                           )}
                           
@@ -977,7 +994,8 @@ export default function TeacherDashboard() {
                             setOpenMenuCourseId(null);
                             await handleDelete(c.id);
                           }} disabled={loading}>
-                            🗑️ Xóa
+                            <span className="material-symbols-outlined">delete</span>
+                            Xóa
                           </button>
                         </div>
                       )}
@@ -987,13 +1005,27 @@ export default function TeacherDashboard() {
               ))}
             </div>
 
+            {!loading && !error && (result?.items?.length === 0) && (
+              <div className="empty-state">
+                <div className="empty-state-icon">
+                  <span className="material-symbols-outlined">inbox</span>
+                </div>
+                <p className="empty-state-text">Chưa có khóa học nào</p>
+                <button className="btn-primary btn-sm" onClick={() => navigate("/teacher/courses/new")}>
+                  <span className="material-symbols-outlined">add</span>
+                  Tạo khóa học đầu tiên
+                </button>
+              </div>
+            )}
+
+            {/* Pagination */}
             <div className="pagination">
               <div className="pagination-info">
                 {loading ? "Đang tải..." : `Hiển thị ${result?.items?.length ?? 0} / ${result?.total ?? 0} khóa học`}
               </div>
-              <div className="pagination-buttons">
+              <div className="pagination-controls">
                 <button
-                  className="pagination-button"
+                  className="pagination-btn"
                   onClick={() => {
                     const next = Math.max(1, page - 1);
                     setPage(next);
@@ -1004,10 +1036,12 @@ export default function TeacherDashboard() {
                   }}
                   disabled={loading || page <= 1}
                 >
-                  ← Trước
+                  <span className="material-symbols-outlined">chevron_left</span>
+                  Trước
                 </button>
+                <span className="pagination-current">{page}</span>
                 <button
-                  className="pagination-button"
+                  className="pagination-btn"
                   onClick={() => {
                     const maxPage = Math.max(1, Math.ceil((result?.total ?? 0) / pageSize));
                     const next = Math.min(maxPage, page + 1);
@@ -1019,13 +1053,13 @@ export default function TeacherDashboard() {
                   }}
                   disabled={loading || page >= Math.max(1, Math.ceil((result?.total ?? 0) / pageSize))}
                 >
-                  Sau →
+                  Sau
+                  <span className="material-symbols-outlined">chevron_right</span>
                 </button>
               </div>
             </div>
           </div>
         )}
-
       </div>
     </div>
   );

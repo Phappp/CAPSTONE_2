@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import AvatarMenu from "../components/AvatarMenu";
-import { url } from "../baseUrl";
-import { COURSES_API } from "../api/courses";
-import { getAccessToken } from "../utils/authStorage";
-import CourseContentTreeEditor from "../components/CourseContentTreeEditor";
-import CourseAssessmentModal, { type CourseAssessmentModalTab } from "../components/CourseAssessmentModal";
+import AvatarMenu from "../../components/AvatarMenu";
+import { url } from "../../baseUrl";
+import { COURSES_API } from "../../api/courses";
+import { getAccessToken } from "../../utils/authStorage";
+import CourseContentTreeEditor from "../../components/CourseContentTreeEditor";
+import CourseAssessmentModal, { type CourseAssessmentModalTab } from "../../components/CourseAssessmentModal";
 import "./TeacherCourseDetailPage.css";
 
 type CourseStatus = "draft" | "published" | "archived";
@@ -905,7 +905,7 @@ export default function TeacherCourseDetailPage() {
 
       <div className="wizard-card content-editor-card">
         <div className="content-editor-header" style={{ alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
-          <div style={{ flex: "1 1 280px" }}>
+          {/* <div style={{ flex: "1 1 280px" }}>
             <div className="content-editor-title">Quizz &amp; bài tập</div>
             <p className="course-stats" style={{ margin: "8px 0 0", maxWidth: 720, lineHeight: 1.5 }}>
               Mở khung soạn toàn màn hình để tập trung. Chọn bài trong form, hoặc từ cây nội dung: menu <strong>⋯</strong> → &quot;Soạn Quizz&quot; / &quot;Soạn bài tập&quot;; trên mỗi chương có nút{" "}
@@ -915,7 +915,7 @@ export default function TeacherCourseDetailPage() {
               </button>
               .
             </p>
-          </div>
+          </div> */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, flexShrink: 0 }}>
             <button type="button" className="primary-button" onClick={() => openAssessmentModal("quiz")}>
               Mở soạn Quizz

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import TeacherLessonRosterModal from "../components/TeacherLessonRosterModal";
-import { getAccessToken } from "../utils/authStorage";
+import TeacherLessonRosterModal from "../../components/TeacherLessonRosterModal";
+import { getAccessToken } from "../../utils/authStorage";
 import "./TeacherLessonRosterPage.css";
 
 export default function TeacherLessonRosterPage() {

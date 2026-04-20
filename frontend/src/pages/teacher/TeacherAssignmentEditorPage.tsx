@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import AvatarMenu from "../components/AvatarMenu";
-import AssignmentEditor from "../components/AssignmentEditor";
-import { getAccessToken } from "../utils/authStorage";
+import AvatarMenu from "../../components/AvatarMenu";
+import AssignmentEditor from "../../components/AssignmentEditor";
+import { getAccessToken } from "../../utils/authStorage";
 import "./TeacherDashboard.css";
 import "./TeacherCourseOverviewPage.css";
 

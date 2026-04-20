@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import AvatarMenu from '../components/AvatarMenu';
-import { COURSES_API } from '../api/courses';
-import { url } from '../baseUrl';
-import { getAccessToken } from '../utils/authStorage';
-import { useAuth } from '../contexts/Auth';
+import AvatarMenu from '../../components/AvatarMenu';
+import { COURSES_API } from '../../api/courses';
+import { url } from '../../baseUrl';
+import { getAccessToken } from '../../utils/authStorage';
+import { useAuth } from '../../contexts/Auth';
 import './StudentDashboard.css';
 import {
   Clock,

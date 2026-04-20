@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import AvatarMenu from "../components/AvatarMenu";
-import { useAuth } from "../contexts/Auth";
+import AvatarMenu from "../../components/AvatarMenu";
+import { useAuth } from "../../contexts/Auth";
 import {
   AdminUser,
   AdminUsersStatistics,
@@ -21,8 +21,8 @@ import {
   apiUpdateUserRole,
   apiUpdateUserStatus,
   AuditLogItem,
-} from "../services/adminUsersClient";
-import { toTitleCase } from "../utils/helper";
+} from "../../services/adminUsersClient";
+import { toTitleCase } from "../../utils/helper";
 
 type RoleFilter = "all" | "learner" | "course_manager" | "admin";
 type StatusFilter = "all" | "active" | "pending" | "banned" | "deleted";

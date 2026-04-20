@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import AvatarMenu from "../components/AvatarMenu";
-import { url } from "../baseUrl";
-import { COURSES_API } from "../api/courses";
-import { getAccessToken } from "../utils/authStorage";
-import PrerequisiteGraph, { type PrerequisiteGraphData } from "../components/PrerequisiteGraph";
+import AvatarMenu from "../../components/AvatarMenu";
+import { url } from "../../baseUrl";
+import { COURSES_API } from "../../api/courses";
+import { getAccessToken } from "../../utils/authStorage";
+import PrerequisiteGraph, { type PrerequisiteGraphData } from "../../components/PrerequisiteGraph";
 import "./LearnerCourseHubPage.css";
 
 type CourseDetail = {

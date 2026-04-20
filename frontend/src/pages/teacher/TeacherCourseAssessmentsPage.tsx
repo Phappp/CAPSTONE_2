@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import AvatarMenu from "../components/AvatarMenu";
-import { url } from "../baseUrl";
-import { COURSES_API } from "../api/courses";
-import { getAccessToken } from "../utils/authStorage";
+import AvatarMenu from "../../components/AvatarMenu";
+import { url } from "../../baseUrl";
+import { COURSES_API } from "../../api/courses";
+import { getAccessToken } from "../../utils/authStorage";
 import "./TeacherDashboard.css";
 import "./TeacherCourseOverviewPage.css";
 
@@ -113,8 +113,8 @@ export default function TeacherCourseAssessmentsPage() {
 
   return (
     <div className="dashboard-page teacher-course-overview">
-      <div className="dashboard-container">
-        <div className="dashboard-header teacher-course-overview__top">
+      {/* <div className="dashboard-container"> */}
+        {/* <div className="dashboard-header teacher-course-overview__top">
           <div className="teacher-course-overview__topLeft" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <button type="button" className="secondary-button back-button" onClick={() => navigate(`/teacher/courses/${courseId}`)}>
               ← Tổng quan khóa học
@@ -124,9 +124,9 @@ export default function TeacherCourseAssessmentsPage() {
             </button>
           </div>
           <AvatarMenu />
-        </div>
+        </div> */}
 
-        <div className="chart-card" style={{ marginBottom: 16 }}>
+        {/* <div className="chart-card" style={{ marginBottom: 16 }}>
           <h1 className="teacher-course-overview__title" style={{ margin: "0 0 8px" }}>
             Quản lý Quizz &amp; bài tập
           </h1>
@@ -142,7 +142,7 @@ export default function TeacherCourseAssessmentsPage() {
               Xây dựng nội dung
             </button>
           </div>
-        </div>
+        </div> */}
 
         {error ? <div className="error-box">{error}</div> : null}
         {loading && !rows.length ? <div className="chart-card teacher-course-overview__loading">Đang tải…</div> : null}
@@ -157,7 +157,7 @@ export default function TeacherCourseAssessmentsPage() {
                 <tr style={{ textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>
                   <th style={{ padding: "8px 10px" }}>Chương</th>
                   <th style={{ padding: "8px 10px" }}>Bài</th>
-                  <th style={{ padding: "8px 10px" }}>Loại</th>
+                  {/* <th style={{ padding: "8px 10px" }}>Loại</th> */}
                   <th style={{ padding: "8px 10px" }}>Quizz</th>
                   <th style={{ padding: "8px 10px" }}>Bài tập</th>
                   <th style={{ padding: "8px 10px", minWidth: 220 }}>Thao tác</th>
@@ -172,7 +172,7 @@ export default function TeacherCourseAssessmentsPage() {
                     <td style={{ padding: "10px" }}>
                       {r.lessonOrder}. {r.title}
                     </td>
-                    <td style={{ padding: "10px", color: "#64748b" }}>{r.lesson_type}</td>
+                    {/* <td style={{ padding: "10px", color: "#64748b" }}>{r.lesson_type}</td> */}
                     <td style={{ padding: "10px" }}>{r.has_quiz ? "Có" : "—"}</td>
                     <td style={{ padding: "10px" }}>{r.has_assignment ? "Có" : "—"}</td>
                     <td style={{ padding: "10px" }}>
@@ -204,6 +204,6 @@ export default function TeacherCourseAssessmentsPage() {
         ) : null}
       </div>
 
-    </div>
+    // </div>
   );
 }
