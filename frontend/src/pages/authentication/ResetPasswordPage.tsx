@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { apiResetPassword } from "../services/authClient";
+import { apiResetPassword } from "../../services/authClient";
 import "./LoginPage.css";
 
 export default function ResetPasswordPage() {

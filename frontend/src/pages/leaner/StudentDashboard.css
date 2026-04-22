@@ -52,8 +52,8 @@
 }
 
 .studentDash__title {
-  font-size: var(--text-page-title-size);
-  font-weight: var(--text-page-title-weight);
+  font-size: 1.25rem;
+  font-weight: 700;
   margin: 0;
   letter-spacing: -0.01em;
 }
@@ -67,18 +67,19 @@
 }
 
 .studentDash__heroTitle {
-  font-size: var(--text-hero-title-size);
-  font-weight: var(--text-hero-title-weight);
+  font-size: 1.875rem;
+  font-weight: 800;
   margin: 0 0 8px 0;
-  letter-spacing: var(--text-hero-title-tracking);
+  letter-spacing: -0.02em;
 }
 
 .studentDash__heroDesc {
   margin: 0;
-  color: var(--text-subtitle-color);
-  font-size: var(--text-subtitle-size);
+  color: #6b7280;
+  font-size: 0.95rem;
 }
 
+/* Stats Cards */
 .studentDash__stats {
   display: grid;
   grid-template-columns: 1fr;
@@ -108,8 +109,8 @@
 }
 
 .statCard__label {
-  font-size: var(--text-caption-size);
-  color: var(--text-subtitle-color);
+  font-size: 0.75rem;
+  color: #6b7280;
   margin: 0 0 6px 0;
 }
 
@@ -145,34 +146,89 @@
   color: #7c3aed;
 }
 
-.studentDash__filters {
+/* Expandable Filters */
+.expandable-filters {
   background: #fff;
   border: 1px solid #eef2f7;
   border-radius: 14px;
-  padding: 12px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
   margin-bottom: 24px;
+  overflow: hidden;
+  transition: all 0.2s ease;
 }
 
-.studentDash__filtersRow {
+.expandable-filters__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  cursor: pointer;
+  transition: background 0.2s;
+  width: 100%;
+  background: white;
+  border: none;
+  text-align: left;
+}
+
+.expandable-filters__header:hover {
+  background: #f9fafb;
+}
+
+.expandable-filters__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.expandable-filters__title .material-symbols-outlined {
+  font-size: 20px;
+  color: #2563eb;
+}
+
+.expand-icon {
+  color: #9ca3af;
+  transition: transform 0.2s;
+}
+
+.expandable-filters__content {
+  padding: 0 20px 20px 20px;
+  border-top: 1px solid #eef2f7;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.filters-row {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
 @media (min-width: 768px) {
-  .studentDash__filtersRow {
+  .filters-row {
     flex-direction: row;
     align-items: center;
   }
 }
 
-.searchField {
+.search-field {
   position: relative;
   flex: 1 1 auto;
 }
 
-.searchField__icon {
+.search-field__icon {
   position: absolute;
   left: 12px;
   top: 50%;
@@ -189,7 +245,7 @@
   border: 1px solid #d1d5db;
   border-radius: 12px;
   padding: 10px 12px;
-  font-size: var(--text-subtitle-size);
+  font-size: 0.9rem;
   outline: none;
   background: #fff;
 }
@@ -200,21 +256,64 @@
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
 }
 
-.searchField .input {
+.search-field .input {
   padding-left: 40px;
 }
 
-.studentDash__filtersActions {
+.filters-actions {
   display: flex;
   gap: 10px;
   align-items: center;
 }
 
+/* Main Tabs */
+.main-tabs {
+  display: flex;
+  gap: 4px;
+  background: #f3f4f6;
+  padding: 4px;
+  border-radius: 14px;
+  margin-bottom: 24px;
+}
+
+.tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.5);
+  color: #374151;
+}
+
+.tab-btn.active {
+  background: white;
+  color: #2563eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.tab-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* Button Styles */
 .btn {
   border: 1px solid transparent;
   border-radius: 12px;
   padding: 10px 14px;
-  font-size: var(--text-subtitle-size);
+  font-size: 0.85rem;
   font-weight: 700;
   cursor: pointer;
   display: inline-flex;
@@ -258,44 +357,15 @@
   text-decoration: underline;
 }
 
-.studentDash__center {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 0;
+.btn--full {
+  flex: 1 1 auto;
 }
 
-.studentDash__error {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 14px;
-  padding: 14px;
-  margin-bottom: 24px;
-  display: flex;
-  gap: 10px;
+.btn--compact {
+  padding: 10px 12px;
 }
 
-.studentDash__errorTitle {
-  margin: 0;
-  font-weight: 800;
-  color: #991b1b;
-}
-
-.studentDash__errorMsg {
-  margin: 6px 0 0 0;
-  color: #b91c1c;
-  font-size: var(--text-caption-size);
-}
-
-.studentDash__empty {
-  text-align: center;
-  background: #fff;
-  border: 1px solid #eef2f7;
-  border-radius: 14px;
-  padding: 48px 16px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-}
-
+/* Course Grid */
 .studentDash__grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -365,7 +435,7 @@
   justify-content: center;
   padding: 4px 10px;
   border-radius: 999px;
-  font-size: var(--text-small-size);
+  font-size: 0.7rem;
   font-weight: 700;
   border: 1px solid transparent;
   white-space: nowrap;
@@ -427,9 +497,9 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  font-size: var(--text-caption-size);
+  font-size: 0.7rem;
   margin-bottom: 6px;
-  color: var(--text-subtitle-color);
+  color: #6b7280;
 }
 
 .courseCard__progressPct {
@@ -452,22 +522,6 @@
   transition: width 0.25s ease;
 }
 
-.courseCard__meta {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  color: var(--text-subtitle-color);
-  font-size: var(--text-caption-size);
-  margin-bottom: 14px;
-}
-
-.metaItem {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
 .courseCard__quickStats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -485,21 +539,8 @@
   border-radius: 10px;
   background: #f9fafb;
   color: #374151;
-  font-size: var(--text-caption-size);
+  font-size: 0.7rem;
   font-weight: 600;
-}
-
-.courseCard__actions {
-  display: flex;
-  gap: 10px;
-}
-
-.btn--full {
-  flex: 1 1 auto;
-}
-
-.btn--compact {
-  padding: 10px 12px;
 }
 
 .courseCard__completed {
@@ -507,12 +548,52 @@
   margin-top: 12px;
   padding-top: 12px;
   color: #16a34a;
-  font-size: var(--text-caption-size);
+  font-size: 0.7rem;
   display: flex;
   gap: 8px;
   align-items: center;
 }
 
+/* Empty & Error States */
+.studentDash__center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 0;
+}
+
+.studentDash__error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 24px;
+  display: flex;
+  gap: 10px;
+}
+
+.studentDash__errorTitle {
+  margin: 0;
+  font-weight: 800;
+  color: #991b1b;
+}
+
+.studentDash__errorMsg {
+  margin: 6px 0 0 0;
+  color: #b91c1c;
+  font-size: 0.75rem;
+}
+
+.studentDash__empty {
+  text-align: center;
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-radius: 14px;
+  padding: 48px 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+/* Pagination */
 .studentDash__pagination {
   display: flex;
   justify-content: center;
@@ -526,7 +607,7 @@
   font-weight: 700;
 }
 
-/* Phần gợi ý khóa học riêng biệt */
+/* Suggested Section */
 .studentDash__suggested {
   margin-top: 48px;
   padding-top: 32px;
@@ -541,8 +622,8 @@
 }
 
 .studentDash__suggestedTitle {
-  font-size: var(--text-page-title-size);
-  font-weight: var(--text-page-title-weight);
+  font-size: 1.25rem;
+  font-weight: 700;
   margin: 0;
   color: #111827;
 }
@@ -550,7 +631,7 @@
 .studentDash__suggestedBadge {
   background: #f3f4f6;
   color: #4b5563;
-  font-size: var(--text-caption-size);
+  font-size: 0.7rem;
   font-weight: 600;
   padding: 4px 10px;
   border-radius: 20px;
@@ -563,5 +644,31 @@
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .tab-btn {
+    padding: 8px 12px;
+    font-size: 0.75rem;
+  }
+  
+  .tab-btn .material-symbols-outlined {
+    font-size: 16px;
+  }
+  
+  .filters-actions {
+    flex-direction: column;
+  }
+  
+  .filters-actions .btn {
+    width: 100%;
+  }
+  
+  .studentDash__suggestedHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
 }

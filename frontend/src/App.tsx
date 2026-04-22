@@ -1,9 +1,9 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import LoginPage from "./pages/LoginPage";
-import RegisterPage from "./pages/RegisterPage";
-import ForgotPasswordPage from "./pages/ForgotPasswordPage";
-import ResetPasswordPage from "./pages/ResetPasswordPage";
-import OAuthRedirectPage from "./pages/OAuthRedirectPage"; // Thêm import
+import LoginPage from "./pages/authentication/LoginPage";
+import RegisterPage from "./pages/authentication/RegisterPage";
+import ForgotPasswordPage from "./pages/authentication/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/authentication/ResetPasswordPage";
+import OAuthRedirectPage from "./pages/authentication/OAuthRedirectPage"; // Thêm import
 import StudentDashboard from "./pages/leaner/StudentDashboard";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -18,6 +18,7 @@ import TeacherAssignmentEditorPage from "./pages/teacher/TeacherAssignmentEditor
 import CoursesCatalogPage from "./pages/leaner/CoursesCatalogPage";
 import CoursePublicDetailPage from "./pages/leaner/CoursePublicDetailPage";
 import ProfilePage from "./pages/ProfilePage";
+import ProfileSecurityPage from "./pages/ProfileSecurityPage";
 import LearningPage from "./pages/leaner/LearningPage";
 import LearnerCourseHubPage from "./pages/leaner/LearnerCourseHubPage";
 import LearningModuleLessonsPage from "./pages/leaner/LearningModuleLessonsPage";
@@ -25,21 +26,24 @@ import TeacherLessonRosterPage from "./pages/teacher/TeacherLessonRosterPage";
 import LearnerQuizTakePage from "./pages/leaner/LearnerQuizTakePage";
 import LearnerAssignmentSubmitPage from "./pages/leaner/LearnerAssignmentSubmitPage";
 import Authentication from "./router/Authentication";
+import LandingPage from "./pages/LandingPage";
+import SystemStatusOrb from "./components/SystemStatusOrb";
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<LoginPage />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/oauth/redirect" element={<OAuthRedirectPage />} /> {/* Thêm route mới */}
+    <>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/oauth/redirect" element={<OAuthRedirectPage />} /> {/* Thêm route mới */}
 
       <Route
         path="/student/dashboard"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["learner", "student"]}>
             <StudentDashboard />
           </Authentication>
         }
@@ -47,7 +51,7 @@ export default function App() {
       <Route
         path="/teacher/dashboard"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherDashboard />
           </Authentication>
         }
@@ -57,6 +61,14 @@ export default function App() {
         element={
           <Authentication>
             <ProfilePage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/profile/security"
+        element={
+          <Authentication>
+            <ProfileSecurityPage />
           </Authentication>
         }
       />
@@ -80,7 +92,7 @@ export default function App() {
       <Route
         path="/learning/:id/:slug"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["learner", "student"]}>
             <LearningPage />
           </Authentication>
         }
@@ -88,7 +100,7 @@ export default function App() {
       <Route
         path="/learning/:id/:slug/modules/:moduleId"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["learner", "student"]}>
             <LearningModuleLessonsPage />
           </Authentication>
         }
@@ -96,7 +108,7 @@ export default function App() {
       <Route
         path="/my-courses/:id/:slug"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["learner", "student"]}>
             <LearnerCourseHubPage />
           </Authentication>
         }
@@ -104,7 +116,7 @@ export default function App() {
       <Route
         path="/teacher/courses/new"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <CreateCoursePage />
           </Authentication>
         }
@@ -112,7 +124,7 @@ export default function App() {
       <Route
         path="/teacher/courses/:id/edit"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherCourseDetailPage />
           </Authentication>
         }
@@ -120,7 +132,7 @@ export default function App() {
       <Route
         path="/teacher/courses/:id/content"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherCourseContentBuilderPage />
           </Authentication>
         }
@@ -128,7 +140,7 @@ export default function App() {
       <Route
         path="/teacher/courses/:id/question-banks"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherQuestionBankPage />
           </Authentication>
         }
@@ -136,7 +148,7 @@ export default function App() {
       <Route
         path="/teacher/courses/:id/quiz-editor"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherQuizEditorPage />
           </Authentication>
         }
@@ -144,7 +156,7 @@ export default function App() {
       <Route
         path="/teacher/courses/:id/assignment-editor"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherAssignmentEditorPage />
           </Authentication>
         }
@@ -152,7 +164,7 @@ export default function App() {
       <Route
         path="/teacher/courses/:id/assessments"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherCourseAssessmentsPage />
           </Authentication>
         }
@@ -160,7 +172,7 @@ export default function App() {
       <Route
         path="/teacher/courses/:id/lessons/:lessonId/roster"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherLessonRosterPage />
           </Authentication>
         }
@@ -168,7 +180,7 @@ export default function App() {
       <Route
         path="/learner/quiz/:courseId/:lessonId"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["learner", "student"]}>
             <LearnerQuizTakePage />
           </Authentication>
         }
@@ -176,7 +188,7 @@ export default function App() {
       <Route
         path="/learner/assignment/:lessonId"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["learner", "student"]}>
             <LearnerAssignmentSubmitPage />
           </Authentication>
         }
@@ -184,7 +196,7 @@ export default function App() {
       <Route
         path="/teacher/courses/:id"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherCourseOverviewPage />
           </Authentication>
         }
@@ -192,13 +204,15 @@ export default function App() {
       <Route
         path="/admin"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["admin"]}>
             <AdminDashboard />
           </Authentication>
         }
       />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      <SystemStatusOrb />
+    </>
   );
 }

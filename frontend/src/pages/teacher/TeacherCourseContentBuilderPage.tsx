@@ -698,9 +698,9 @@ export default function TeacherCourseDetailPage() {
                         onChange={(e) => setForm((p) => ({ ...p, level: e.target.value }))}
                         disabled={loading}
                       >
-                        <option value="beginner">Beginner</option>
-                        <option value="intermediate">Intermediate</option>
-                        <option value="advanced">Advanced</option>
+                        <option value="beginner">Cơ bản</option>
+                        <option value="intermediate">Trung cấp</option>
+                        <option value="advanced">Nâng cao</option>
                       </select>
                     </div>
 

@@ -120,6 +120,7 @@ export default function TeacherQuestionBankPage() {
   const [aiQuestionType, setAiQuestionType] = useState<"multiple_choice" | "true_false" | "mixed">("mixed");
   const [aiExtraInstructions, setAiExtraInstructions] = useState("");
   const [aiAttachments, setAiAttachments] = useState<Array<{ name: string; text: string }>>([]);
+  const [aiPendingQuestions, setAiPendingQuestions] = useState<BankQuestion[]>([]);
 
   const selectedBank = useMemo(
     () => banks.find((bank) => bank.id === selectedBankId) ?? null,
@@ -180,6 +181,10 @@ export default function TeacherQuestionBankPage() {
     setError(null);
     void loadQuestions().catch((err: any) => setError(err?.message || "Không tải được câu hỏi."));
   }, [loadQuestions]);
+
+  useEffect(() => {
+    setAiPendingQuestions([]);
+  }, [selectedBankId]);
 
   const resetBankForm = () => {
     setBankName("");
@@ -620,12 +625,30 @@ export default function TeacherQuestionBankPage() {
       }
       const generated = Array.isArray(data?.data) ? data.data : [];
       if (!generated.length) throw new Error("AI không tạo được câu hỏi hợp lệ.");
-      await bulkCreateQuestions(generated);
+      setAiPendingQuestions(generated);
+      setError(null);
+    } catch (err: any) {
+      setError(err?.message || "Lỗi tạo câu hỏi bằng AI.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const confirmAiPendingQuestions = async () => {
+    if (!aiPendingQuestions.length) {
+      setError("Danh sách tạm đang trống.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await bulkCreateQuestions(aiPendingQuestions);
       await loadQuestions();
+      setAiPendingQuestions([]);
       setActiveMainTab("manual");
       resetBulkForms();
     } catch (err: any) {
-      setError(err?.message || "Lỗi tạo câu hỏi bằng AI.");
+      setError(err?.message || "Không thể đưa câu hỏi AI vào danh sách chính.");
     } finally {
       setLoading(false);
     }
@@ -1141,6 +1164,58 @@ export default function TeacherQuestionBankPage() {
                             <span className="material-symbols-outlined">auto_awesome</span>
                             {loading ? "Đang tạo..." : "Tạo câu hỏi bằng AI"}
                           </button>
+
+                          {aiPendingQuestions.length > 0 && (
+                            <div className="ai-pending-section">
+                              <div className="ai-pending-header">
+                                <span className="material-symbols-outlined">pending_actions</span>
+                                <strong>Danh sách tạm từ AI ({aiPendingQuestions.length} câu)</strong>
+                              </div>
+                              <p className="import-hint">
+                                Câu hỏi AI sẽ chỉ được thêm vào ngân hàng khi bạn bấm <strong>OK</strong>.
+                              </p>
+                              <div className="ai-pending-list">
+                                {aiPendingQuestions.map((question, index) => (
+                                  <div key={`${question.question_text}-${index}`} className="ai-pending-item">
+                                    <span className="ai-pending-index">#{index + 1}</span>
+                                    <div className="ai-pending-content">
+                                      <div className="ai-pending-text">{question.question_text}</div>
+                                      <div className="ai-pending-meta">
+                                        <span>{TYPE_LABELS[question.question_type]}</span>
+                                        <span>{DIFFICULTY_LABELS[question.difficulty].label}</span>
+                                        <span>{question.points ?? 1} điểm</span>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="icon-btn danger"
+                                      title="Loại khỏi danh sách tạm"
+                                      onClick={() =>
+                                        setAiPendingQuestions((prev) => prev.filter((_, itemIdx) => itemIdx !== index))
+                                      }
+                                    >
+                                      <span className="material-symbols-outlined">delete</span>
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="form-actions">
+                                <button className="btn-primary" type="button" onClick={() => void confirmAiPendingQuestions()} disabled={loading}>
+                                  <span className="material-symbols-outlined">check_circle</span>
+                                  {loading ? "Đang nhập..." : "OK - Đưa vào danh sách chính"}
+                                </button>
+                                <button
+                                  className="btn-secondary"
+                                  type="button"
+                                  onClick={() => setAiPendingQuestions([])}
+                                  disabled={loading}
+                                >
+                                  <span className="material-symbols-outlined">close</span>
+                                  Xóa danh sách tạm
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

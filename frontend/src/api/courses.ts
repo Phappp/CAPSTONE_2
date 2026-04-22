@@ -6,6 +6,10 @@ export const COURSES_API = {
   createCourse: `${COURSES_API_BASE}`,
   myStats: `${COURSES_API_BASE}/my/stats`,
   myList: `${COURSES_API_BASE}/my`,
+  adminPendingReview: `${COURSES_API_BASE}/admin/pending-review`,
+  adminReview: (id: number | string) => `${COURSES_API_BASE}/${id}/admin-review`,
+  adminReviewTimeline: (id: number | string) => `${COURSES_API_BASE}/${id}/admin-review/timeline`,
+  myReviewTimeline: (id: number | string) => `${COURSES_API_BASE}/${id}/review-timeline`,
   detail: (id: number | string) => `${COURSES_API_BASE}/${id}`,
   /** GV: thống kê tổng quan một khóa học (biểu đồ, enrollment, …). */
   managerOverview: (id: number | string) => `${COURSES_API_BASE}/${id}/manager-overview`,

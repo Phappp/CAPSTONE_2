@@ -42,14 +42,24 @@ type ResetPasswordRequest = {
 };
 
 type ExchangeTokenResult = {
-  sub: string;
-  refreshToken: string;
-  accessToken: string;
+  sub?: string;
+  refreshToken?: string;
+  accessToken?: string;
+  requiresRoleSelection?: boolean;
+  pendingToken?: string;
+  email?: string;
+  fullName?: string;
+  avatarUrl?: string | null;
 };
 
 type ExchangeTokenRequest = {
   code: string;
   idp: string;
+};
+
+type CompleteGoogleOAuthRequest = {
+  pendingToken: string;
+  role: 'learner' | 'course_manager';
 };
 
 interface AuthService {
@@ -60,6 +70,7 @@ interface AuthService {
 
   // Google OAuth (giữ lại để tương thích nếu cần)
   exchangeWithGoogleIDP(request: ExchangeTokenRequest): Promise<ExchangeTokenResult>;
+  completeGoogleOAuth(request: CompleteGoogleOAuthRequest): Promise<LoginResult>;
 
   logout(token: string): Promise<void>;
   refreshToken(token: string): Promise<ExchangeTokenResult>;
@@ -72,6 +83,7 @@ export {
   AuthService,
   ExchangeTokenRequest,
   ExchangeTokenResult,
+  CompleteGoogleOAuthRequest,
   RegisterRequest,
   LoginRequest,
   RequestPasswordResetRequest,

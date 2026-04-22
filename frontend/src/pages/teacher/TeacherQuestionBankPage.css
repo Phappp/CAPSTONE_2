@@ -473,6 +473,75 @@ textarea.form-input {
     background: linear-gradient(135deg, white, rgba(59, 130, 246, 0.02));
 }
 
+.ai-pending-section {
+    margin-top: 8px;
+    padding: 14px;
+    border: 1px dashed var(--primary);
+    border-radius: var(--radius-md);
+    background: rgba(59, 130, 246, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.ai-pending-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--primary-dark);
+}
+
+.ai-pending-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.ai-pending-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: flex-start;
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    padding: 10px;
+}
+
+.ai-pending-index {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--gray-500);
+    min-width: 24px;
+}
+
+.ai-pending-content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ai-pending-text {
+    font-size: 0.85rem;
+    color: var(--gray-800);
+}
+
+.ai-pending-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.ai-pending-meta span {
+    font-size: 0.7rem;
+    color: var(--gray-600);
+    background: var(--gray-100);
+    border-radius: 999px;
+    padding: 2px 8px;
+}
+
 .import-hint {
     font-size: 0.75rem;
     color: var(--gray-500);
@@ -937,6 +1006,10 @@ textarea.form-input {
     
     .bulk-sub-tabs {
         gap: 4px;
+    }
+
+    .ai-pending-item {
+        grid-template-columns: 1fr;
     }
 }
 

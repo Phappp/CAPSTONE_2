@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiForgotPassword } from "../services/authClient";
+import { apiForgotPassword } from "../../services/authClient";
 import "./LoginPage.css";
 
 export default function ForgotPasswordPage() {

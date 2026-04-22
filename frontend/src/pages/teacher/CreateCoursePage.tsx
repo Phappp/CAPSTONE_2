@@ -4,6 +4,8 @@ import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { getAccessToken } from "../../utils/authStorage";
+import { useAuth } from "../../contexts/Auth";
+import CommonModal from "../../components/CommonModal";
 import "./CreateCoursePage.css";
 
 type Level = "beginner" | "intermediate" | "advanced";
@@ -32,6 +34,23 @@ type CourseOption = {
   slug: string;
 };
 
+const CATEGORY_TAXONOMY: Array<{ group: string; majors: string[] }> = [
+  { group: "Công nghệ thông tin (IT)", majors: ["Lập trình viên (Web, Mobile, Game)", "Kỹ sư phần mềm", "An ninh mạng", "Trí tuệ nhân tạo (AI)", "Khoa học dữ liệu (Data Analyst, Data Scientist)", "Quản trị hệ thống, Cloud"] },
+  { group: "Kinh doanh - Quản trị", majors: ["Quản trị doanh nghiệp", "Quản lý dự án", "Khởi nghiệp", "Điều hành doanh nghiệp", "Phát triển kinh doanh (Business Development)"] },
+  { group: "Tài chính - Kế toán - Ngân hàng", majors: ["Kế toán doanh nghiệp", "Kiểm toán", "Tài chính đầu tư", "Ngân hàng", "Chứng khoán", "Thuế"] },
+  { group: "Marketing - Truyền thông", majors: ["Digital Marketing", "Content Marketing", "SEO", "Quảng cáo", "Quan hệ công chúng (PR)", "Thiết kế thương hiệu"] },
+  { group: "Y tế - Sức khỏe", majors: ["Bác sĩ", "Điều dưỡng", "Dược sĩ", "Kỹ thuật xét nghiệm", "Vật lý trị liệu", "Tâm lý học"] },
+  { group: "Giáo dục - Đào tạo", majors: ["Giáo viên", "Giảng viên", "Trainer doanh nghiệp", "Giáo dục mầm non", "Ngoại ngữ"] },
+  { group: "Kỹ thuật - Xây dựng", majors: ["Cơ khí", "Điện - điện tử", "Tự động hóa", "Xây dựng dân dụng", "Kiến trúc", "Kỹ sư công trình"] },
+  { group: "Luật - Hành chính", majors: ["Luật sư", "Công chứng", "Nhân sự hành chính", "Quản lý nhà nước"] },
+  { group: "Logistics - Xuất nhập khẩu", majors: ["Chuỗi cung ứng", "Kho vận", "Hải quan", "Vận tải quốc tế", "Mua hàng"] },
+  { group: "Du lịch - Nhà hàng - Khách sạn", majors: ["Quản trị khách sạn", "Hướng dẫn viên", "Nhà hàng", "Sự kiện", "Chăm sóc khách hàng"] },
+  { group: "Nghệ thuật - Thiết kế", majors: ["Thiết kế đồ họa", "UI/UX Design", "Nhiếp ảnh", "Làm phim", "Âm nhạc", "Thời trang"] },
+  { group: "Nông nghiệp - Môi trường", majors: ["Công nghệ thực phẩm", "Nông nghiệp công nghệ cao", "Thú y", "Bảo vệ môi trường"] },
+  { group: "Lao động tay nghề - Dịch vụ", majors: ["Điện lạnh", "Sửa chữa ô tô, xe máy", "Làm tóc", "Spa", "Đầu bếp", "Thợ kỹ thuật"] },
+  { group: "Khác", majors: [] },
+];
+
 const DEFAULT_PAYLOAD: CreateCoursePayload = {
   title: "",
   short_description: "",
@@ -49,17 +68,78 @@ const DEFAULT_PAYLOAD: CreateCoursePayload = {
   publish_scheduled_at: null,
 };
 
+const mapValidationMessage = (message: string): string => {
+  const lower = message.toLowerCase();
+  if (lower.includes("title must be longer than or equal to 1")) return "Vui lòng nhập tên khóa học.";
+  if (lower.includes("short_description")) return "Vui lòng nhập mô tả ngắn hợp lệ (tối đa 200 ký tự).";
+  if (lower.includes("full_description")) return "Mô tả chi tiết chưa hợp lệ.";
+  if (lower.includes("level")) return "Cấp độ khóa học không hợp lệ.";
+  if (lower.includes("language")) return "Ngôn ngữ khóa học không hợp lệ.";
+  if (lower.includes("category")) return "Danh mục khóa học không hợp lệ.";
+  return message;
+};
+
+const parseFriendlyApiError = async (res: Response, fallback: string): Promise<string> => {
+  const text = await res.text().catch(() => "");
+  if (!text) return fallback;
+  try {
+    const data = JSON.parse(text) as { message?: string | string[]; error?: string };
+    const rawMessage = data?.message;
+    if (Array.isArray(rawMessage) && rawMessage.length) {
+      return rawMessage.map((item) => mapValidationMessage(String(item))).join("\n");
+    }
+    if (typeof rawMessage === "string" && rawMessage.trim()) {
+      return mapValidationMessage(rawMessage);
+    }
+    return fallback;
+  } catch {
+    return text.includes("{") ? fallback : text;
+  }
+};
+
 export default function CreateCoursePage() {
+  const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [payload, setPayload] = useState<CreateCoursePayload>(DEFAULT_PAYLOAD);
+  const [selectedCategoryGroup, setSelectedCategoryGroup] = useState(CATEGORY_TAXONOMY[0].group);
+  const [selectedCategoryMajor, setSelectedCategoryMajor] = useState(CATEGORY_TAXONOMY[0].majors[0] || "");
+  const [customCategoryMajor, setCustomCategoryMajor] = useState("");
   const [prerequisiteOptions, setPrerequisiteOptions] = useState<CourseOption[]>([]);
+  const [modalState, setModalState] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm?: () => void;
+  }>({ open: false, title: "", message: "" });
 
   const navigate = useNavigate();
 
   const maxStep = 4;
+  const managerBlocked = Boolean(
+    user?.primary_role === "course_manager" &&
+      user?.manager_verification &&
+      user.manager_verification.status !== "verified"
+  );
+
+  const ensureVerifiedForCourseActions = (): boolean => {
+    if (!managerBlocked) return true;
+    const note = user?.manager_verification?.review_note
+      ? `\n\nGhi chú từ quản trị viên: ${user.manager_verification.review_note}`
+      : "";
+    setModalState({
+      open: true,
+      title: "Cần cấp phép giảng viên",
+      message: `Tính năng này yêu cầu tài khoản giảng viên đã được xác minh.${note}\n\nBạn sẽ được chuyển đến trang hồ sơ để xem trạng thái xác minh.`,
+      onConfirm: () => {
+        setModalState({ open: false, title: "", message: "" });
+        navigate("/profile");
+      },
+    });
+    return false;
+  };
 
   const selectedPrerequisiteIds = useMemo(() => {
     return new Set(
@@ -68,6 +148,19 @@ export default function CreateCoursePage() {
         .filter((n) => Number.isInteger(n) && n > 0)
     );
   }, [payload.prerequisites]);
+
+  const categoryMajors = useMemo(
+    () => CATEGORY_TAXONOMY.find((item) => item.group === selectedCategoryGroup)?.majors || [],
+    [selectedCategoryGroup]
+  );
+
+  useEffect(() => {
+    if (selectedCategoryGroup === "Khác") {
+      setSelectedCategoryMajor("");
+      return;
+    }
+    setSelectedCategoryMajor((prev) => (categoryMajors.includes(prev) ? prev : categoryMajors[0] || ""));
+  }, [selectedCategoryGroup, categoryMajors]);
 
   const handleBasicChange = (field: keyof CreateCoursePayload, value: any) => {
     setPayload((prev) => ({ ...prev, [field]: value }));
@@ -98,6 +191,16 @@ export default function CreateCoursePage() {
       copy.splice(index, 1);
       return { ...prev, [field]: copy.length ? copy : [""] };
     });
+  };
+
+  const applyCategorySelection = () => {
+    const major = selectedCategoryGroup === "Khác" ? customCategoryMajor.trim() : selectedCategoryMajor.trim();
+    if (!major) {
+      setError("Vui lòng chọn hoặc nhập chuyên ngành cho danh mục.");
+      return;
+    }
+    handleBasicChange("category", `${selectedCategoryGroup}: ${major}`);
+    setError(null);
   };
 
   const canGoNextFromStep1 =
@@ -172,6 +275,7 @@ export default function CreateCoursePage() {
   };
 
   const handleSave = async (publish: boolean) => {
+    if (!ensureVerifiedForCourseActions()) return;
     setIsSubmitting(true);
     setError(null);
     try {
@@ -210,8 +314,8 @@ export default function CreateCoursePage() {
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Không thể lưu khóa học.");
+        const friendlyMessage = await parseFriendlyApiError(res, "Không thể lưu khóa học. Vui lòng kiểm tra lại thông tin.");
+        throw new Error(friendlyMessage);
       }
 
       const data = await res.json().catch(() => ({}));
@@ -300,17 +404,37 @@ export default function CreateCoursePage() {
 
       <div className="form-group">
         <label className="form-label">Danh mục</label>
-        <select
-          className="form-input"
-          value={payload.category}
-          onChange={(e) => handleBasicChange("category", e.target.value)}
-        >
-          <option value="">Chọn danh mục</option>
-          <option value="programming">Lập trình</option>
-          <option value="data-science">Khoa học dữ liệu</option>
-          <option value="design">Thiết kế</option>
-          <option value="business">Kinh doanh</option>
-        </select>
+        <div className="category-picker">
+          <select className="form-input" value={selectedCategoryGroup} onChange={(e) => setSelectedCategoryGroup(e.target.value)}>
+            {CATEGORY_TAXONOMY.map((item) => (
+              <option key={item.group} value={item.group}>
+                {item.group}
+              </option>
+            ))}
+          </select>
+          {selectedCategoryGroup === "Khác" ? (
+            <input
+              className="form-input"
+              placeholder="Nhập chuyên ngành..."
+              value={customCategoryMajor}
+              onChange={(e) => setCustomCategoryMajor(e.target.value)}
+            />
+          ) : (
+            <select className="form-input" value={selectedCategoryMajor} onChange={(e) => setSelectedCategoryMajor(e.target.value)}>
+              {categoryMajors.map((major) => (
+                <option key={major} value={major}>
+                  {major}
+                </option>
+              ))}
+            </select>
+          )}
+          <button type="button" className="secondary-button" onClick={applyCategorySelection}>
+            Chọn danh mục
+          </button>
+        </div>
+        <div className="category-selected-preview">
+          Danh mục đã chọn: <strong>{payload.category || "Chưa chọn"}</strong>
+        </div>
       </div>
 
       <div className="two-column-grid">
@@ -321,9 +445,9 @@ export default function CreateCoursePage() {
             value={payload.level}
             onChange={(e) => handleBasicChange("level", e.target.value as Level)}
           >
-            <option value="beginner">Beginner</option>
-            <option value="intermediate">Intermediate</option>
-            <option value="advanced">Advanced</option>
+            <option value="beginner">Cơ bản</option>
+            <option value="intermediate">Trung cấp</option>
+            <option value="advanced">Nâng cao</option>
           </select>
         </div>
 
@@ -625,6 +749,19 @@ export default function CreateCoursePage() {
           </div>
         </div>
       </div>
+      <CommonModal
+        open={modalState.open}
+        title={modalState.title}
+        message={modalState.message}
+        onClose={() => setModalState({ open: false, title: "", message: "" })}
+        onConfirm={() => {
+          if (modalState.onConfirm) {
+            modalState.onConfirm();
+            return;
+          }
+          setModalState({ open: false, title: "", message: "" });
+        }}
+      />
     </div>
   );
 }

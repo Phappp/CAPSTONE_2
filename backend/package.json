@@ -13,7 +13,9 @@
     "cdc-test": "nodemon executable/cdc-test/main.ts",
     "db:sync": "npx ts-node lib/sync-db.ts sync",
     "db:drop": "npx ts-node lib/sync-db.ts drop",
-    "db:help": "npx ts-node lib/sync-db.ts"
+    "db:help": "npx ts-node lib/sync-db.ts",
+    "admin": "npx ts-node lib/create-admin.ts",
+    "admin:create": "npx ts-node lib/create-admin.ts"
   },
   "keywords": [],
   "author": "",

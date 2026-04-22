@@ -5,11 +5,14 @@ import { useEffect, useMemo, useState } from "react";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { getAccessToken } from "../../utils/authStorage";
+import { useAuth } from "../../contexts/Auth";
+import CommonModal from "../../components/CommonModal";
 import "./TeacherDashboard.css";
 
 type CourseViewMode = "list" | "grid" | "compact";
 
 export default function TeacherDashboard() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const TAB_STORAGE_KEY = "teacher_courses_tab";
@@ -21,15 +24,17 @@ export default function TeacherDashboard() {
     total: number;
     published: number;
     draft: number;
+    pending_review?: number;
     archived: number;
   } | null>(null);
-  const [tab, setTab] = useState<"all" | "published" | "draft" | "archived">(() => {
+  const [tab, setTab] = useState<"all" | "published" | "draft" | "pending_review" | "archived">(() => {
     try {
       const saved = window.localStorage.getItem(TAB_STORAGE_KEY);
       if (
         saved === "all" ||
         saved === "published" ||
         saved === "draft" ||
+        saved === "pending_review" ||
         saved === "archived"
       ) {
         return saved;
@@ -83,6 +88,34 @@ export default function TeacherDashboard() {
     page_size: number;
     total: number;
   } | null>(null);
+  const [modalState, setModalState] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm?: () => void;
+  }>({ open: false, title: "", message: "" });
+  const managerBlocked = Boolean(
+    user?.primary_role === "course_manager" &&
+      user?.manager_verification &&
+      user.manager_verification.status !== "verified"
+  );
+
+  const ensureVerifiedForCourseActions = (): boolean => {
+    if (!managerBlocked) return true;
+    const note = user?.manager_verification?.review_note
+      ? `\n\nGhi chú từ quản trị viên: ${user.manager_verification.review_note}`
+      : "";
+    setModalState({
+      open: true,
+      title: "Cần cấp phép giảng viên",
+      message: `Tính năng này yêu cầu tài khoản giảng viên đã được xác minh.${note}\n\nBạn sẽ được chuyển đến trang hồ sơ để xem trạng thái xác minh.`,
+      onConfirm: () => {
+        setModalState({ open: false, title: "", message: "" });
+        navigate("/profile");
+      },
+    });
+    return false;
+  };
 
   type TeacherSection = "dashboard" | "course";
 
@@ -245,7 +278,7 @@ export default function TeacherDashboard() {
 
   const handleSetStatus = async (
     courseId: number,
-    status: "draft" | "published" | "archived"
+    status: "draft" | "pending_review" | "published" | "archived"
   ) => {
     setLoading(true);
     setError(null);
@@ -312,8 +345,9 @@ export default function TeacherDashboard() {
     const items = filteredCourses ?? [];
     const published = items.filter((c: any) => c?.status === "published").length;
     const draft = items.filter((c: any) => c?.status === "draft").length;
+    const pending_review = items.filter((c: any) => c?.status === "pending_review").length;
     const archived = items.filter((c: any) => c?.status === "archived").length;
-    return { total: items.length, published, draft, archived };
+    return { total: items.length, published, draft, pending_review, archived };
   }, [filteredCourses]);
 
   const levelPieData = useMemo(() => {
@@ -678,6 +712,7 @@ export default function TeacherDashboard() {
                 { label: "Tổng số", value: filteredStatus.total, key: "total", icon: "dashboard", color: "#3b82f6" },
                 { label: "Đã xuất bản", value: filteredStatus.published, key: "published", icon: "check_circle", color: "#10b981" },
                 { label: "Bản nháp", value: filteredStatus.draft, key: "draft", icon: "edit_note", color: "#f59e0b" },
+                { label: "Chờ duyệt", value: filteredStatus.pending_review, key: "pending_review", icon: "hourglass_top", color: "#06b6d4" },
                 { label: "Đã lưu trữ", value: filteredStatus.archived, key: "archived", icon: "archive", color: "#8b5cf6" },
               ].map((c) => (
                 <div key={c.key} className="stat-card">
@@ -703,6 +738,7 @@ export default function TeacherDashboard() {
                   data={[
                     { label: "Đã xuất bản", value: filteredStatus.published ?? 0, color: "#10b981" },
                     { label: "Bản nháp", value: filteredStatus.draft ?? 0, color: "#f59e0b" },
+                    { label: "Chờ duyệt", value: filteredStatus.pending_review ?? 0, color: "#06b6d4" },
                     { label: "Đã lưu trữ", value: filteredStatus.archived ?? 0, color: "#8b5cf6" },
                   ]}
                 />
@@ -792,7 +828,10 @@ export default function TeacherDashboard() {
               </div>
               <button
                 className="btn-primary"
-                onClick={() => navigate("/teacher/courses/new")}
+                onClick={() => {
+                  if (!ensureVerifiedForCourseActions()) return;
+                  navigate("/teacher/courses/new");
+                }}
               >
                 <span className="material-symbols-outlined">add</span>
                 Tạo khóa học mới
@@ -805,6 +844,7 @@ export default function TeacherDashboard() {
                 { key: "all", label: "Tất cả", count: stats?.total, icon: "apps" },
                 { key: "published", label: "Đã xuất bản", count: stats?.published, icon: "check_circle" },
                 { key: "draft", label: "Bản nháp", count: stats?.draft, icon: "edit" },
+                { key: "pending_review", label: "Chờ duyệt", count: stats?.pending_review ?? 0, icon: "hourglass_top" },
                 { key: "archived", label: "Đã lưu trữ", count: stats?.archived, icon: "inventory" },
               ].map((t) => (
                 <button
@@ -908,7 +948,13 @@ export default function TeacherDashboard() {
                       <div className="course-title-row">
                         <h6 className="course-title">{c.title}</h6>
                         <span className={`status-badge status-badge--${c.status}`}>
-                          {c.status === "published" ? "Đã xuất bản" : c.status === "draft" ? "Bản nháp" : "Đã lưu trữ"}
+                          {c.status === "published"
+                            ? "Đã xuất bản"
+                            : c.status === "draft"
+                              ? "Bản nháp"
+                              : c.status === "pending_review"
+                                ? "Chờ quản trị viên duyệt"
+                                : "Đã lưu trữ"}
                         </span>
                       </div>
                       <p className="course-description">
@@ -927,6 +973,18 @@ export default function TeacherDashboard() {
                           <span className="material-symbols-outlined meta-icon">menu_book</span>
                           {c.lessons_count ?? 0} bài học
                         </span>
+                      </div>
+                      <div style={{ marginTop: 6 }}>
+                        {c.quality_gate?.ready ? (
+                          <span style={{ color: "#15803d", fontSize: 12, fontWeight: 700 }}>Quality gate: Ready</span>
+                        ) : (
+                          <span
+                            style={{ color: "#b45309", fontSize: 12, fontWeight: 700 }}
+                            title={(c.quality_gate?.issues || []).join("\n")}
+                          >
+                            Quality gate: Chưa đạt
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -950,6 +1008,7 @@ export default function TeacherDashboard() {
                               <button onClick={async (e) => {
                                 e.stopPropagation();
                                 setOpenMenuCourseId(null);
+                                if (!ensureVerifiedForCourseActions()) return;
                                 await handleSetStatus(c.id, "published");
                               }} disabled={loading}>
                                 <span className="material-symbols-outlined">publish</span>
@@ -959,6 +1018,7 @@ export default function TeacherDashboard() {
                               <button className="danger" onClick={async (e) => {
                                 e.stopPropagation();
                                 setOpenMenuCourseId(null);
+                                if (!ensureVerifiedForCourseActions()) return;
                                 await handleUnpublish(c.id);
                               }} disabled={loading}>
                                 <span className="material-symbols-outlined">unpublish</span>
@@ -971,6 +1031,7 @@ export default function TeacherDashboard() {
                             <button onClick={async (e) => {
                               e.stopPropagation();
                               setOpenMenuCourseId(null);
+                              if (!ensureVerifiedForCourseActions()) return;
                               await handleSetStatus(c.id, "archived");
                             }} disabled={loading}>
                               <span className="material-symbols-outlined">archive</span>
@@ -980,6 +1041,7 @@ export default function TeacherDashboard() {
                             <button onClick={async (e) => {
                               e.stopPropagation();
                               setOpenMenuCourseId(null);
+                              if (!ensureVerifiedForCourseActions()) return;
                               await handleSetStatus(c.id, "draft");
                             }} disabled={loading}>
                               <span className="material-symbols-outlined">unarchive</span>
@@ -992,6 +1054,7 @@ export default function TeacherDashboard() {
                           <button className="danger" onClick={async (e) => {
                             e.stopPropagation();
                             setOpenMenuCourseId(null);
+                            if (!ensureVerifiedForCourseActions()) return;
                             await handleDelete(c.id);
                           }} disabled={loading}>
                             <span className="material-symbols-outlined">delete</span>
@@ -1011,10 +1074,10 @@ export default function TeacherDashboard() {
                   <span className="material-symbols-outlined">inbox</span>
                 </div>
                 <p className="empty-state-text">Chưa có khóa học nào</p>
-                <button className="btn-primary btn-sm" onClick={() => navigate("/teacher/courses/new")}>
+                {/* <button className="btn-primary btn-sm" onClick={() => navigate("/teacher/courses/new")}>
                   <span className="material-symbols-outlined">add</span>
                   Tạo khóa học đầu tiên
-                </button>
+                </button> */}
               </div>
             )}
 
@@ -1061,6 +1124,19 @@ export default function TeacherDashboard() {
           </div>
         )}
       </div>
+      <CommonModal
+        open={modalState.open}
+        title={modalState.title}
+        message={modalState.message}
+        onClose={() => setModalState({ open: false, title: "", message: "" })}
+        onConfirm={() => {
+          if (modalState.onConfirm) {
+            modalState.onConfirm();
+            return;
+          }
+          setModalState({ open: false, title: "", message: "" });
+        }}
+      />
     </div>
   );
 }

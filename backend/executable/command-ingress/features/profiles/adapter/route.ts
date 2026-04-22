@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { ProfileController } from "./controller";
-import { uploadAvatarMiddleware } from "./middleware";
+import { uploadAvatarMiddleware, uploadVerificationDocumentMiddleware } from "./middleware";
 import requireAuthorizedUser from "../../../middlewares/auth";
 
 export const createProfileRoutes = (controller: ProfileController) => {
@@ -16,7 +16,14 @@ export const createProfileRoutes = (controller: ProfileController) => {
     controller.uploadAvatar
   );
   router.delete("/profile/avatar", controller.deleteAvatar);
+  router.post(
+    "/profile/course-manager-documents",
+    uploadVerificationDocumentMiddleware.single("file"),
+    controller.uploadCourseManagerDocument
+  );
   router.put("/profile/change-password", controller.changePassword);
   router.patch("/profile/security", controller.updateSecuritySettings);
+  router.get("/profile/course-manager-readiness", controller.getCourseManagerReadiness);
+  router.put("/profile/course-manager-application", controller.submitCourseManagerApplication);
   return router;
 };

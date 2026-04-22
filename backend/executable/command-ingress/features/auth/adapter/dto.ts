@@ -14,6 +14,22 @@ export class ExchangeGoogleTokenBody extends RequestDto {
   }
 }
 
+export class CompleteGoogleOAuthBody extends RequestDto {
+  @Length(1)
+  pendingToken: string;
+
+  @IsIn(['learner', 'course_manager'])
+  role: 'learner' | 'course_manager';
+
+  constructor(body: any) {
+    super();
+    if (body) {
+      this.pendingToken = String(body.pending_token || body.pendingToken || '');
+      this.role = body.role === 'course_manager' ? 'course_manager' : 'learner';
+    }
+  }
+}
+
 export class RegisterRequestBody extends RequestDto {
   @IsEmail()
   email: string;

@@ -1,15 +1,20 @@
-export type CourseStatus = 'draft' | 'published' | 'archived';
+export type CourseStatus = 'draft' | 'pending_review' | 'published' | 'archived';
 
 export type CreateCourseRequest = {
   title: string;
   short_description?: string | null;
   full_description?: string | null;
+  category?: string | null;
   level?: string | null;
   language?: string | null;
   thumbnail_url?: string | null;
   publish_scheduled_at?: string | null;
   learning_objectives?: string[] | null;
   prerequisites?: string[] | null;
+  price?: number | null;
+  has_certificate?: boolean;
+  estimated_hours?: number | null;
+  tags?: string[] | null;
 };
 
 export type UpdateCourseRequest = Partial<CreateCourseRequest>;
@@ -217,11 +222,16 @@ export type CourseListItem = {
   slug: string;
   short_description: string | null;
   full_description?: string | null;
+  category?: string | null;
   thumbnail_url: string | null;
   level: string;
   language: string;
   learning_objectives?: string[] | null;
   prerequisites?: string[] | null;
+  price?: number | null;
+  has_certificate?: boolean;
+  estimated_hours?: number | null;
+  tags?: string[] | null;
   status: CourseStatus;
   published_at: string | null;
   publish_scheduled_at?: string | null;
@@ -230,6 +240,10 @@ export type CourseListItem = {
   learners_count: number;
   modules_count: number;
   lessons_count: number;
+  quality_gate?: {
+    ready: boolean;
+    issues: string[];
+  };
 };
 
 export type CourseListResult = {
@@ -250,8 +264,40 @@ export type CourseDashboardStats = {
   total: number;
   published: number;
   draft: number;
+  pending_review: number;
   archived: number;
 };
+
+export type PendingReviewCourseQuery = {
+  page?: number;
+  page_size?: number;
+  q?: string;
+};
+
+export type PendingReviewCourseListResult = {
+  items: CourseListItem[];
+  page: number;
+  page_size: number;
+  total: number;
+};
+
+export type CourseReviewEventItem = {
+  id: number;
+  course_id: number;
+  actor_user_id: number;
+  from_status: CourseStatus | null;
+  to_status: CourseStatus;
+  decision: 'submit' | 'approve' | 'reject' | 'archive' | 'revert_draft';
+  note: string | null;
+  created_at: string;
+};
+
+export type CourseReviewTimelineResult = {
+  course_id: number;
+  items: CourseReviewEventItem[];
+};
+
+export type ReviewCourseDecision = 'approve' | 'reject';
 
 /** Tổng quan một khóa học cho màn hình quản lý (GV). */
 export type CourseManagerOverview = {
@@ -555,6 +601,10 @@ export interface CourseService {
   updateMyCourseCompletionRules(subjectUserId: number, courseId: number, request: UpdateCourseCompletionRulesRequest): Promise<CourseCompletionRules>;
   listMyCourseLearnerProgress(subjectUserId: number, courseId: number, query: { page?: number; page_size?: number; q?: string }): Promise<CourseLearnerProgressResult>;
   getCourseLeaderboard(subjectUserId: number, courseId: number): Promise<CourseLeaderboardResult>;
+  listPendingReviewCourses(subjectUserId: number, query: PendingReviewCourseQuery): Promise<PendingReviewCourseListResult>;
+  reviewCourseByAdmin(subjectUserId: number, courseId: number, decision: ReviewCourseDecision, note?: string | null): Promise<void>;
+  getCourseReviewTimelineByAdmin(subjectUserId: number, courseId: number): Promise<CourseReviewTimelineResult>;
+  getMyCourseReviewTimeline(subjectUserId: number, courseId: number): Promise<CourseReviewTimelineResult>;
 
   getMyCourseContentTree(subjectUserId: number, courseId: number): Promise<CourseContentTree>;
   createModule(subjectUserId: number, courseId: number, request: CreateModuleRequest): Promise<{ id: number }>;

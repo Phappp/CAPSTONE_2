@@ -10,6 +10,8 @@ import {
   CreateLessonYoutubeResourceBody,
   CreateModuleBody,
   LearnerLessonProgressBody,
+  ListPendingReviewCoursesQuery,
+  ReviewCourseBody,
   UpdateCourseCompletionRulesBody,
   ListMyCoursesQuery,
   ListPublishedCoursesQuery,
@@ -303,6 +305,52 @@ export class CourseController extends BaseController {
       const q = req.query.q != null ? String(req.query.q) : undefined;
       const result = await this.service.listMyCourseLearnerProgress(uid, courseId, { page, page_size, q });
       res.status(200).json(result);
+    });
+  }
+
+  async listPendingReviewCourses(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const query = new ListPendingReviewCoursesQuery(req.query);
+      const result = await this.service.listPendingReviewCourses(uid, {
+        page: query.page,
+        page_size: query.page_size,
+        q: query.q,
+      });
+      res.status(200).json(result);
+    });
+  }
+
+  async reviewCourseByAdmin(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const body = new ReviewCourseBody(req.body);
+      const validateResult = await body.validate();
+      if (!validateResult.ok) {
+        responseValidationError(res, validateResult.errors[0]);
+        return;
+      }
+      await this.service.reviewCourseByAdmin(uid, courseId, body.decision, body.note);
+      res.sendStatus(204);
+    });
+  }
+
+  async getCourseReviewTimelineByAdmin(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const timeline = await this.service.getCourseReviewTimelineByAdmin(uid, courseId);
+      res.status(200).json(timeline);
+    });
+  }
+
+  async getMyCourseReviewTimeline(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const timeline = await this.service.getMyCourseReviewTimeline(uid, courseId);
+      res.status(200).json(timeline);
     });
   }
 

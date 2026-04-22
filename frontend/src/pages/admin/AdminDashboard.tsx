@@ -1,6 +1,51 @@
+// AdminDashboard.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Menu,
+  ChevronLeft,
+  ChevronRight,
+  Users,
+  FileText,
+  Key,
+  BookOpen,
+  CheckCircle,
+  LogOut,
+  UserCheck,
+  Search,
+  Filter,
+  Download,
+  Save,
+  X,
+  Check,
+  AlertCircle,
+  RefreshCw,
+  Eye,
+  EyeOff,
+  Shield,
+  UserX,
+  UserCheck as UserRestore,
+  Lock,
+  Trash2,
+  Clock,
+  Calendar,
+  Mail,
+  Phone,
+  Hash,
+  Award,
+  Briefcase,
+  Building,
+  Link as LinkIcon,
+  FileText as FileIcon,
+  Star,
+  Zap,
+  Plus,
+  Copy,
+  MoreVertical,
+  ExternalLink,
+} from "lucide-react";
 import AvatarMenu from "../../components/AvatarMenu";
+import CommonModal from "../../components/CommonModal";
 import { useAuth } from "../../contexts/Auth";
 import {
   AdminUser,
@@ -20,22 +65,39 @@ import {
   apiUpdateOpenRouterConfig,
   apiUpdateUserRole,
   apiUpdateUserStatus,
+  apiGetPendingReviewCourses,
+  apiGetCourseManagerVerifications,
+  apiGetCourseReviewTimeline,
+  apiReviewCourseManagerVerification,
+  apiReviewCourseByAdmin,
   AuditLogItem,
+  CourseManagerVerification,
+  PendingReviewCourse,
 } from "../../services/adminUsersClient";
-import { toTitleCase } from "../../utils/helper";
+import "./AdminDashboard.css";
 
 type RoleFilter = "all" | "learner" | "course_manager" | "admin";
 type StatusFilter = "all" | "active" | "pending" | "banned" | "deleted";
-type AdminView = "users" | "audit_logs" | "keys";
+type AdminView = "users" | "audit_logs" | "keys" | "course_reviews" | "manager_verifications";
 type AdminTier = "admin" | "non_admin";
 
-export default function AdminDashboard() {
-  const { accessToken, user } = useAuth();
+const VIEW_CONFIG: Record<AdminView, { label: string; icon: React.ReactNode; description: string }> = {
+  users: { label: "Quản lý người dùng", icon: <Users size={18} />, description: "Quản lý tất cả người dùng trong hệ thống" },
+  audit_logs: { label: "Nhật ký hệ thống", icon: <FileText size={18} />, description: "Xem lịch sử hoạt động hệ thống" },
+  keys: { label: "Khóa API", icon: <Key size={18} />, description: "Quản lý khóa API OpenRouter" },
+  course_reviews: { label: "Duyệt khóa học", icon: <BookOpen size={18} />, description: "Duyệt khóa học chờ xuất bản" },
+  manager_verifications: { label: "Xác minh giảng viên", icon: <UserCheck size={18} />, description: "Xác minh và cấp phép giảng viên" },
+};
 
+export default function AdminDashboard() {
+  const { accessToken, user, logout } = useAuth();
   const adminTier = getAdminTierFromUser(user);
   const queryClient = useQueryClient();
-
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [view, setView] = useState<AdminView>("users");
+
+  // Users state
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [search, setSearch] = useState("");
@@ -43,38 +105,23 @@ export default function AdminDashboard() {
   const [role, setRole] = useState<RoleFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [includeDeleted, setIncludeDeleted] = useState(false);
-
-  const [savedFilterName, setSavedFilterName] = useState("");
-  const [savedFilters, setSavedFilters] = useState<
-    Array<{
-      name: string;
-      value: {
-        search: string;
-        role: RoleFilter;
-        status: StatusFilter;
-        includeDeleted: boolean;
-        fuzzy: boolean;
-      };
-    }>
-  >([]);
-
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [bulkAction, setBulkAction] = useState<
-    "activate" | "deactivate" | "set_role"
-  >("activate");
+  const [bulkAction, setBulkAction] = useState<"activate" | "deactivate" | "set_role">("activate");
   const [bulkRole, setBulkRole] = useState<RoleFilter>("learner");
   const [bulkRunning, setBulkRunning] = useState(false);
-  const [lastUndo, setLastUndo] = useState<
-    | { action: "activate" | "deactivate"; userIds: number[] }
-    | null
-  >(null);
+  const [lastUndo, setLastUndo] = useState<{ action: "activate" | "deactivate"; userIds: number[] } | null>(null);
+  const [savedFilterName, setSavedFilterName] = useState("");
+  const [savedFilters, setSavedFilters] = useState<Array<{ name: string; value: any }>>([]);
 
+  // Audit logs state
   const [auditPage, setAuditPage] = useState(1);
   const [auditLimit] = useState(20);
   const [auditActorId, setAuditActorId] = useState("");
   const [auditAction, setAuditAction] = useState("");
   const [auditFrom, setAuditFrom] = useState("");
   const [auditTo, setAuditTo] = useState("");
+
+  // Keys state
   const [newOpenRouterApiKey, setNewOpenRouterApiKey] = useState("");
   const [newOpenRouterKeyLabel, setNewOpenRouterKeyLabel] = useState("");
   const [openRouterModelsInput, setOpenRouterModelsInput] = useState("");
@@ -85,12 +132,92 @@ export default function AdminDashboard() {
   const [testingKeyId, setTestingKeyId] = useState<number | null>(null);
   const [keyHealthFilter, setKeyHealthFilter] = useState<"all" | "healthy" | "limited" | "auth_error" | "inactive">("all");
 
+  // Course reviews state
+  const [reviewPage, setReviewPage] = useState(1);
+  const [reviewQ, setReviewQ] = useState("");
+  const [reviewActionLoading, setReviewActionLoading] = useState<number | null>(null);
+
+  // Manager verifications state
+  const [verificationPage, setVerificationPage] = useState(1);
+  const [verificationQ, setVerificationQ] = useState("");
+  const [verificationStatus, setVerificationStatus] = useState<"all" | "pending" | "verified" | "rejected" | "suspended">("all");
+  const [verificationActionLoading, setVerificationActionLoading] = useState<number | null>(null);
+
+  // Modal state
+  const [noticeModal, setNoticeModal] = useState<{ open: boolean; title: string; message: string; variant?: "info" | "warning" | "error" | "success" }>({
+    open: false,
+    title: "",
+    message: "",
+    variant: "info",
+  });
+
+  // Queries
+  const usersQuery = useQuery({
+    queryKey: ["admin-users", { page, limit, search: fuzzy ? "" : search, role, status, includeDeleted }],
+    queryFn: () =>
+      apiGetAdminUsers({
+        page,
+        limit,
+        search: fuzzy ? undefined : search.trim() || undefined,
+        role,
+        status,
+        includeDeleted,
+        accessToken: accessToken || "",
+      }),
+    enabled: !!accessToken && view === "users",
+    keepPreviousData: true,
+  });
+
+  const auditQuery = useQuery({
+    queryKey: ["admin-audit-logs", { auditPage, auditLimit, auditActorId, auditAction, auditFrom, auditTo }],
+    queryFn: () =>
+      apiGetAuditLogs({
+        page: auditPage,
+        limit: auditLimit,
+        actorUserId: auditActorId.trim() ? Number(auditActorId.trim()) : undefined,
+        action: auditAction.trim() || undefined,
+        from: auditFrom || undefined,
+        to: auditTo || undefined,
+        accessToken: accessToken || "",
+      }),
+    enabled: !!accessToken && view === "audit_logs",
+    keepPreviousData: true,
+  });
+
   const openRouterQuery = useQuery({
     queryKey: ["admin-openrouter-config"],
     queryFn: () => apiGetOpenRouterConfig({ accessToken: accessToken || "" }),
     enabled: !!accessToken && view === "keys",
   });
 
+  const pendingReviewQuery = useQuery({
+    queryKey: ["admin-course-pending-review", { reviewPage, reviewQ }],
+    queryFn: () =>
+      apiGetPendingReviewCourses({
+        accessToken: accessToken || "",
+        page: reviewPage,
+        pageSize: 10,
+        q: reviewQ || undefined,
+      }),
+    enabled: !!accessToken && view === "course_reviews",
+    keepPreviousData: true,
+  });
+
+  const managerVerificationQuery = useQuery({
+    queryKey: ["admin-course-manager-verifications", { verificationPage, verificationQ, verificationStatus }],
+    queryFn: () =>
+      apiGetCourseManagerVerifications({
+        accessToken: accessToken || "",
+        page: verificationPage,
+        limit: 10,
+        q: verificationQ || undefined,
+        status: verificationStatus,
+      }),
+    enabled: !!accessToken && view === "manager_verifications",
+    keepPreviousData: true,
+  });
+
+  // Effects
   useEffect(() => {
     const cfg = openRouterQuery.data;
     if (!cfg) return;
@@ -100,60 +227,27 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!openRouterMessage) return;
-    const timer = window.setTimeout(() => {
-      setOpenRouterMessage(null);
-    }, 5000);
+    const timer = window.setTimeout(() => setOpenRouterMessage(null), 5000);
     return () => window.clearTimeout(timer);
   }, [openRouterMessage]);
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["admin-users", { page, limit, search: fuzzy ? "" : search, role, status, includeDeleted }],
-    queryFn: () =>
-      apiGetAdminUsers({
-        page,
-        limit,
-        // Khi fuzzy ON: không gửi search lên BE, để BE trả toàn bộ page,
-        // client-side fuzzy filter mới có data để lọc.
-        search: fuzzy ? undefined : search.trim() || undefined,
-        role,
-        status,
-        includeDeleted,
-        accessToken: accessToken || "",
-      }),
-    enabled: !!accessToken,
-    keepPreviousData: true,
-  });
-
-  const users = data?.users ?? [];
-  const pagination = data?.pagination;
-  const statistics: AdminUsersStatistics | undefined = data?.statistics;
 
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem("admin_users_saved_filters");
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as any;
-      if (Array.isArray(parsed)) setSavedFilters(parsed);
-    } catch {
-      // ignore
-    }
+      if (raw) setSavedFilters(JSON.parse(raw));
+    } catch {}
   }, []);
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(
-        "admin_users_saved_filters",
-        JSON.stringify(savedFilters)
-      );
-    } catch {
-      // ignore
-    }
+      window.localStorage.setItem("admin_users_saved_filters", JSON.stringify(savedFilters));
+    } catch {}
   }, [savedFilters]);
 
-  useEffect(() => {
-    // Clear selection when result set changes page/filter.
-    setSelectedIds(new Set());
-  }, [page, limit, search, role, status, includeDeleted]);
+  // Computed values
+  const users = usersQuery.data?.users ?? [];
+  const pagination = usersQuery.data?.pagination;
+  const statistics = usersQuery.data?.statistics;
 
   const displayedUsers = useMemo(() => {
     if (!fuzzy || !search.trim()) return users;
@@ -169,165 +263,46 @@ export default function AdminDashboard() {
     return [...selectedIds].filter((id) => ids.has(id));
   }, [selectedIds, displayedUsers]);
 
-  const allSelectedOnPage =
-    displayedUsers.length > 0 && selectedOnPage.length === displayedUsers.length;
+  const allSelectedOnPage = displayedUsers.length > 0 && selectedOnPage.length === displayedUsers.length;
 
-  const auditQuery = useQuery({
-    queryKey: [
-      "admin-audit-logs",
-      { auditPage, auditLimit, auditActorId, auditAction, auditFrom, auditTo },
-    ],
-    queryFn: () =>
-      apiGetAuditLogs({
-        page: auditPage,
-        limit: auditLimit,
-        actorUserId: auditActorId.trim() ? Number(auditActorId.trim()) : undefined,
-        action: auditAction.trim() || undefined,
-        from: auditFrom || undefined,
-        to: auditTo || undefined,
-        accessToken: accessToken || "",
-      }),
-    enabled: !!accessToken && view === "audit_logs",
-    keepPreviousData: true,
-  });
+  const filteredOpenRouterKeys = useMemo(() => {
+    const all = openRouterQuery.data?.keys ?? [];
+    if (keyHealthFilter === "all") return all;
+    return all.filter((key) => getKeyHealthStatus(key) === keyHealthFilter);
+  }, [openRouterQuery.data?.keys, keyHealthFilter]);
 
-  async function handleResetPassword(target: AdminUser) {
-    if (!accessToken) return;
-    if (!can(adminTier, "reset_password")) {
-      alert("Bạn không có quyền reset password.");
-      return;
-    }
-    const ok = confirmSensitive(
-      `Reset password cho ${target.email} (ID: ${target.id})?`
-    );
-    if (!ok) return;
-    const result = await apiResetUserPassword({ userId: target.id, accessToken });
-    alert(`Mật khẩu tạm thời: ${result.temp_password}`);
-  }
+  // Actions
+  const showNotice = (message: string, title = "Thông báo", variant: "info" | "warning" | "error" | "success" = "info") => {
+    setNoticeModal({ open: true, title, message, variant });
+  };
 
-  async function handleUpdateRole(target: AdminUser, nextRole: RoleFilter) {
-    if (!accessToken) return;
-    if (!can(adminTier, "change_role")) {
-      alert("Bạn không có quyền đổi role.");
-      return;
-    }
-    const ok = confirmSensitive(
-      `Đổi role của ${target.email} (ID: ${target.id}) sang ${nextRole.toUpperCase()}?`
-    );
-    if (!ok) return;
-    await apiUpdateUserRole({
-      userId: target.id,
-      role: nextRole as any,
-      accessToken,
-    });
-    await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-  }
-
-  async function handleUpdateStatus(
-    target: AdminUser,
-    nextStatus: Exclude<StatusFilter, "all" | "deleted">
-  ) {
-    if (!accessToken) return;
-    if (!can(adminTier, "change_status")) {
-      alert("Bạn không có quyền đổi trạng thái.");
-      return;
-    }
-    const reasonInput = window.prompt(
-      nextStatus === "banned"
-        ? "Lý do (bắt buộc khi ban):"
-        : "Lý do (optional):",
-      ""
-    );
-    const reason = reasonInput ? reasonInput.trim() : "";
-    if (nextStatus === "banned" && !reason) {
-      alert("Bạn phải nhập lý do khi ban user.");
-      return;
-    }
-    const ok = confirmSensitive(
-      `Đổi trạng thái của ${target.email} (ID: ${target.id}) sang ${nextStatus.toUpperCase()}?`
-    );
-    if (!ok) return;
-    await apiUpdateUserStatus({
-      userId: target.id,
-      status: nextStatus as any,
-      reason: reason || undefined,
-      accessToken,
-    });
-    await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-  }
-
-  async function handleSoftDelete(target: AdminUser) {
-    if (!accessToken) return;
-    if (!can(adminTier, "soft_delete")) {
-      alert("Bạn không có quyền xóa (soft delete).");
-      return;
-    }
-    const reasonInput = window.prompt("Lý do soft delete (bắt buộc):", "");
-    const reason = reasonInput ? reasonInput.trim() : "";
-    if (!reason) {
-      alert("Bạn phải nhập lý do soft delete.");
-      return;
-    }
-    const ok = confirmSensitive(`Soft delete ${target.email} (ID: ${target.id})?`);
-    if (!ok) return;
-    await apiSoftDeleteUser({ userId: target.id, reason, accessToken });
-    await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-  }
-
-  async function handleRestore(target: AdminUser) {
-    if (!accessToken) return;
-    if (!can(adminTier, "restore")) {
-      alert("Bạn không có quyền khôi phục user.");
-      return;
-    }
-    const ok = confirmSensitive(`Khôi phục ${target.email} (ID: ${target.id})?`);
-    if (!ok) return;
-    await apiRestoreUser({ userId: target.id, accessToken });
-    await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-  }
-
-  async function handleHardDelete(target: AdminUser) {
-    if (!accessToken) return;
-    if (!can(adminTier, "hard_delete")) {
-      alert("Hệ thống hiện chỉ có role admin/learner/course_manager nên không hỗ trợ hard delete.");
-      return;
-    }
-    const ok = confirmTyped(
-      `Hard delete vĩnh viễn ${target.email} (ID: ${target.id}). Không thể hoàn tác.`,
-      "DELETE"
-    );
-    if (!ok) return;
-    await apiHardDeleteUser({ userId: target.id, accessToken });
-    await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-  }
-
-  function toggleSelectAllOnPage(checked: boolean) {
+  const toggleSelectAllOnPage = (checked: boolean) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (!checked) {
         for (const u of displayedUsers) next.delete(u.id);
-        return next;
-      }
-      for (const u of displayedUsers) {
-        if (u.status !== "deleted") next.add(u.id);
+      } else {
+        for (const u of displayedUsers) {
+          if (u.status !== "deleted") next.add(u.id);
+        }
       }
       return next;
     });
-  }
+  };
 
-  function toggleOne(id: number, checked: boolean) {
+  const toggleOne = (id: number, checked: boolean) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (checked) next.add(id);
       else next.delete(id);
       return next;
     });
-  }
+  };
 
-  function saveCurrentFilter() {
+  const saveCurrentFilter = () => {
     const name = savedFilterName.trim();
     if (!name) {
-      alert("Nhập tên filter để lưu.");
+      showNotice("Nhập tên bộ lọc để lưu.");
       return;
     }
     const value = { search, role, status, includeDeleted, fuzzy };
@@ -336,9 +311,10 @@ export default function AdminDashboard() {
       return [...without, { name, value }];
     });
     setSavedFilterName("");
-  }
+    showNotice(`Đã lưu bộ lọc "${name}"`, "Thành công", "success");
+  };
 
-  function applySavedFilter(name: string) {
+  const applySavedFilter = (name: string) => {
     const found = savedFilters.find((f) => f.name === name);
     if (!found) return;
     setPage(1);
@@ -347,248 +323,21 @@ export default function AdminDashboard() {
     setStatus(found.value.status);
     setIncludeDeleted(found.value.includeDeleted);
     setFuzzy(found.value.fuzzy);
-  }
+  };
 
-  function deleteSavedFilter(name: string) {
+  const deleteSavedFilter = (name: string) => {
     setSavedFilters((prev) => prev.filter((f) => f.name !== name));
-  }
+    showNotice(`Đã xóa bộ lọc "${name}"`, "Thành công", "success");
+  };
 
-  async function runBulk() {
-    if (!accessToken) return;
-    if (!can(adminTier, "bulk")) {
-      alert("Bạn không có quyền bulk actions.");
-      return;
-    }
-    const userIds = selectedOnPage;
-    if (userIds.length === 0) {
-      alert("Chưa chọn user nào.");
-      return;
-    }
-    const preview =
-      bulkAction === "set_role"
-        ? `Set role => ${bulkRole.toUpperCase()} cho ${userIds.length} users`
-        : `${bulkAction.toUpperCase()} ${userIds.length} users`;
-    const ok = confirmSensitive(`Bulk action:\n${preview}`);
-    if (!ok) return;
-
-    setBulkRunning(true);
-    try {
-      await apiBulkAction({
-        userIds,
-        action: bulkAction,
-        role: bulkAction === "set_role" ? (bulkRole as any) : undefined,
-        accessToken,
-      });
-      if (bulkAction === "activate" || bulkAction === "deactivate") {
-        setLastUndo({
-          action: bulkAction,
-          userIds,
-        });
-      } else {
-        setLastUndo(null);
-      }
-      setSelectedIds(new Set());
-      setPage((p) => p);
-      alert("Bulk action thành công.");
-    } catch (e: any) {
-      alert(`Bulk action thất bại: ${String(e?.message || e)}`);
-    } finally {
-      setBulkRunning(false);
-    }
-  }
-
-  async function saveOpenRouterConfig() {
-    if (!accessToken) return;
-    if (!can(adminTier, "change_status")) {
-      alert("Bạn không có quyền cập nhật cấu hình OpenRouter.");
-      return;
-    }
-    setOpenRouterSaving(true);
-    setOpenRouterMessage(null);
-    try {
-      const models = openRouterModelsInput
-        .split(/\r?\n/)
-        .map((item) => item.trim())
-        .filter(Boolean);
-      await apiUpdateOpenRouterConfig({
-        accessToken,
-        models,
-        defaultModel: openRouterDefaultModel.trim() || undefined,
-      });
-      setOpenRouterMessage("Đã lưu cấu hình OpenRouter.");
-      await queryClient.invalidateQueries({ queryKey: ["admin-openrouter-config"] });
-    } catch (e: any) {
-      setOpenRouterMessage(`Lỗi lưu cấu hình: ${String(e?.message || e)}`);
-    } finally {
-      setOpenRouterSaving(false);
-    }
-  }
-
-  async function createOpenRouterKey() {
-    if (!accessToken) return;
-    const key = newOpenRouterApiKey.trim();
-    if (!key) {
-      setOpenRouterMessage("Vui lòng nhập API key trước khi thêm.");
-      return;
-    }
-    setOpenRouterSaving(true);
-    setOpenRouterMessage(null);
-    try {
-      await apiCreateOpenRouterKey({
-        accessToken,
-        apiKey: key,
-        label: newOpenRouterKeyLabel.trim() || undefined,
-      });
-      setNewOpenRouterApiKey("");
-      setNewOpenRouterKeyLabel("");
-      setOpenRouterMessage("Đã thêm OpenRouter key mới.");
-      await queryClient.invalidateQueries({ queryKey: ["admin-openrouter-config"] });
-    } catch (e: any) {
-      setOpenRouterMessage(`Lỗi thêm key: ${String(e?.message || e)}`);
-    } finally {
-      setOpenRouterSaving(false);
-    }
-  }
-
-  async function toggleOpenRouterKeyActive(keyId: number, next: boolean) {
-    if (!accessToken) return;
-    setOpenRouterSaving(true);
-    setOpenRouterMessage(null);
-    try {
-      await apiUpdateOpenRouterKey({
-        accessToken,
-        keyId,
-        isActive: next,
-      });
-      await queryClient.invalidateQueries({ queryKey: ["admin-openrouter-config"] });
-    } catch (e: any) {
-      setOpenRouterMessage(`Lỗi cập nhật key: ${String(e?.message || e)}`);
-    } finally {
-      setOpenRouterSaving(false);
-    }
-  }
-
-  async function setOpenRouterKeyCooldown(keyId: number) {
-    if (!accessToken) return;
-    const minutes = Number(openRouterCooldownMinutes);
-    if (!Number.isFinite(minutes) || minutes <= 0) {
-      setOpenRouterMessage("Cooldown minutes phải > 0.");
-      return;
-    }
-    setOpenRouterSaving(true);
-    setOpenRouterMessage(null);
-    try {
-      await apiUpdateOpenRouterKey({
-        accessToken,
-        keyId,
-        cooldownMinutes: minutes,
-      });
-      await queryClient.invalidateQueries({ queryKey: ["admin-openrouter-config"] });
-    } catch (e: any) {
-      setOpenRouterMessage(`Lỗi set cooldown: ${String(e?.message || e)}`);
-    } finally {
-      setOpenRouterSaving(false);
-    }
-  }
-
-  async function clearOpenRouterKeyCooldown(keyId: number) {
-    if (!accessToken) return;
-    setOpenRouterSaving(true);
-    setOpenRouterMessage(null);
-    try {
-      await apiUpdateOpenRouterKey({
-        accessToken,
-        keyId,
-        clearCooldown: true,
-      });
-      await queryClient.invalidateQueries({ queryKey: ["admin-openrouter-config"] });
-    } catch (e: any) {
-      setOpenRouterMessage(`Lỗi clear cooldown: ${String(e?.message || e)}`);
-    } finally {
-      setOpenRouterSaving(false);
-    }
-  }
-
-  async function deleteOpenRouterKey(keyId: number) {
-    if (!accessToken) return;
-    const ok = confirmSensitive(`Xóa key #${keyId}?`);
-    if (!ok) return;
-    setOpenRouterSaving(true);
-    setOpenRouterMessage(null);
-    try {
-      await apiDeleteOpenRouterKey({ accessToken, keyId });
-      await queryClient.invalidateQueries({ queryKey: ["admin-openrouter-config"] });
-    } catch (e: any) {
-      setOpenRouterMessage(`Lỗi xóa key: ${String(e?.message || e)}`);
-    } finally {
-      setOpenRouterSaving(false);
-    }
-  }
-
-  async function testOpenRouterKey(keyId: number) {
-    if (!accessToken) return;
-    setTestingKeyId(keyId);
-    setOpenRouterMessage(null);
-    try {
-      const result = await apiTestOpenRouterKey({ accessToken, keyId });
-      const suffix = result.cooldown_applied_minutes
-        ? ` (cooldown ${result.cooldown_applied_minutes} phút)`
-        : "";
-      setOpenRouterMessage(`Key #${keyId}: ${result.message}${suffix}`);
-      await queryClient.invalidateQueries({ queryKey: ["admin-openrouter-config"] });
-    } catch (e: any) {
-      setOpenRouterMessage(`Lỗi test key #${keyId}: ${String(e?.message || e)}`);
-    } finally {
-      setTestingKeyId(null);
-    }
-  }
-
-  const filteredOpenRouterKeys = useMemo(() => {
-    const all = openRouterQuery.data?.keys ?? [];
-    if (keyHealthFilter === "all") return all;
-    return all.filter((key) => {
-      const status = getKeyHealthStatus(key);
-      if (keyHealthFilter === "healthy") return status === "healthy";
-      if (keyHealthFilter === "limited") return status === "limited";
-      if (keyHealthFilter === "auth_error") return status === "auth_error";
-      if (keyHealthFilter === "inactive") return status === "inactive";
-      return true;
-    });
-  }, [openRouterQuery.data?.keys, keyHealthFilter]);
-
-  async function undoLastBulk() {
-    if (!accessToken || !lastUndo) return;
-    if (!can(adminTier, "bulk")) return;
-    const reverse = lastUndo.action === "activate" ? "deactivate" : "activate";
-    const ok = confirmSensitive(
-      `Undo bulk: ${lastUndo.action.toUpperCase()} -> ${reverse.toUpperCase()} (${lastUndo.userIds.length} users)`
-    );
-    if (!ok) return;
-    setBulkRunning(true);
-    try {
-      await apiBulkAction({
-        userIds: lastUndo.userIds,
-        action: reverse,
-        accessToken,
-      });
-      setLastUndo(null);
-      setPage((p) => p);
-      alert("Undo thành công.");
-    } catch (e: any) {
-      alert(`Undo thất bại: ${String(e?.message || e)}`);
-    } finally {
-      setBulkRunning(false);
-    }
-  }
-
-  function exportCsv() {
+  const exportCsv = () => {
     const rows = displayedUsers.map((u) => ({
       id: u.id,
       email: u.email,
       full_name: u.full_name || "",
       role: u.role || "",
       status: u.status,
-      email_verified: u.email_verified ? "yes" : "no",
+      email_verified: u.email_verified ? "có" : "không",
       last_login: u.last_login || "",
       created_at: u.created_at,
     }));
@@ -602,108 +351,531 @@ export default function AdminDashboard() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-  }
+    showNotice("Xuất file CSV thành công", "Thành công", "success");
+  };
+
+  const handleResetPassword = async (target: AdminUser) => {
+    if (!can(adminTier, "reset_password")) {
+      showNotice("Bạn không có quyền đặt lại mật khẩu.", "Lỗi quyền", "error");
+      return;
+    }
+    if (!window.confirm(`Đặt lại mật khẩu cho ${target.email} (ID: ${target.id})?`)) return;
+    try {
+      const result = await apiResetUserPassword({ userId: target.id, accessToken: accessToken || "" });
+      showNotice(`Mật khẩu tạm thời: ${result.temp_password}`, "Reset mật khẩu thành công", "success");
+    } catch (e: any) {
+      showNotice(e?.message || "Đặt lại mật khẩu thất bại", "Lỗi", "error");
+    }
+  };
+
+  const handleUpdateRole = async (target: AdminUser, nextRole: RoleFilter) => {
+    if (!can(adminTier, "change_role")) {
+      showNotice("Bạn không có quyền đổi vai trò.", "Lỗi quyền", "error");
+      return;
+    }
+    if (!window.confirm(`Đổi vai trò của ${target.email} (ID: ${target.id}) sang ${getRoleDisplayLabel(nextRole)}?`)) return;
+    try {
+      await apiUpdateUserRole({ userId: target.id, role: nextRole as any, accessToken: accessToken || "" });
+      await usersQuery.refetch();
+      showNotice(`Đã đổi vai trò thành ${getRoleDisplayLabel(nextRole)}`, "Thành công", "success");
+    } catch (e: any) {
+      showNotice(e?.message || "Đổi vai trò thất bại", "Lỗi", "error");
+    }
+  };
+
+  const handleUpdateStatus = async (target: AdminUser, nextStatus: Exclude<StatusFilter, "all" | "deleted">) => {
+    if (!can(adminTier, "change_status")) {
+      showNotice("Bạn không có quyền đổi trạng thái.", "Lỗi quyền", "error");
+      return;
+    }
+    const reasonInput = window.prompt(nextStatus === "banned" ? "Lý do (bắt buộc khi khóa):" : "Lý do (tùy chọn):", "");
+    const reason = reasonInput ? reasonInput.trim() : "";
+    if (nextStatus === "banned" && !reason) {
+      showNotice("Bạn phải nhập lý do khi khóa người dùng.", "Lỗi", "error");
+      return;
+    }
+    if (!window.confirm(`Đổi trạng thái của ${target.email} (ID: ${target.id}) sang ${nextStatus.toUpperCase()}?`)) return;
+    try {
+      await apiUpdateUserStatus({ userId: target.id, status: nextStatus as any, reason: reason || undefined, accessToken: accessToken || "" });
+      await usersQuery.refetch();
+      showNotice(`Đã đổi trạng thái thành ${nextStatus.toUpperCase()}`, "Thành công", "success");
+    } catch (e: any) {
+      showNotice(e?.message || "Đổi trạng thái thất bại", "Lỗi", "error");
+    }
+  };
+
+  const handleSoftDelete = async (target: AdminUser) => {
+    if (!can(adminTier, "soft_delete")) {
+      showNotice("Bạn không có quyền xóa mềm.", "Lỗi quyền", "error");
+      return;
+    }
+    const reason = window.prompt("Lý do xóa mềm (bắt buộc):", "");
+    if (!reason?.trim()) {
+      showNotice("Bạn phải nhập lý do xóa mềm.", "Lỗi", "error");
+      return;
+    }
+    if (!window.confirm(`Soft delete ${target.email} (ID: ${target.id})?`)) return;
+    try {
+      await apiSoftDeleteUser({ userId: target.id, reason: reason.trim(), accessToken: accessToken || "" });
+      await usersQuery.refetch();
+      showNotice(`Đã xóa mềm người dùng ${target.email}`, "Thành công", "success");
+    } catch (e: any) {
+      showNotice(e?.message || "Xóa mềm thất bại", "Lỗi", "error");
+    }
+  };
+
+  const handleRestore = async (target: AdminUser) => {
+    if (!can(adminTier, "restore")) {
+      showNotice("Bạn không có quyền khôi phục người dùng.", "Lỗi quyền", "error");
+      return;
+    }
+    if (!window.confirm(`Khôi phục ${target.email} (ID: ${target.id})?`)) return;
+    try {
+      await apiRestoreUser({ userId: target.id, accessToken: accessToken || "" });
+      await usersQuery.refetch();
+      showNotice(`Đã khôi phục người dùng ${target.email}`, "Thành công", "success");
+    } catch (e: any) {
+      showNotice(e?.message || "Khôi phục thất bại", "Lỗi", "error");
+    }
+  };
+
+  const runBulk = async () => {
+    if (!can(adminTier, "bulk")) {
+      showNotice("Bạn không có quyền thao tác hàng loạt.", "Lỗi quyền", "error");
+      return;
+    }
+    const userIds = selectedOnPage;
+    if (userIds.length === 0) {
+      showNotice("Chưa chọn người dùng nào.");
+      return;
+    }
+    const preview = bulkAction === "set_role" ? `Đặt vai trò => ${getRoleDisplayLabel(bulkRole)} cho ${userIds.length} người dùng` : `${bulkAction.toUpperCase()} ${userIds.length} người dùng`;
+    if (!window.confirm(`Thao tác hàng loạt:\n${preview}`)) return;
+
+    setBulkRunning(true);
+    try {
+      await apiBulkAction({ userIds, action: bulkAction, role: bulkAction === "set_role" ? (bulkRole as any) : undefined, accessToken: accessToken || "" });
+      if (bulkAction === "activate" || bulkAction === "deactivate") setLastUndo({ action: bulkAction, userIds });
+      else setLastUndo(null);
+      setSelectedIds(new Set());
+      await usersQuery.refetch();
+      showNotice("Thao tác hàng loạt thành công.", "Thành công", "success");
+    } catch (e: any) {
+      showNotice(`Thao tác hàng loạt thất bại: ${String(e?.message || e)}`, "Lỗi", "error");
+    } finally {
+      setBulkRunning(false);
+    }
+  };
+
+  const undoLastBulk = async () => {
+    if (!lastUndo || !can(adminTier, "bulk")) return;
+    const reverse = lastUndo.action === "activate" ? "deactivate" : "activate";
+    if (!window.confirm(`Hoàn tác hàng loạt: ${lastUndo.action.toUpperCase()} -> ${reverse.toUpperCase()} (${lastUndo.userIds.length} người dùng)`)) return;
+    setBulkRunning(true);
+    try {
+      await apiBulkAction({ userIds: lastUndo.userIds, action: reverse, accessToken: accessToken || "" });
+      setLastUndo(null);
+      await usersQuery.refetch();
+      showNotice("Hoàn tác thành công.", "Thành công", "success");
+    } catch (e: any) {
+      showNotice(`Hoàn tác thất bại: ${String(e?.message || e)}`, "Lỗi", "error");
+    } finally {
+      setBulkRunning(false);
+    }
+  };
+
+  const saveOpenRouterConfig = async () => {
+    if (!can(adminTier, "change_status")) {
+      showNotice("Bạn không có quyền cập nhật cấu hình OpenRouter.", "Lỗi quyền", "error");
+      return;
+    }
+    setOpenRouterSaving(true);
+    try {
+      const models = openRouterModelsInput.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+      await apiUpdateOpenRouterConfig({ accessToken: accessToken || "", models, defaultModel: openRouterDefaultModel.trim() || undefined });
+      setOpenRouterMessage("Đã lưu cấu hình OpenRouter.");
+      await openRouterQuery.refetch();
+    } catch (e: any) {
+      setOpenRouterMessage(`Lỗi lưu cấu hình: ${String(e?.message || e)}`);
+    } finally {
+      setOpenRouterSaving(false);
+    }
+  };
+
+  const createOpenRouterKey = async () => {
+    const key = newOpenRouterApiKey.trim();
+    if (!key) {
+      setOpenRouterMessage("Vui lòng nhập khóa API trước khi thêm.");
+      return;
+    }
+    setOpenRouterSaving(true);
+    try {
+      await apiCreateOpenRouterKey({ accessToken: accessToken || "", apiKey: key, label: newOpenRouterKeyLabel.trim() || undefined });
+      setNewOpenRouterApiKey("");
+      setNewOpenRouterKeyLabel("");
+      setOpenRouterMessage("Đã thêm OpenRouter key mới.");
+      await openRouterQuery.refetch();
+    } catch (e: any) {
+      setOpenRouterMessage(`Lỗi thêm key: ${String(e?.message || e)}`);
+    } finally {
+      setOpenRouterSaving(false);
+    }
+  };
+
+  const testOpenRouterKey = async (keyId: number) => {
+    setTestingKeyId(keyId);
+    try {
+      const result = await apiTestOpenRouterKey({ accessToken: accessToken || "", keyId });
+      const suffix = result.cooldown_applied_minutes ? ` (cooldown ${result.cooldown_applied_minutes} phút)` : "";
+      setOpenRouterMessage(`Key #${keyId}: ${result.message}${suffix}`);
+      await openRouterQuery.refetch();
+    } catch (e: any) {
+      setOpenRouterMessage(`Lỗi test key #${keyId}: ${String(e?.message || e)}`);
+    } finally {
+      setTestingKeyId(null);
+    }
+  };
+
+  const toggleOpenRouterKeyActive = async (keyId: number, isActive: boolean) => {
+    setOpenRouterSaving(true);
+    try {
+      await apiUpdateOpenRouterKey({ accessToken: accessToken || "", keyId, isActive });
+      await openRouterQuery.refetch();
+    } catch (e: any) {
+      setOpenRouterMessage(`Lỗi cập nhật key: ${String(e?.message || e)}`);
+    } finally {
+      setOpenRouterSaving(false);
+    }
+  };
+
+  const setOpenRouterKeyCooldown = async (keyId: number) => {
+    const minutes = Number(openRouterCooldownMinutes);
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      setOpenRouterMessage("Số phút chờ phải > 0.");
+      return;
+    }
+    setOpenRouterSaving(true);
+    try {
+      await apiUpdateOpenRouterKey({ accessToken: accessToken || "", keyId, cooldownMinutes: minutes });
+      await openRouterQuery.refetch();
+      setOpenRouterMessage(`Đã set cooldown ${minutes} phút cho key #${keyId}`);
+    } catch (e: any) {
+      setOpenRouterMessage(`Lỗi set cooldown: ${String(e?.message || e)}`);
+    } finally {
+      setOpenRouterSaving(false);
+    }
+  };
+
+  const clearOpenRouterKeyCooldown = async (keyId: number) => {
+    setOpenRouterSaving(true);
+    try {
+      await apiUpdateOpenRouterKey({ accessToken: accessToken || "", keyId, clearCooldown: true });
+      await openRouterQuery.refetch();
+      setOpenRouterMessage(`Đã clear cooldown cho key #${keyId}`);
+    } catch (e: any) {
+      setOpenRouterMessage(`Lỗi clear cooldown: ${String(e?.message || e)}`);
+    } finally {
+      setOpenRouterSaving(false);
+    }
+  };
+
+  const deleteOpenRouterKey = async (keyId: number) => {
+    if (!window.confirm(`Xóa key #${keyId}?`)) return;
+    setOpenRouterSaving(true);
+    try {
+      await apiDeleteOpenRouterKey({ accessToken: accessToken || "", keyId });
+      await openRouterQuery.refetch();
+      setOpenRouterMessage(`Đã xóa key #${keyId}`);
+    } catch (e: any) {
+      setOpenRouterMessage(`Lỗi xóa key: ${String(e?.message || e)}`);
+    } finally {
+      setOpenRouterSaving(false);
+    }
+  };
+
+  const reviewCourse = async (course: PendingReviewCourse, decision: "approve" | "reject") => {
+    if (!can(adminTier, "change_status")) {
+      showNotice("Bạn không có quyền duyệt khóa học.", "Lỗi quyền", "error");
+      return;
+    }
+    const note = window.prompt(decision === "reject" ? "Lý do từ chối (khuyến nghị nhập):" : "Ghi chú duyệt (tùy chọn):", "");
+    if (!window.confirm(`${decision === "approve" ? "Duyệt" : "Từ chối"} khóa học "${course.title}" (#${course.id})?`)) return;
+    setReviewActionLoading(course.id);
+    try {
+      await apiReviewCourseByAdmin({ accessToken: accessToken || "", courseId: course.id, decision, note: note || undefined });
+      await pendingReviewQuery.refetch();
+      showNotice(`Đã ${decision === "approve" ? "duyệt" : "từ chối"} khóa học.`, "Thành công", "success");
+    } catch (e: any) {
+      showNotice(`Thao tác thất bại: ${String(e?.message || e)}`, "Lỗi", "error");
+    } finally {
+      setReviewActionLoading(null);
+    }
+  };
+
+  const viewReviewTimeline = async (course: PendingReviewCourse) => {
+    try {
+      const data = await apiGetCourseReviewTimeline({ accessToken: accessToken || "", courseId: course.id });
+      if (!data.items.length) {
+        showNotice("Khóa học chưa có lịch sử duyệt.");
+        return;
+      }
+      const lines = data.items.slice(0, 10).map((item) => {
+        const time = new Date(item.created_at).toLocaleString("vi-VN");
+        const note = item.note ? ` | note: ${item.note}` : "";
+        return `${time} | ${item.decision} | ${item.from_status ?? "—"} -> ${item.to_status}${note}`;
+      });
+      showNotice(`Dòng thời gian gần nhất của khóa #${course.id}\n\n${lines.join("\n")}`, "Lịch sử duyệt");
+    } catch (e: any) {
+      showNotice(`Không thể tải timeline: ${String(e?.message || e)}`, "Lỗi", "error");
+    }
+  };
+
+  const reviewManagerVerification = async (item: CourseManagerVerification, status: "verified" | "rejected" | "suspended") => {
+    const note = window.prompt(status === "verified" ? "Ghi chú xác minh (tùy chọn):" : "Lý do (khuyến nghị nhập):", "");
+    if (!window.confirm(`Cập nhật trạng thái xác minh của ${item.email} -> ${status.toUpperCase()}?`)) return;
+    setVerificationActionLoading(item.user_id);
+    try {
+      await apiReviewCourseManagerVerification({ accessToken: accessToken || "", userId: item.user_id, status, note: note || undefined });
+      await managerVerificationQuery.refetch();
+      showNotice("Đã cập nhật trạng thái xác minh.", "Thành công", "success");
+    } catch (e: any) {
+      showNotice(`Cập nhật thất bại: ${String(e?.message || e)}`, "Lỗi", "error");
+    } finally {
+      setVerificationActionLoading(null);
+    }
+  };
+
+  const navItems = [
+    { id: "users" as const, label: "Quản lý người dùng", icon: <Users size={18} />, disabled: false },
+    { id: "audit_logs" as const, label: "Nhật ký hệ thống", icon: <FileText size={18} />, disabled: !can(adminTier, "view_audit_logs") },
+    { id: "keys" as const, label: "Khóa API", icon: <Key size={18} />, disabled: !can(adminTier, "change_status") },
+    { id: "course_reviews" as const, label: "Duyệt khóa học", icon: <BookOpen size={18} />, disabled: !can(adminTier, "change_status") },
+    { id: "manager_verifications" as const, label: "Xác minh giảng viên", icon: <UserCheck size={18} />, disabled: !can(adminTier, "change_status") },
+  ];
+
+  const closeMobileSidebar = () => setMobileOpen(false);
 
   return (
-    <div className="dashboard-page">
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "1.5rem",
-          marginBottom: "1.5rem",
-        }}
-      >
-        <div>
-          <h1 className="dashboard-title">Admin Panel</h1>
-          <p className="dashboard-subtitle">
-            Quản lý người dùng trong hệ thống MindBridge.
-          </p>
-        </div>
-        <div style={{ marginLeft: "auto" }}>
-          <AvatarMenu />
-        </div>
-      </div>
+    <div className="admin-dashboard">
+      <button className="mobile-menu-btn" onClick={() => setMobileOpen(true)}>
+        <Menu size={20} />
+      </button>
 
-      <div
-        style={{
-          marginBottom: "1.5rem",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <div>
-          <div
-            style={{
-              fontSize: "0.85rem",
-              color: "#607489",
-              marginBottom: "0.25rem",
-            }}
-          >
-            Đang đăng nhập với tư cách:
-          </div>
-          <div
-            style={{
-              fontSize: "0.95rem",
-              fontWeight: 500,
-              color: "#1f2933",
-            }}
-          >
-            {user?.email} ({user?.primary_role || user?.roles?.[0] || "admin"})
-          </div>
-        </div>
-      </div>
+      {mobileOpen && <div className="mobile-overlay" onClick={closeMobileSidebar} />}
 
-      <section style={{ marginBottom: "1.5rem" }}>
-        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
-          <button
-            type="button"
-            className={view === "users" ? "primary-button" : "secondary-button"}
-            onClick={() => setView("users")}
-          >
-            Users
+      <aside className={`admin-sidebar ${sidebarCollapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`}>
+        <div className="sidebar-header">
+          {!sidebarCollapsed && <span className="sidebar-logo">MindBridge</span>}
+          <button className="sidebar-toggle" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
+            {sidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
-          <button
-            type="button"
-            className={
-              view === "audit_logs" ? "primary-button" : "secondary-button"
-            }
-            onClick={() => setView("audit_logs")}
-            disabled={!can(adminTier, "view_audit_logs")}
-            title={
-              can(adminTier, "view_audit_logs")
-                ? "Xem audit logs"
-                : "Chỉ Admin/Super Admin được xem audit logs"
-            }
-          >
-            Audit Logs
-          </button>
-          <button
-            type="button"
-            className={view === "keys" ? "primary-button" : "secondary-button"}
-            onClick={() => setView("keys")}
-            disabled={!can(adminTier, "change_status")}
-            title={
-              can(adminTier, "change_status")
-                ? "Cấu hình API keys và model"
-                : "Bạn không có quyền cấu hình keys"
-            }
-          >
-            Keys
-          </button>
-          <div
-            style={{
-              marginLeft: "auto",
-              fontSize: "0.85rem",
-              color: "#607489",
-            }}
-          >
-            Quyền: <b>{adminTier === "admin" ? "ADMIN" : "NON-ADMIN"}</b>
-          </div>
         </div>
 
-        {view === "audit_logs" ? (
+        <nav className="sidebar-nav">
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              className={`nav-item ${view === item.id ? "active" : ""}`}
+              onClick={() => !item.disabled && setView(item.id)}
+              disabled={item.disabled}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              {!sidebarCollapsed && <span className="nav-label">{item.label}</span>}
+            </button>
+          ))}
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="user-info">
+            {!sidebarCollapsed && (
+              <>
+                <div className="user-email">{user?.email}</div>
+                <div className="user-role">{getRoleDisplayLabel(user?.primary_role || user?.roles?.[0])}</div>
+              </>
+            )}
+          </div>
+          <button className="logout-btn" onClick={logout}>
+            <LogOut size={16} />
+            {!sidebarCollapsed && <span>Đăng xuất</span>}
+          </button>
+        </div>
+      </aside>
+
+      <main className="admin-main">
+        <div className="main-header">
+          <h1 className="main-title">{VIEW_CONFIG[view].label}</h1>
+          <p className="main-subtitle">{VIEW_CONFIG[view].description}</p>
+        </div>
+
+        {view === "users" && (
+          <>
+            {/* Stats Section */}
+            <div className="stats-grid">
+              <div className="stat-card">
+                <div className="stat-label">Tổng số</div>
+                <div className="stat-value">{(statistics?.total ?? 0).toLocaleString()}</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Học viên</div>
+                <div className="stat-value">{(statistics?.learners ?? 0).toLocaleString()}</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Giảng viên</div>
+                <div className="stat-value">{(statistics?.course_managers ?? 0).toLocaleString()}</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Quản trị viên</div>
+                <div className="stat-value">{(statistics?.admins ?? 0).toLocaleString()}</div>
+              </div>
+            </div>
+
+            {/* Filters Section */}
+            <div className="filters-card">
+              <div className="filters-row">
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ position: "relative" }}>
+                    <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+                    <input
+                      type="text"
+                      placeholder="Tìm kiếm theo email, tên, SĐT..."
+                      value={search}
+                      onChange={(e) => { setPage(1); setSearch(e.target.value); }}
+                      className="filter-input"
+                      style={{ paddingLeft: 36, width: "100%" }}
+                    />
+                  </div>
+                </div>
+                
+                <button className="btn-secondary" onClick={exportCsv}>
+                  <Download size={14} /> XUẤT FILE
+                </button>
+              </div>
+              <div className="filters-row">
+              <label className="filter-checkbox">
+                  <input type="checkbox" checked={fuzzy} onChange={(e) => { setPage(1); setFuzzy(e.target.checked); }} />
+                  <span>Tìm gần đúng</span>
+                </label>
+                <select className="filter-select" value={role} onChange={(e) => { setPage(1); setRole(e.target.value as RoleFilter); }} style={{ width: 140 }}>
+                  <option value="all">Tất cả vai trò</option>
+                  <option value="learner">Học viên</option>
+                  <option value="course_manager">Giảng viên</option>
+                  <option value="admin">Quản trị viên</option>
+                </select>
+                <select className="filter-select" value={status} onChange={(e) => { setPage(1); setStatus(e.target.value as StatusFilter); }} style={{ width: 140 }}>
+                  <option value="all">Tất cả trạng thái</option>
+                  <option value="active">Hoạt động</option>
+                  <option value="pending">Chờ duyệt</option>
+                  <option value="banned">Bị khóa</option>
+                  <option value="deleted">Đã xóa</option>
+                </select>
+                <label className="filter-checkbox">
+                  <input type="checkbox" checked={includeDeleted} onChange={(e) => { setPage(1); setIncludeDeleted(e.target.checked); }} />
+                  <span>Gồm cả đã xóa</span>
+                </label>
+              </div>
+              <div className="filters-row">
+                <input
+                  className="filter-input"
+                  placeholder="Tên bộ lọc đã lưu..."
+                  value={savedFilterName}
+                  onChange={(e) => setSavedFilterName(e.target.value)}
+                  style={{ width: 200 }}
+                />
+                <button className="btn-secondary" onClick={saveCurrentFilter}>
+                  <Save size={14} /> Lưu bộ lọc
+                </button>
+                {savedFilters.length > 0 && (
+                  <div className="filter-tag-group">
+                    {savedFilters.map((f) => (
+                      <div key={f.name} className="filter-tag-group">
+                        <button className="filter-tag" onClick={() => applySavedFilter(f.name)}>{f.name}</button>
+                        <button className="filter-tag-remove" onClick={() => deleteSavedFilter(f.name)}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Bulk Actions Bar */}
+            <div className="bulk-bar">
+              <span className="bulk-count">Đã chọn: {selectedOnPage.length}</span>
+              <select className="filter-select" value={bulkAction} onChange={(e) => setBulkAction(e.target.value as any)} disabled={bulkRunning} style={{ width: 140 }}>
+                <option value="activate">Kích hoạt</option>
+                <option value="deactivate">Vô hiệu hóa</option>
+                <option value="set_role">Đổi vai trò</option>
+              </select>
+              {bulkAction === "set_role" && (
+                <select className="filter-select" value={bulkRole} onChange={(e) => setBulkRole(e.target.value as RoleFilter)} disabled={bulkRunning} style={{ width: 140 }}>
+                  <option value="learner">Học viên</option>
+                  <option value="course_manager">Giảng viên</option>
+                  <option value="admin">Quản trị viên</option>
+                </select>
+              )}
+              <button className="btn-primary" onClick={runBulk} disabled={bulkRunning || selectedOnPage.length === 0}>
+                {bulkRunning ? "Đang chạy..." : "Áp dụng"}
+              </button>
+              <button className="btn-secondary" onClick={undoLastBulk} disabled={bulkRunning || !lastUndo}>Hoàn tác</button>
+              <button className="btn-secondary" onClick={() => setSelectedIds(new Set())} disabled={selectedOnPage.length === 0}>Bỏ chọn</button>
+            </div>
+
+            {/* Users Table */}
+            <div className="table-container">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 40 }}><input type="checkbox" checked={allSelectedOnPage} onChange={(e) => toggleSelectAllOnPage(e.target.checked)} /></th>
+                    <th>Người dùng</th>
+                    <th>Email</th>
+                    <th>Vai trò</th>
+                    <th>Trạng thái</th>
+                    <th>Đăng nhập cuối</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usersQuery.isLoading && (
+                    <tr><td colSpan={7} className="table-empty"><RefreshCw size={20} style={{ animation: "spin 1s linear infinite" }} /> Đang tải...</td></tr>
+                  )}
+                  {usersQuery.isError && !usersQuery.isLoading && (
+                    <tr><td colSpan={7} className="table-empty"><AlertCircle size={20} /> Không thể tải danh sách người dùng</td></tr>
+                  )}
+                  {!usersQuery.isLoading && !usersQuery.isError && displayedUsers.length === 0 && (
+                    <tr><td colSpan={7} className="table-empty">Không có người dùng nào</td></tr>
+                  )}
+                  {displayedUsers.map((u) => (
+                    <UserRow
+                      key={u.id}
+                      user={u}
+                      selected={selectedIds.has(u.id)}
+                      onToggleSelected={(checked) => toggleOne(u.id, checked)}
+                      onResetPassword={() => handleResetPassword(u)}
+                      onChangeRole={(r) => handleUpdateRole(u, r)}
+                      onChangeStatus={(s) => handleUpdateStatus(u, s)}
+                      onSoftDelete={() => handleSoftDelete(u)}
+                      onRestore={() => handleRestore(u)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="pagination">
+              <div className="pagination-buttons">
+                <button className="btn-secondary" disabled={!pagination || page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  <ChevronLeft size={14} /> Trước
+                </button>
+                <button className="btn-secondary" disabled={!pagination || page >= (pagination?.pages ?? 1)} onClick={() => setPage((p) => !pagination ? p : Math.min(pagination.pages, p + 1))}>
+                  Sau <ChevronRight size={14} />
+                </button>
+              </div>
+              <div className="pagination-info">Trang {page} / {pagination?.pages ?? 1}</div>
+            </div>
+          </>
+        )}
+
+        {view === "audit_logs" && (
           <AuditLogsPanel
             data={auditQuery.data?.logs ?? []}
             pagination={auditQuery.data?.pagination}
@@ -720,675 +892,99 @@ export default function AdminDashboard() {
             to={auditTo}
             setTo={setAuditTo}
           />
-        ) : null}
-        {view === "keys" ? (
-          <section style={{ marginBottom: "1.5rem" }}>
-            <h2
-              style={{
-                fontSize: "0.95rem",
-                fontWeight: 600,
-                color: "#1f2933",
-                marginBottom: "0.75rem",
-              }}
-            >
-              🤖 OpenRouter Config
-            </h2>
-            <div style={{ border: "1px solid rgba(15,23,42,0.08)", borderRadius: 12, padding: 12, background: "#fff", marginBottom: 12 }}>
-              <div style={{ display: "grid", gap: 10 }}>
-                <div>
-                  <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>Danh sách model (mỗi dòng 1 model)</label>
-                  <textarea
-                    className="form-input"
-                    rows={5}
-                    value={openRouterModelsInput}
-                    onChange={(e) => setOpenRouterModelsInput(e.target.value)}
-                    placeholder={"openai/gpt-4o-mini\nanthropic/claude-3.5-sonnet\ngoogle/gemini-2.0-flash-001"}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>Default model</label>
-                  <input
-                    className="form-input"
-                    value={openRouterDefaultModel}
-                    onChange={(e) => setOpenRouterDefaultModel(e.target.value)}
-                    placeholder="openai/gpt-4o-mini"
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>Cooldown phút khi key bị limit</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    min={1}
-                    value={openRouterCooldownMinutes}
-                    onChange={(e) => setOpenRouterCooldownMinutes(e.target.value)}
-                    placeholder="10"
-                  />
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <button type="button" className="secondary-button" onClick={saveOpenRouterConfig} disabled={openRouterSaving}>
-                    {openRouterSaving ? "Đang lưu..." : "Lưu OpenRouter config"}
-                  </button>
-                  {openRouterMessage ? <span style={{ fontSize: 13, color: "#475569" }}>{openRouterMessage}</span> : null}
-                </div>
-              </div>
-            </div>
+        )}
 
-            <div style={{ border: "1px solid rgba(15,23,42,0.08)", borderRadius: 12, padding: 12, background: "#fff", marginBottom: 12 }}>
-              <h3 style={{ margin: "0 0 8px", fontSize: 16 }}>Thêm key mới</h3>
-              <div style={{ display: "grid", gap: 8 }}>
-                <input
-                  className="form-input"
-                  value={newOpenRouterKeyLabel}
-                  onChange={(e) => setNewOpenRouterKeyLabel(e.target.value)}
-                  placeholder="Label (vd: key backup #2)"
-                />
-                <input
-                  className="form-input"
-                  type="password"
-                  value={newOpenRouterApiKey}
-                  onChange={(e) => setNewOpenRouterApiKey(e.target.value)}
-                  placeholder="Nhập OpenRouter API key"
-                />
-                <div>
-                  <button type="button" className="secondary-button" onClick={createOpenRouterKey} disabled={openRouterSaving}>
-                    Thêm key
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ border: "1px solid rgba(15,23,42,0.08)", borderRadius: 12, padding: 12, background: "#fff" }}>
-              <h3 style={{ margin: "0 0 8px", fontSize: 16 }}>
-                Danh sách keys (khả dụng: {openRouterQuery.data?.active_available_keys ?? 0})
-              </h3>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-                {[
-                  { id: "all", label: "All" },
-                  { id: "healthy", label: "Healthy" },
-                  { id: "limited", label: "Limited" },
-                  { id: "auth_error", label: "Auth Error" },
-                  { id: "inactive", label: "Inactive" },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={keyHealthFilter === item.id ? "primary-button" : "secondary-button"}
-                    onClick={() => setKeyHealthFilter(item.id as any)}
-                    style={{ padding: "6px 10px", fontSize: 13 }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-              <div style={{ display: "grid", gap: 8 }}>
-                {filteredOpenRouterKeys.map((k) => (
-                  <div key={k.id} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-                      <div>
-                        <div style={{ marginBottom: 4 }}>
-                          {renderKeyHealthBadge(k)}
-                        </div>
-                        <div style={{ fontWeight: 600 }}>
-                          #{k.id} {k.label ? `- ${k.label}` : ""}
-                        </div>
-                        <div style={{ fontSize: 13, color: "#64748b" }}>
-                          {k.key_preview} · {k.is_active ? "active" : "inactive"} ·{" "}
-                          {k.is_available_now ? "available" : "cooldown/unavailable"}
-                        </div>
-                        <div style={{ fontSize: 12, color: "#64748b" }}>
-                          cooldown_until: {k.cooldown_until ? new Date(k.cooldown_until).toLocaleString("vi-VN") : "—"} ·
-                          last_used: {k.last_used_at ? new Date(k.last_used_at).toLocaleString("vi-VN") : "—"} ·
-                          errors: {k.error_count}
-                        </div>
-                        {k.last_test_message ? (
-                          <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
-                            last test: {k.last_test_message}
-                          </div>
-                        ) : null}
-                      </div>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => void toggleOpenRouterKeyActive(k.id, !k.is_active)}
-                        >
-                          {k.is_active ? "Disable" : "Enable"}
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => void setOpenRouterKeyCooldown(k.id)}
-                        >
-                          Set cooldown
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => void clearOpenRouterKeyCooldown(k.id)}
-                        >
-                          Clear cooldown
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => void testOpenRouterKey(k.id)}
-                          disabled={testingKeyId === k.id}
-                        >
-                          {testingKeyId === k.id ? "Testing..." : "Test key"}
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => void deleteOpenRouterKey(k.id)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {filteredOpenRouterKeys.length === 0 ? (
-                  <div style={{ color: "#64748b", fontSize: 13 }}>Chưa có key nào.</div>
-                ) : null}
-              </div>
-            </div>
-          </section>
-        ) : null}
-      </section>
-
-      {view === "users" ? (
-        <>
-      <section style={{ marginBottom: "1.5rem" }}>
-        <h2
-          style={{
-            fontSize: "0.95rem",
-            fontWeight: 600,
-            color: "#1f2933",
-            marginBottom: "0.75rem",
-          }}
-        >
-          📊 Thống kê
-        </h2>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: "1rem",
-          }}
-        >
-          {renderStatCard("Tổng số", statistics?.total ?? 0)}
-          {renderStatCard("Học viên", statistics?.learners ?? 0)}
-          {renderStatCard("Giảng viên", statistics?.course_managers ?? 0)}
-          {renderStatCard("Admin", statistics?.admins ?? 0)}
-        </div>
-      </section>
-
-      <section style={{ marginBottom: "1.5rem" }}>
-        <h2
-          style={{
-            fontSize: "0.95rem",
-            fontWeight: 600,
-            color: "#1f2933",
-            marginBottom: "0.75rem",
-          }}
-        >
-          🔍 Tìm kiếm và lọc
-        </h2>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.75rem",
-            alignItems: "center",
-          }}
-        >
-          <input
-            type="text"
-            placeholder="Tìm kiếm theo email, tên, SĐT..."
-            value={search}
-            onChange={(e) => {
-              setPage(1);
-              setSearch(e.target.value);
-            }}
-            className="form-input"
-            style={{ minWidth: "260px", flex: "1 1 260px" }}
+        {view === "keys" && (
+          <KeysPanel
+            openRouterModelsInput={openRouterModelsInput}
+            setOpenRouterModelsInput={setOpenRouterModelsInput}
+            openRouterDefaultModel={openRouterDefaultModel}
+            setOpenRouterDefaultModel={setOpenRouterDefaultModel}
+            openRouterCooldownMinutes={openRouterCooldownMinutes}
+            setOpenRouterCooldownMinutes={setOpenRouterCooldownMinutes}
+            openRouterSaving={openRouterSaving}
+            openRouterMessage={openRouterMessage}
+            saveOpenRouterConfig={saveOpenRouterConfig}
+            newOpenRouterKeyLabel={newOpenRouterKeyLabel}
+            setNewOpenRouterKeyLabel={setNewOpenRouterKeyLabel}
+            newOpenRouterApiKey={newOpenRouterApiKey}
+            setNewOpenRouterApiKey={setNewOpenRouterApiKey}
+            createOpenRouterKey={createOpenRouterKey}
+            keyHealthFilter={keyHealthFilter}
+            setKeyHealthFilter={setKeyHealthFilter}
+            filteredKeys={filteredOpenRouterKeys}
+            testingKeyId={testingKeyId}
+            testOpenRouterKey={testOpenRouterKey}
+            toggleOpenRouterKeyActive={toggleOpenRouterKeyActive}
+            setOpenRouterKeyCooldown={setOpenRouterKeyCooldown}
+            clearOpenRouterKeyCooldown={clearOpenRouterKeyCooldown}
+            deleteOpenRouterKey={deleteOpenRouterKey}
+            activeAvailableKeys={openRouterQuery.data?.active_available_keys ?? 0}
           />
+        )}
 
-          <label
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              fontSize: "0.85rem",
-              color: "#607489",
-              userSelect: "none",
-            }}
-            title="Fuzzy search (client-side, trong trang hiện tại)"
-          >
-            <input
-              type="checkbox"
-              checked={fuzzy}
-              onChange={(e) => {
-                setPage(1);
-                setFuzzy(e.target.checked);
-              }}
-            />
-            Fuzzy
-          </label>
-
-          <select
-            className="form-input"
-            value={role}
-            onChange={(e) => {
-              setPage(1);
-              setRole(e.target.value as RoleFilter);
-            }}
-            style={{ width: 140 }}
-          >
-            <option value="all">Tất cả vai trò</option>
-            <option value="learner">Learner</option>
-            <option value="course_manager">Course Manager</option>
-            <option value="admin">Admin</option>
-          </select>
-
-          <select
-            className="form-input"
-            value={status}
-            onChange={(e) => {
-              setPage(1);
-              setStatus(e.target.value as StatusFilter);
-            }}
-            style={{ width: 140 }}
-          >
-            <option value="all">Tất cả trạng thái</option>
-            <option value="active">Active</option>
-            <option value="pending">Pending</option>
-            <option value="banned">Banned</option>
-            <option value="deleted">Deleted</option>
-          </select>
-
-          <label
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              fontSize: "0.85rem",
-              color: "#607489",
-              userSelect: "none",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={includeDeleted}
-              onChange={(e) => {
-                setPage(1);
-                setIncludeDeleted(e.target.checked);
-              }}
-            />
-            Include deleted
-          </label>
-
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={exportCsv}
-          >
-            EXPORT
-          </button>
-        </div>
-
-        <div
-          style={{
-            marginTop: "0.75rem",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.5rem",
-            alignItems: "center",
-          }}
-        >
-          <input
-            className="form-input"
-            placeholder="Tên saved filter..."
-            value={savedFilterName}
-            onChange={(e) => setSavedFilterName(e.target.value)}
-            style={{ width: 220 }}
+        {view === "course_reviews" && (
+          <CourseReviewsPanel
+            data={pendingReviewQuery.data?.items ?? []}
+            pagination={
+              pendingReviewQuery.data
+                ? {
+                    page: pendingReviewQuery.data.page,
+                    limit: pendingReviewQuery.data.page_size,
+                    total: pendingReviewQuery.data.total,
+                    pages: Math.max(1, Math.ceil(pendingReviewQuery.data.total / pendingReviewQuery.data.page_size)),
+                  }
+                : undefined
+            }
+            isLoading={pendingReviewQuery.isLoading}
+            isError={pendingReviewQuery.isError}
+            page={reviewPage}
+            setPage={setReviewPage}
+            q={reviewQ}
+            setQ={setReviewQ}
+            actionLoading={reviewActionLoading}
+            onReview={reviewCourse}
+            onViewTimeline={viewReviewTimeline}
+            refetch={pendingReviewQuery.refetch}
           />
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={saveCurrentFilter}
-          >
-            Save filter
-          </button>
+        )}
 
-          {savedFilters.length > 0 ? (
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              {savedFilters
-                .slice()
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((f) => (
-                  <div
-                    key={f.name}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.35rem",
-                      padding: "0.2rem 0.45rem",
-                      borderRadius: 999,
-                      border: "1px solid rgba(15, 23, 42, 0.08)",
-                      background: "#fff",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => applySavedFilter(f.name)}
-                      style={{ padding: "0.25rem 0.55rem" }}
-                      title="Apply filter"
-                    >
-                      {f.name}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => deleteSavedFilter(f.name)}
-                      style={{ padding: "0.25rem 0.55rem" }}
-                      title="Delete filter"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-            </div>
-          ) : (
-            <div style={{ fontSize: "0.85rem", color: "#94a3b8" }}>
-              Chưa có saved filters.
-            </div>
-          )}
-        </div>
-      </section>
+        {view === "manager_verifications" && (
+          <ManagerVerificationsPanel
+            data={managerVerificationQuery.data?.items ?? []}
+            pagination={managerVerificationQuery.data?.pagination}
+            isLoading={managerVerificationQuery.isLoading}
+            isError={managerVerificationQuery.isError}
+            page={verificationPage}
+            setPage={setVerificationPage}
+            q={verificationQ}
+            setQ={setVerificationQ}
+            status={verificationStatus}
+            setStatus={setVerificationStatus}
+            actionLoading={verificationActionLoading}
+            onReview={reviewManagerVerification}
+            refetch={managerVerificationQuery.refetch}
+          />
+        )}
+      </main>
 
-      <section>
-        <div
-          style={{
-            marginBottom: "0.75rem",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.5rem",
-            alignItems: "center",
-            padding: "0.75rem",
-            borderRadius: 12,
-            border: "1px solid rgba(15, 23, 42, 0.08)",
-            background: "#ffffff",
-          }}
-        >
-          <div style={{ fontSize: "0.85rem", color: "#607489" }}>
-            Selected: <b>{selectedOnPage.length}</b> (trên trang hiện tại)
-          </div>
-
-          <select
-            className="form-input"
-            value={bulkAction}
-            onChange={(e) => setBulkAction(e.target.value as any)}
-            disabled={!can(adminTier, "bulk") || bulkRunning}
-            style={{ width: 160 }}
-            title="Bulk action"
-          >
-            <option value="activate">Activate</option>
-            <option value="deactivate">Deactivate</option>
-            <option value="set_role">Set role</option>
-          </select>
-
-          {bulkAction === "set_role" ? (
-            <select
-              className="form-input"
-              value={bulkRole}
-              onChange={(e) => setBulkRole(e.target.value as RoleFilter)}
-              disabled={!can(adminTier, "bulk") || bulkRunning}
-              style={{ width: 160 }}
-              title="Role"
-            >
-              <option value="learner">Learner</option>
-              <option value="course_manager">Course Manager</option>
-              <option value="admin">Admin</option>
-            </select>
-          ) : null}
-
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={runBulk}
-            disabled={!can(adminTier, "bulk") || bulkRunning || selectedOnPage.length === 0}
-            title="Preview + apply"
-          >
-            {bulkRunning ? "Running..." : "Apply bulk"}
-          </button>
-
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={undoLastBulk}
-            disabled={!can(adminTier, "bulk") || bulkRunning || !lastUndo}
-            title="Undo (chỉ activate/deactivate)"
-          >
-            Undo
-          </button>
-
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => setSelectedIds(new Set())}
-            disabled={selectedOnPage.length === 0 || bulkRunning}
-          >
-            Clear selection
-          </button>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "0.5rem",
-            fontSize: "0.85rem",
-            color: "#607489",
-          }}
-        >
-          <div>
-            Kết quả: {pagination?.total ?? 0} users (hiển thị{" "}
-            {users.length > 0 ? `${(page - 1) * limit + 1} - ${(page - 1) * limit + users.length}` : "0"}
-            )
-          </div>
-        </div>
-
-        <div
-          style={{
-            borderRadius: 12,
-            border: "1px solid rgba(15, 23, 42, 0.08)",
-            overflow: "hidden",
-            background: "#ffffff",
-          }}
-        >
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "0.85rem",
-            }}
-          >
-            <thead
-              style={{
-                background: "#f8fafc",
-                textAlign: "left",
-                color: "#607489",
-              }}
-            >
-              <tr>
-                <th style={thStyle}>
-                  <input
-                    type="checkbox"
-                    checked={allSelectedOnPage}
-                    onChange={(e) => toggleSelectAllOnPage(e.target.checked)}
-                    disabled={displayedUsers.length === 0}
-                    title="Select all on this page"
-                  />
-                </th>
-                <th style={thStyle}>USER</th>
-                <th style={thStyle}>EMAIL</th>
-                <th style={thStyle}>VAI TRÒ</th>
-                <th style={thStyle}>TRẠNG THÁI</th>
-                <th style={thStyle}>LẦN ĐĂNG NHẬP CUỐI</th>
-                <th style={thStyle}>ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading && (
-                <tr>
-                  <td colSpan={7} style={emptyCellStyle}>
-                    Đang tải danh sách người dùng...
-                  </td>
-                </tr>
-              )}
-              {isError && !isLoading && (
-                <tr>
-                  <td colSpan={7} style={emptyCellStyle}>
-                    Không thể tải danh sách người dùng. Vui lòng thử lại.
-                  </td>
-                </tr>
-              )}
-              {!isLoading && !isError && users.length === 0 && (
-                <tr>
-                  <td colSpan={7} style={emptyCellStyle}>
-                    Không có người dùng nào khớp với bộ lọc hiện tại.
-                  </td>
-                </tr>
-              )}
-              {displayedUsers.map((u) => (
-                <UserRow
-                  key={u.id}
-                  user={u}
-                  adminTier={adminTier}
-                  selected={selectedIds.has(u.id)}
-                  onToggleSelected={(checked) => toggleOne(u.id, checked)}
-                  onResetPassword={() => handleResetPassword(u)}
-                  onChangeRole={(r) => handleUpdateRole(u, r)}
-                  onChangeStatus={(s) => handleUpdateStatus(u, s)}
-                  onSoftDelete={() => handleSoftDelete(u)}
-                  onRestore={() => handleRestore(u)}
-                  onHardDelete={() => handleHardDelete(u)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: "0.75rem",
-            gap: "0.75rem",
-          }}
-        >
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={!pagination || page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              ⟵ Previous
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={!pagination || page >= (pagination?.pages ?? 1)}
-              onClick={() =>
-                setPage((p) =>
-                  !pagination ? p : Math.min(pagination.pages, p + 1)
-                )
-              }
-            >
-              Next ⟶
-            </button>
-          </div>
-
-          <div
-            style={{
-              fontSize: "0.8rem",
-              color: "#607489",
-            }}
-          >
-            Trang {page} / {pagination?.pages ?? 1}
-          </div>
-        </div>
-      </section>
-        </>
-      ) : null}
+      <CommonModal
+        open={noticeModal.open}
+        title={noticeModal.title}
+        message={noticeModal.message}
+        variant={noticeModal.variant}
+        showCancel={false}
+        onClose={() => setNoticeModal({ open: false, title: "", message: "", variant: "info" })}
+        onConfirm={() => setNoticeModal({ open: false, title: "", message: "", variant: "info" })}
+      />
     </div>
   );
 }
 
-const thStyle: React.CSSProperties = {
-  padding: "0.65rem 0.9rem",
-  fontWeight: 500,
-  fontSize: "0.78rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
-  borderBottom: "1px solid rgba(15, 23, 42, 0.08)",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "0.6rem 0.9rem",
-  borderBottom: "1px solid rgba(15, 23, 42, 0.04)",
-  verticalAlign: "middle",
-};
-
-const emptyCellStyle: React.CSSProperties = {
-  padding: "1.5rem",
-  textAlign: "center",
-  color: "#607489",
-};
-
-function renderStatCard(label: string, value: number) {
-  return (
-    <div
-      style={{
-        padding: "0.9rem 1.1rem",
-        borderRadius: 14,
-        background:
-          "radial-gradient(circle at top left, #e0f2fe 0, #f8fafc 45%, #ffffff 100%)",
-        border: "1px solid rgba(15, 23, 42, 0.05)",
-        boxShadow: "0 8px 18px rgba(15, 23, 42, 0.06)",
-      }}
-    >
-      <div
-        style={{
-          fontSize: "0.8rem",
-          color: "#607489",
-          marginBottom: "0.15rem",
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: "1.4rem",
-          fontWeight: 700,
-          color: "#1f2933",
-        }}
-      >
-        {value.toLocaleString("vi-VN")}
-      </div>
-    </div>
-  );
-}
+// ==================== Sub-components ====================
 
 function UserRow({
   user,
-  adminTier,
   selected,
   onToggleSelected,
   onResetPassword,
@@ -1396,10 +992,8 @@ function UserRow({
   onChangeStatus,
   onSoftDelete,
   onRestore,
-  onHardDelete,
 }: {
   user: AdminUser;
-  adminTier: AdminTier;
   selected: boolean;
   onToggleSelected: (checked: boolean) => void;
   onResetPassword: () => void;
@@ -1407,156 +1001,42 @@ function UserRow({
   onChangeStatus: (status: Exclude<StatusFilter, "all" | "deleted">) => void;
   onSoftDelete: () => void;
   onRestore: () => void;
-  onHardDelete: () => void;
 }) {
-  const roleLabel = toTitleCase(user.role || "unknown");
-
-  const statusColor =
-    user.status === "active"
-      ? "#22c55e"
-      : user.status === "pending"
-      ? "#eab308"
-      : user.status === "deleted"
-      ? "#94a3b8"
-      : "#ef4444";
-
-  const statusText =
-    user.status === "active"
-      ? "Active"
-      : user.status === "pending"
-      ? "Pending"
-      : user.status === "deleted"
-      ? "Deleted"
-      : "Banned";
+  const statusConfig: Record<string, { label: string; className: string }> = {
+    active: { label: "Hoạt động", className: "success" },
+    pending: { label: "Chờ duyệt", className: "warning" },
+    banned: { label: "Bị khóa", className: "error" },
+    deleted: { label: "Đã xóa", className: "deleted" },
+  };
+  const config = statusConfig[user.status] || { label: user.status, className: "warning" };
 
   return (
     <tr>
-      <td style={tdStyle}>
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={(e) => onToggleSelected(e.target.checked)}
-          disabled={user.status === "deleted"}
-        />
+      <td><input type="checkbox" checked={selected} onChange={(e) => onToggleSelected(e.target.checked)} disabled={user.status === "deleted"} /></td>
+      <td>
+        <div className="user-name">{user.full_name || user.email}</div>
+        <div className="user-id">ID: {user.id}</div>
       </td>
-      <td style={tdStyle}>
-        <div style={{ fontWeight: 500, color: "#111827" }}>
-          {user.full_name || user.email}
-        </div>
-        <div
-          style={{
-            fontSize: "0.75rem",
-            color: "#9ca3af",
-            marginTop: "0.1rem",
-          }}
-        >
-          ID: {user.id}
-        </div>
-      </td>
-      <td style={tdStyle}>{user.email}</td>
-      <td style={tdStyle}>{roleLabel}</td>
-      <td style={tdStyle}>
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.35rem",
-          }}
-        >
-          <span
-            style={{
-              width: 9,
-              height: 9,
-              borderRadius: "999px",
-              backgroundColor: statusColor,
-            }}
-          />
-          <span
-            style={{
-              fontSize: "0.8rem",
-              color: "#4b5563",
-            }}
-          >
-            {statusText}
-          </span>
-        </span>
-      </td>
-      <td style={tdStyle}>
-        <span
-          style={{
-            fontSize: "0.78rem",
-            color: "#6b7280",
-          }}
-        >
-          {user.last_login
-            ? new Date(user.last_login).toLocaleString("vi-VN")
-            : "—"}
-        </span>
-      </td>
-      <td style={tdStyle}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={onResetPassword}
-            disabled={!can(adminTier, "reset_password") || user.status === "deleted"}
-            title="Reset password (rate-limited)"
-          >
-            Reset pass
-          </button>
-
-          <select
-            className="form-input"
-            value={user.role || "learner"}
-            onChange={(e) => onChangeRole(e.target.value as RoleFilter)}
-            disabled={!can(adminTier, "change_role") || user.status === "deleted"}
-            style={{ width: 130 }}
-            title="Đổi role"
-          >
-            <option value="learner">Learner</option>
-            <option value="course_manager">Course Manager</option>
-            <option value="admin">Admin</option>
+      <td>{user.email}</td>
+      <td>{getRoleDisplayLabel(user.role)}</td>
+      <td><span className={`status-badge-text ${config.className}`}>{config.label}</span></td>
+      <td>{user.last_login ? new Date(user.last_login).toLocaleString("vi-VN") : "—"}</td>
+      <td>
+        <div className="action-buttons">
+          <button className="btn-small" onClick={onResetPassword} disabled={user.status === "deleted"}><Lock size={12} /></button>
+          <select className="btn-small-select" value={user.role || "learner"} onChange={(e) => onChangeRole(e.target.value as RoleFilter)} disabled={user.status === "deleted"} style={{ width: 110 }}>
+            <option value="learner">Học viên</option>
+            <option value="course_manager">Giảng viên</option>
+            <option value="admin">Quản trị viên</option>
           </select>
-
-          <select
-            className="form-input"
-            value={user.status === "deleted" ? "banned" : user.status}
-            onChange={(e) =>
-              onChangeStatus(
-                e.target.value as Exclude<StatusFilter, "all" | "deleted">
-              )
-            }
-            disabled={!can(adminTier, "change_status") || user.status === "deleted"}
-            style={{ width: 130 }}
-            title="Đổi trạng thái"
-          >
-            <option value="active">Active</option>
-            <option value="pending">Pending</option>
-            <option value="banned">Banned</option>
-          </select>
-
           {user.status !== "deleted" ? (
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={onSoftDelete}
-              disabled={!can(adminTier, "soft_delete")}
-              title="Soft delete"
-            >
-              Soft delete
-            </button>
-          ) : (
             <>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={onRestore}
-                disabled={!can(adminTier, "restore")}
-                title="Restore"
-              >
-                Restore
-              </button>
+              <button className="btn-small" onClick={() => onChangeStatus("active")}>Mở</button>
+              <button className="btn-small" onClick={() => onChangeStatus("banned")}>Khóa</button>
+              <button className="btn-small btn-danger" onClick={onSoftDelete}>Xóa mềm</button>
             </>
+          ) : (
+            <button className="btn-small" onClick={onRestore}><UserRestore size={12} /> Khôi phục</button>
           )}
         </div>
       </td>
@@ -1564,114 +1044,28 @@ function UserRow({
   );
 }
 
-function getAdminTierFromUser(user: any): AdminTier {
-  const roles: string[] = [
-    user?.primary_role,
-    ...(Array.isArray(user?.roles) ? user.roles : []),
-  ]
-    .filter(Boolean)
-    .map((r: string) => String(r).toLowerCase());
-
-  if (roles.includes("admin")) return "admin";
-  return "non_admin";
-}
-
-function can(tier: AdminTier, action: string): boolean {
-  if (tier !== "admin") return false;
-  return action !== "hard_delete";
-}
-
-function normalize(s: string): string {
-  return String(s)
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-}
-
-function fuzzyMatch(hay: string, needle: string): boolean {
-  // Simple subsequence match: "mbr" matches "mindbridge"
-  if (!needle) return true;
-  let i = 0;
-  for (let j = 0; j < hay.length && i < needle.length; j++) {
-    if (hay[j] === needle[i]) i++;
-  }
-  return i === needle.length;
-}
-
-function toCsv(rows: Array<Record<string, string | number>>): string {
-  const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
-  const escape = (v: any) => {
-    const s = String(v ?? "");
-    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-    return s;
-  };
-  const lines = [
-    headers.join(","),
-    ...rows.map((r) => headers.map((h) => escape((r as any)[h])).join(",")),
-  ];
-  return lines.join("\n");
-}
-
-function confirmSensitive(message: string): boolean {
-  return window.confirm(`${message}\n\nBạn có chắc chắn muốn thực hiện?`);
-}
-
-function confirmTyped(message: string, expected: string): boolean {
-  const input = window.prompt(`${message}\n\nNhập "${expected}" để xác nhận:`, "");
-  return (input || "").trim().toUpperCase() === expected.toUpperCase();
-}
-
-function renderKeyHealthBadge(key: {
-  is_active: boolean;
-  is_available_now: boolean;
-  last_test_status: string | null;
-}) {
-  const baseStyle: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "2px 8px",
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 600,
-  };
-
-  if (!key.is_active) {
-    return <span style={{ ...baseStyle, background: "#e5e7eb", color: "#334155" }}>Inactive</span>;
-  }
-  if (key.last_test_status === "unauthorized") {
-    return <span style={{ ...baseStyle, background: "#fee2e2", color: "#b91c1c" }}>Auth Error</span>;
-  }
-  if (key.last_test_status === "rate_limited" || !key.is_available_now) {
-    return <span style={{ ...baseStyle, background: "#fef3c7", color: "#92400e" }}>Limited</span>;
-  }
-  if (key.last_test_status === "ok") {
-    return <span style={{ ...baseStyle, background: "#dcfce7", color: "#166534" }}>Healthy</span>;
-  }
-  return <span style={{ ...baseStyle, background: "#e0f2fe", color: "#0c4a6e" }}>Unknown</span>;
-}
-
-function getKeyHealthStatus(key: {
-  is_active: boolean;
-  is_available_now: boolean;
-  last_test_status: string | null;
-}): "inactive" | "auth_error" | "limited" | "healthy" | "unknown" {
-  if (!key.is_active) return "inactive";
-  if (key.last_test_status === "unauthorized") return "auth_error";
-  if (key.last_test_status === "rate_limited" || !key.is_available_now) return "limited";
-  if (key.last_test_status === "ok") return "healthy";
-  return "unknown";
-}
-
-function AuditLogsPanel(props: {
+function AuditLogsPanel({
+  data,
+  pagination,
+  isLoading,
+  isError,
+  page,
+  setPage,
+  actorId,
+  setActorId,
+  action,
+  setAction,
+  from,
+  setFrom,
+  to,
+  setTo,
+}: {
   data: AuditLogItem[];
-  pagination:
-    | { total: number; page: number; limit: number; pages: number }
-    | undefined;
+  pagination: any;
   isLoading: boolean;
   isError: boolean;
   page: number;
-  setPage: (n: number | ((p: number) => number)) => void;
+  setPage: (n: number) => void;
   actorId: string;
   setActorId: (s: string) => void;
   action: string;
@@ -1681,162 +1075,212 @@ function AuditLogsPanel(props: {
   to: string;
   setTo: (s: string) => void;
 }) {
-  const {
-    data,
-    pagination,
-    isLoading,
-    isError,
-    page,
-    setPage,
-    actorId,
-    setActorId,
-    action,
-    setAction,
-    from,
-    setFrom,
-    to,
-    setTo,
-  } = props;
-
   return (
-    <section style={{ marginBottom: "1.5rem" }}>
-      <h2
-        style={{
-          fontSize: "0.95rem",
-          fontWeight: 600,
-          color: "#1f2933",
-          marginBottom: "0.75rem",
-        }}
-      >
-        🧾 Audit Logs
-      </h2>
-
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "0.75rem",
-          alignItems: "center",
-          marginBottom: "0.75rem",
-        }}
-      >
-        <input
-          className="form-input"
-          style={{ width: 160 }}
-          placeholder="actor_user_id"
-          value={actorId}
-          onChange={(e) => {
-            setPage(1);
-            setActorId(e.target.value);
-          }}
-        />
-        <input
-          className="form-input"
-          style={{ width: 240 }}
-          placeholder="action (e.g. user_reset_password)"
-          value={action}
-          onChange={(e) => {
-            setPage(1);
-            setAction(e.target.value);
-          }}
-        />
-        <input
-          className="form-input"
-          type="datetime-local"
-          value={from}
-          onChange={(e) => {
-            setPage(1);
-            setFrom(e.target.value);
-          }}
-          title="From"
-        />
-        <input
-          className="form-input"
-          type="datetime-local"
-          value={to}
-          onChange={(e) => {
-            setPage(1);
-            setTo(e.target.value);
-          }}
-          title="To"
-        />
+    <div>
+      <div className="filters-card">
+        <div className="filters-row">
+          <input className="filter-input" placeholder="ID người thao tác" value={actorId} onChange={(e) => { setPage(1); setActorId(e.target.value); }} style={{ width: 160 }} />
+          <input className="filter-input" placeholder="Hành động" value={action} onChange={(e) => { setPage(1); setAction(e.target.value); }} style={{ width: 240 }} />
+          <input className="filter-input" type="datetime-local" value={from} onChange={(e) => { setPage(1); setFrom(e.target.value); }} />
+          <input className="filter-input" type="datetime-local" value={to} onChange={(e) => { setPage(1); setTo(e.target.value); }} />
+        </div>
       </div>
 
-      <div
-        style={{
-          borderRadius: 12,
-          border: "1px solid rgba(15, 23, 42, 0.08)",
-          overflow: "hidden",
-          background: "#ffffff",
-        }}
-      >
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontSize: "0.85rem",
-          }}
-        >
-          <thead
-            style={{
-              background: "#f8fafc",
-              textAlign: "left",
-              color: "#607489",
-            }}
-          >
-            <tr>
-              <th style={thStyle}>TIME</th>
-              <th style={thStyle}>ACTOR</th>
-              <th style={thStyle}>ACTION</th>
-              <th style={thStyle}>TARGET</th>
-              <th style={thStyle}>DETAILS</th>
-            </tr>
+      <div className="table-container">
+        <table className="admin-table">
+          <thead>
+            <tr><th>Thời gian</th><th>Người thao tác</th><th>Hành động</th><th>Đối tượng</th><th>Chi tiết</th></tr>
           </thead>
           <tbody>
-            {isLoading && (
-              <tr>
-                <td colSpan={5} style={emptyCellStyle}>
-                  Đang tải audit logs...
-                </td>
-              </tr>
-            )}
-            {isError && !isLoading && (
-              <tr>
-                <td colSpan={5} style={emptyCellStyle}>
-                  Không thể tải audit logs.
-                </td>
-              </tr>
-            )}
-            {!isLoading && !isError && data.length === 0 && (
-              <tr>
-                <td colSpan={5} style={emptyCellStyle}>
-                  Không có log nào.
-                </td>
-              </tr>
-            )}
+            {isLoading && <tr><td colSpan={5} className="table-empty"><RefreshCw size={20} style={{ animation: "spin 1s linear infinite" }} /> Đang tải...</td></tr>}
+            {isError && <tr><td colSpan={5} className="table-empty"><AlertCircle size={20} /> Không thể tải nhật ký hệ thống</td></tr>}
+            {!isLoading && !isError && data.length === 0 && <tr><td colSpan={5} className="table-empty">Không có nhật ký nào</td></tr>}
             {data.map((l) => (
               <tr key={l.id}>
-                <td style={tdStyle}>
-                  {new Date(l.created_at).toLocaleString("vi-VN")}
-                </td>
-                <td style={tdStyle}>#{l.actor_user_id}</td>
-                <td style={tdStyle}>{l.action}</td>
-                <td style={tdStyle}>
-                  {l.target_user_id ? `#${l.target_user_id}` : "—"}
-                </td>
-                <td style={tdStyle}>
-                  <pre
-                    style={{
-                      margin: 0,
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                      maxWidth: 520,
-                      fontSize: "0.75rem",
-                      color: "#475569",
-                    }}
-                  >
-                    {JSON.stringify(l.metadata || {}, null, 2)}
-                  </pre>
+                <td>{new Date(l.created_at).toLocaleString("vi-VN")}</td>
+                <td>#{l.actor_user_id}</td>
+                <td>{l.action}</td>
+                <td>{l.target_user_id ? `#${l.target_user_id}` : "—"}</td>
+                <td><pre className="log-details">{JSON.stringify(l.metadata || {}, null, 2)}</pre></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="pagination">
+        <div className="pagination-buttons">
+          <button className="btn-secondary" disabled={!pagination || page <= 1} onClick={() => setPage(Math.max(1, page - 1))}>Trước</button>
+          <button className="btn-secondary" disabled={!pagination || page >= (pagination?.pages ?? 1)} onClick={() => setPage(Math.min(pagination?.pages || 1, page + 1))}>Sau</button>
+        </div>
+        <div className="pagination-info">Trang {page} / {pagination?.pages ?? 1}</div>
+      </div>
+    </div>
+  );
+}
+
+function KeysPanel({
+  openRouterModelsInput,
+  setOpenRouterModelsInput,
+  openRouterDefaultModel,
+  setOpenRouterDefaultModel,
+  openRouterCooldownMinutes,
+  setOpenRouterCooldownMinutes,
+  openRouterSaving,
+  openRouterMessage,
+  saveOpenRouterConfig,
+  newOpenRouterKeyLabel,
+  setNewOpenRouterKeyLabel,
+  newOpenRouterApiKey,
+  setNewOpenRouterApiKey,
+  createOpenRouterKey,
+  keyHealthFilter,
+  setKeyHealthFilter,
+  filteredKeys,
+  testingKeyId,
+  testOpenRouterKey,
+  toggleOpenRouterKeyActive,
+  setOpenRouterKeyCooldown,
+  clearOpenRouterKeyCooldown,
+  deleteOpenRouterKey,
+  activeAvailableKeys,
+}: any) {
+  const healthFilters = [
+    { id: "all", label: "Tất cả" },
+    { id: "healthy", label: "Ổn định" },
+    { id: "limited", label: "Giới hạn" },
+    { id: "auth_error", label: "Lỗi xác thực" },
+    { id: "inactive", label: "Không hoạt động" },
+  ];
+
+  return (
+    <div>
+      <div className="config-section">
+        <h3>🤖 Cấu hình OpenRouter</h3>
+        <div style={{ display: "grid", gap: 12 }}>
+          <div>
+            <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>Danh sách model (mỗi dòng 1 model)</label>
+            <textarea className="form-textarea" rows={5} value={openRouterModelsInput} onChange={(e) => setOpenRouterModelsInput(e.target.value)} placeholder="openai/gpt-4o-mini&#10;anthropic/claude-3.5-sonnet" />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>Model mặc định</label>
+            <input className="filter-input" value={openRouterDefaultModel} onChange={(e) => setOpenRouterDefaultModel(e.target.value)} placeholder="openai/gpt-4o-mini" style={{ width: "100%" }} />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>Số phút chờ khi key bị giới hạn</label>
+            <input className="filter-input" type="number" min={1} value={openRouterCooldownMinutes} onChange={(e) => setOpenRouterCooldownMinutes(e.target.value)} style={{ width: 120 }} />
+          </div>
+          <div>
+            <button className="btn-primary" onClick={saveOpenRouterConfig} disabled={openRouterSaving}>{openRouterSaving ? "Đang lưu..." : "Lưu cấu hình OpenRouter"}</button>
+            {openRouterMessage && <div className="toast-message" style={{ marginTop: 8 }}>{openRouterMessage}</div>}
+          </div>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="keys-header">
+          <h3 style={{ margin: 0 }}>Khóa API</h3>
+          <div className="keys-count">Khóa hoạt động khả dụng: {activeAvailableKeys}</div>
+        </div>
+
+        <div className="filter-tags">
+          {healthFilters.map((f) => (
+            <button key={f.id} className={`filter-tag ${keyHealthFilter === f.id ? "active" : ""}`} onClick={() => setKeyHealthFilter(f.id as any)}>{f.label}</button>
+          ))}
+        </div>
+
+        <div className="keys-list">
+          <div className="key-card" style={{ background: "#f8fafc", border: "1px dashed #cbd5e1" }}>
+            <div style={{ display: "grid", gap: 8 }}>
+              <input className="filter-input" placeholder="Nhãn (vd: key dự phòng #2)" value={newOpenRouterKeyLabel} onChange={(e) => setNewOpenRouterKeyLabel(e.target.value)} />
+              <input className="filter-input" type="password" placeholder="Nhập khóa API OpenRouter" value={newOpenRouterApiKey} onChange={(e) => setNewOpenRouterApiKey(e.target.value)} />
+              <button className="btn-primary" onClick={createOpenRouterKey} disabled={openRouterSaving}><Plus size={14} /> Thêm khóa</button>
+            </div>
+          </div>
+
+          {filteredKeys.map((k: any) => {
+            const healthStatus = getKeyHealthStatus(k);
+            return (
+              <div key={k.id} className="key-card">
+                <div className="key-header">
+                  <span className={`key-badge ${healthStatus}`}>{healthStatus.toUpperCase()}</span>
+                  <span className="key-id">#{k.id}</span>
+                  {k.label && <span style={{ fontSize: 13, color: "#334155" }}>{k.label}</span>}
+                </div>
+                <div className="key-details">
+                  <code className="key-preview">{k.key_preview}</code>
+                  <span style={{ fontSize: 12 }}>{k.is_active ? "hoạt động" : "không hoạt động"} · {k.is_available_now ? "khả dụng" : "đang chờ"}</span>
+                </div>
+                <div className="key-meta">
+                  chờ đến: {k.cooldown_until ? new Date(k.cooldown_until).toLocaleString("vi-VN") : "—"}<br />
+                  lỗi: {k.error_count} · dùng gần nhất: {k.last_used_at ? new Date(k.last_used_at).toLocaleString("vi-VN") : "—"}
+                </div>
+                <div className="key-actions">
+                  <button className="btn-small" onClick={() => toggleOpenRouterKeyActive(k.id, !k.is_active)}>{k.is_active ? "Tắt" : "Bật"}</button>
+                  <button className="btn-small" onClick={() => setOpenRouterKeyCooldown(k.id)}>Đặt thời gian chờ</button>
+                  <button className="btn-small" onClick={() => clearOpenRouterKeyCooldown(k.id)}>Xóa thời gian chờ</button>
+                  <button className="btn-small" onClick={() => testOpenRouterKey(k.id)} disabled={testingKeyId === k.id}>{testingKeyId === k.id ? "Đang kiểm tra..." : "Kiểm tra"}</button>
+                  <button className="btn-small btn-danger" onClick={() => deleteOpenRouterKey(k.id)}>Xóa</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CourseReviewsPanel({
+  data,
+  pagination,
+  isLoading,
+  isError,
+  page,
+  setPage,
+  q,
+  setQ,
+  actionLoading,
+  onReview,
+  onViewTimeline,
+  refetch,
+}: any) {
+  return (
+    <div>
+      <div className="filters-card">
+        <div className="filters-row">
+          <div style={{ flex: 1 }}>
+            <div style={{ position: "relative" }}>
+              <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+              <input className="filter-input" placeholder="Tìm theo tiêu đề / slug" value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} style={{ paddingLeft: 36, width: "100%" }} />
+            </div>
+          </div>
+          <button className="btn-secondary" onClick={() => refetch()}><RefreshCw size={14} /> Tải lại</button>
+        </div>
+      </div>
+
+      <div className="table-container">
+        <table className="admin-table">
+          <thead>
+            <tr><th>Khóa học</th><th>Danh mục</th><th>Slug</th><th>Kiểm tra chất lượng</th><th>Cập nhật</th><th>Thao tác</th></tr>
+          </thead>
+          <tbody>
+            {isLoading && <tr><td colSpan={6} className="table-empty"><RefreshCw size={20} style={{ animation: "spin 1s linear infinite" }} /> Đang tải...</td></tr>}
+            {isError && <tr><td colSpan={6} className="table-empty"><AlertCircle size={20} /> Không thể tải danh sách</td></tr>}
+            {!isLoading && !isError && data.length === 0 && <tr><td colSpan={6} className="table-empty">Không có khóa học nào chờ duyệt</td></tr>}
+            {data.map((course: any) => (
+              <tr key={course.id}>
+                <td><div className="user-name">{course.title}</div><div className="user-id">#{course.id}</div></td>
+                <td>{course.category || "—"}</td>
+                <td>/{course.slug}</td>
+                <td>{course.quality_gate?.ready ? <Check size={16} style={{ color: "#16a34a" }} /> : <AlertCircle size={16} style={{ color: "#b45309" }} />}</td>
+                <td>{new Date(course.updated_at).toLocaleString("vi-VN")}</td>
+                <td>
+                  <div className="action-buttons">
+                    <button className="btn-small" onClick={() => onReview(course, "approve")} disabled={actionLoading === course.id}>Duyệt</button>
+                    <button className="btn-small btn-danger" onClick={() => onReview(course, "reject")} disabled={actionLoading === course.id}>Từ chối</button>
+                    <button className="btn-small" onClick={() => onViewTimeline(course)}>Lịch sử</button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -1844,42 +1288,223 @@ function AuditLogsPanel(props: {
         </table>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginTop: "0.75rem",
-          gap: "0.75rem",
-        }}
-      >
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={!pagination || page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            ⟵ Previous
-          </button>
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={!pagination || page >= (pagination?.pages ?? 1)}
-            onClick={() =>
-              setPage((p) =>
-                !pagination ? p : Math.min(pagination.pages, p + 1)
-              )
-            }
-          >
-            Next ⟶
-          </button>
+      <div className="pagination">
+        <div className="pagination-buttons">
+          <button className="btn-secondary" disabled={!pagination || page <= 1} onClick={() => setPage(Math.max(1, page - 1))}>Trước</button>
+          <button className="btn-secondary" disabled={!pagination || page >= (pagination?.pages ?? 1)} onClick={() => setPage(Math.min(pagination?.pages || 1, page + 1))}>Sau</button>
         </div>
+        <div className="pagination-info">Trang {page} / {pagination?.pages ?? 1}</div>
+      </div>
+    </div>
+  );
+}
 
-        <div style={{ fontSize: "0.8rem", color: "#607489" }}>
-          Trang {page} / {pagination?.pages ?? 1}
+function ManagerVerificationsPanel({
+  data,
+  pagination,
+  isLoading,
+  isError,
+  page,
+  setPage,
+  q,
+  setQ,
+  status,
+  setStatus,
+  actionLoading,
+  onReview,
+  refetch,
+}: any) {
+  const [selectedVerification, setSelectedVerification] = useState<any | null>(null);
+  const formatStatusLabel = (value: string) => {
+    if (value === "pending") return "Chờ duyệt";
+    if (value === "verified") return "Đã xác minh";
+    if (value === "rejected") return "Từ chối";
+    if (value === "suspended") return "Tạm khóa";
+    return value;
+  };
+  const splitLinks = (value?: string | null) =>
+    String(value || "")
+      .split(/\r?\n|,/g)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+  return (
+    <div>
+      <div className="filters-card">
+        <div className="filters-row">
+          <div style={{ flex: 1 }}>
+            <div style={{ position: "relative" }}>
+              <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+              <input className="filter-input" placeholder="Tìm theo email / họ tên" value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} style={{ paddingLeft: 36, width: "100%" }} />
+            </div>
+          </div>
+          <select className="filter-select" value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }} style={{ width: 140 }}>
+            <option value="all">Tất cả trạng thái</option>
+            <option value="pending">Chờ duyệt</option>
+            <option value="verified">Đã xác minh</option>
+            <option value="rejected">Từ chối</option>
+            <option value="suspended">Tạm khóa</option>
+          </select>
+          <button className="btn-secondary" onClick={() => refetch()}><RefreshCw size={14} /> Tải lại</button>
         </div>
       </div>
-    </section>
+
+      {selectedVerification ? (
+        <div className="panel" style={{ padding: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, color: "#0f172a" }}>
+              Xác minh giảng viên &gt; {selectedVerification.email}
+            </div>
+            <button className="btn-secondary" onClick={() => setSelectedVerification(null)}>
+              Quay lại danh sách
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            <div><strong>Họ tên:</strong> {selectedVerification.full_name || "—"}</div>
+            <div><strong>Email:</strong> {selectedVerification.email}</div>
+            <div><strong>Trạng thái:</strong> {formatStatusLabel(selectedVerification.status)}</div>
+            <div><strong>Checklist:</strong> {selectedVerification.checklist_passed ? "Đạt" : "Chưa đạt"}</div>
+            <div><strong>Chuyên môn:</strong> {selectedVerification.expertise_areas || "—"}</div>
+            <div><strong>Kinh nghiệm:</strong> {selectedVerification.years_experience != null ? `${selectedVerification.years_experience} năm` : "—"}</div>
+            <div><strong>Đơn vị:</strong> {selectedVerification.organization_name || "—"}</div>
+            <div><strong>Tóm tắt hồ sơ:</strong> {selectedVerification.application_note || "—"}</div>
+            <div><strong>Triết lý giảng dạy:</strong> {selectedVerification.teaching_statement || "—"}</div>
+            <div><strong>Ghi chú duyệt:</strong> {selectedVerification.review_note || "—"}</div>
+            <div><strong>Cập nhật:</strong> {new Date(selectedVerification.updated_at).toLocaleString("vi-VN")}</div>
+            <div>
+              <strong>Portfolio:</strong>{" "}
+              {selectedVerification.portfolio_url ? (
+                <a href={selectedVerification.portfolio_url} target="_blank" rel="noreferrer">
+                  {selectedVerification.portfolio_url}
+                </a>
+              ) : (
+                "—"
+              )}
+            </div>
+            <div>
+              <strong>Liên kết chứng chỉ:</strong>
+              {splitLinks(selectedVerification.certificate_links).length ? (
+                <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                  {splitLinks(selectedVerification.certificate_links).map((link) => (
+                    <li key={link}>
+                      <a href={link} target="_blank" rel="noreferrer">
+                        {link}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <span> —</span>
+              )}
+            </div>
+          </div>
+
+          <div className="action-buttons" style={{ marginTop: 16 }}>
+            <button className="btn-small" onClick={() => onReview(selectedVerification, "verified")} disabled={actionLoading === selectedVerification.user_id}>Xác minh</button>
+            <button className="btn-small btn-danger" onClick={() => onReview(selectedVerification, "rejected")} disabled={actionLoading === selectedVerification.user_id}>Từ chối</button>
+            <button className="btn-small" onClick={() => onReview(selectedVerification, "suspended")} disabled={actionLoading === selectedVerification.user_id}>Tạm khóa</button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="table-container">
+            <table className="admin-table">
+              <thead>
+                <tr><th>Người dùng</th><th>Trạng thái</th><th>Hồ sơ năng lực</th><th>Cập nhật</th><th>Thao tác</th></tr>
+              </thead>
+              <tbody>
+                {isLoading && <tr><td colSpan={5} className="table-empty"><RefreshCw size={20} style={{ animation: "spin 1s linear infinite" }} /> Đang tải...</td></tr>}
+                {isError && <tr><td colSpan={5} className="table-empty"><AlertCircle size={20} /> Không thể tải danh sách</td></tr>}
+                {!isLoading && !isError && data.length === 0 && <tr><td colSpan={5} className="table-empty">Không có dữ liệu xác minh</td></tr>}
+                {data.map((item: any) => (
+                  <tr key={item.user_id}>
+                    <td><div className="user-name">{item.full_name || "—"}</div><div className="user-id">{item.email} (#{item.user_id})</div></td>
+                    <td>
+                      <span className={`status-badge-text ${item.status === "verified" ? "success" : item.status === "pending" ? "warning" : "error"}`}>{formatStatusLabel(item.status)}</span>
+                      <div style={{ fontSize: 11, marginTop: 4, color: item.checklist_passed ? "#16a34a" : "#b45309" }}>{item.checklist_passed ? "Checklist đạt" : "Checklist chưa đạt"}</div>
+                    </td>
+                    <td style={{ maxWidth: 300 }}>
+                      <div><strong>Chuyên môn:</strong> {item.expertise_areas || "—"}</div>
+                      <div><strong>Kinh nghiệm:</strong> {item.years_experience != null ? `${item.years_experience} năm` : "—"}</div>
+                      <div><strong>Đơn vị:</strong> {item.organization_name || "—"}</div>
+                      {item.review_note && <div><strong>Ghi chú:</strong> {item.review_note}</div>}
+                    </td>
+                    <td>{new Date(item.updated_at).toLocaleString("vi-VN")}</td>
+                    <td>
+                      <div className="action-buttons">
+                        <button className="btn-small" onClick={() => setSelectedVerification(item)}>Xem chi tiết</button>
+                        <button className="btn-small" onClick={() => onReview(item, "verified")} disabled={actionLoading === item.user_id}>Xác minh</button>
+                        <button className="btn-small btn-danger" onClick={() => onReview(item, "rejected")} disabled={actionLoading === item.user_id}>Từ chối</button>
+                        <button className="btn-small" onClick={() => onReview(item, "suspended")} disabled={actionLoading === item.user_id}>Tạm khóa</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="pagination">
+            <div className="pagination-buttons">
+              <button className="btn-secondary" disabled={!pagination || page <= 1} onClick={() => setPage(Math.max(1, page - 1))}>Trước</button>
+              <button className="btn-secondary" disabled={!pagination || page >= (pagination?.pages ?? 1)} onClick={() => setPage(Math.min(pagination?.pages || 1, page + 1))}>Sau</button>
+            </div>
+            <div className="pagination-info">Trang {page} / {pagination?.pages ?? 1}</div>
+          </div>
+        </>
+      )}
+    </div>
   );
+}
+
+// ==================== Helper Functions ====================
+
+function getAdminTierFromUser(user: any): AdminTier {
+  const roles: string[] = [user?.primary_role, ...(Array.isArray(user?.roles) ? user.roles : [])].filter(Boolean).map((r: string) => String(r).toLowerCase());
+  return roles.includes("admin") ? "admin" : "non_admin";
+}
+
+function can(tier: AdminTier, action: string): boolean {
+  if (tier !== "admin") return false;
+  return action !== "hard_delete";
+}
+
+function getRoleDisplayLabel(role?: string | null): string {
+  const normalizedRole = String(role || "").toLowerCase();
+  if (normalizedRole === "learner" || normalizedRole === "student") return "Học viên";
+  if (normalizedRole === "course_manager" || normalizedRole === "teacher") return "Giảng viên";
+  if (normalizedRole === "admin") return "Quản trị viên";
+  return role ? String(role) : "Không xác định";
+}
+
+function normalize(s: string): string {
+  return String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+
+function fuzzyMatch(hay: string, needle: string): boolean {
+  if (!needle) return true;
+  let i = 0;
+  for (let j = 0; j < hay.length && i < needle.length; j++) {
+    if (hay[j] === needle[i]) i++;
+  }
+  return i === needle.length;
+}
+
+function toCsv(rows: Array<Record<string, any>>): string {
+  const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+  const escape = (v: any) => {
+    const s = String(v ?? "");
+    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+  return [headers.join(","), ...rows.map((r) => headers.map((h) => escape(r[h])).join(","))].join("\n");
+}
+
+function getKeyHealthStatus(key: { is_active: boolean; is_available_now: boolean; last_test_status: string | null }): string {
+  if (!key.is_active) return "inactive";
+  if (key.last_test_status === "unauthorized") return "auth_error";
+  if (key.last_test_status === "rate_limited" || !key.is_available_now) return "limited";
+  if (key.last_test_status === "ok") return "healthy";
+  return "unknown";
 }

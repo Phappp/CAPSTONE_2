@@ -74,10 +74,16 @@ interface Stats {
   inProgress: number;
 }
 
+type MainTab = 'myCourses' | 'suggested';
+
 export default function StudentDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const displayName = user?.full_name?.trim() || user?.email || 'bạn';
+
+  // UI State
+  const [isFilterExpanded, setIsFilterExpanded] = useState(false);
+  const [activeMainTab, setActiveMainTab] = useState<MainTab>('myCourses');
 
   // States cho khóa học của tôi
   const [courses, setCourses] = useState<Course[]>([]);
@@ -252,6 +258,13 @@ export default function StudentDashboard() {
     });
   }, [suggested, courses]);
 
+  const handleTabChange = (tab: MainTab) => {
+    setActiveMainTab(tab);
+    if (tab === 'suggested' && visibleSuggested.length === 0) {
+      fetchSuggestedCourses();
+    }
+  };
+
   return (
     <div className="studentDash">
       {/* Header */}
@@ -269,10 +282,12 @@ export default function StudentDashboard() {
 
       <div className="studentDash__container studentDash__content">
         {/* Welcome Section */}
-        <div className="studentDash__hero">
-        </div>
+        {/* <div className="studentDash__hero">
+          <h2 className="studentDash__heroTitle">Xin chào, {displayName} 👋</h2>
+          <p className="studentDash__heroDesc">Theo dõi tiến trình học tập và khám phá kiến thức mới</p>
+        </div> */}
 
-        {/* Stats Cards */}
+        {/* Stats Cards - Always visible */}
         <div className="studentDash__stats">
           <div className="statCard">
             <div className="statCard__row">
@@ -323,238 +338,262 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        {/* PHẦN 1: KHÓA HỌC CỦA TÔI */}
-        <div className="studentDash__myCourses">
-          {/* Filters */}
-          <div className="studentDash__filters">
-            <div className="studentDash__filtersRow">
-              <div className="searchField">
-                <Search className="searchField__icon" />
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm khóa học..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="input"
-                />
+        {/* Expandable Filters */}
+        <div className="expandable-filters">
+          <button 
+            className="expandable-filters__header"
+            onClick={() => setIsFilterExpanded(!isFilterExpanded)}
+            type="button"
+          >
+            <div className="expandable-filters__title">
+              <span className="material-symbols-outlined">filter_list</span>
+              <span>Bộ lọc tìm kiếm</span>
+            </div>
+            <span className="material-symbols-outlined expand-icon">
+              {isFilterExpanded ? 'expand_less' : 'expand_more'}
+            </span>
+          </button>
+          
+          {isFilterExpanded && (
+            <div className="expandable-filters__content">
+              <div className="filters-row">
+                <div className="search-field">
+                  <Search className="search-field__icon" />
+                  <input
+                    type="text"
+                    placeholder="Tìm kiếm khóa học..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="input"
+                  />
+                </div>
+                <div className="filters-actions">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="select"
+                  >
+                    <option value="all">Tất cả trạng thái</option>
+                    <option value="active">Đang học</option>
+                    <option value="completed">Hoàn thành</option>
+                    <option value="dropped">Đã dừng</option>
+                    <option value="expired">Hết hạn</option>
+                  </select>
+                  <button
+                    onClick={() => navigate('/courses')}
+                    className="btn btn--primary"
+                  >
+                    <BookOpen size={16} />
+                    Khám phá thêm
+                  </button>
+                </div>
               </div>
-              <div className="studentDash__filtersActions">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="select"
-                >
-                  <option value="all">Tất cả trạng thái</option>
-                  <option value="active">Đang học</option>
-                  <option value="completed">Hoàn thành</option>
-                  <option value="dropped">Đã dừng</option>
-                  <option value="expired">Hết hạn</option>
-                </select>
+            </div>
+          )}
+        </div>
+
+        {/* Main Tabs */}
+        <div className="main-tabs">
+          <button
+            type="button"
+            className={`tab-btn ${activeMainTab === 'myCourses' ? 'active' : ''}`}
+            onClick={() => handleTabChange('myCourses')}
+          >
+            <span className="material-symbols-outlined">folder_open</span>
+            Khóa học của tôi
+          </button>
+          <button
+            type="button"
+            className={`tab-btn ${activeMainTab === 'suggested' ? 'active' : ''}`}
+            onClick={() => handleTabChange('suggested')}
+          >
+            <span className="material-symbols-outlined">recommend</span>
+            Gợi ý cho bạn
+          </button>
+        </div>
+
+        {/* Tab Content: My Courses */}
+        {activeMainTab === 'myCourses' && (
+          <>
+            {/* Loading State */}
+            {loading && (
+              <div className="studentDash__center">
+                <Loader2 className="studentDash__brandIcon" style={{ animation: 'spin 1s linear infinite' }} />
+              </div>
+            )}
+
+            {/* Error State */}
+            {error && !loading && (
+              <div className="studentDash__error">
+                <AlertCircle size={20} />
+                <div>
+                  <p className="studentDash__errorTitle">Có lỗi xảy ra</p>
+                  <p className="studentDash__errorMsg">{error}</p>
+                  <button
+                    onClick={fetchEnrolledCourses}
+                    className="btn btn--link"
+                  >
+                    Thử lại
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!loading && !error && courses.length === 0 && (
+              <div className="studentDash__empty">
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12, color: '#9ca3af' }}>
+                  <BookOpen size={64} />
+                </div>
+                <h3 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 8px 0' }}>Chưa có khóa học nào</h3>
+                <p style={{ color: '#6b7280', margin: '0 0 18px 0' }}>
+                  Bạn chưa đăng ký khóa học nào. Hãy khám phá và đăng ký ngay!
+                </p>
                 <button
                   onClick={() => navigate('/courses')}
                   className="btn btn--primary"
                 >
-                  <BookOpen width={16} height={16} />
-                  Khám phá thêm
+                  <BookOpen size={18} />
+                  Khám phá khóa học
                 </button>
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Loading State */}
-          {loading && (
-            <div className="studentDash__center">
-              <Loader2 className="studentDash__brandIcon" style={{ animation: 'spin 1s linear infinite' }} />
-            </div>
-          )}
+            {/* Course Grid */}
+            {!loading && !error && courses.length > 0 && (
+              <>
+                <div className="studentDash__grid">
+                  {courses.map((course) => {
+                    const level = getLevelBadge(course.course_level);
+                    const status = getStatusBadge(course.status);
 
-          {/* Error State */}
-          {error && !loading && (
-            <div className="studentDash__error">
-              <AlertCircle width={20} height={20} />
-              <div>
-                <p className="studentDash__errorTitle">Có lỗi xảy ra</p>
-                <p className="studentDash__errorMsg">{error}</p>
-                <button
-                  onClick={fetchEnrolledCourses}
-                  className="btn btn--link"
-                >
-                  Thử lại
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Empty State */}
-          {!loading && !error && courses.length === 0 && (
-            <div className="studentDash__empty">
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12, color: '#9ca3af' }}>
-                <BookOpen width={64} height={64} />
-              </div>
-              <h3 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 8px 0' }}>Chưa có khóa học nào</h3>
-              <p style={{ color: '#6b7280', margin: '0 0 18px 0' }}>
-                Bạn chưa đăng ký khóa học nào. Hãy khám phá và đăng ký ngay!
-              </p>
-              <button
-                onClick={() => navigate('/courses')}
-                className="btn btn--primary"
-              >
-                <BookOpen width={18} height={18} />
-                Khám phá khóa học
-              </button>
-            </div>
-          )}
-
-          {/* Course Grid */}
-          {!loading && !error && courses.length > 0 && (
-            <>
-              <div className="studentDash__grid">
-                {courses.map((course) => {
-                  const level = getLevelBadge(course.course_level);
-                  const status = getStatusBadge(course.status);
-
-                  return (
-                    <div
-                      key={course.id}
-                      className="courseCard courseCard--clickable"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => openLearningHub(course.course_id, course.course_slug)}
-                      onKeyDown={(e) => {
-                        if (e.key !== 'Enter' && e.key !== ' ') return;
-                        openLearningHub(course.course_id, course.course_slug);
-                      }}
-                      aria-label={`Mở khóa học: ${course.course_title}`}
-                    >
-                      {/* Thumbnail */}
-                      <div className="courseCard__thumb">
-                        {course.course_thumbnail ? (
-                          <img
-                            src={course.course_thumbnail}
-                            alt={course.course_title}
-                          />
-                        ) : (
-                          <div className="courseCard__thumbPlaceholder">
-                            <BookOpen width={48} height={48} />
-                          </div>
-                        )}
-
-                        {/* Status Badge */}
-                        <div className="badgePosTopRight">
-                          <span className={status.className}>
-                            {status.label}
-                          </span>
-                        </div>
-
-                        {/* Level Badge */}
-                        <div className="badgePosBottomLeft">
-                          <span className={level.className}>
-                            {level.label}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <div className="courseCard__body">
-                        <h3 className="courseCard__title">
-                          {course.course_title}
-                        </h3>
-
-                        {/* Progress */}
-                        <div className="courseCard__progress">
-                          <div className="courseCard__progressRow">
-                            <span>Tiến độ</span>
-                            <span className="courseCard__progressPct">{course.progress_percent}%</span>
-                          </div>
-                          <div className="progressBar" role="progressbar" aria-valuenow={course.progress_percent} aria-valuemin={0} aria-valuemax={100}>
-                            <div
-                              className="progressBar__fill"
-                              style={{ width: `${course.progress_percent}%` }}
+                    return (
+                      <div
+                        key={course.id}
+                        className="courseCard courseCard--clickable"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openLearningHub(course.course_id, course.course_slug)}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter' && e.key !== ' ') return;
+                          openLearningHub(course.course_id, course.course_slug);
+                        }}
+                        aria-label={`Mở khóa học: ${course.course_title}`}
+                      >
+                        {/* Thumbnail */}
+                        <div className="courseCard__thumb">
+                          {course.course_thumbnail ? (
+                            <img
+                              src={course.course_thumbnail}
+                              alt={course.course_title}
                             />
+                          ) : (
+                            <div className="courseCard__thumbPlaceholder">
+                              <BookOpen size={48} />
+                            </div>
+                          )}
+
+                          {/* Status Badge */}
+                          <div className="badgePosTopRight">
+                            <span className={status.className}>
+                              {status.label}
+                            </span>
+                          </div>
+
+                          {/* Level Badge */}
+                          <div className="badgePosBottomLeft">
+                            <span className={level.className}>
+                              {level.label}
+                            </span>
                           </div>
                         </div>
 
-                        {/* Course stats */}
-                        <div className="courseCard__quickStats">
-                          <div className="quickStat">
-                            <Users size={14} />
-                            <span>{toDisplayCount(course.learners_count)}</span>
-                          </div>
-                          <div className="quickStat">
-                            <Layers3 size={14} />
-                            <span>{toDisplayCount(course.modules_count)}</span>
-                          </div>
-                          <div className="quickStat">
-                            <ListChecks size={14} />
-                            <span>{toDisplayCount(course.lessons_count)}</span>
-                          </div>
-                        </div>
+                        {/* Content */}
+                        <div className="courseCard__body">
+                          <h3 className="courseCard__title">
+                            {course.course_title}
+                          </h3>
 
-                        {/* Completed badge */}
-                        {course.status === 'completed' && (
-                          <div className="courseCard__completed">
-                            <Award width={16} height={16} />
-                            <span>Hoàn thành: {formatDate(course.completed_at)}</span>
+                          {/* Progress */}
+                          <div className="courseCard__progress">
+                            <div className="courseCard__progressRow">
+                              <span>Tiến độ</span>
+                              <span className="courseCard__progressPct">{course.progress_percent}%</span>
+                            </div>
+                            <div className="progressBar" role="progressbar" aria-valuenow={course.progress_percent} aria-valuemin={0} aria-valuemax={100}>
+                              <div
+                                className="progressBar__fill"
+                                style={{ width: `${course.progress_percent}%` }}
+                              />
+                            </div>
                           </div>
-                        )}
+
+                          {/* Course stats */}
+                          <div className="courseCard__quickStats">
+                            <div className="quickStat">
+                              <Users size={14} />
+                              <span>{toDisplayCount(course.learners_count)}</span>
+                            </div>
+                            <div className="quickStat">
+                              <Layers3 size={14} />
+                              <span>{toDisplayCount(course.modules_count)}</span>
+                            </div>
+                            <div className="quickStat">
+                              <ListChecks size={14} />
+                              <span>{toDisplayCount(course.lessons_count)}</span>
+                            </div>
+                          </div>
+
+                          {/* Completed badge */}
+                          {course.status === 'completed' && (
+                            <div className="courseCard__completed">
+                              <Award size={16} />
+                              <span>Hoàn thành: {formatDate(course.completed_at)}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="studentDash__pagination">
-                  <button
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="btn btn--secondary"
-                  >
-                    Trước
-                  </button>
-                  <span className="studentDash__pageLabel">
-                    Trang {currentPage} / {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="btn btn--secondary"
-                  >
-                    Sau
-                  </button>
+                    );
+                  })}
                 </div>
-              )}
-            </>
-          )}
-        </div>
 
-        {/* PHẦN 2: GỢI Ý KHÓA HỌC - RIÊNG BIỆT */}
-        {!suggestedLoading && !suggestedError && visibleSuggested.length > 0 && (
-          <div className="studentDash__suggested">
-            <div className="studentDash__suggestedHeader">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Sparkles size={24} color="#2563eb" />
-                <h3 className="studentDash__suggestedTitle">Gợi ý khóa học</h3>
-                <span className="studentDash__suggestedBadge">Phổ biến nhất</span>
-              </div>
-              <button
-                className="btn btn--secondary"
-                type="button"
-                onClick={() => navigate('/courses')}
-              >
-                Xem tất cả
-                <ChevronRight width={16} height={16} />
-              </button>
-            </div>
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="studentDash__pagination">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="btn btn--secondary"
+                    >
+                      Trước
+                    </button>
+                    <span className="studentDash__pageLabel">
+                      Trang {currentPage} / {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="btn btn--secondary"
+                    >
+                      Sau
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
 
+        {/* Tab Content: Suggested Courses */}
+        {activeMainTab === 'suggested' && (
+          <div className="studentDash__suggested" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
             {suggestedLoading ? (
-              <div className="studentDash__center" style={{ padding: '24px 0' }}>
+              <div className="studentDash__center" style={{ padding: '48px 0' }}>
                 <Loader2 className="studentDash__brandIcon" style={{ animation: 'spin 1s linear infinite' }} />
               </div>
             ) : suggestedError ? (
-              <div className="studentDash__error" style={{ marginTop: 16 }}>
-                <AlertCircle width={20} height={20} />
+              <div className="studentDash__error">
+                <AlertCircle size={20} />
                 <div>
                   <p className="studentDash__errorTitle">Không thể tải gợi ý</p>
                   <p className="studentDash__errorMsg">{suggestedError}</p>
@@ -566,56 +605,91 @@ export default function StudentDashboard() {
                   </button>
                 </div>
               </div>
-            ) : (
-              <div className="studentDash__grid">
-                {visibleSuggested.map((course) => {
-                  const level = getLevelBadge(course.level);
-                  return (
-                    <div
-                      key={course.id}
-                      className="courseCard courseCard--clickable"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => openCoursePublicDetail(course.slug)}
-                      onKeyDown={(e) => {
-                        if (e.key !== 'Enter' && e.key !== ' ') return;
-                        openCoursePublicDetail(course.slug);
-                      }}
-                      aria-label={`Xem khóa học: ${course.title}`}
-                    >
-                      <div className="courseCard__thumb">
-                        {course.thumbnail_url ? (
-                          <img src={course.thumbnail_url} alt={course.title} />
-                        ) : (
-                          <div className="courseCard__thumbPlaceholder">
-                            <BookOpen width={48} height={48} />
-                          </div>
-                        )}
-                        <div className="badgePosBottomLeft">
-                          <span className={level.className}>{level.label}</span>
-                        </div>
-                      </div>
-                      <div className="courseCard__body">
-                        <h3 className="courseCard__title">{course.title}</h3>
-                        <div className="courseCard__quickStats">
-                          <div className="quickStat">
-                            <Users size={14} />
-                            <span>{toDisplayCount(course.learners_count)}</span>
-                          </div>
-                          <div className="quickStat">
-                            <Layers3 size={14} />
-                            <span>{toDisplayCount(course.modules_count)}</span>
-                          </div>
-                          <div className="quickStat">
-                            <ListChecks size={14} />
-                            <span>{toDisplayCount(course.lessons_count)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+            ) : visibleSuggested.length === 0 ? (
+              <div className="studentDash__empty">
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12, color: '#9ca3af' }}>
+                  <Sparkles size={64} />
+                </div>
+                <h3 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 8px 0' }}>Chưa có gợi ý nào</h3>
+                <p style={{ color: '#6b7280', margin: '0 0 18px 0' }}>
+                  Hiện tại chưa có khóa học mới nào dành cho bạn. Hãy quay lại sau nhé!
+                </p>
+                <button
+                  onClick={() => navigate('/courses')}
+                  className="btn btn--primary"
+                >
+                  <BookOpen size={18} />
+                  Khám phá tất cả khóa học
+                </button>
               </div>
+            ) : (
+              <>
+                <div className="studentDash__suggestedHeader">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Sparkles size={24} color="#2563eb" />
+                    <h3 className="studentDash__suggestedTitle">Gợi ý khóa học</h3>
+                    <span className="studentDash__suggestedBadge">Phổ biến nhất</span>
+                  </div>
+                  <button
+                    className="btn btn--secondary"
+                    type="button"
+                    onClick={() => navigate('/courses')}
+                  >
+                    Xem tất cả
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+
+                <div className="studentDash__grid">
+                  {visibleSuggested.map((course) => {
+                    const level = getLevelBadge(course.level);
+                    return (
+                      <div
+                        key={course.id}
+                        className="courseCard courseCard--clickable"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openCoursePublicDetail(course.slug)}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter' && e.key !== ' ') return;
+                          openCoursePublicDetail(course.slug);
+                        }}
+                        aria-label={`Xem khóa học: ${course.title}`}
+                      >
+                        <div className="courseCard__thumb">
+                          {course.thumbnail_url ? (
+                            <img src={course.thumbnail_url} alt={course.title} />
+                          ) : (
+                            <div className="courseCard__thumbPlaceholder">
+                              <BookOpen size={48} />
+                            </div>
+                          )}
+                          <div className="badgePosBottomLeft">
+                            <span className={level.className}>{level.label}</span>
+                          </div>
+                        </div>
+                        <div className="courseCard__body">
+                          <h3 className="courseCard__title">{course.title}</h3>
+                          <div className="courseCard__quickStats">
+                            <div className="quickStat">
+                              <Users size={14} />
+                              <span>{toDisplayCount(course.learners_count)}</span>
+                            </div>
+                            <div className="quickStat">
+                              <Layers3 size={14} />
+                              <span>{toDisplayCount(course.modules_count)}</span>
+                            </div>
+                            <div className="quickStat">
+                              <ListChecks size={14} />
+                              <span>{toDisplayCount(course.lessons_count)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         )}

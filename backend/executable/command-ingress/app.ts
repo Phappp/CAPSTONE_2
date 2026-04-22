@@ -86,9 +86,9 @@ const createHttpServer = (redisClient: any) => {
 
       const result = await uploadBufferToCloudinary({
         buffer: file,
-        folder: 'avatars',
+        folder: fileName.includes("manager-docs") ? "manager-docs" : "avatars",
         originalFilename: fileName,
-        resourceType: 'image',
+        resourceType: mimeType?.startsWith("image/") ? "image" : "raw",
       });
 
       return result.secure_url;

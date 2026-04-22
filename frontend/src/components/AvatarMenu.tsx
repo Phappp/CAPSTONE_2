@@ -2,6 +2,14 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/Auth";
 
+function getRoleLabel(role?: string | null) {
+  const key = String(role || "").toLowerCase();
+  if (key === "course_manager" || key === "teacher") return "Giảng viên";
+  if (key === "learner" || key === "student") return "Học viên";
+  if (key === "admin") return "Quản trị viên";
+  return role || "Học viên";
+}
+
 function getInitials(name?: string | null, email?: string | null) {
   if (name && name.trim()) {
     const parts = name.trim().split(/\s+/);
@@ -80,7 +88,7 @@ export default function AvatarMenu() {
               color: "#607489",
             }}
           >
-            {user?.primary_role || user?.roles?.[0] || "learner"}
+            {getRoleLabel(user?.primary_role || user?.roles?.[0])}
           </div>
         </div>
       </button>
@@ -119,6 +127,26 @@ export default function AvatarMenu() {
           }}
           >
             Thông tin tài khoản
+          </button>
+          <button
+            type="button"
+            style={{
+              width: "100%",
+              padding: "0.5rem 0.75rem",
+              borderRadius: 8,
+              border: "none",
+              background: "transparent",
+              textAlign: "left",
+              fontSize: "0.85rem",
+              color: "#1f2933",
+              cursor: "pointer",
+            }}
+            onClick={() => {
+              setOpen(false);
+              navigate("/profile/security");
+            }}
+          >
+            Bảo mật
           </button>
           <button
             type="button"

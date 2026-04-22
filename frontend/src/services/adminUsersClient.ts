@@ -1,5 +1,6 @@
 import { url as API_BASE_URL } from "../baseUrl";
 import { ADMIN_USERS_API, ADMIN_USERS_API_BASE } from "../api/adminUsers";
+import { COURSES_API } from "../api/courses";
 
 export type AdminUserRole = "learner" | "course_manager" | "admin";
 export type AdminUserStatus = "active" | "pending" | "banned" | "deleted";
@@ -336,6 +337,160 @@ export type OpenRouterConfig = {
   }>;
   active_available_keys: number;
 };
+
+export type PendingReviewCourse = {
+  id: number;
+  title: string;
+  slug: string;
+  status: "pending_review" | "draft" | "published" | "archived";
+  short_description: string | null;
+  updated_at: string;
+  created_at: string;
+  category?: string | null;
+  quality_gate?: {
+    ready: boolean;
+    issues: string[];
+  };
+};
+
+export type CourseReviewTimelineItem = {
+  id: number;
+  course_id: number;
+  actor_user_id: number;
+  from_status: "draft" | "pending_review" | "published" | "archived" | null;
+  to_status: "draft" | "pending_review" | "published" | "archived";
+  decision: "submit" | "approve" | "reject" | "archive" | "revert_draft";
+  note: string | null;
+  created_at: string;
+};
+
+export type CourseManagerVerification = {
+  user_id: number;
+  full_name: string;
+  email: string;
+  status: "pending" | "verified" | "rejected" | "suspended";
+  application_note: string | null;
+  expertise_areas?: string | null;
+  years_experience?: number | null;
+  organization_name?: string | null;
+  portfolio_url?: string | null;
+  certificate_links?: string | null;
+  teaching_statement?: string | null;
+  checklist_passed?: boolean;
+  review_note: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function apiGetPendingReviewCourses(params: {
+  accessToken: string;
+  page?: number;
+  pageSize?: number;
+  q?: string;
+}): Promise<{ items: PendingReviewCourse[]; page: number; page_size: number; total: number }> {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.pageSize) q.set("page_size", String(params.pageSize));
+  if (params.q?.trim()) q.set("q", params.q.trim());
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}${COURSES_API.adminPendingReview}${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_PENDING_REVIEW_FETCH_FAILED");
+  }
+  return data as { items: PendingReviewCourse[]; page: number; page_size: number; total: number };
+}
+
+export async function apiReviewCourseByAdmin(params: {
+  accessToken: string;
+  courseId: number;
+  decision: "approve" | "reject";
+  note?: string;
+}): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${COURSES_API.adminReview(params.courseId)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+    body: JSON.stringify({
+      decision: params.decision,
+      note: params.note?.trim() || undefined,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_COURSE_REVIEW_FAILED");
+  }
+}
+
+export async function apiGetCourseReviewTimeline(params: {
+  accessToken: string;
+  courseId: number;
+}): Promise<{ course_id: number; items: CourseReviewTimelineItem[] }> {
+  const res = await fetch(`${API_BASE_URL}${COURSES_API.adminReviewTimeline(params.courseId)}`, {
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_COURSE_REVIEW_TIMELINE_FAILED");
+  }
+  return data as { course_id: number; items: CourseReviewTimelineItem[] };
+}
+
+export async function apiGetCourseManagerVerifications(params: {
+  accessToken: string;
+  page?: number;
+  limit?: number;
+  q?: string;
+  status?: "all" | "pending" | "verified" | "rejected" | "suspended";
+}): Promise<{ items: CourseManagerVerification[]; pagination: AdminUsersPagination }> {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.limit) q.set("limit", String(params.limit));
+  if (params.q?.trim()) q.set("q", params.q.trim());
+  if (params.status && params.status !== "all") q.set("status", params.status);
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}${ADMIN_USERS_API.courseManagerVerifications}${suffix}`, {
+    headers: { Authorization: `Bearer ${params.accessToken}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.success) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_CM_VERIFICATIONS_FETCH_FAILED");
+  }
+  return data.data as { items: CourseManagerVerification[]; pagination: AdminUsersPagination };
+}
+
+export async function apiReviewCourseManagerVerification(params: {
+  accessToken: string;
+  userId: number;
+  status: "verified" | "rejected" | "suspended";
+  note?: string;
+}): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${ADMIN_USERS_API.courseManagerVerificationReview(params.userId)}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+    body: JSON.stringify({
+      status: params.status,
+      note: params.note?.trim() || undefined,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.success === false) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_CM_VERIFICATION_REVIEW_FAILED");
+  }
+}
 
 export async function apiGetOpenRouterConfig(params: {
   accessToken: string;

@@ -89,6 +89,37 @@ export class ProfileController {
     }
   };
 
+  uploadCourseManagerDocument = async (req: HttpRequest, res: Response) => {
+    try {
+      const userId = Number(req.getSubject?.());
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "Unauthorized",
+        });
+      }
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({
+          success: false,
+          message: "Vui lòng chọn file minh chứng",
+        });
+      }
+
+      const result = await this.profileService.uploadCourseManagerDocument(userId, file);
+      return res.status(200).json({
+        success: true,
+        message: "Tải file minh chứng thành công!",
+        data: result,
+      });
+    } catch (error: any) {
+      return res.status(400).json({
+        success: false,
+        message: error.message || "Upload file minh chứng thất bại",
+      });
+    }
+  };
+
   deleteAvatar = async (req: HttpRequest, res: Response) => {
     try {
       const userId = Number(req.getSubject?.());
@@ -152,6 +183,49 @@ export class ProfileController {
       return res.status(400).json({
         success: false,
         message: error.message || "Không thể lưu cài đặt bảo mật",
+      });
+    }
+  };
+
+  getCourseManagerReadiness = async (req: HttpRequest, res: Response) => {
+    try {
+      const userId = Number(req.getSubject?.());
+      if (!userId) throw new Error("Unauthorized");
+      const data = await this.profileService.getCourseManagerReadiness(userId);
+      return res.status(200).json({
+        success: true,
+        data,
+      });
+    } catch (error: any) {
+      return res.status(400).json({
+        success: false,
+        message: error.message || "Không thể lấy checklist cấp phép course manager",
+      });
+    }
+  };
+
+  submitCourseManagerApplication = async (req: HttpRequest, res: Response) => {
+    try {
+      const userId = Number(req.getSubject?.());
+      if (!userId) throw new Error("Unauthorized");
+      const body = (req.body as any) || {};
+      await this.profileService.submitCourseManagerApplication(userId, {
+        expertise_areas: body.expertise_areas,
+        years_experience: body.years_experience,
+        organization_name: body.organization_name,
+        portfolio_url: body.portfolio_url,
+        certificate_links: body.certificate_links,
+        teaching_statement: body.teaching_statement,
+        application_note: body.application_note,
+      });
+      return res.status(200).json({
+        success: true,
+        message: "Đã gửi hồ sơ cấp phép cho admin.",
+      });
+    } catch (error: any) {
+      return res.status(400).json({
+        success: false,
+        message: error.message || "Không thể gửi hồ sơ cấp phép",
       });
     }
   };

@@ -57,3 +57,37 @@ export interface UpdateOpenRouterKeyRequest {
   clear_cooldown?: boolean;
 }
 
+export type CourseManagerVerificationStatus = 'pending' | 'verified' | 'rejected' | 'suspended';
+
+export interface CourseManagerVerificationItem {
+  user_id: number;
+  full_name: string;
+  email: string;
+  status: CourseManagerVerificationStatus;
+  application_note: string | null;
+  expertise_areas?: string | null;
+  years_experience?: number | null;
+  organization_name?: string | null;
+  portfolio_url?: string | null;
+  certificate_links?: string | null;
+  teaching_statement?: string | null;
+  checklist_passed: boolean;
+  review_note: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListCourseManagerVerificationsQuery {
+  page: number;
+  limit: number;
+  q?: string;
+  status?: CourseManagerVerificationStatus | 'all';
+}
+
+export interface ReviewCourseManagerVerificationRequest {
+  status: Exclude<CourseManagerVerificationStatus, 'pending'>;
+  note?: string;
+}
+

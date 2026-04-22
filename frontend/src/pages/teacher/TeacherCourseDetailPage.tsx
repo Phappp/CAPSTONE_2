@@ -6,9 +6,11 @@ import { COURSES_API } from "../../api/courses";
 import { getAccessToken } from "../../utils/authStorage";
 import CourseContentTreeEditor from "../../components/CourseContentTreeEditor";
 import CourseAssessmentModal, { type CourseAssessmentModalTab } from "../../components/CourseAssessmentModal";
+import { useAuth } from "../../contexts/Auth";
+import CommonModal from "../../components/CommonModal";
 import "./TeacherCourseDetailPage.css";
 
-type CourseStatus = "draft" | "published" | "archived";
+type CourseStatus = "draft" | "pending_review" | "published" | "archived";
 
 type CourseDetail = {
   id: number;
@@ -16,11 +18,16 @@ type CourseDetail = {
   slug: string;
   short_description: string | null;
   full_description?: string | null;
+  category?: string | null;
   thumbnail_url: string | null;
   level: string;
   language: string;
   learning_objectives?: string[] | string | null;
   prerequisites?: string[] | string | null;
+  price?: number | null;
+  has_certificate?: boolean;
+  estimated_hours?: number | null;
+  tags?: string[] | string | null;
   status: CourseStatus;
   published_at: string | null;
   publish_scheduled_at?: string | null;
@@ -29,6 +36,10 @@ type CourseDetail = {
   learners_count: number;
   modules_count: number;
   lessons_count: number;
+  quality_gate?: {
+    ready: boolean;
+    issues: string[];
+  };
 };
 
 type CompletionRules = {
@@ -47,6 +58,7 @@ type CourseOption = {
 };
 
 export default function TeacherCourseDetailPage() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const params = useParams();
   const courseId = Number(params.id);
@@ -61,22 +73,32 @@ export default function TeacherCourseDetailPage() {
     title: "",
     short_description: "",
     full_description: "",
+    category: "",
     level: "beginner",
     language: "vi",
     thumbnail_url: "",
     learning_objectives: [""] as string[],
     prerequisites: [""] as string[],
+    price: "",
+    has_certificate: false,
+    estimated_hours: "",
+    tags: "",
     publish_scheduled_at: "" as string,
   });
   const [initialForm, setInitialForm] = useState<null | {
     title: string;
     short_description: string;
     full_description: string;
+    category: string;
     level: string;
     language: string;
     thumbnail_url: string;
     learning_objectives: string[];
     prerequisites: string[];
+    price: string;
+    has_certificate: boolean;
+    estimated_hours: string;
+    tags: string;
     publish_scheduled_at: string;
     status: CourseStatus;
   }>(null);
@@ -96,6 +118,44 @@ export default function TeacherCourseDetailPage() {
   const [pickedLessonId, setPickedLessonId] = useState<number | null>(null);
   const [assessmentModalOpen, setAssessmentModalOpen] = useState(false);
   const [assessmentModalTab, setAssessmentModalTab] = useState<CourseAssessmentModalTab>("quiz");
+  const [reviewTimeline, setReviewTimeline] = useState<Array<{
+    id: number;
+    from_status: CourseStatus | null;
+    to_status: CourseStatus;
+    decision: string;
+    note: string | null;
+    created_at: string;
+  }>>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [modalState, setModalState] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm?: () => void;
+  }>({ open: false, title: "", message: "" });
+
+  const managerBlocked = Boolean(
+    user?.primary_role === "course_manager" &&
+      user?.manager_verification &&
+      user.manager_verification.status !== "verified"
+  );
+
+  const ensureVerifiedForCourseActions = (): boolean => {
+    if (!managerBlocked) return true;
+    const note = user?.manager_verification?.review_note
+      ? `\n\nGhi chú từ quản trị viên: ${user.manager_verification.review_note}`
+      : "";
+    setModalState({
+      open: true,
+      title: "Cần cấp phép giảng viên",
+      message: `Tính năng này yêu cầu tài khoản giảng viên đã được xác minh.${note}\n\nBạn sẽ được chuyển đến trang hồ sơ để xem trạng thái xác minh.`,
+      onConfirm: () => {
+        setModalState({ open: false, title: "", message: "" });
+        navigate("/profile");
+      },
+    });
+    return false;
+  };
 
   const pickLessonForAssessment = (lessonId: number, tab: CourseAssessmentModalTab) => {
     setPickedLessonId(lessonId);
@@ -116,12 +176,17 @@ export default function TeacherCourseDetailPage() {
       form.title !== initialForm.title ||
       form.short_description !== initialForm.short_description ||
       form.full_description !== initialForm.full_description ||
+      form.category !== initialForm.category ||
       form.level !== initialForm.level ||
       form.language !== initialForm.language ||
       form.thumbnail_url !== initialForm.thumbnail_url ||
       form.publish_scheduled_at !== initialForm.publish_scheduled_at ||
       JSON.stringify(form.learning_objectives) !== JSON.stringify(initialForm.learning_objectives) ||
       JSON.stringify(form.prerequisites) !== JSON.stringify(initialForm.prerequisites) ||
+      form.price !== initialForm.price ||
+      form.has_certificate !== initialForm.has_certificate ||
+      form.estimated_hours !== initialForm.estimated_hours ||
+      form.tags !== initialForm.tags ||
       selectedStatus !== initialForm.status
     );
   }, [form, initialForm, selectedStatus]);
@@ -233,11 +298,16 @@ export default function TeacherCourseDetailPage() {
       title: data.title ?? "",
       short_description: data.short_description ?? "",
       full_description: data.full_description ?? "",
+      category: data.category ?? "",
       level: data.level ?? "beginner",
       language: data.language ?? "vi",
       thumbnail_url: data.thumbnail_url ?? "",
       learning_objectives: normalizeStringArray(data.learning_objectives),
       prerequisites: normalizeStringArray(data.prerequisites),
+      price: data.price != null ? String(data.price) : "",
+      has_certificate: Boolean(data.has_certificate),
+      estimated_hours: data.estimated_hours != null ? String(data.estimated_hours) : "",
+      tags: Array.isArray(data.tags) ? data.tags.join(", ") : "",
       publish_scheduled_at: isoToDatetimeLocalValue(data.publish_scheduled_at),
     };
     setForm(nextForm);
@@ -271,6 +341,26 @@ export default function TeacherCourseDetailPage() {
       setRules(null);
     } finally {
       setRulesLoading(false);
+    }
+  };
+
+  const fetchReviewTimeline = async () => {
+    if (!courseId || Number.isNaN(courseId)) return;
+    setTimelineLoading(true);
+    try {
+      const res = await fetch(`${url}${COURSES_API.myReviewTimeline(courseId)}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as any)?.message || "Không thể tải timeline duyệt.");
+      setReviewTimeline(Array.isArray((data as any)?.items) ? (data as any).items : []);
+    } catch {
+      setReviewTimeline([]);
+    } finally {
+      setTimelineLoading(false);
     }
   };
 
@@ -356,6 +446,7 @@ export default function TeacherCourseDetailPage() {
       .finally(() => setLoading(false));
     void fetchCompletionRules();
     void fetchPrerequisiteOptions();
+    void fetchReviewTimeline();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
 
@@ -364,6 +455,7 @@ export default function TeacherCourseDetailPage() {
   }, [course?.id]);
 
   const save = async () => {
+    if (!ensureVerifiedForCourseActions()) return;
     setLoading(true);
     setError(null);
     setSaveSuccessOpen(false);
@@ -372,10 +464,18 @@ export default function TeacherCourseDetailPage() {
         title: form.title,
         short_description: form.short_description,
         full_description: form.full_description,
+        category: form.category || null,
         level: form.level,
         language: form.language,
         learning_objectives: form.learning_objectives.map((x) => x.trim()).filter(Boolean),
         prerequisites: Array.from(selectedPrerequisiteIds).map(String),
+        price: form.price.trim() ? Number(form.price) : null,
+        has_certificate: form.has_certificate,
+        estimated_hours: form.estimated_hours.trim() ? Number(form.estimated_hours) : null,
+        tags: form.tags
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean),
         publish_scheduled_at: form.publish_scheduled_at ? new Date(form.publish_scheduled_at).toISOString() : null,
       };
       if (initialForm && form.thumbnail_url !== initialForm.thumbnail_url) {
@@ -423,6 +523,7 @@ export default function TeacherCourseDetailPage() {
   };
 
   const setStatusNow = async (nextStatus: CourseStatus) => {
+    if (!ensureVerifiedForCourseActions()) return;
     if (!courseId || Number.isNaN(courseId)) return;
     setLoading(true);
     setError(null);
@@ -447,6 +548,7 @@ export default function TeacherCourseDetailPage() {
   };
 
   const del = async () => {
+    if (!ensureVerifiedForCourseActions()) return;
     if (!window.confirm("Xóa khóa học? (soft delete)")) return;
     setLoading(true);
     setError(null);
@@ -473,6 +575,8 @@ export default function TeacherCourseDetailPage() {
     switch (status) {
       case "published":
         return "course-status-published";
+      case "pending_review":
+        return "course-status-draft";
       case "draft":
         return "course-status-draft";
       case "archived":
@@ -546,6 +650,8 @@ export default function TeacherCourseDetailPage() {
               <span className={`course-status-badge ${getStatusClassName(course.status)}`}>
                 {course.status === "published"
                   ? "Đã xuất bản"
+                  : course.status === "pending_review"
+                    ? "Chờ quản trị viên duyệt"
                   : course.status === "draft"
                     ? "Bản nháp"
                     : "Đã lưu trữ"}
@@ -590,6 +696,17 @@ export default function TeacherCourseDetailPage() {
                 ) : null}
                 <button
                   type="button"
+                  className={`course-action-item ${selectedStatus === "pending_review" ? "active" : ""}`}
+                  onClick={() => {
+                    setOpenStatusMenu(false);
+                    void setStatusNow("pending_review");
+                  }}
+                  disabled={loading}
+                >
+                  Gửi duyệt quản trị viên
+                </button>
+                <button
+                  type="button"
                   className={`course-action-item ${selectedStatus === "archived" ? "active" : ""}`}
                   onClick={() => {
                     setOpenStatusMenu(false);
@@ -618,6 +735,16 @@ export default function TeacherCourseDetailPage() {
         </div>
 
         {error && <div className="error-box" style={{ marginTop: "0.75rem" }}>{error}</div>}
+        {course && !course.quality_gate?.ready ? (
+          <div className="error-box" style={{ marginTop: "0.75rem" }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Quality gate chưa đạt</div>
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {(course.quality_gate?.issues || []).map((issue) => (
+                <li key={issue}>{issue}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <div className="course-detail-two-column">
           <div>
@@ -648,6 +775,16 @@ export default function TeacherCourseDetailPage() {
                 value={form.full_description}
                 onChange={(e) => setForm((p) => ({ ...p, full_description: e.target.value }))}
                 disabled={loading}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Danh mục</label>
+              <input
+                className="form-input"
+                value={form.category}
+                onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
+                disabled={loading}
+                placeholder="Ví dụ: programming, data-science..."
               />
             </div>
             <div className="form-group">
@@ -779,9 +916,9 @@ export default function TeacherCourseDetailPage() {
                 onChange={(e) => setForm((p) => ({ ...p, level: e.target.value }))}
                 disabled={loading}
               >
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
+                <option value="beginner">Cơ bản</option>
+                <option value="intermediate">Trung cấp</option>
+                <option value="advanced">Nâng cao</option>
               </select>
             </div>
             <div className="form-group">
@@ -863,6 +1000,49 @@ export default function TeacherCourseDetailPage() {
                 </div>
               </div>
             </div>
+            <div className="form-group">
+              <label className="form-label">Giá (VNĐ)</label>
+              <input
+                className="form-input"
+                inputMode="numeric"
+                value={form.price}
+                onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))}
+                disabled={loading}
+                placeholder="Để trống nếu miễn phí"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Có chứng chỉ</label>
+              <select
+                className="form-input"
+                value={form.has_certificate ? "yes" : "no"}
+                onChange={(e) => setForm((p) => ({ ...p, has_certificate: e.target.value === "yes" }))}
+                disabled={loading}
+              >
+                <option value="no">Không</option>
+                <option value="yes">Có</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Thời lượng ước tính (giờ)</label>
+              <input
+                className="form-input"
+                inputMode="numeric"
+                value={form.estimated_hours}
+                onChange={(e) => setForm((p) => ({ ...p, estimated_hours: e.target.value }))}
+                disabled={loading}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Tags</label>
+              <input
+                className="form-input"
+                value={form.tags}
+                onChange={(e) => setForm((p) => ({ ...p, tags: e.target.value }))}
+                disabled={loading}
+                placeholder="python, backend, nhập môn"
+              />
+            </div>
           </div>
         </div>
 
@@ -887,6 +1067,29 @@ export default function TeacherCourseDetailPage() {
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="wizard-card content-editor-card">
+        <div className="content-editor-header">
+          <div className="content-editor-title">Timeline duyệt khóa học</div>
+        </div>
+        {timelineLoading ? (
+          <div className="course-stats" style={{ marginTop: 8 }}>Đang tải timeline...</div>
+        ) : reviewTimeline.length ? (
+          <div className="review-timeline-list">
+            {reviewTimeline.slice(0, 10).map((item) => (
+              <div className="review-timeline-item" key={item.id}>
+                <div className="review-timeline-time">{new Date(item.created_at).toLocaleString("vi-VN")}</div>
+                <div className="review-timeline-main">
+                  <b>{item.decision}</b> · {item.from_status ?? "—"} → {item.to_status}
+                  {item.note ? ` · ${item.note}` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="course-stats" style={{ marginTop: 8 }}>Chưa có lịch sử duyệt.</div>
+        )}
       </div>
 
       <div className="wizard-card content-editor-card">
@@ -1003,6 +1206,19 @@ export default function TeacherCourseDetailPage() {
           </div>
         </div>
       </div>
+      <CommonModal
+        open={modalState.open}
+        title={modalState.title}
+        message={modalState.message}
+        onClose={() => setModalState({ open: false, title: "", message: "" })}
+        onConfirm={() => {
+          if (modalState.onConfirm) {
+            modalState.onConfirm();
+            return;
+          }
+          setModalState({ open: false, title: "", message: "" });
+        }}
+      />
     </div>
   );
 }

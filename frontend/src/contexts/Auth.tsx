@@ -19,6 +19,13 @@ import {
   LoginParams,
 } from "../services/authClient";
 import { MESSAGES } from "../constants/messages";
+import { resolvePrimaryRole } from "../utils/roles";
+import SessionReauthModal from "../components/SessionReauthModal";
+import {
+  emitSessionUnauthorized,
+  isUnauthorizedMessage,
+  SESSION_UNAUTHORIZED_EVENT,
+} from "../utils/authEvents";
 
 type AuthUser = ApiAuthUser;
 
@@ -27,7 +34,7 @@ type AuthContextValue = {
   user: AuthUser | null;
   accessToken: string | null;
   refreshToken: string | null;
-  login: (params: LoginParams & { remember?: boolean }) => Promise<AuthResponse | void>;
+  login: (params: LoginParams & { remember?: boolean; redirect?: boolean }) => Promise<AuthResponse | void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (patch: Partial<AuthUser>) => void;
@@ -97,25 +104,7 @@ function redirectByRole(
   user: AuthUser | null,
   navigate: ReturnType<typeof useNavigate>
 ) {
-  const normalizedPrimaryRole = String(user?.primary_role ?? "")
-    .trim()
-    .toLowerCase();
-  const roles = (user?.roles ?? [])
-    .map((r) => String(r).trim().toLowerCase())
-    .filter(Boolean);
-  // Ưu tiên suy ra role từ roles để tránh trường hợp primary_role bị lệch.
-  const role =
-    roles.includes("admin")
-      ? "admin"
-      : roles.includes("course_manager")
-      ? "course_manager"
-      : roles.includes("teacher")
-      ? "teacher"
-      : roles.includes("learner")
-      ? "learner"
-      : roles.includes("student")
-      ? "student"
-      : normalizedPrimaryRole || roles[0] || "";
+  const role = resolvePrimaryRole(user);
   // Hỗ trợ cả tên role cũ (student/teacher) và mới (learner/course_manager)
   if (role === "student" || role === "learner") {
     navigate("/student/dashboard", { replace: true });
@@ -147,6 +136,9 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(initial.user);
   const [remember, setRemember] = useState<boolean>(initial.remember);
   const [isLoading, setIsLoading] = useState(false);
+  const [showReauthModal, setShowReauthModal] = useState(false);
+  const [reauthEmail, setReauthEmail] = useState(initial.user?.email ?? "");
+  const [reauthError, setReauthError] = useState<string | null>(null);
 
   const isAuthenticated = !!accessToken && !!user;
 
@@ -264,7 +256,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
   // Hàm đăng nhập (hỗ trợ cả 2FA)
   const login = useCallback(async (
-    params: LoginParams & { remember?: boolean }
+    params: LoginParams & { remember?: boolean; redirect?: boolean }
   ): Promise<AuthResponse | void> => {
     setIsLoading(true);
     try {
@@ -286,11 +278,16 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
       saveAuthToStorage(access_token, refresh_token, user, rememberFlag);
 
-      // Redirect theo role
-      redirectByRole(user, navigate);
+      // Redirect theo role nếu được yêu cầu
+      if (params.redirect !== false) {
+        redirectByRole(user, navigate);
+      }
 
       return data;
     } catch (err: any) {
+      if (isUnauthorizedMessage(err)) {
+        emitSessionUnauthorized();
+      }
       const code = err?.message as keyof typeof MESSAGES;
       throw new Error(MESSAGES[code] ?? MESSAGES.LOGIN_FAILED);
     } finally {
@@ -429,6 +426,69 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [isAuthenticated, logout, updateLastActive]);
 
+  useEffect(() => {
+    const originalFetch = window.fetch.bind(window);
+
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      const request = args[0];
+      const requestUrl =
+        typeof request === "string"
+          ? request
+          : request instanceof URL
+            ? request.href
+            : request.url;
+
+      if (response.status === 401) {
+        emitSessionUnauthorized({ url: requestUrl });
+      }
+
+      return response;
+    };
+
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onUnauthorized = () => {
+      if (!accessToken) return;
+      setReauthEmail(user?.email ?? "");
+      setReauthError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      setShowReauthModal(true);
+    };
+
+    window.addEventListener(SESSION_UNAUTHORIZED_EVENT, onUnauthorized);
+    return () => {
+      window.removeEventListener(SESSION_UNAUTHORIZED_EVENT, onUnauthorized);
+    };
+  }, [accessToken, user?.email]);
+
+  const handleReauthByPassword = useCallback(
+    async (password: string) => {
+      try {
+        setReauthError(null);
+        await login({
+          email: reauthEmail,
+          password,
+          remember,
+          redirect: false,
+        });
+        setShowReauthModal(false);
+      } catch (error: any) {
+        setReauthError(error?.message ?? "Đăng nhập lại thất bại.");
+      }
+    },
+    [login, reauthEmail, remember]
+  );
+
+  const handleReauthByGoogle = useCallback(async () => {
+    const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.sessionStorage.setItem("post_auth_redirect", returnTo);
+    await loginWithGoogle();
+  }, [loginWithGoogle]);
+
   const value: AuthContextValue = {
     isAuthenticated,
     user,
@@ -445,7 +505,21 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     clearAuth,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <SessionReauthModal
+        open={showReauthModal}
+        email={reauthEmail}
+        onEmailChange={setReauthEmail}
+        onSubmitPassword={handleReauthByPassword}
+        onGoogleLogin={handleReauthByGoogle}
+        error={reauthError}
+        loading={isLoading}
+        onClose={() => setShowReauthModal(false)}
+      />
+    </AuthContext.Provider>
+  );
 }
 
 // HOOKS
