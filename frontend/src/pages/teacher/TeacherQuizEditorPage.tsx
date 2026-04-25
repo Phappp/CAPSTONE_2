@@ -1,10 +1,5 @@
-import { useMemo } from "react";
+import { useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import AvatarMenu from "../../components/AvatarMenu";
-import ManualQuizEditor from "../../components/ManualQuizEditor";
-import { getAccessToken } from "../../utils/authStorage";
-import "./TeacherDashboard.css";
-import "./TeacherCourseOverviewPage.css";
 
 export default function TeacherQuizEditorPage() {
   const { id } = useParams();
@@ -13,44 +8,18 @@ export default function TeacherQuizEditorPage() {
   const courseId = Number(id);
   const lessonIdRaw = searchParams.get("lessonId");
   const pickedLessonId = lessonIdRaw ? Number(lessonIdRaw) : null;
-  const token = getAccessToken();
 
-  const courses = useMemo(() => {
-    if (!courseId || Number.isNaN(courseId)) return [];
-    return [{ id: courseId, title: `Khóa học #${courseId}` }];
-  }, [courseId]);
+  useEffect(() => {
+    if (!courseId || Number.isNaN(courseId)) {
+      navigate("/teacher/dashboard", { replace: true });
+      return;
+    }
+    if (!pickedLessonId || Number.isNaN(pickedLessonId)) {
+      navigate(`/teacher/courses/${courseId}/assessments`, { replace: true });
+      return;
+    }
+    navigate(`/teacher/courses/${courseId}/lessons/${pickedLessonId}/studio?section=quiz`, { replace: true });
+  }, [courseId, pickedLessonId, navigate]);
 
-  if (!courseId || Number.isNaN(courseId)) return null;
-
-  return (
-    <div className="dashboard-page teacher-course-overview">
-      <div className="dashboard-container">
-        <div className="dashboard-header teacher-course-overview__top">
-          <div className="teacher-course-overview__topLeft" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button type="button" className="secondary-button back-button" onClick={() => navigate(`/teacher/courses/${courseId}/assessments`)}>
-              ← Quản lý Quizz & bài tập
-            </button>
-          </div>
-          <AvatarMenu />
-        </div>
-        <div className="chart-card" style={{ marginBottom: 16 }}>
-          <h1 className="teacher-course-overview__title" style={{ margin: "0 0 8px" }}>
-            Soạn Quizz
-          </h1>
-        </div>
-        <div className="chart-card">
-          <ManualQuizEditor
-            courses={courses}
-            token={token}
-            loading={false}
-            selectedCourseId={courseId}
-            onSelectedCourseIdChange={() => {
-              // cố định theo route course hiện tại
-            }}
-            pickedLessonId={pickedLessonId}
-          />
-        </div>
-      </div>
-    </div>
-  );
+  return null;
 }

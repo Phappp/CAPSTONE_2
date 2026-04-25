@@ -425,7 +425,7 @@ export default function TeacherCourseOverviewPage() {
                   <span className="material-symbols-outlined">edit</span>
                   Chỉnh sửa
                 </button> */}
-                <button className="btn-secondary" onClick={() => navigate(`/teacher/courses/${courseId}/content`)}>
+                <button className="btn-secondary" onClick={() => navigate(`/teacher/courses/${courseId}/content?tab=content`)}>
                   <span className="material-symbols-outlined">format_list_bulleted</span>
                   Nội dung
                 </button>

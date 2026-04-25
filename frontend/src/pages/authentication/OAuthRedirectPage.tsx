@@ -17,6 +17,22 @@ export default function OAuthRedirectPage() {
     const [pendingToken, setPendingToken] = useState<string | null>(null);
     const [displayName, setDisplayName] = useState<string>("");
     const [isSubmittingRole, setIsSubmittingRole] = useState(false);
+    const isPopupFlow = typeof window !== "undefined" && !!window.opener && window.opener !== window;
+
+    const postResultToOpener = (payload: {
+        type: "oauth:success";
+        accessToken: string;
+        refreshToken: string;
+        user: any;
+    } | {
+        type: "oauth:error";
+        message: string;
+    }) => {
+        if (!isPopupFlow || !window.opener) return false;
+        window.opener.postMessage(payload, window.location.origin);
+        window.close();
+        return true;
+    };
 
     const navigateAfterAuth = (fallbackRole: ReturnType<typeof resolvePrimaryRole>) => {
         const returnTo = window.sessionStorage.getItem("post_auth_redirect");
@@ -48,7 +64,11 @@ export default function OAuthRedirectPage() {
             const fullName = searchParams.get("full_name");
 
             if (errorMsg) {
-                setError(decodeURIComponent(errorMsg));
+                const decodedError = decodeURIComponent(errorMsg);
+                if (postResultToOpener({ type: "oauth:error", message: decodedError })) {
+                    return;
+                }
+                setError(decodedError);
                 setTimeout(() => {
                     navigate("/login?error=" + encodeURIComponent(errorMsg));
                 }, 3000);
@@ -89,6 +109,15 @@ export default function OAuthRedirectPage() {
                             })
                         };
 
+                        if (postResultToOpener({
+                            type: "oauth:success",
+                            accessToken,
+                            refreshToken,
+                            user: resolvedUser,
+                        })) {
+                            return;
+                        }
+
                         // Lưu token và user
                         setTokens(accessToken, refreshToken, uid, resolvedUser);
                         saveAuthToStorage(accessToken, refreshToken, resolvedUser, true);
@@ -99,18 +128,36 @@ export default function OAuthRedirectPage() {
                         navigateAfterAuth(role);
                     } catch (apiError) {
                         console.warn("Unable to load user profile after Google OAuth:", apiError);
+                        if (postResultToOpener({
+                            type: "oauth:error",
+                            message: "Không thể tải quyền tài khoản. Vui lòng đăng nhập lại.",
+                        })) {
+                            return;
+                        }
                         setError("Không thể tải quyền tài khoản. Vui lòng đăng nhập lại.");
                         setTimeout(() => {
                             navigate("/login?error=Không thể xác định quyền tài khoản Google", { replace: true });
                         }, 2000);
                     }
                 } catch (err: any) {
+                    if (postResultToOpener({
+                        type: "oauth:error",
+                        message: "Không thể xử lý đăng nhập",
+                    })) {
+                        return;
+                    }
                     setError("Không thể xử lý đăng nhập");
                     setTimeout(() => {
                         navigate("/login?error=Không thể đăng nhập bằng Google");
                     }, 3000);
                 }
             } else {
+                if (postResultToOpener({
+                    type: "oauth:error",
+                    message: "Không nhận được thông tin xác thực từ Google",
+                })) {
+                    return;
+                }
                 setError("Không nhận được thông tin xác thực từ Google");
                 setTimeout(() => {
                     navigate("/login?error=Không thể đăng nhập bằng Google");
@@ -138,6 +185,15 @@ export default function OAuthRedirectPage() {
                 primary_role: resolvePrimaryRole(result.user),
             };
 
+            if (postResultToOpener({
+                type: "oauth:success",
+                accessToken: result.access_token,
+                refreshToken: result.refresh_token,
+                user: authUser,
+            })) {
+                return;
+            }
+
             setTokens(result.access_token, result.refresh_token, String(authUser.id), authUser);
             saveAuthToStorage(result.access_token, result.refresh_token, authUser, true);
             setUser(authUser);
@@ -145,7 +201,11 @@ export default function OAuthRedirectPage() {
             const primaryRole = resolvePrimaryRole(authUser);
             navigateAfterAuth(primaryRole);
         } catch (err: any) {
-            setError(err?.message || "Không thể hoàn tất đăng nhập Google.");
+            const message = err?.message || "Không thể hoàn tất đăng nhập Google.";
+            if (postResultToOpener({ type: "oauth:error", message })) {
+                return;
+            }
+            setError(message);
         } finally {
             setIsSubmittingRole(false);
         }

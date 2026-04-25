@@ -251,8 +251,12 @@ export class QuestionBankServiceImpl implements QuestionBankService {
     async deleteQuestion(bankId: number, questionId: number, userId: number): Promise<void> {
         await this.assertCourseManagerOrAdmin(userId);
         await this.getOwnedBankOrThrow(bankId, userId);
-        const questionRepo = this.dataSource.getRepository(BankQuestion);
-        await questionRepo.delete({ id: questionId, bank_id: bankId });
+        await this.dataSource.transaction(async (manager) => {
+            const questionRepo = manager.getRepository(BankQuestion);
+            const optionRepo = manager.getRepository(BankQuestionOption);
+            await optionRepo.delete({ question_id: questionId });
+            await questionRepo.delete({ id: questionId, bank_id: bankId });
+        });
     }
 
     async generateQuestionsWithAi(

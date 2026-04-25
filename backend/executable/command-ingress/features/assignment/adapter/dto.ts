@@ -23,6 +23,7 @@ export class CreateAssignmentBody extends RequestDto implements CreateAssignment
     assignment_kind: AssignmentKind;
 
     short_answer_questions?: { id: string; question_text: string; order_index: number }[] | null;
+    time_limit_minutes?: number | null;
 
     constructor(body: any) {
         super();
@@ -42,5 +43,6 @@ export class CreateAssignmentBody extends RequestDto implements CreateAssignment
         : ['pdf', 'docx', 'doc', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'zip', 'rar', '7z'];
         this.assignment_kind = body?.assignment_kind === 'short_answer' ? 'short_answer' : 'file_prompt';
         this.short_answer_questions = Array.isArray(body?.short_answer_questions) ? body.short_answer_questions : null;
+        this.time_limit_minutes = body?.time_limit_minutes != null ? Number(body.time_limit_minutes) : null;
         }
 }

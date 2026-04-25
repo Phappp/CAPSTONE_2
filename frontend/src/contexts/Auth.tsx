@@ -28,6 +28,17 @@ import {
 } from "../utils/authEvents";
 
 type AuthUser = ApiAuthUser;
+type OAuthPopupSuccessPayload = {
+  type: "oauth:success";
+  accessToken: string;
+  refreshToken: string;
+  user: AuthUser;
+};
+type OAuthPopupErrorPayload = {
+  type: "oauth:error";
+  message: string;
+};
+type OAuthPopupPayload = OAuthPopupSuccessPayload | OAuthPopupErrorPayload;
 
 type AuthContextValue = {
   isAuthenticated: boolean;
@@ -56,6 +67,8 @@ interface StoredAuthData {
   lastActiveAt: number;
   remember: boolean;
 }
+
+const REAUTH_RETRY_HEADER = "x-session-reauth-retry";
 
 function loadFromStorage(): {
   accessToken: string | null;
@@ -139,8 +152,19 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const [showReauthModal, setShowReauthModal] = useState(false);
   const [reauthEmail, setReauthEmail] = useState(initial.user?.email ?? "");
   const [reauthError, setReauthError] = useState<string | null>(null);
+  const accessTokenRef = useRef<string | null>(initial.accessToken);
+  const userEmailRef = useRef<string>(initial.user?.email ?? "");
+  const reauthPromiseRef = useRef<{
+    promise: Promise<boolean>;
+    resolve: (value: boolean) => void;
+  } | null>(null);
 
   const isAuthenticated = !!accessToken && !!user;
+
+  useEffect(() => {
+    accessTokenRef.current = accessToken;
+    userEmailRef.current = user?.email ?? "";
+  }, [accessToken, user?.email]);
 
   // Hàm lưu auth data vào storage
   const saveAuthToStorage = useCallback((
@@ -173,6 +197,34 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     window.sessionStorage.removeItem("auth");
     window.localStorage.removeItem("access_token");
     window.sessionStorage.removeItem("access_token");
+  }, []);
+
+  const resolveReauthRequests = useCallback((ok: boolean) => {
+    if (!reauthPromiseRef.current) return;
+    reauthPromiseRef.current.resolve(ok);
+    reauthPromiseRef.current = null;
+  }, []);
+
+  const ensureReauthFlow = useCallback(() => {
+    if (!accessTokenRef.current) {
+      return null;
+    }
+
+    if (!reauthPromiseRef.current) {
+      let resolvePromise: (value: boolean) => void = () => undefined;
+      const promise = new Promise<boolean>((resolve) => {
+        resolvePromise = resolve;
+      });
+      reauthPromiseRef.current = {
+        promise,
+        resolve: resolvePromise,
+      };
+      setReauthEmail(userEmailRef.current);
+      setReauthError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      setShowReauthModal(true);
+    }
+
+    return reauthPromiseRef.current.promise;
   }, []);
 
   // Hàm cập nhật lastActiveAt
@@ -324,9 +376,10 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(null);
     setRefreshToken(null);
     setUser(null);
+    resolveReauthRequests(false);
     clearAuth();
     navigate("/login", { replace: true });
-  }, [refreshToken, clearAuth, navigate]);
+  }, [refreshToken, resolveReauthRequests, clearAuth, navigate]);
 
   // Hàm cập nhật user
   const updateUser = useCallback((patch: Partial<AuthUser>) => {
@@ -429,15 +482,78 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const originalFetch = window.fetch.bind(window);
 
+    const getRequestUrl = (request: RequestInfo | URL) => {
+      if (typeof request === "string") return request;
+      if (request instanceof URL) return request.href;
+      return request.url;
+    };
+
+    const isAuthEndpoint = (url: string) =>
+      url.includes("/api/auth/login") ||
+      url.includes("/api/auth/token") ||
+      url.includes("/api/auth/logout") ||
+      url.includes("/api/auth/google");
+
+    const wasRetried = (request: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.headers) {
+        const headers = new Headers(init.headers);
+        if (headers.get(REAUTH_RETRY_HEADER) === "1") return true;
+      }
+      if (request instanceof Request) {
+        return request.headers.get(REAUTH_RETRY_HEADER) === "1";
+      }
+      return false;
+    };
+
+    const retryRequestWithLatestToken = async (
+      request: RequestInfo | URL,
+      init: RequestInit | undefined,
+      latestToken: string | null
+    ) => {
+      const mergedHeaders = new Headers(
+        init?.headers ?? (request instanceof Request ? request.headers : undefined)
+      );
+      mergedHeaders.set(REAUTH_RETRY_HEADER, "1");
+
+      const prevAuthHeader = mergedHeaders.get("Authorization");
+      if (prevAuthHeader?.toLowerCase().startsWith("bearer ") && latestToken) {
+        mergedHeaders.set("Authorization", `Bearer ${latestToken}`);
+      }
+
+      if (request instanceof Request) {
+        const retryRequest = new Request(request, {
+          ...init,
+          headers: mergedHeaders,
+        });
+        return originalFetch(retryRequest);
+      }
+
+      return originalFetch(request, {
+        ...(init ?? {}),
+        headers: mergedHeaders,
+      });
+    };
+
     window.fetch = async (...args) => {
+      const [request, init] = args;
+      const requestUrl = getRequestUrl(request);
       const response = await originalFetch(...args);
-      const request = args[0];
-      const requestUrl =
-        typeof request === "string"
-          ? request
-          : request instanceof URL
-            ? request.href
-            : request.url;
+
+      if (
+        response.status === 401 &&
+        accessTokenRef.current &&
+        !isAuthEndpoint(requestUrl) &&
+        !wasRetried(request, init)
+      ) {
+        emitSessionUnauthorized({ url: requestUrl });
+        const reauthPromise = ensureReauthFlow();
+        if (!reauthPromise) return response;
+
+        const reauthOk = await reauthPromise;
+        if (!reauthOk) return response;
+
+        return retryRequestWithLatestToken(request, init, accessTokenRef.current);
+      }
 
       if (response.status === 401) {
         emitSessionUnauthorized({ url: requestUrl });
@@ -449,21 +565,18 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       window.fetch = originalFetch;
     };
-  }, []);
+  }, [ensureReauthFlow]);
 
   useEffect(() => {
     const onUnauthorized = () => {
-      if (!accessToken) return;
-      setReauthEmail(user?.email ?? "");
-      setReauthError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
-      setShowReauthModal(true);
+      ensureReauthFlow();
     };
 
     window.addEventListener(SESSION_UNAUTHORIZED_EVENT, onUnauthorized);
     return () => {
       window.removeEventListener(SESSION_UNAUTHORIZED_EVENT, onUnauthorized);
     };
-  }, [accessToken, user?.email]);
+  }, [ensureReauthFlow]);
 
   const handleReauthByPassword = useCallback(
     async (password: string) => {
@@ -476,18 +589,77 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
           redirect: false,
         });
         setShowReauthModal(false);
+        resolveReauthRequests(true);
       } catch (error: any) {
         setReauthError(error?.message ?? "Đăng nhập lại thất bại.");
       }
     },
-    [login, reauthEmail, remember]
+    [login, reauthEmail, remember, resolveReauthRequests]
   );
 
   const handleReauthByGoogle = useCallback(async () => {
-    const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    window.sessionStorage.setItem("post_auth_redirect", returnTo);
-    await loginWithGoogle();
-  }, [loginWithGoogle]);
+    setIsLoading(true);
+    setReauthError(null);
+
+    try {
+      const authUrl = await apiGetGoogleAuthUrl();
+      const popup = window.open(
+        authUrl,
+        "google-reauth-popup",
+        "width=560,height=700,menubar=no,toolbar=no,location=yes,status=no,resizable=yes,scrollbars=yes"
+      );
+
+      if (!popup) {
+        throw new Error("Trình duyệt đã chặn popup. Vui lòng cho phép popup và thử lại.");
+      }
+
+      const result = await new Promise<OAuthPopupPayload>((resolve, reject) => {
+        const timer = window.setInterval(() => {
+          if (!popup || popup.closed) {
+            window.clearInterval(timer);
+            window.removeEventListener("message", onMessage);
+            reject(new Error("Bạn đã đóng cửa sổ xác thực Google."));
+          }
+        }, 500);
+
+        const onMessage = (event: MessageEvent<OAuthPopupPayload>) => {
+          if (event.origin !== window.location.origin) return;
+          if (!event.data || (event.data.type !== "oauth:success" && event.data.type !== "oauth:error")) {
+            return;
+          }
+          window.clearInterval(timer);
+          window.removeEventListener("message", onMessage);
+          resolve(event.data);
+        };
+
+        window.addEventListener("message", onMessage);
+      });
+
+      if (result.type === "oauth:error") {
+        throw new Error(result.message || "Đăng nhập lại bằng Google thất bại.");
+      }
+
+      setTokens(
+        result.accessToken,
+        result.refreshToken,
+        String(result.user.id),
+        result.user
+      );
+      saveAuthToStorage(
+        result.accessToken,
+        result.refreshToken,
+        result.user,
+        remember
+      );
+      setUser(result.user);
+      setShowReauthModal(false);
+      resolveReauthRequests(true);
+    } catch (error: any) {
+      setReauthError(error?.message ?? "Đăng nhập lại bằng Google thất bại.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [remember, resolveReauthRequests, saveAuthToStorage, setTokens]);
 
   const value: AuthContextValue = {
     isAuthenticated,
@@ -516,7 +688,10 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         onGoogleLogin={handleReauthByGoogle}
         error={reauthError}
         loading={isLoading}
-        onClose={() => setShowReauthModal(false)}
+        onClose={() => {
+          setShowReauthModal(false);
+          resolveReauthRequests(false);
+        }}
       />
     </AuthContext.Provider>
   );

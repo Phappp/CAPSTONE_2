@@ -2802,6 +2802,7 @@ export class CourseServiceImpl implements CourseService {
         lesson_type: (l.lesson_type || 'text') as LessonType,
         order_index: l.order_index,
         open_at: l.open_at ? new Date(l.open_at).toISOString() : null,
+        is_published: Boolean(l.is_published),
         has_quiz: attachFlagsTree.hasQuiz.has(lid),
         has_assignment: attachFlagsTree.hasAssignment.has(lid),
       });
@@ -2815,6 +2816,7 @@ export class CourseServiceImpl implements CourseService {
       description: m.description ?? null,
       order_index: m.order_index,
       open_at: m.open_at ? new Date(m.open_at).toISOString() : null,
+      is_published: Boolean(m.is_published),
       lessons: lessonByModule.get(m.id) || [],
     }));
 
@@ -2854,6 +2856,7 @@ export class CourseServiceImpl implements CourseService {
     if (request.title != null) (mod as any).title = request.title;
     if ('description' in request) (mod as any).description = request.description ?? null;
     if ('open_at' in request) (mod as any).open_at = parseNullableDateTime((request as any)?.open_at);
+    if ('is_published' in request) (mod as any).is_published = Boolean((request as any).is_published);
     await moduleRepo.save(mod as any);
   }
 
@@ -2917,6 +2920,7 @@ export class CourseServiceImpl implements CourseService {
       (lesson as any).lesson_type = request.lesson_type;
     }
     if ('open_at' in request) (lesson as any).open_at = parseNullableDateTime((request as any)?.open_at) ?? null;
+    if ('is_published' in request) (lesson as any).is_published = Boolean((request as any).is_published);
     await lessonRepo.save(lesson as any);
   }
 
@@ -2930,7 +2934,51 @@ export class CourseServiceImpl implements CourseService {
     if (!lesson) throw new Error('Không tìm thấy bài học.');
     const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id, course_id: courseId } as any });
     if (!mod) throw new Error('Không tìm thấy bài học.');
-    await lessonRepo.delete({ id: lessonId } as any);
+    await AppDataSource.transaction(async (manager) => {
+      const quizRepo = manager.getRepository(Quiz);
+      const qqRepo = manager.getRepository(QuizQuestion);
+      const qOptRepo = manager.getRepository(QuestionOption);
+      const attemptRepo = manager.getRepository(QuizAttempt);
+      const respRepo = manager.getRepository(QuizResponse);
+      const roRepo = manager.getRepository(QuizResponseOption);
+      const assignmentRepo = manager.getRepository(Assignment);
+      const resourceRepo = manager.getRepository(LessonResource);
+      const progressRepo = manager.getRepository(LessonProgress);
+      const completionRepo = manager.getRepository(LessonCompletion);
+      const lessonRepoTx = manager.getRepository(Lesson);
+
+      const quiz = await quizRepo.findOne({ where: { lesson_id: lessonId } as any });
+      if (quiz) {
+        const quizId = Number((quiz as any).id);
+        const maps = await qqRepo.find({ where: { quiz_id: quizId } as any });
+        const qqIds = (maps as any[]).map((m) => Number((m as any).id)).filter((id) => id > 0);
+
+        const attempts = await attemptRepo.find({ where: { quiz_id: quizId } as any });
+        const attemptIds = (attempts as any[]).map((a) => Number((a as any).id)).filter((id) => id > 0);
+
+        if (attemptIds.length) {
+          const responses = await respRepo.find({ where: { attempt_id: In(attemptIds) } as any });
+          const responseIds = (responses as any[]).map((r) => Number((r as any).id)).filter((id) => id > 0);
+          if (responseIds.length) {
+            await roRepo.delete({ response_id: In(responseIds) } as any);
+          }
+          await respRepo.delete({ attempt_id: In(attemptIds) } as any);
+          await attemptRepo.delete({ id: In(attemptIds) } as any);
+        }
+
+        if (qqIds.length) {
+          await qOptRepo.delete({ quiz_question_id: In(qqIds) } as any);
+        }
+        await qqRepo.delete({ quiz_id: quizId } as any);
+        await quizRepo.delete({ id: quizId } as any);
+      }
+
+      await assignmentRepo.delete({ lesson_id: lessonId } as any);
+      await resourceRepo.delete({ lesson_id: lessonId } as any);
+      await progressRepo.delete({ lesson_id: lessonId } as any);
+      await completionRepo.delete({ lesson_id: lessonId } as any);
+      await lessonRepoTx.delete({ id: lessonId } as any);
+    });
   }
 
   async reorderCourseContent(subjectUserId: number, courseId: number, request: ReorderCourseContentRequest): Promise<void> {
@@ -2992,7 +3040,6 @@ export class CourseServiceImpl implements CourseService {
     if (!lesson) throw new Error('Không tìm thấy bài học.');
     const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id, course_id: courseId } as any });
     if (!mod) throw new Error('Không tìm thấy bài học.');
-
     const resources = await resourceRepo.find({
       where: { lesson_id: lessonId } as any,
       order: { created_at: 'DESC', id: 'DESC' } as any,

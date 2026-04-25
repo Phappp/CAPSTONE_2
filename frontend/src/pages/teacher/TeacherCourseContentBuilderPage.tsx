@@ -1,11 +1,11 @@
 // TeacherCourseContentBuilderPage.tsx
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { getAccessToken } from "../../utils/authStorage";
-import CourseContentTreeEditor from "../../components/CourseContentTreeEditor";
+import CourseContentSimpleTree from "../../components/CourseContentSimpleTree";
 import TeacherCourseAssessmentsPage from "./TeacherCourseAssessmentsPage";
 import "./TeacherDashboard.css";
 import "./TeacherCourseContentBuilderPage.css";
@@ -52,6 +52,7 @@ type MainTab = "info" | "content" | "assessment" | "rules";
 
 export default function TeacherCourseDetailPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const params = useParams();
   const courseId = Number(params.id);
 
@@ -62,6 +63,14 @@ export default function TeacherCourseDetailPage() {
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<CourseStatus>("draft");
   const [activeTab, setActiveTab] = useState<MainTab>("info");
+
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const tab = q.get("tab");
+    if (tab === "content" || tab === "info" || tab === "assessment" || tab === "rules") {
+      setActiveTab(tab);
+    }
+  }, [location.search]);
 
   const [form, setForm] = useState({
     title: "",
@@ -485,12 +494,33 @@ export default function TeacherCourseDetailPage() {
                 Tổng quan khóa học
               </button>
             </div>
-            <h1 className="dashboard-title">
-              {course ? course.title : "Quản lý nội dung khóa học"}
-            </h1>
-            <p className="dashboard-subtitle">
+            {/* <h1
+              className="dashboard-title"
+              style={{ fontWeight: 500, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}
+            >
+              <button
+                type="button"
+                onClick={() => navigate("/teacher/dashboard")}
+                style={{ border: "none", background: "transparent", padding: 0, margin: 0, cursor: "pointer", color: "inherit", font: "inherit" }}
+                title="Đi tới Dashboard"
+              >
+                Dashboard
+              </button>
+              <span className="material-symbols-outlined" style={{ fontSize: 16, color: "#94a3b8" }}>chevron_right</span>
+              <button
+                type="button"
+                onClick={() => navigate(`/teacher/courses/${courseId}`)}
+                style={{ border: "none", background: "transparent", padding: 0, margin: 0, cursor: "pointer", color: "inherit", font: "inherit" }}
+                title="Đi tới tổng quan khóa học"
+              >
+                {course ? course.title : "Khóa học"}
+              </button>
+              <span className="material-symbols-outlined" style={{ fontSize: 16, color: "#94a3b8" }}>chevron_right</span>
+              <span>Quản lý nội dung</span>
+            </h1> */}
+            {/* <p className="dashboard-subtitle">
               Quản lý thông tin, nội dung, bài kiểm tra và quy tắc hoàn thành khóa học
-            </p>
+            </p> */}
           </div>
           <AvatarMenu />
         </div>
@@ -532,14 +562,14 @@ export default function TeacherCourseDetailPage() {
             <span className="material-symbols-outlined">menu_book</span>
             Nội dung
           </button>
-          <button
+          {/* <button
             type="button"
             className={`tab-btn ${activeTab === "assessment" ? "active" : ""}`}
             onClick={() => setActiveTab("assessment")}
           >
             <span className="material-symbols-outlined">quiz</span>
             Quiz & Bài tập
-          </button>
+          </button> */}
           <button
             type="button"
             className={`tab-btn ${activeTab === "rules" ? "active" : ""}`}
@@ -899,10 +929,7 @@ export default function TeacherCourseDetailPage() {
                 </div>
               </div>
               <div className="section-card-content content-editor-wrapper">
-                <CourseContentTreeEditor
-                  courseId={courseId}
-                  embedded
-                />
+                <CourseContentSimpleTree courseId={courseId} />
               </div>
             </div>
           )}

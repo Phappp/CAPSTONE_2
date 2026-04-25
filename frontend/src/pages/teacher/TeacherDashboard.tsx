@@ -628,7 +628,7 @@ export default function TeacherDashboard() {
         {/* Header */}
         <div className="dashboard-header">
           <div className="header-title-section">
-            <h1 className="dashboard-title">Teacher Hub</h1>
+            <h1 className="dashboard-title">DASHBOARD</h1>
             <p className="dashboard-subtitle">Quản lý khóa học và theo dõi hiệu suất giảng dạy</p>
           </div>
           <AvatarMenu />

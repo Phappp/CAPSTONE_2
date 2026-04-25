@@ -164,6 +164,13 @@ function normalizeAllowedFormats(value: any, fallback: AssignmentFormat[]): Assi
   return fallback;
 }
 
+function normalizeTimeLimitMinutes(raw: any): number | null {
+  if (raw == null || raw === '') return null;
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n)) return null;
+  return Math.max(1, Math.min(600, n));
+}
+
 export class AssignmentServiceImpl implements AssignmentService {
   async createAssignment(subjectUserId: number, lessonId: number, request: CreateAssignmentRequest): Promise<any> {
     const lessonRepo = AppDataSource.getRepository(Lesson);
@@ -173,6 +180,9 @@ export class AssignmentServiceImpl implements AssignmentService {
     // Kiểm tra Bài học và Module có tồn tại
     const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
     if (!lesson) throw new Error('Không tìm thấy bài học!');
+    if (String((lesson as any).lesson_type || '') === 'quiz') {
+      throw new Error('Không thể gắn bài tập cho lesson loại Quizz.');
+    }
 
     const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id } as any });
     if (!mod) throw new Error('Không tìm thấy module chứa bài học này!');
@@ -184,8 +194,8 @@ export class AssignmentServiceImpl implements AssignmentService {
     if (!course) throw new Error('Không tìm thấy khóa học hoặc bạn không có quyền thực hiện thao tác này!');
 
     // validate một số lỗi login nghiệp vụ
-    if (request.passing_score && request.passing_score > request.max_score) {
-      throw new Error('Điểm đạt không được lớn hơn thang điểm 10!');
+    if (request.passing_score != null && request.passing_score > request.max_score) {
+      throw new Error(`Điểm đạt không được lớn hơn thang điểm ${request.max_score}.`);
     }
     const dueDate = new Date(request.due_date);
     if (isNaN(dueDate.getTime())) {
@@ -198,8 +208,12 @@ export class AssignmentServiceImpl implements AssignmentService {
       kind === 'short_answer'
         ? normalizeShortAnswerQuestionsForSave((request as any).short_answer_questions)
         : [];
+    const timeLimitMinutes = kind === 'short_answer' ? normalizeTimeLimitMinutes((request as any).time_limit_minutes) : null;
     if (kind === 'short_answer' && saq.length < 1) {
       throw new Error('Dạng trả lời ngắn cần ít nhất một câu hỏi.');
+    }
+    if (kind === 'short_answer' && timeLimitMinutes == null) {
+      throw new Error('Dạng trả lời ngắn cần cấu hình thời gian làm bài (phút).');
     }
 
     // thực thi db transaction giữa table assignments và grade_items
@@ -229,6 +243,7 @@ export class AssignmentServiceImpl implements AssignmentService {
         allow_late_submission: Boolean(request.allow_late_submission),
         assignment_kind: kind,
         short_answer_questions: kind === 'short_answer' ? saq : null,
+        time_limit_minutes: kind === 'short_answer' ? timeLimitMinutes : null,
       } as any);
 
       const savedAssignment = await assignmentRepo.save(newAssignment as any);
@@ -340,6 +355,7 @@ export class AssignmentServiceImpl implements AssignmentService {
     created_at: string;
     assignment_kind: AssignmentKind;
     short_answer_questions: ShortAnswerQuestionDef[];
+    time_limit_minutes: number | null;
   }> {
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const moduleRepo = AppDataSource.getRepository(Module);
@@ -390,6 +406,8 @@ export class AssignmentServiceImpl implements AssignmentService {
       created_at: new Date((assignment as any).created_at).toISOString(),
       assignment_kind: parseAssignmentKind((assignment as any).assignment_kind),
       short_answer_questions: mapShortAnswerQuestionsFromDb((assignment as any).short_answer_questions),
+      time_limit_minutes:
+        (assignment as any).time_limit_minutes != null ? Number((assignment as any).time_limit_minutes) : null,
     };
   }
 
@@ -410,6 +428,7 @@ export class AssignmentServiceImpl implements AssignmentService {
     attachments: AssignmentAttachmentPreview[];
     assignment_kind: AssignmentKind;
     short_answer_questions: ShortAnswerQuestionDef[];
+    time_limit_minutes: number | null;
   }> {
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const moduleRepo = AppDataSource.getRepository(Module);
@@ -464,6 +483,8 @@ export class AssignmentServiceImpl implements AssignmentService {
       attachments,
       assignment_kind: parseAssignmentKind((assignment as any).assignment_kind),
       short_answer_questions: mapShortAnswerQuestionsFromDb((assignment as any).short_answer_questions),
+      time_limit_minutes:
+        (assignment as any).time_limit_minutes != null ? Number((assignment as any).time_limit_minutes) : null,
     };
   }
 
@@ -499,7 +520,7 @@ export class AssignmentServiceImpl implements AssignmentService {
     const hasNonDraftSubmission = await submissionRepo.findOne({
       where: {
         assignment_id: assignmentId,
-        status: ['submitted', 'graded', 'returned'] as any,
+        status: In(['submitted', 'graded', 'returned']) as any,
       } as any,
     });
 
@@ -518,7 +539,7 @@ export class AssignmentServiceImpl implements AssignmentService {
         : currentPassing;
 
     if (nextPassing != null && nextPassing > nextMax) {
-      throw new Error('Điểm đạt không được lớn hơn thang điểm.');
+      throw new Error(`Điểm đạt không được lớn hơn thang điểm ${nextMax}.`);
     }
 
     if (request.title != null) assignment.title = String(request.title);
@@ -564,13 +585,26 @@ export class AssignmentServiceImpl implements AssignmentService {
         const sa = normalizeShortAnswerQuestionsForSave(request.short_answer_questions);
         if (sa.length < 1) throw new Error('Dạng trả lời ngắn cần ít nhất một câu hỏi.');
         (assignment as any).short_answer_questions = sa;
+        const tl = normalizeTimeLimitMinutes(request.time_limit_minutes);
+        if (tl == null) throw new Error('Dạng trả lời ngắn cần cấu hình thời gian làm bài (phút).');
+        (assignment as any).time_limit_minutes = tl;
       } else {
         (assignment as any).short_answer_questions = null;
+        (assignment as any).time_limit_minutes = null;
       }
     } else if (request.short_answer_questions !== undefined && parseAssignmentKind((assignment as any).assignment_kind) === 'short_answer') {
       const sa = normalizeShortAnswerQuestionsForSave(request.short_answer_questions);
       if (sa.length < 1) throw new Error('Cần ít nhất một câu hỏi.');
       (assignment as any).short_answer_questions = sa;
+    }
+
+    if (
+      request.time_limit_minutes !== undefined &&
+      parseAssignmentKind((assignment as any).assignment_kind) === 'short_answer'
+    ) {
+      const tl = normalizeTimeLimitMinutes(request.time_limit_minutes);
+      if (tl == null) throw new Error('Thời gian làm bài (phút) không hợp lệ.');
+      (assignment as any).time_limit_minutes = tl;
     }
 
     await assignmentRepo.save(assignment as any);

@@ -173,7 +173,12 @@ export default function LearningPage() {
 
     const targets = (course.modules || [])
       .flatMap((m) => m.lessons || [])
-      .filter((l) => (l.lesson_type === "video" || l.lesson_type === "text") && (Boolean(l.has_quiz) || Boolean(l.has_assignment)));
+      .filter(
+        (l) =>
+          l.lesson_type === "quiz" ||
+          l.lesson_type === "assignment" ||
+          ((l.lesson_type === "video" || l.lesson_type === "text") && (Boolean(l.has_quiz) || Boolean(l.has_assignment)))
+      );
 
     const load = async () => {
       const entries = await Promise.all(
@@ -181,7 +186,10 @@ export default function LearningPage() {
           let quiz = false;
           let assignment = false;
 
-          if (l.has_quiz) {
+          const needQuiz = l.lesson_type === "quiz" || Boolean(l.has_quiz);
+          const needAssignment = l.lesson_type === "assignment" || Boolean(l.has_assignment);
+
+          if (needQuiz) {
             try {
               const r = await fetch(`${url}${COURSES_API.learnerQuizTake(courseId, l.id)}`, { headers });
               if (r.ok) {
@@ -194,7 +202,7 @@ export default function LearningPage() {
             }
           }
 
-          if (l.has_assignment) {
+          if (needAssignment) {
             try {
               const ar = await fetch(`${url}${ASSIGNMENTS_API.learnerAssignmentForLesson(l.id)}`, { headers });
               if (ar.ok) {
@@ -634,9 +642,15 @@ export default function LearningPage() {
       lessonModuleIdById.set(le.id, mod.id);
       lessonNeedsAssessmentsById.set(
         le.id,
-        (le.lesson_type === "video" || le.lesson_type === "text") && (Boolean(le.has_quiz) || Boolean(le.has_assignment))
+        le.lesson_type === "quiz" ||
+          le.lesson_type === "assignment" ||
+          ((le.lesson_type === "video" || le.lesson_type === "text") && (Boolean(le.has_quiz) || Boolean(le.has_assignment)))
       );
-      if (le.lesson_type === "video" || le.lesson_type === "text") {
+      if (le.lesson_type === "quiz") {
+        lessonAssessmentKindsById.set(le.id, ["quiz"]);
+      } else if (le.lesson_type === "assignment") {
+        lessonAssessmentKindsById.set(le.id, ["assignment"]);
+      } else if (le.lesson_type === "video" || le.lesson_type === "text") {
         const kinds: ("quiz" | "assignment")[] = [];
         if (le.has_quiz) kinds.push("quiz");
         if (le.has_assignment) kinds.push("assignment");
@@ -881,17 +895,27 @@ export default function LearningPage() {
                       const assessmentKinds = lessonAssessmentKindsById.get(lessonId) || [];
                       const hasQuiz = assessmentKinds.includes("quiz");
                       const hasAssignment = assessmentKinds.includes("assignment");
+                      const lessonType = lessonById.get(lessonId)?.lesson_type;
+                      const isStandaloneAssessment = lessonType === "quiz" || lessonType === "assignment";
                       const submitted = assessmentSubmittedByLessonId[lessonId];
                       setAssessmentQuickPick({
                         moduleId: link.moduleId,
                         lessonId,
                         x: p.x,
                         y: p.y,
-                        options: [
-                          { kind: "lesson", completed: done },
-                          { kind: "quiz", disabled: !hasQuiz, completed: Boolean(submitted?.quiz) },
-                          { kind: "assignment", disabled: !hasAssignment, completed: Boolean(submitted?.assignment) },
-                        ],
+                        options: isStandaloneAssessment
+                          ? [
+                              {
+                                kind: lessonType === "quiz" ? "quiz" : "assignment",
+                                disabled: false,
+                                completed: lessonType === "quiz" ? Boolean(submitted?.quiz) : Boolean(submitted?.assignment),
+                              },
+                            ]
+                          : [
+                              { kind: "lesson", completed: done },
+                              { kind: "quiz", disabled: !hasQuiz, completed: Boolean(submitted?.quiz) },
+                              { kind: "assignment", disabled: !hasAssignment, completed: Boolean(submitted?.assignment) },
+                            ],
                       });
                     };
                     return (

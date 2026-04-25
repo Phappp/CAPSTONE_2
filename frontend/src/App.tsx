@@ -15,6 +15,7 @@ import TeacherCourseAssessmentsPage from "./pages/teacher/TeacherCourseAssessmen
 import TeacherCourseContentBuilderPage from "./pages/teacher/TeacherCourseContentBuilderPage";
 import TeacherQuizEditorPage from "./pages/teacher/TeacherQuizEditorPage";
 import TeacherAssignmentEditorPage from "./pages/teacher/TeacherAssignmentEditorPage";
+import TeacherLessonStudioPage from "./pages/teacher/TeacherLessonStudioPage";
 import CoursesCatalogPage from "./pages/leaner/CoursesCatalogPage";
 import CoursePublicDetailPage from "./pages/leaner/CoursePublicDetailPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -174,6 +175,14 @@ export default function App() {
         element={
           <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherLessonRosterPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/courses/:id/lessons/:lessonId/studio"
+        element={
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <TeacherLessonStudioPage />
           </Authentication>
         }
       />

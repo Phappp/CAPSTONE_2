@@ -65,6 +65,7 @@ export type CourseLessonItem = {
   lesson_type: LessonType;
   order_index: number;
   open_at?: string | null;
+  is_published?: boolean;
   is_free_preview?: boolean;
   duration_minutes?: number | null;
   /** Có Quizz gắn với lesson (lesson vẫn có thể là video/text). */
@@ -80,6 +81,7 @@ export type CourseModuleItem = {
   description: string | null;
   order_index: number;
   open_at?: string | null;
+  is_published?: boolean;
   lessons: CourseLessonItem[];
 };
 
@@ -176,6 +178,7 @@ export type UpdateModuleRequest = {
   title?: string;
   description?: string | null;
   open_at?: string | null;
+  is_published?: boolean;
 };
 
 export type CreateLessonRequest = {
@@ -190,6 +193,7 @@ export type UpdateLessonRequest = {
   description?: string | null;
   lesson_type?: LessonType;
   open_at?: string | null;
+  is_published?: boolean;
 };
 
 export type ReorderModulesRequest = {

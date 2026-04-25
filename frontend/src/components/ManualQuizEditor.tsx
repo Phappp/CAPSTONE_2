@@ -53,6 +53,11 @@ type BankQuestion = {
   options?: Array<{ option_text: string; is_correct: boolean }>;
 };
 
+type QuizPreviewConfig = {
+  time_limit_minutes: number | null;
+  passing_score: number | null;
+};
+
 function defaultQuestion(): QuestionRow {
   return {
     question_text: "",
@@ -97,8 +102,33 @@ export default function ManualQuizEditor(props: {
   selectedCourseId: number | null;
   onSelectedCourseIdChange: (id: number | null) => void;
   pickedLessonId?: number | null;
+  embeddedMode?: boolean;
+  embeddedQuizTitle?: string;
+  showSavedQuestionsSection?: boolean;
+  onSavedQuestionsChange?: (questions: QuestionRow[]) => void;
+  onQuizConfigChange?: (config: QuizPreviewConfig) => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  hideSaveButton?: boolean;
+  externalSaveSignal?: number;
+  questionsOverride?: QuestionRow[] | null;
 }) {
-  const { courses, token, loading, selectedCourseId, onSelectedCourseIdChange, pickedLessonId } = props;
+  const {
+    courses,
+    token,
+    loading,
+    selectedCourseId,
+    onSelectedCourseIdChange,
+    pickedLessonId,
+    embeddedMode = false,
+    embeddedQuizTitle,
+    showSavedQuestionsSection = true,
+    onSavedQuestionsChange,
+    onQuizConfigChange,
+    onDirtyChange,
+    hideSaveButton = false,
+    externalSaveSignal = 0,
+    questionsOverride = null,
+  } = props;
   const navigate = useNavigate();
 
   const [lessonTree, setLessonTree] = useState<CourseContentTree | null>(null);
@@ -118,14 +148,15 @@ export default function ManualQuizEditor(props: {
   const [showCorrect, setShowCorrect] = useState(true);
 
   const [questions, setQuestions] = useState<QuestionRow[]>([defaultQuestion()]);
+  const [savedQuestions, setSavedQuestions] = useState<QuestionRow[]>([]);
   const [saving, setSaving] = useState(false);
   const [questionBanks, setQuestionBanks] = useState<QuestionBank[]>([]);
   const [selectedBankId, setSelectedBankId] = useState<number | "">("");
   const [bankQuestions, setBankQuestions] = useState<BankQuestion[]>([]);
   const [pickedBankQuestionIds, setPickedBankQuestionIds] = useState<number[]>([]);
-  const [bulkText, setBulkText] = useState("");
   const [csvFileName, setCsvFileName] = useState("");
   const [csvImportErrors, setCsvImportErrors] = useState<string[]>([]);
+  const [quizCreateMode, setQuizCreateMode] = useState<"manual" | "question_bank" | "csv" | "ai">("manual");
   const [aiTopic, setAiTopic] = useState("");
   const [aiQuestionCount, setAiQuestionCount] = useState(5);
   const [aiDifficulty, setAiDifficulty] = useState<"easy" | "medium" | "hard">("medium");
@@ -133,12 +164,24 @@ export default function ManualQuizEditor(props: {
   const [aiExtraInstructions, setAiExtraInstructions] = useState("");
   const [aiAttachments, setAiAttachments] = useState<Array<{ name: string; text: string }>>([]);
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [lastSavedFingerprint, setLastSavedFingerprint] = useState("");
+  const [manualOptionCount, setManualOptionCount] = useState(4);
 
   const authHeaders = useMemo(() => {
     const h: Record<string, string> = {};
     if (token) h.Authorization = `Bearer ${token}`;
     return h;
   }, [token]);
+
+  const manualMaxOptionCount = useMemo(() => {
+    const maxFromRows = questions.reduce((max, q) => Math.max(max, q.options.length || 0), 0);
+    return Math.max(2, manualOptionCount, maxFromRows);
+  }, [manualOptionCount, questions]);
+
+  useEffect(() => {
+    const maxFromRows = questions.reduce((max, q) => Math.max(max, q.options.length || 0), 0);
+    setManualOptionCount((prev) => Math.max(2, prev, maxFromRows));
+  }, [questions]);
 
   const selectedLessonTitle = useMemo(() => {
     if (!lessonTree) return "";
@@ -272,7 +315,8 @@ export default function ManualQuizEditor(props: {
       setShuffleOptions(false);
       setShowResults(true);
       setShowCorrect(true);
-      setQuestions([defaultQuestion()]);
+      setSavedQuestions([]);
+      setLastSavedFingerprint("");
       return;
     }
     setTitle(quiz.title ?? "");
@@ -285,9 +329,38 @@ export default function ManualQuizEditor(props: {
     setShowResults(quiz.show_results_immediately !== false);
     setShowCorrect(quiz.show_correct_answers !== false);
     if (Array.isArray(quiz.questions) && quiz.questions.length) {
-      setQuestions(mapApiToRows(quiz.questions));
+      const rows = mapApiToRows(quiz.questions);
+      setSavedQuestions(rows);
+      setLastSavedFingerprint(
+        JSON.stringify({
+          title: quiz.title ?? "",
+          description: quiz.description ?? "",
+          timeLimit: quiz.time_limit_minutes != null ? String(quiz.time_limit_minutes) : "",
+          passingScore: quiz.passing_score != null ? String(quiz.passing_score) : "",
+          maxAttempts: Number(quiz.max_attempts ?? 1) || 1,
+          shuffleQuestions: Boolean(quiz.shuffle_questions),
+          shuffleOptions: Boolean(quiz.shuffle_options),
+          showResults: quiz.show_results_immediately !== false,
+          showCorrect: quiz.show_correct_answers !== false,
+          questions: quizCreateMode === "manual" ? [] : rows,
+        })
+      );
     } else {
-      setQuestions([defaultQuestion()]);
+      setSavedQuestions([]);
+      setLastSavedFingerprint(
+        JSON.stringify({
+          title: quiz.title ?? "",
+          description: quiz.description ?? "",
+          timeLimit: quiz.time_limit_minutes != null ? String(quiz.time_limit_minutes) : "",
+          passingScore: quiz.passing_score != null ? String(quiz.passing_score) : "",
+          maxAttempts: Number(quiz.max_attempts ?? 1) || 1,
+          shuffleQuestions: Boolean(quiz.shuffle_questions),
+          shuffleOptions: Boolean(quiz.shuffle_options),
+          showResults: quiz.show_results_immediately !== false,
+          showCorrect: quiz.show_correct_answers !== false,
+          questions: quizCreateMode === "manual" ? [] : [defaultQuestion()],
+        })
+      );
     }
   }, [authHeaders, lessonId, selectedCourseId]);
 
@@ -297,18 +370,93 @@ export default function ManualQuizEditor(props: {
     });
   }, [loadExistingQuiz]);
 
+  useEffect(() => {
+    onSavedQuestionsChange?.(savedQuestions);
+  }, [onSavedQuestionsChange, savedQuestions]);
+
+  useEffect(() => {
+    const nextConfig: QuizPreviewConfig = {
+      time_limit_minutes: timeLimit.trim() ? Number(timeLimit) : null,
+      passing_score: passingScore.trim() ? Number(passingScore) : null,
+    };
+    onQuizConfigChange?.(nextConfig);
+  }, [onQuizConfigChange, passingScore, timeLimit]);
+
+  useEffect(() => {
+    if (!questionsOverride) return;
+    if (quizCreateMode === "manual") return;
+    const next = JSON.stringify(questionsOverride);
+    const curr = JSON.stringify(questions);
+    if (next !== curr) setQuestions(questionsOverride);
+  }, [questionsOverride, questions, quizCreateMode]);
+
+  useEffect(() => {
+    if (!externalSaveSignal) return;
+    void handleSaveQuiz();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalSaveSignal]);
+
+  useEffect(() => {
+    const fingerprintQuestions = quizCreateMode === "manual" ? [] : questions;
+    const currentFingerprint = JSON.stringify({
+      title,
+      description,
+      timeLimit,
+      passingScore,
+      maxAttempts,
+      shuffleQuestions,
+      shuffleOptions,
+      showResults,
+      showCorrect,
+      questions: fingerprintQuestions,
+    });
+    onDirtyChange?.(Boolean(lastSavedFingerprint) && currentFingerprint !== lastSavedFingerprint);
+  }, [
+    description,
+    lastSavedFingerprint,
+    maxAttempts,
+    onDirtyChange,
+    passingScore,
+    questions,
+    showCorrect,
+    showResults,
+    shuffleOptions,
+    shuffleQuestions,
+    timeLimit,
+    title,
+    quizCreateMode,
+  ]);
+
+  useEffect(() => {
+    if (!embeddedMode) return;
+    const fallback = String(embeddedQuizTitle || "").trim();
+    if (!fallback) return;
+    setTitle((prev) => (prev.trim() ? prev : fallback));
+  }, [embeddedMode, embeddedQuizTitle]);
+
   const handleSaveQuiz = async () => {
     if (loading || saving) return;
     if (selectedCourseId == null || lessonId === "") {
       toast.error("Chọn khóa học và bài học.");
       return;
     }
-    if (!title.trim()) {
+    const resolvedTitle = title.trim() || String(embeddedQuizTitle || "").trim();
+    if (!resolvedTitle) {
       toast.error("Nhập tiêu đề Quizz.");
       return;
     }
+    const effectiveQuestions =
+      quizCreateMode === "manual"
+        ? [
+            ...savedQuestions,
+            ...questions.filter(
+              (q) => q.question_text.trim() || q.options.some((opt) => opt.option_text.trim())
+            ),
+          ]
+        : questions;
+
     const payload = {
-      title: title.trim(),
+      title: resolvedTitle,
       description: description.trim() || null,
       time_limit_minutes: timeLimit.trim() ? Number(timeLimit) : null,
       passing_score: passingScore.trim() ? Number(passingScore) : null,
@@ -317,7 +465,7 @@ export default function ManualQuizEditor(props: {
       shuffle_options: shuffleOptions,
       show_results_immediately: showResults,
       show_correct_answers: showCorrect,
-      questions: questions.map((q) => ({
+      questions: effectiveQuestions.map((q) => ({
         question_text: q.question_text.trim(),
         question_type: q.question_type,
         explanation: q.explanation.trim() || null,
@@ -342,8 +490,39 @@ export default function ManualQuizEditor(props: {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || "Lưu Quizz thất bại.");
+      const savedRows: QuestionRow[] = payload.questions.map((q) => ({
+        question_text: q.question_text,
+        question_type: q.question_type === "true_false" ? "true_false" : "multiple_choice",
+        explanation: q.explanation ?? "",
+        points: Number(q.points) || 1,
+        difficulty: q.difficulty === "easy" || q.difficulty === "hard" ? q.difficulty : "medium",
+        options: q.options.map((o) => ({
+          option_text: o.option_text,
+          is_correct: o.is_correct,
+        })),
+      }));
+      setSavedQuestions(savedRows);
+      setLastSavedFingerprint(
+        JSON.stringify({
+          title,
+          description,
+          timeLimit,
+          passingScore,
+          maxAttempts,
+          shuffleQuestions,
+          shuffleOptions,
+          showResults,
+          showCorrect,
+          questions: savedRows,
+        })
+      );
+      if (quizCreateMode === "manual") {
+        setQuestions([defaultQuestion()]);
+        setManualOptionCount(4);
+      } else {
+        setQuestions(savedRows);
+      }
       toast.success("Đã lưu Quizz.");
-      await loadExistingQuiz();
     } catch (e: any) {
       toast.error(e?.message || "Lỗi.");
     } finally {
@@ -412,60 +591,6 @@ export default function ManualQuizEditor(props: {
     setQuestions((prev) => [...prev, ...mapped]);
     setPickedBankQuestionIds([]);
     toast.success(`Đã import ${mapped.length} câu hỏi.`);
-  };
-
-  const importFromBulkText = () => {
-    const lines = bulkText
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-
-    if (!lines.length) {
-      toast.error("Nhập dữ liệu trước khi tạo nhanh.");
-      return;
-    }
-
-    const parsed: QuestionRow[] = [];
-
-    for (const line of lines) {
-      // Format: Question? | *Correct | Wrong | Wrong
-      const parts = line
-        .split("|")
-        .map((part) => part.trim())
-        .filter(Boolean);
-      if (parts.length < 3) continue;
-
-      const questionText = parts[0];
-      const rawOptions = parts.slice(1);
-      const options: OptRow[] = rawOptions.map((opt, idx) => {
-        const isCorrect = opt.startsWith("*");
-        return {
-          option_text: isCorrect ? opt.slice(1).trim() : opt,
-          is_correct: isCorrect,
-        };
-      });
-      const hasCorrect = options.some((o) => o.is_correct);
-      if (!hasCorrect && options.length > 0) options[0].is_correct = true;
-      if (!questionText || options.length < 2) continue;
-
-      parsed.push({
-        question_text: questionText,
-        question_type: "multiple_choice",
-        explanation: "",
-        points: 1,
-        difficulty: "medium",
-        options,
-      });
-    }
-
-    if (!parsed.length) {
-      toast.error("Không parse được dữ liệu. Xem mẫu hướng dẫn rồi thử lại.");
-      return;
-    }
-
-    setQuestions((prev) => [...prev, ...parsed]);
-    setBulkText("");
-    toast.success(`Đã thêm nhanh ${parsed.length} câu hỏi.`);
   };
 
   const generateByAi = async () => {
@@ -641,6 +766,7 @@ export default function ManualQuizEditor(props: {
   return (
     <div className="assignment-editor manual-quiz-editor">
       <Toaster position="top-right" />
+      {!embeddedMode && (
       <div className="editor-row" style={{ flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
         <div style={{ flex: "1 1 200px" }}>
           <label className="editor-label">Khóa học</label>
@@ -674,7 +800,9 @@ export default function ManualQuizEditor(props: {
           Mở Content Builder →
         </button>
       </div>
+      )}
 
+      {!embeddedMode && (
       <div className="editor-row">
         <label className="editor-label">Bài học</label>
         <select
@@ -694,21 +822,26 @@ export default function ManualQuizEditor(props: {
           ))}
         </select>
       </div>
+      )}
 
       {lessonsError && <div className="error-box">{lessonsError}</div>}
 
       <div className="assignment-form">
-        <p className="mq-section-title">Nội dung Quizz</p>
-        <h3>Tiêu đề và cấu hình</h3>
+        {!embeddedMode && <p className="mq-section-title">Nội dung Quizz</p>}
+        {!embeddedMode && <h3>Tiêu đề và cấu hình</h3>}
         <div className="form-grid">
-          <div className="field">
-            <label>Tiêu đề Quizz *</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} disabled={saving} />
-          </div>
-          <div className="field">
-            <label>Mô tả</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} disabled={saving} />
-          </div>
+          {!embeddedMode && (
+            <div className="field">
+              <label>Tiêu đề Quizz *</label>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} disabled={saving} />
+            </div>
+          )}
+          {!embeddedMode && (
+            <div className="field">
+              <label>Mô tả</label>
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} disabled={saving} />
+            </div>
+          )}
           <div className="field">
             <label>Thời giới hạn (phút)</label>
             <input
@@ -745,462 +878,493 @@ export default function ManualQuizEditor(props: {
           </div>
         </div>
 
-        <div className="policy-grid mq-check-grid" style={{ marginTop: 12 }}>
-          <label className="checkbox-row">
-            <input type="checkbox" checked={shuffleQuestions} onChange={(e) => setShuffleQuestions(e.target.checked)} disabled={saving} />
-            Trộn câu hỏi
-          </label>
-          <label className="checkbox-row">
-            <input type="checkbox" checked={shuffleOptions} onChange={(e) => setShuffleOptions(e.target.checked)} disabled={saving} />
-            Trộn đáp án
-          </label>
-          <label className="checkbox-row">
-            <input type="checkbox" checked={showResults} onChange={(e) => setShowResults(e.target.checked)} disabled={saving} />
-            Hiện kết quả ngay
-          </label>
-          <label className="checkbox-row">
-            <input type="checkbox" checked={showCorrect} onChange={(e) => setShowCorrect(e.target.checked)} disabled={saving} />
-            Hiện đáp án đúng
-          </label>
+        <div className="mq-question-card" style={{ marginTop: 12 }}>
+          <div className="mq-question-head">
+            <strong>Tùy chọn</strong>
+          </div>
+          <div className="policy-grid mq-check-grid" style={{ marginTop: 8 }}>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={shuffleQuestions} onChange={(e) => setShuffleQuestions(e.target.checked)} disabled={saving} />
+              Trộn câu hỏi
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={shuffleOptions} onChange={(e) => setShuffleOptions(e.target.checked)} disabled={saving} />
+              Trộn đáp án
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={showResults} onChange={(e) => setShowResults(e.target.checked)} disabled={saving} />
+              Hiện kết quả ngay
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={showCorrect} onChange={(e) => setShowCorrect(e.target.checked)} disabled={saving} />
+              Hiện đáp án đúng
+            </label>
+          </div>
         </div>
 
         <p className="mq-section-title" style={{ marginTop: 16 }}>
           Câu hỏi
         </p>
-        <div className="mq-question-card" style={{ marginBottom: 12 }}>
-          <div className="mq-question-head">
-            <strong>Import từ Question Bank</strong>
-          </div>
-          <div className="form-grid" style={{ marginTop: 8 }}>
-            <div className="field">
-              <label>Ngân hàng câu hỏi</label>
-              <select
-                value={selectedBankId}
-                onChange={(e) => setSelectedBankId(e.target.value ? Number(e.target.value) : "")}
-                disabled={!questionBanks.length}
-              >
-                {questionBanks.length ? null : <option value="">Chưa có Question Bank</option>}
-                {questionBanks.map((bank) => (
-                  <option key={bank.id} value={bank.id}>
-                    {bank.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div style={{ maxHeight: 180, overflow: "auto", border: "1px solid #e5e7eb", borderRadius: 8, padding: 8 }}>
-            {bankQuestions.map((item) => (
-              <label key={item.id} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "flex-start" }}>
-                <input
-                  type="checkbox"
-                  checked={pickedBankQuestionIds.includes(item.id)}
-                  onChange={(e) =>
-                    setPickedBankQuestionIds((prev) =>
-                      e.target.checked ? [...prev, item.id] : prev.filter((id) => id !== item.id)
-                    )
-                  }
-                />
-                <span>
-                  {item.question_text} <em style={{ color: "#64748b" }}>({item.question_type})</em>
-                </span>
-              </label>
-            ))}
-            {!bankQuestions.length ? <p style={{ margin: 0, color: "#64748b" }}>Không có câu hỏi phù hợp để import.</p> : null}
-          </div>
-          <button type="button" className="btn-secondary" style={{ marginTop: 8 }} onClick={importSelectedBankQuestions}>
-            Import câu đã chọn
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          <button
+            type="button"
+            className={quizCreateMode === "manual" ? "btn-primary" : "btn-secondary"}
+            style={{ width: "auto" }}
+            onClick={() => setQuizCreateMode("manual")}
+          >
+            Thủ công
+          </button>
+          <button
+            type="button"
+            className={quizCreateMode === "question_bank" ? "btn-primary" : "btn-secondary"}
+            style={{ width: "auto" }}
+            onClick={() => setQuizCreateMode("question_bank")}
+          >
+            Question Bank
+          </button>
+          <button
+            type="button"
+            className={quizCreateMode === "csv" ? "btn-primary" : "btn-secondary"}
+            style={{ width: "auto" }}
+            onClick={() => setQuizCreateMode("csv")}
+          >
+            Import CSV
+          </button>
+          <button
+            type="button"
+            className={quizCreateMode === "ai" ? "btn-primary" : "btn-secondary"}
+            style={{ width: "auto" }}
+            onClick={() => setQuizCreateMode("ai")}
+          >
+            Tạo bằng AI
           </button>
         </div>
 
-        <div className="mq-question-card" style={{ marginBottom: 12 }}>
-          <div className="mq-question-head">
-            <strong>Tạo nhanh bằng dán văn bản</strong>
-          </div>
-          <p style={{ margin: "8px 0", color: "#64748b", fontSize: 13 }}>
-            Mỗi dòng 1 câu theo mẫu: <code>Câu hỏi | *Đáp án đúng | Đáp án sai | Đáp án sai</code>
-          </p>
-          <textarea
-            rows={5}
-            value={bulkText}
-            onChange={(e) => setBulkText(e.target.value)}
-            placeholder={"2+2=? | *4 | 3 | 5\nThủ đô Việt Nam? | *Hà Nội | Đà Nẵng | Cần Thơ"}
-          />
-          <button type="button" className="btn-secondary" style={{ marginTop: 8 }} onClick={importFromBulkText}>
-            Tạo nhanh từ văn bản
-          </button>
-        </div>
-
-        <div className="mq-question-card" style={{ marginBottom: 12 }}>
-          <div className="mq-question-head">
-            <strong>Tạo câu hỏi bằng AI</strong>
-          </div>
-          <div className="form-grid" style={{ marginTop: 8 }}>
-            <div className="field">
-              <label>Chủ đề *</label>
-              <input
-                value={aiTopic}
-                onChange={(e) => setAiTopic(e.target.value)}
-                placeholder="Ví dụ: Thì hiện tại đơn trong tiếng Anh"
-                disabled={aiGenerating}
-              />
-            </div>
-            <div className="field">
-              <label>Số câu</label>
-              <input
-                type="number"
-                min={1}
-                max={20}
-                value={aiQuestionCount}
-                onChange={(e) => setAiQuestionCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
-                disabled={aiGenerating}
-              />
-            </div>
-            <div className="field">
-              <label>Độ khó</label>
-              <select
-                value={aiDifficulty}
-                onChange={(e) => setAiDifficulty(e.target.value as "easy" | "medium" | "hard")}
-                disabled={aiGenerating}
-              >
-                <option value="easy">Dễ</option>
-                <option value="medium">Trung bình</option>
-                <option value="hard">Khó</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>Loại câu</label>
-              <select
-                value={aiQuestionType}
-                onChange={(e) =>
-                  setAiQuestionType(e.target.value as "multiple_choice" | "true_false" | "mixed")
-                }
-                disabled={aiGenerating}
-              >
-                <option value="mixed">Trộn</option>
-                <option value="multiple_choice">Trắc nghiệm</option>
-                <option value="true_false">Đúng / Sai</option>
-              </select>
-            </div>
-          </div>
-          <div className="field">
-            <label>Yêu cầu bổ sung (tuỳ chọn)</label>
-            <textarea
-              rows={2}
-              value={aiExtraInstructions}
-              onChange={(e) => setAiExtraInstructions(e.target.value)}
-              placeholder="Ví dụ: ưu tiên tình huống thực tế, tránh câu quá dài"
-              disabled={aiGenerating}
-            />
-          </div>
-          <div className="field">
-            <label>Đính kèm file ngữ cảnh (txt/md/csv/json)</label>
-            <input
-              type="file"
-              accept=".txt,.md,.csv,.json,text/plain,text/csv,application/json"
-              disabled={aiGenerating}
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                try {
-                  const text = await file.text();
-                  const trimmed = String(text || "").trim();
-                  if (!trimmed) {
-                    toast.error("File đính kèm đang trống.");
-                    return;
-                  }
-                  setAiAttachments((prev) => {
-                    const next = [...prev, { name: file.name, text: trimmed.slice(0, 12000) }];
-                    return next.slice(0, 5);
-                  });
-                  toast.success("Đã đính kèm file cho AI.");
-                } catch {
-                  toast.error("Không đọc được file đính kèm.");
-                } finally {
-                  e.currentTarget.value = "";
-                }
-              }}
-            />
-            {aiAttachments.length ? (
-              <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
-                {aiAttachments.map((item, idx) => (
-                  <div key={`${item.name}-${idx}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 13, color: "#475569" }}>
-                      {item.name} ({Math.min(item.text.length, 12000)} ký tự)
-                    </span>
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={() => setAiAttachments((prev) => prev.filter((_, i) => i !== idx))}
-                      disabled={aiGenerating}
-                    >
-                      Xóa
-                    </button>
-                  </div>
-                ))}
+        {quizCreateMode === "question_bank" && (
+          <>
+            <div className="mq-question-card" style={{ marginBottom: 12 }}>
+              <div className="mq-question-head">
+                <strong>Import từ Question Bank</strong>
               </div>
-            ) : null}
-          </div>
-          <button type="button" className="btn-secondary" style={{ marginTop: 8 }} onClick={generateByAi} disabled={aiGenerating}>
-            {aiGenerating ? "AI đang tạo..." : "Tạo bằng AI"}
-          </button>
-        </div>
-
-        <div className="mq-question-card" style={{ marginBottom: 12 }}>
-          <div className="mq-question-head">
-            <strong>Import từ CSV</strong>
-          </div>
-          <p style={{ margin: "8px 0", color: "#64748b", fontSize: 13 }}>
-            Header gợi ý: <code>question_text,correct_option,option_2,option_3,option_4,difficulty,points,explanation</code>
-          </p>
-          <button type="button" className="btn-secondary" style={{ marginBottom: 8 }} onClick={downloadCsvTemplate}>
-            Tải file CSV mẫu
-          </button>
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              setCsvFileName(file.name);
-              try {
-                await importFromCsvFile(file);
-              } catch (err: any) {
-                toast.error(err?.message || "Import CSV thất bại.");
-              } finally {
-                e.currentTarget.value = "";
-              }
-            }}
-          />
-          {csvFileName ? <p style={{ marginTop: 8, fontSize: 13, color: "#475569" }}>File gần nhất: {csvFileName}</p> : null}
-          {csvImportErrors.length ? (
-            <div style={{ marginTop: 8, background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 8, padding: 8 }}>
-              <strong style={{ fontSize: 13 }}>Dòng CSV bị bỏ qua:</strong>
-              <ul style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 13 }}>
-                {csvImportErrors.slice(0, 8).map((item, idx) => (
-                  <li key={idx}>{item}</li>
+              <div className="form-grid" style={{ marginTop: 8 }}>
+                <div className="field">
+                  <label>Ngân hàng câu hỏi</label>
+                  <select
+                    value={selectedBankId}
+                    onChange={(e) => setSelectedBankId(e.target.value ? Number(e.target.value) : "")}
+                    disabled={!questionBanks.length}
+                  >
+                    {questionBanks.length ? null : <option value="">Chưa có Question Bank</option>}
+                    {questionBanks.map((bank) => (
+                      <option key={bank.id} value={bank.id}>
+                        {bank.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div style={{ maxHeight: 180, overflow: "auto", border: "1px solid #e5e7eb", borderRadius: 8, padding: 8 }}>
+                {bankQuestions.map((item) => (
+                  <label key={item.id} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "flex-start" }}>
+                    <input
+                      type="checkbox"
+                      checked={pickedBankQuestionIds.includes(item.id)}
+                      onChange={(e) =>
+                        setPickedBankQuestionIds((prev) =>
+                          e.target.checked ? [...prev, item.id] : prev.filter((id) => id !== item.id)
+                        )
+                      }
+                    />
+                    <span>
+                      {item.question_text} <em style={{ color: "#64748b" }}>({item.question_type})</em>
+                    </span>
+                  </label>
                 ))}
-              </ul>
-              {csvImportErrors.length > 8 ? (
-                <p style={{ margin: "6px 0 0", fontSize: 12, color: "#9a3412" }}>
-                  ...và {csvImportErrors.length - 8} lỗi khác.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-
-        {questions.map((q, qi) => (
-          <div key={qi} className="mq-question-card">
-            <div className="mq-question-head">
-              <strong>Câu {qi + 1}</strong>
-              <button
-                type="button"
-                className="btn-secondary"
-                disabled={saving || questions.length <= 1}
-                onClick={() => setQuestions((prev) => prev.filter((_, i) => i !== qi))}
-              >
-                Xóa câu
+                {!bankQuestions.length ? <p style={{ margin: 0, color: "#64748b" }}>Không có câu hỏi phù hợp để import.</p> : null}
+              </div>
+              <button type="button" className="btn-secondary" style={{ marginTop: 8 }} onClick={importSelectedBankQuestions}>
+                Import câu đã chọn
               </button>
             </div>
-            <div className="field mq-field-select" style={{ marginTop: 8 }}>
-              <label>Loại</label>
-              <select
-                className="mq-question-meta-select mq-question-meta-select--kind"
-                value={q.question_type}
-                onChange={(e) => {
-                  const t = e.target.value === "true_false" ? "true_false" : "multiple_choice";
-                  updateQuestion(qi, {
-                    question_type: t,
-                    options:
-                      t === "true_false"
-                        ? [
-                            { option_text: "Đúng", is_correct: true },
-                            { option_text: "Sai", is_correct: false },
-                          ]
-                        : defaultQuestion().options,
-                  });
-                }}
-                disabled={saving}
-              >
-                <option value="multiple_choice">Trắc nghiệm nhiều lựa chọn</option>
-                <option value="true_false">Đúng / Sai</option>
-              </select>
+          </>
+        )}
+
+        {quizCreateMode === "ai" && (
+          <div className="mq-question-card" style={{ marginBottom: 12 }}>
+            <div className="mq-question-head">
+              <strong>Tạo câu hỏi bằng AI</strong>
             </div>
-            <div className="field">
-              <label>Nội dung câu hỏi</label>
-              <textarea
-                rows={2}
-                value={q.question_text}
-                onChange={(e) => updateQuestion(qi, { question_text: e.target.value })}
-                disabled={saving}
-              />
-            </div>
-            <div className="form-grid">
+            <div className="form-grid" style={{ marginTop: 8 }}>
               <div className="field">
-                <label>Điểm</label>
+                <label>Chủ đề *</label>
                 <input
-                  type="number"
-                  min={0.01}
-                  step={0.5}
-                  value={q.points}
-                  onChange={(e) => updateQuestion(qi, { points: Number(e.target.value) || 1 })}
-                  disabled={saving}
+                  value={aiTopic}
+                  onChange={(e) => setAiTopic(e.target.value)}
+                  placeholder="Ví dụ: Thì hiện tại đơn trong tiếng Anh"
+                  disabled={aiGenerating}
                 />
               </div>
-              <div className="field mq-field-select">
+              <div className="field">
+                <label>Số câu</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={aiQuestionCount}
+                  onChange={(e) => setAiQuestionCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+                  disabled={aiGenerating}
+                />
+              </div>
+              <div className="field">
                 <label>Độ khó</label>
                 <select
-                  className="mq-question-meta-select mq-question-meta-select--difficulty"
-                  value={q.difficulty}
-                  onChange={(e) =>
-                    updateQuestion(qi, {
-                      difficulty: e.target.value as QuestionRow["difficulty"],
-                    })
-                  }
-                  disabled={saving}
+                  value={aiDifficulty}
+                  onChange={(e) => setAiDifficulty(e.target.value as "easy" | "medium" | "hard")}
+                  disabled={aiGenerating}
                 >
                   <option value="easy">Dễ</option>
                   <option value="medium">Trung bình</option>
                   <option value="hard">Khó</option>
                 </select>
               </div>
+              <div className="field">
+                <label>Loại câu</label>
+                <select
+                  value={aiQuestionType}
+                  onChange={(e) =>
+                    setAiQuestionType(e.target.value as "multiple_choice" | "true_false" | "mixed")
+                  }
+                  disabled={aiGenerating}
+                >
+                  <option value="mixed">Trộn</option>
+                  <option value="multiple_choice">Trắc nghiệm</option>
+                  <option value="true_false">Đúng / Sai</option>
+                </select>
+              </div>
             </div>
             <div className="field">
-              <label>Giải thích (tuỳ chọn)</label>
-              <input
-                value={q.explanation}
-                onChange={(e) => updateQuestion(qi, { explanation: e.target.value })}
-                disabled={saving}
+              <label>Yêu cầu bổ sung (tuỳ chọn)</label>
+              <textarea
+                rows={2}
+                value={aiExtraInstructions}
+                onChange={(e) => setAiExtraInstructions(e.target.value)}
+                placeholder="Ví dụ: ưu tiên tình huống thực tế, tránh câu quá dài"
+                disabled={aiGenerating}
               />
             </div>
-            {q.question_type === "multiple_choice" && (
-              <>
-                <label style={{ display: "block", marginTop: 8, fontWeight: 600 }}>Đáp án</label>
-                {q.options.map((o, oi) => (
-                  <div key={oi} className="mq-option-row">
-                    <input
-                      type="radio"
-                      name={`correct-${qi}`}
-                      checked={o.is_correct}
-                      onChange={() => {
-                        setQuestions((prev) =>
-                          prev.map((qq, i) => {
-                            if (i !== qi) return qq;
-                            return {
-                              ...qq,
-                              options: qq.options.map((x, j) => ({ ...x, is_correct: j === oi })),
-                            };
-                          })
-                        );
-                      }}
-                      disabled={saving}
-                    />
-                    <input
-                      style={{ flex: 1 }}
-                      value={o.option_text}
-                      onChange={(e) => updateOption(qi, oi, { option_text: e.target.value })}
-                      disabled={saving}
-                      placeholder={`Lựa chọn ${oi + 1}`}
-                    />
+            <div className="field">
+              <label>Đính kèm file ngữ cảnh (txt/md/csv/json)</label>
+              <input
+                type="file"
+                accept=".txt,.md,.csv,.json,text/plain,text/csv,application/json"
+                disabled={aiGenerating}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    const text = await file.text();
+                    const trimmed = String(text || "").trim();
+                    if (!trimmed) {
+                      toast.error("File đính kèm đang trống.");
+                      return;
+                    }
+                    setAiAttachments((prev) => {
+                      const next = [...prev, { name: file.name, text: trimmed.slice(0, 12000) }];
+                      return next.slice(0, 5);
+                    });
+                    toast.success("Đã đính kèm file cho AI.");
+                  } catch {
+                    toast.error("Không đọc được file đính kèm.");
+                  } finally {
+                    e.currentTarget.value = "";
+                  }
+                }}
+              />
+              {aiAttachments.length ? (
+                <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+                  {aiAttachments.map((item, idx) => (
+                    <div key={`${item.name}-${idx}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 13, color: "#475569" }}>
+                        {item.name} ({Math.min(item.text.length, 12000)} ký tự)
+                      </span>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => setAiAttachments((prev) => prev.filter((_, i) => i !== idx))}
+                        disabled={aiGenerating}
+                      >
+                        Xóa
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <button type="button" className="btn-secondary" style={{ marginTop: 8 }} onClick={generateByAi} disabled={aiGenerating}>
+              {aiGenerating ? "AI đang tạo..." : "Tạo bằng AI"}
+            </button>
+          </div>
+        )}
+
+        {quizCreateMode === "csv" && (
+          <div className="mq-question-card" style={{ marginBottom: 12 }}>
+            <div className="mq-question-head">
+              <strong>Import từ CSV</strong>
+            </div>
+            <p style={{ margin: "8px 0", color: "#64748b", fontSize: 13 }}>
+              Header gợi ý: <code>question_text,correct_option,option_2,option_3,option_4,difficulty,points,explanation</code>
+            </p>
+            <button type="button" className="btn-secondary" style={{ marginBottom: 8 }} onClick={downloadCsvTemplate}>
+              Tải file CSV mẫu
+            </button>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setCsvFileName(file.name);
+                try {
+                  await importFromCsvFile(file);
+                } catch (err: any) {
+                  toast.error(err?.message || "Import CSV thất bại.");
+                } finally {
+                  e.currentTarget.value = "";
+                }
+              }}
+            />
+            {csvFileName ? <p style={{ marginTop: 8, fontSize: 13, color: "#475569" }}>File gần nhất: {csvFileName}</p> : null}
+            {csvImportErrors.length ? (
+              <div style={{ marginTop: 8, background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 8, padding: 8 }}>
+                <strong style={{ fontSize: 13 }}>Dòng CSV bị bỏ qua:</strong>
+                <ul style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 13 }}>
+                  {csvImportErrors.slice(0, 8).map((item, idx) => (
+                    <li key={idx}>{item}</li>
+                  ))}
+                </ul>
+                {csvImportErrors.length > 8 ? (
+                  <p style={{ margin: "6px 0 0", fontSize: 12, color: "#9a3412" }}>
+                    ...và {csvImportErrors.length - 8} lỗi khác.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {quizCreateMode === "manual" ? (
+          <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 10, background: "#fff" }}>
+            <table style={{ minWidth: 1320, width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "#f8fafc" }}>
+                  <th style={{ border: "1px solid #e2e8f0", padding: 8, textAlign: "left" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600 }}>STT</div>
+                  </th>
+                  <th style={{ border: "1px solid #e2e8f0", padding: 8, textAlign: "left" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600 }}>question_text</div>
+                    <div style={{ fontSize: 10, color: "#64748b" }}>Ví dụ: 2 + 2 bằng mấy?</div>
+                  </th>
+                  {Array.from({ length: manualMaxOptionCount }).map((_, optIdx) => (
+                    <th key={`manual-opt-head-${optIdx}`} style={{ border: "1px solid #e2e8f0", padding: 8, textAlign: "left" }}>
+                      <div style={{ fontSize: 12, fontWeight: 600 }}>
+                        {optIdx === 0 ? "Đáp án đúng" : `Đáp án ${optIdx + 1}`}
+                      </div>
+                      <div style={{ fontSize: 10, color: "#64748b" }}>
+                        {optIdx === 0 ? "Ví dụ: 4" : `Ví dụ: phương án ${optIdx + 1}`}
+                      </div>
+                    </th>
+                  ))}
+                  <th style={{ border: "1px solid #e2e8f0", padding: 8, textAlign: "center", width: 72 }}>
                     <button
                       type="button"
                       className="btn-secondary"
-                      disabled={saving || q.options.length <= 2}
-                      onClick={() =>
+                      style={{ width: "auto", padding: "4px 8px", marginRight: 4 }}
+                      title="Thêm cột đáp án"
+                      onClick={() => {
+                        setManualOptionCount((prev) => prev + 1);
                         setQuestions((prev) =>
-                          prev.map((qq, i) =>
-                            i === qi ? { ...qq, options: qq.options.filter((_, j) => j !== oi) } : qq
-                          )
-                        )
-                      }
+                          prev.map((row) => ({
+                            ...row,
+                            options: [...row.options, { option_text: "", is_correct: false }],
+                          }))
+                        );
+                      }}
                     >
-                      ✕
+                      +
                     </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  style={{ marginTop: 8 }}
-                  disabled={saving}
-                  onClick={() =>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ width: "auto", padding: "4px 8px" }}
+                      title="Hủy cột đáp án cuối"
+                      disabled={manualOptionCount <= 2}
+                      onClick={() => {
+                        const nextCount = Math.max(2, manualOptionCount - 1);
+                        setManualOptionCount(nextCount);
+                        setQuestions((prev) =>
+                          prev.map((row) => ({
+                            ...row,
+                            options: row.options.slice(0, nextCount).map((opt, idx) => ({
+                              ...opt,
+                              is_correct: idx === 0,
+                            })),
+                          }))
+                        );
+                      }}
+                    >
+                      -
+                    </button>
+                  </th>
+                  <th style={{ border: "1px solid #e2e8f0", padding: 8, textAlign: "left" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600 }}>difficulty</div>
+                    <div style={{ fontSize: 10, color: "#64748b" }}>easy / medium / hard</div>
+                  </th>
+                  <th style={{ border: "1px solid #e2e8f0", padding: 8, textAlign: "left" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600 }}>points</div>
+                    <div style={{ fontSize: 10, color: "#64748b" }}>Ví dụ: 1</div>
+                  </th>
+                  <th style={{ border: "1px solid #e2e8f0", padding: 8, textAlign: "left" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600 }}>explanation</div>
+                    <div style={{ fontSize: 10, color: "#64748b" }}>Tuỳ chọn</div>
+                  </th>
+                  <th style={{ border: "1px solid #e2e8f0", padding: 8, textAlign: "left" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600 }}>Thao tác</div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {questions.map((q, qi) => {
+                  const setOptionAt = (idx: number, value: string) => {
                     setQuestions((prev) =>
-                      prev.map((qq, i) =>
-                        i === qi
-                          ? { ...qq, options: [...qq.options, { option_text: "", is_correct: false }] }
-                          : qq
-                      )
-                    )
-                  }
-                >
-                  + Thêm đáp án
-                </button>
-              </>
-            )}
-            {q.question_type === "true_false" && (
-              <div style={{ marginTop: 8 }}>
-                <span style={{ fontWeight: 600, marginRight: 12 }}>Đáp án đúng:</span>
-                <label style={{ marginRight: 16 }}>
-                  <input
-                    type="radio"
-                    name={`tf-correct-${qi}`}
-                    checked={Boolean(q.options[0]?.is_correct)}
-                    onChange={() =>
-                      updateQuestion(qi, {
-                        options: [
-                          { option_text: "Đúng", is_correct: true },
-                          { option_text: "Sai", is_correct: false },
-                        ],
+                      prev.map((row, rIdx) => {
+                        if (rIdx !== qi) return row;
+                        const normalized = Array.from({ length: manualMaxOptionCount }).map((__, optIdx) => ({
+                          option_text: row.options[optIdx]?.option_text ?? "",
+                          is_correct: optIdx === 0,
+                        }));
+                        normalized[idx] = {
+                          option_text: value,
+                          is_correct: idx === 0,
+                        };
+                        return {
+                          ...row,
+                          question_type: "multiple_choice",
+                          options: normalized,
+                        };
                       })
-                    }
-                    disabled={saving}
-                  />{" "}
-                  Đúng
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name={`tf-correct-${qi}`}
-                    checked={Boolean(q.options[1]?.is_correct)}
-                    onChange={() =>
-                      updateQuestion(qi, {
-                        options: [
-                          { option_text: "Đúng", is_correct: false },
-                          { option_text: "Sai", is_correct: true },
-                        ],
-                      })
-                    }
-                    disabled={saving}
-                  />{" "}
-                  Sai
-                </label>
-              </div>
-            )}
+                    );
+                  };
+                  const normalizedOptions = Array.from({ length: manualMaxOptionCount }).map(
+                    (_, optIdx) => q.options[optIdx]?.option_text ?? ""
+                  );
+                  const duplicateExists = (() => {
+                    const cleaned = normalizedOptions.map((x) => x.trim().toLowerCase()).filter(Boolean);
+                    return new Set(cleaned).size !== cleaned.length;
+                  })();
+                  return (
+                    <tr key={qi}>
+                      <td style={{ border: "1px solid #e2e8f0", padding: 8 }}>{qi + 1}</td>
+                      <td style={{ border: "1px solid #e2e8f0", padding: 8 }}>
+                        <input value={q.question_text} onChange={(e) => updateQuestion(qi, { question_text: e.target.value })} disabled={saving} />
+                      </td>
+                      {normalizedOptions.map((optVal, optIdx) => (
+                        <td key={`manual-row-${qi}-opt-${optIdx}`} style={{ border: "1px solid #e2e8f0", padding: 8 }}>
+                          <input value={optVal} onChange={(e) => setOptionAt(optIdx, e.target.value)} disabled={saving} />
+                        </td>
+                      ))}
+                      <td style={{ border: "1px solid #e2e8f0", padding: 8 }} />
+                      <td style={{ border: "1px solid #e2e8f0", padding: 8 }}>
+                        <select value={q.difficulty} onChange={(e) => updateQuestion(qi, { difficulty: e.target.value as QuestionRow["difficulty"] })} disabled={saving}>
+                          <option value="easy">easy</option>
+                          <option value="medium">medium</option>
+                          <option value="hard">hard</option>
+                        </select>
+                      </td>
+                      <td style={{ border: "1px solid #e2e8f0", padding: 8 }}>
+                        <input type="number" min={0.01} step={0.5} value={q.points} onChange={(e) => updateQuestion(qi, { points: Number(e.target.value) || 1 })} disabled={saving} />
+                      </td>
+                      <td style={{ border: "1px solid #e2e8f0", padding: 8 }}>
+                        <input value={q.explanation} onChange={(e) => updateQuestion(qi, { explanation: e.target.value })} disabled={saving} />
+                      </td>
+                      <td style={{ border: "1px solid #e2e8f0", padding: 8 }}>
+                        <button type="button" className="btn-secondary" disabled={saving || questions.length <= 1} onClick={() => setQuestions((prev) => prev.filter((_, i) => i !== qi))}>
+                          Xóa
+                        </button>
+                        {duplicateExists && (
+                          <div style={{ marginTop: 6, fontSize: 11, color: "#b45309", fontWeight: 600 }}>
+                            Cảnh báo: có đáp án bị trùng nhau.
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        ))}
-
-        <button
-          type="button"
-          className="btn-secondary"
-          disabled={saving}
-          onClick={() => setQuestions((prev) => [...prev, defaultQuestion()])}
-        >
-          + Thêm câu hỏi
-        </button>
-
-        <div className="actions-row" style={{ marginTop: 16 }}>
-          <button className="btn-primary" onClick={handleSaveQuiz} disabled={saving || loading}>
-            {saving ? "Đang lưu..." : "Lưu Quizz"}
-          </button>
+        ) : null}
+        
+        {quizCreateMode === "manual" && (
           <button
             type="button"
             className="btn-secondary"
-            disabled={saving || lessonId === ""}
-            onClick={() => loadExistingQuiz().then(() => toast.success("Đã tải lại")).catch((e) => toast.error(e?.message))}
+            disabled={saving}
+            onClick={() => setQuestions((prev) => [...prev, defaultQuestion()])}
           >
-            Tải lại từ server
+            + Thêm dòng
           </button>
-        </div>
+        )}
+
+        {!hideSaveButton && (
+          <div className="actions-row" style={{ marginTop: 16 }}>
+            <button className="btn-primary" onClick={handleSaveQuiz} disabled={saving || loading}>
+              {saving ? "Đang lưu..." : "Lưu Quizz"}
+            </button>
+            {/* <button
+              type="button"
+              className="btn-secondary"
+              disabled={saving || lessonId === ""}
+              onClick={() => loadExistingQuiz().then(() => toast.success("Đã tải lại")).catch((e) => toast.error(e?.message))}
+            >
+              Tải lại từ server
+            </button> */}
+          </div>
+        )}
+
+        {showSavedQuestionsSection && (
+          <div className="mq-question-card" style={{ marginTop: 12 }}>
+            <div className="mq-question-head">
+              <strong>Danh sách câu hỏi</strong>
+            </div>
+            {!savedQuestions.length ? (
+              <p style={{ marginTop: 8, color: "#64748b" }}>
+                Chưa có câu hỏi đã lưu. Nhập ở phần Thủ công và bấm "Lưu Quizz" để nạp xuống danh sách này.
+              </p>
+            ) : (
+              <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
+                {savedQuestions.map((item, idx) => {
+                  const correct = item.options.find((o) => o.is_correct)?.option_text || "(chưa có)";
+                  return (
+                    <div
+                      key={`saved-${idx}`}
+                      style={{
+                        border: "1px solid #e2e8f0",
+                        borderRadius: 8,
+                        padding: "8px 10px",
+                        background: "#f8fafc",
+                      }}
+                    >
+                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                        Câu {idx + 1}: {item.question_text || "(trống)"}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#475569" }}>Đáp án đúng: {correct}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

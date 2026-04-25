@@ -197,12 +197,14 @@ export class UpdateModuleBody extends RequestDto {
   title?: string;
   description?: string | null;
   open_at?: string | null;
+  is_published?: boolean;
 
   constructor(body: any) {
     super();
     if (body?.title != null) this.title = String(body.title);
     if ('description' in (body || {})) this.description = body?.description != null ? String(body.description) : null;
     if ('open_at' in (body || {})) this.open_at = body.open_at != null && String(body.open_at).trim() ? String(body.open_at) : null;
+    if ('is_published' in (body || {})) this.is_published = Boolean(body?.is_published);
   }
 }
 
@@ -228,6 +230,7 @@ export class UpdateLessonBody extends RequestDto {
   description?: string | null;
   lesson_type?: LessonType;
   open_at?: string | null;
+  is_published?: boolean;
 
   constructor(body: any) {
     super();
@@ -235,6 +238,7 @@ export class UpdateLessonBody extends RequestDto {
     if ('description' in (body || {})) this.description = body?.description != null ? String(body.description) : null;
     if (body?.lesson_type != null) this.lesson_type = String(body.lesson_type) as LessonType;
     if ('open_at' in (body || {})) this.open_at = body.open_at != null && String(body.open_at).trim() ? String(body.open_at) : null;
+    if ('is_published' in (body || {})) this.is_published = Boolean(body?.is_published);
   }
 }
 

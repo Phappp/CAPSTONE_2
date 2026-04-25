@@ -9,6 +9,7 @@
   --primary: #00a8cc;
   --primary-dark: #006b8f;
   --primary-light: #38c4e0;
+  --heading-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
@@ -85,6 +86,7 @@ body {
 }
 
 .dashboard-title {
+  font-family: var(--heading-font);
   font-size: 2rem;
   font-weight: 700;
   background: linear-gradient(135deg, var(--gray-900) 0%, var(--primary-dark) 45%, var(--primary) 100%);
@@ -833,8 +835,9 @@ body {
 }
 
 .course-title {
+  font-family: var(--heading-font);
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--gray-800);
   flex: 1;
   overflow: hidden;

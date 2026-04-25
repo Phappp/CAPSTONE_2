@@ -40,6 +40,7 @@ export type LearnerAssignmentPayload = {
   attachments: { file_name: string; file_path: string; signed_url: string }[];
   assignment_kind: "file_prompt" | "short_answer";
   short_answer_questions: { id: string; question_text: string; order_index: number }[];
+  time_limit_minutes: number | null;
 };
 
 export default function LearnerAssignmentSubmit(props: {
@@ -63,6 +64,7 @@ export default function LearnerAssignmentSubmit(props: {
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
   const [gradeRow, setGradeRow] = useState<MyAssignmentGradeRow | null>(null);
   const [gradeLoading, setGradeLoading] = useState(false);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
 
   const authJsonHeaders = useMemo(() => {
     const h: Record<string, string> = { "Content-Type": "application/json" };
@@ -136,6 +138,33 @@ export default function LearnerAssignmentSubmit(props: {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!assignment || assignment.assignment_kind !== "short_answer") {
+      setRemainingSeconds(null);
+      return;
+    }
+    const limit = Number(assignment.time_limit_minutes ?? 0);
+    if (!Number.isFinite(limit) || limit <= 0) {
+      setRemainingSeconds(null);
+      return;
+    }
+    const storageKey = `short-answer-timer:${assignment.assignment_id}`;
+    const now = Date.now();
+    const persisted = Number(window.localStorage.getItem(storageKey));
+    const startAt = Number.isFinite(persisted) && persisted > 0 ? persisted : now;
+    if (!Number.isFinite(persisted) || persisted <= 0) {
+      window.localStorage.setItem(storageKey, String(startAt));
+    }
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - startAt) / 1000);
+      const remaining = Math.max(0, limit * 60 - elapsed);
+      setRemainingSeconds(remaining);
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [assignment]);
+
   const handleSubmit = async () => {
     if (!assignment || submitting) return;
     setSubmitting(true);
@@ -143,6 +172,9 @@ export default function LearnerAssignmentSubmit(props: {
     try {
       const id = assignment.assignment_id;
       if (assignment.assignment_kind === "short_answer") {
+        if (remainingSeconds != null && remainingSeconds <= 0) {
+          throw new Error("Đã hết thời gian làm bài.");
+        }
         const list = (assignment.short_answer_questions || []).map((q) => ({
           question_id: q.id,
           answer_text: String(shortAnswers[q.id] ?? "").trim(),
@@ -156,6 +188,7 @@ export default function LearnerAssignmentSubmit(props: {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error((data as any)?.message || "Nộp bài thất bại.");
+        window.localStorage.removeItem(`short-answer-timer:${id}`);
         setDoneMsg(String((data as any)?.message || "Đã nộp bài thành công."));
         void loadGrade(id);
         onSubmitted();
@@ -205,6 +238,9 @@ export default function LearnerAssignmentSubmit(props: {
   }, [gradeRow]);
 
   const submitClosedReason = useMemo(() => {
+    if (assignment?.assignment_kind === "short_answer" && remainingSeconds != null && remainingSeconds <= 0) {
+      return "Đã hết thời gian làm bài. Bạn không thể nộp thêm.";
+    }
     if (usedSubmitAttempts >= maxSubmitAttempts && maxSubmitAttempts > 0) {
       return "Bạn đã dùng hết lượt nộp cho bài tập này.";
     }
@@ -220,7 +256,14 @@ export default function LearnerAssignmentSubmit(props: {
       return "Đã hết thời hạn nộp bài. Form nộp đã được đóng.";
     }
     return null;
-  }, [assignment, maxSubmitAttempts, usedSubmitAttempts]);
+  }, [assignment, maxSubmitAttempts, remainingSeconds, usedSubmitAttempts]);
+
+  const timerLabel = useMemo(() => {
+    if (remainingSeconds == null) return null;
+    const mm = String(Math.floor(remainingSeconds / 60)).padStart(2, "0");
+    const ss = String(remainingSeconds % 60).padStart(2, "0");
+    return `${mm}:${ss}`;
+  }, [remainingSeconds]);
 
   return (
     <div className="learner-quiz-overlay" role="dialog" aria-modal="true" aria-labelledby="learner-asg-title">
@@ -252,6 +295,19 @@ export default function LearnerAssignmentSubmit(props: {
               Dạng:{" "}
               <strong>{assignment.assignment_kind === "short_answer" ? "Trả lời ngắn" : "File / văn bản"}</strong>
             </span>
+            {assignment.assignment_kind === "short_answer" && assignment.time_limit_minutes != null ? (
+              <span>
+                Thời gian làm bài: <strong>{assignment.time_limit_minutes} phút</strong>
+                {timerLabel != null ? (
+                  <>
+                    {" · "}Còn lại:{" "}
+                    <strong style={{ color: remainingSeconds != null && remainingSeconds <= 60 ? "#dc2626" : "#0f172a" }}>
+                      {timerLabel}
+                    </strong>
+                  </>
+                ) : null}
+              </span>
+            ) : null}
             <span>
               Lượt nộp: <strong>{usedSubmitAttempts}/{maxSubmitAttempts}</strong>
             </span>
