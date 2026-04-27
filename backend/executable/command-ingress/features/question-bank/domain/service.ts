@@ -3,6 +3,9 @@ import AppDataSource from '../../../../../lib/database';
 import QuestionBank from '../../../../../internal/model/question_banks';
 import BankQuestion from '../../../../../internal/model/bank_questions';
 import BankQuestionOption from '../../../../../internal/model/bank_question_options';
+import QuizQuestion from '../../../../../internal/model/quiz_question';
+import Quiz from '../../../../../internal/model/quizze';
+import Lesson from '../../../../../internal/model/lesson';
 import UserRole from '../../../../../internal/model/user_roles';
 import Role from '../../../../../internal/model/role';
 import OpenRouterKey from '../../../../../internal/model/openrouter_key';
@@ -11,11 +14,34 @@ import crypto from 'crypto';
 import { CreateQuestionBankBody, AddBankQuestionBody } from '../adapter/dto';
 import { QuestionBankService } from '../types';
 
+const AUTO_QUIZ_BANK_NAME = '__AUTO_QUIZ_INTERNAL_BANK__';
+
 export class QuestionBankServiceImpl implements QuestionBankService {
     private dataSource: DataSource;
 
     constructor(){
         this.dataSource = AppDataSource;
+    }
+
+    private async ensureQuestionBankSchema(): Promise<void> {
+        const table = 'question_banks';
+        const column = 'is_active';
+        const rows = await this.dataSource.query(
+            `
+            SELECT COUNT(*) AS cnt
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = ?
+              AND COLUMN_NAME = ?
+            `,
+            [table, column]
+        );
+        const exists = Number((rows?.[0] as any)?.cnt || 0) > 0;
+        if (!exists) {
+            await this.dataSource.query(
+                `ALTER TABLE question_banks ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1`
+            );
+        }
     }
 
     private async assertCourseManagerOrAdmin(userId: number): Promise<void> {
@@ -37,8 +63,9 @@ export class QuestionBankServiceImpl implements QuestionBankService {
     }
 
     private async getOwnedBankOrThrow(bankId: number, userId: number): Promise<QuestionBank> {
+        await this.ensureQuestionBankSchema();
         const bankRepo = this.dataSource.getRepository(QuestionBank);
-        const bank = await bankRepo.findOne({ where: { id: bankId } });
+        const bank = await bankRepo.findOne({ where: { id: bankId, is_active: true } as any });
         if (!bank) {
             throw new Error('Question bank not found!');
         }
@@ -80,6 +107,7 @@ export class QuestionBankServiceImpl implements QuestionBankService {
 
     async createBank(req: CreateQuestionBankBody): Promise<any>{
         await this.assertCourseManagerOrAdmin(req.user_id);
+        await this.ensureQuestionBankSchema();
         const bankRepo = this.dataSource.getRepository(QuestionBank);
 
         const newBank = bankRepo.create({
@@ -87,6 +115,7 @@ export class QuestionBankServiceImpl implements QuestionBankService {
             name: req.name,
             description: req.description,
             is_shared: req.is_shared || false,
+            is_active: true,
             created_by: req.user_id
         });
 
@@ -147,20 +176,51 @@ export class QuestionBankServiceImpl implements QuestionBankService {
         return results;
     }
 
-    async listBanks(userId: number, courseId?: number): Promise<any[]> {
+    async listBanks(userId: number, courseId?: number, includeArchived: boolean = false): Promise<any[]> {
         await this.assertCourseManagerOrAdmin(userId);
+        await this.ensureQuestionBankSchema();
         const bankRepo = this.dataSource.getRepository(QuestionBank);
-        const where: any = { created_by: userId };
-        if (courseId) {
-            where.course_id = courseId;
-        }
-
-        const banks = await bankRepo.find({
-            where,
-            order: { created_at: 'DESC' },
-        });
+        const qb = bankRepo.createQueryBuilder('qb');
+        qb.where('qb.created_by = :userId', { userId });
+        qb.andWhere('qb.name <> :autoName', { autoName: AUTO_QUIZ_BANK_NAME });
+        if (!includeArchived) qb.andWhere('qb.is_active = :isActive', { isActive: true });
+        if (courseId) qb.andWhere('qb.course_id = :courseId', { courseId });
+        qb.orderBy('qb.created_at', 'DESC');
+        const banks = await qb.getMany();
 
         return banks;
+    }
+
+    async getBankUsage(bankId: number, userId: number): Promise<{ quiz_count: number; usages: any[] }> {
+        await this.assertCourseManagerOrAdmin(userId);
+        await this.getOwnedBankOrThrow(bankId, userId);
+        const usageRows = await this.dataSource
+            .getRepository(QuizQuestion)
+            .createQueryBuilder('qq')
+            .innerJoin(BankQuestion, 'bq', 'bq.id = qq.bank_question_id')
+            .innerJoin(Quiz, 'qz', 'qz.id = qq.quiz_id')
+            .leftJoin(Lesson, 'l', 'l.id = qz.lesson_id')
+            .select('qq.quiz_id', 'quiz_id')
+            .addSelect('COUNT(*)', 'question_count')
+            .addSelect('qz.title', 'quiz_title')
+            .addSelect('l.id', 'lesson_id')
+            .addSelect('l.title', 'lesson_title')
+            .where('bq.bank_id = :bankId', { bankId })
+            .groupBy('qq.quiz_id')
+            .addGroupBy('qz.title')
+            .addGroupBy('l.id')
+            .addGroupBy('l.title')
+            .orderBy('COUNT(*)', 'DESC')
+            .getRawMany();
+
+        const usages = (usageRows || []).map((r: any) => ({
+            quiz_id: Number(r.quiz_id),
+            lesson_id: r.lesson_id != null ? Number(r.lesson_id) : null,
+            lesson_title: r.lesson_title != null ? String(r.lesson_title) : null,
+            quiz_title: r.quiz_title != null ? String(r.quiz_title) : null,
+            question_count: Number(r.question_count || 0),
+        }));
+        return { quiz_count: usages.length, usages };
     }
 
     async getBankQuestions(bankId: number, userId: number): Promise<any[]> {
@@ -177,22 +237,27 @@ export class QuestionBankServiceImpl implements QuestionBankService {
     async updateBank(
       bankId: number,
       userId: number,
-      payload: { name?: string; description?: string; is_shared?: boolean }
+      payload: { name?: string; description?: string; is_shared?: boolean; is_active?: boolean }
     ): Promise<any> {
         await this.assertCourseManagerOrAdmin(userId);
+        await this.ensureQuestionBankSchema();
         const bankRepo = this.dataSource.getRepository(QuestionBank);
         const bank = await this.getOwnedBankOrThrow(bankId, userId);
         if (payload.name !== undefined) bank.name = payload.name;
         if (payload.description !== undefined) bank.description = payload.description;
         if (payload.is_shared !== undefined) bank.is_shared = payload.is_shared;
+        if (payload.is_active !== undefined) (bank as any).is_active = Boolean(payload.is_active);
         return await bankRepo.save(bank);
     }
 
     async deleteBank(bankId: number, userId: number): Promise<void> {
         await this.assertCourseManagerOrAdmin(userId);
-        const bankRepo = this.dataSource.getRepository(QuestionBank);
+        await this.ensureQuestionBankSchema();
         await this.getOwnedBankOrThrow(bankId, userId);
-        await bankRepo.delete({ id: bankId });
+        await this.dataSource.transaction(async (manager) => {
+            const bankRepo = manager.getRepository(QuestionBank);
+            await bankRepo.update({ id: bankId } as any, { is_active: false } as any);
+        });
     }
 
     async updateQuestion(

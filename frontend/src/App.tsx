@@ -7,6 +7,7 @@ import OAuthRedirectPage from "./pages/authentication/OAuthRedirectPage"; // Th√
 import StudentDashboard from "./pages/leaner/StudentDashboard";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminCourseContentReviewPage from "./pages/admin/AdminCourseContentReviewPage";
 import CreateCoursePage from "./pages/teacher/CreateCoursePage";
 import TeacherCourseDetailPage from "./pages/teacher/TeacherCourseDetailPage";
 import TeacherCourseOverviewPage from "./pages/teacher/TeacherCourseOverviewPage";
@@ -133,7 +134,7 @@ export default function App() {
       <Route
         path="/teacher/courses/:id/content"
         element={
-          <Authentication allowedRoles={["course_manager", "teacher"]}>
+          <Authentication allowedRoles={["course_manager", "teacher", "admin"]}>
             <TeacherCourseContentBuilderPage />
           </Authentication>
         }
@@ -218,7 +219,14 @@ export default function App() {
           </Authentication>
         }
       />
-
+      <Route
+        path="/admin/courses/:id/content-review"
+        element={
+          <Authentication allowedRoles={["admin"]}>
+            <AdminCourseContentReviewPage />
+          </Authentication>
+        }
+      />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <SystemStatusOrb />

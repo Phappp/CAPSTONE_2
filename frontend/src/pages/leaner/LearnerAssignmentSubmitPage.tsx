@@ -1,14 +1,14 @@
 import { useLayoutEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import LearnerAssignmentSubmit from "../../components/LearnerAssignmentSubmit";
-import { getAccessToken } from "../../utils/authStorage";
+import { useAuth } from "../../contexts/Auth";
 import "./LearnerAssignmentSubmitPage.css";
 
 export default function LearnerAssignmentSubmitPage() {
   const { lessonId } = useParams();
   const [search] = useSearchParams();
   const navigate = useNavigate();
-  const token = useMemo(() => getAccessToken(), []);
+  const { accessToken: token } = useAuth();
   const [ready, setReady] = useState(false);
 
   const lid = Number(lessonId);

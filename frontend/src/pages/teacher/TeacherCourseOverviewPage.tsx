@@ -5,7 +5,7 @@ import AvatarMenu from "../../components/AvatarMenu";
 import PrerequisiteGraph, { type PrerequisiteGraphData } from "../../components/PrerequisiteGraph";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
-import { getAccessToken } from "../../utils/authStorage";
+import { useAuth } from "../../contexts/Auth";
 import "./TeacherDashboard.css";
 import "./TeacherCourseOverviewPage.css";
 
@@ -54,6 +54,26 @@ type LearnerProgressResult = {
   page: number;
   page_size: number;
   total: number;
+};
+
+type QuickFixAction = {
+  key: string;
+  label: string;
+  to: string;
+};
+
+type RejectedResourceItem = {
+  id: number;
+  module_id: number;
+  module_title: string;
+  lesson_id: number;
+  lesson_title: string;
+  lesson_type: "video" | "text" | "quiz" | "assignment";
+  resource_kind: "pdf" | "word" | "video" | "youtube" | "other";
+  filename: string | null;
+  review_reason: string | null;
+  review_event_note: string | null;
+  review_event_at: string | null;
 };
 
 function BarChartMini({ data }: { data: { label: string; value: number; color: string }[] }) {
@@ -207,11 +227,13 @@ export default function TeacherCourseOverviewPage() {
   const navigate = useNavigate();
   const params = useParams();
   const courseId = Number(params.id);
-  const token = useMemo(() => getAccessToken(), []);
+  const { accessToken: token } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ManagerOverview | null>(null);
+  const [rejectedResources, setRejectedResources] = useState<RejectedResourceItem[]>([]);
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   const [graphModalOpen, setGraphModalOpen] = useState(false);
   const [graphLoading, setGraphLoading] = useState(false);
@@ -305,9 +327,19 @@ export default function TeacherCourseOverviewPage() {
       const json = (await res.json().catch(() => ({}))) as Partial<ManagerOverview> & { message?: string };
       if (!res.ok) throw new Error(json?.message || "Không tải được tổng quan khóa học.");
       setData(json as ManagerOverview);
+      const rejectedRes = await fetch(`${url}${COURSES_API.myRejectedResources(courseId)}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const rejectedJson = (await rejectedRes.json().catch(() => ({}))) as { items?: RejectedResourceItem[]; message?: string };
+      if (!rejectedRes.ok) throw new Error(rejectedJson?.message || "Không thể tải danh sách nội dung bị từ chối.");
+      setRejectedResources(Array.isArray(rejectedJson.items) ? rejectedJson.items : []);
     } catch (e: any) {
       setError(e?.message || "Đã xảy ra lỗi.");
       setData(null);
+      setRejectedResources([]);
     } finally {
       setLoading(false);
     }
@@ -317,9 +349,80 @@ export default function TeacherCourseOverviewPage() {
     void load();
   }, [load]);
 
+  const submitForReview = useCallback(async () => {
+    if (!courseId || Number.isNaN(courseId)) return;
+    const confirmed = window.confirm("Bạn có chắc muốn gửi khóa học này để quản trị viên duyệt không?");
+    if (!confirmed) return;
+    setSubmittingReview(true);
+    setError(null);
+    try {
+      const res = await fetch(`${url}${COURSES_API.setStatus(courseId)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ status: "pending_review" }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { message?: string };
+      if (!res.ok) {
+        throw new Error(json?.message || "Không thể gửi duyệt khóa học.");
+      }
+      await load();
+    } catch (e: any) {
+      setError(e?.message || "Không thể gửi duyệt khóa học.");
+    } finally {
+      setSubmittingReview(false);
+    }
+  }, [courseId, load, token]);
+
   const c = data?.course;
   const statusLabel =
-    c?.status === "published" ? "Đã xuất bản" : c?.status === "draft" ? "Bản nháp" : c?.status === "archived" ? "Đã lưu trữ" : "";
+    c?.status === "published"
+      ? "Đã xuất bản"
+      : c?.status === "draft"
+      ? "Bản nháp"
+      : c?.status === "pending_review"
+      ? "Chờ duyệt"
+      : c?.status === "archived"
+      ? "Đã lưu trữ"
+      : "";
+
+  const quickFixActions = useMemo<QuickFixAction[]>(() => {
+    if (!error || !courseId || Number.isNaN(courseId)) return [];
+    const lower = String(error).toLowerCase();
+    const actions: QuickFixAction[] = [];
+    const addAction = (key: string, label: string, to: string) => {
+      if (actions.some((x) => x.key === key)) return;
+      actions.push({ key, label, to });
+    };
+
+    // Nhóm lỗi thông tin khóa học -> tab info.
+    if (
+      lower.includes("thiếu tiêu đề khóa học") ||
+      lower.includes("thiếu mô tả ngắn") ||
+      lower.includes("thiếu mô tả chi tiết") ||
+      lower.includes("thiếu ảnh đại diện")
+    ) {
+      addAction("go-info", "Đi tới Thông tin khóa học", `/teacher/courses/${courseId}/content?tab=info`);
+    }
+
+    // Nhóm lỗi cấu trúc/nội dung -> tab content.
+    if (
+      lower.includes("ít nhất 1 chương") ||
+      lower.includes("ít nhất 3 bài học") ||
+      lower.includes("ít nhất 1 tài nguyên") ||
+      lower.includes("chưa có nội dung hợp lệ") ||
+      lower.includes("bài quiz") ||
+      lower.includes("bài tập") ||
+      lower.includes("tài nguyên bị từ chối") ||
+      lower.includes("tài nguyên đã được duyệt")
+    ) {
+      addAction("go-content", "Đi tới Cấu trúc nội dung", `/teacher/courses/${courseId}/content?tab=content`);
+    }
+
+    return actions;
+  }, [error, courseId]);
 
   const enrollmentPie = useMemo(() => {
     const e = data?.enrollment_by_status || {};
@@ -391,13 +494,60 @@ export default function TeacherCourseOverviewPage() {
           </div>
         ) : null}
 
-        {error && <div className="error-message">{error}</div>}
+        {error && (
+          <div className="warning-message">
+            <div>{error}</div>
+            {quickFixActions.length > 0 && (
+              <div className="quick-fix-actions">
+                {quickFixActions.map((action) => (
+                  <button
+                    key={action.key}
+                    type="button"
+                    className="quick-fix-btn"
+                    onClick={() => navigate(action.to)}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!error && rejectedResources.length > 0 && (
+          <div className="warning-message warning-message--rejected">
+            Có {rejectedResources.length} nội dung bị từ chối. Vui lòng mở mục cần sửa để cập nhật và gửi lại.
+          </div>
+        )}
 
         {/* Course Content */}
         {c && (
           <>
             {/* Course Hero Section */}
             <div className="course-hero">
+              <div className="course-hero-top-right">
+                {c.status === "pending_review" ? (
+                  <button
+                    className="btn-secondary"
+                    onClick={() => navigate(`/teacher/courses/${courseId}/content?tab=content`)}
+                    disabled={loading}
+                    title="Mở nội dung bị từ chối để sửa và gửi lại"
+                  >
+                    <span className="material-symbols-outlined">build</span>
+                    {rejectedResources.length > 0 ? `Mở mục cần sửa (${rejectedResources.length})` : "Mở mục cần sửa"}
+                  </button>
+                ) : (
+                  <button
+                    className="btn-primary"
+                    onClick={() => void submitForReview()}
+                    disabled={loading || submittingReview}
+                    title="Gửi khóa học để quản trị viên duyệt"
+                  >
+                    <span className="material-symbols-outlined">send</span>
+                    {submittingReview ? "Đang gửi..." : "Gửi duyệt"}
+                  </button>
+                )}
+              </div>
               <div className="course-hero-main">
                 <div className="course-thumbnail-large">
                   {c.thumbnail_url ? (

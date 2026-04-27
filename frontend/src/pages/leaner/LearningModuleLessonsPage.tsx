@@ -4,7 +4,7 @@ import AvatarMenu from "../../components/AvatarMenu";
 import LearnerCourseContentTree, { type ModuleItem } from "../../components/LearnerCourseContentTree";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
-import { getAccessToken } from "../../utils/authStorage";
+import { useAuth } from "../../contexts/Auth";
 import "./LearningModuleLessonsPage.css";
 
 type CourseDetail = {
@@ -57,7 +57,7 @@ export default function LearningModuleLessonsPage() {
   const initialAssessmentKind =
     initialAssessmentParam === "quiz" || initialAssessmentParam === "assignment" ? initialAssessmentParam : null;
 
-  const token = useMemo(() => getAccessToken(), []);
+  const { accessToken: token } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
-import { getAccessToken } from "../utils/authStorage";
+import { useAuth } from "../contexts/Auth";
 import toast, { Toaster } from "react-hot-toast";
 
 import {
@@ -441,7 +441,7 @@ export default function CourseContentTreeEditor(props: {
   };
 }) {
   const { courseId, embedded, assessmentShortcuts } = props;
-  const token = useMemo(() => getAccessToken(), []);
+  const { accessToken: token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

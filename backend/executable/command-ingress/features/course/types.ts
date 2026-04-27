@@ -72,6 +72,10 @@ export type CourseLessonItem = {
   has_quiz?: boolean;
   /** Có bài tập gắn với lesson (lesson có thể không phải loại assignment). */
   has_assignment?: boolean;
+  /** Trạng thái chất lượng nội dung để hiển thị trong cây của giảng viên. */
+  quality_status?: 'ok' | 'needs_fix';
+  /** Lý do lesson chưa đạt chất lượng (nếu có). */
+  quality_issue?: string | null;
 };
 
 export type CourseModuleItem = {
@@ -207,17 +211,86 @@ export type ReorderLessonsRequest = {
 export type ReorderCourseContentRequest = ReorderModulesRequest & ReorderLessonsRequest;
 
 export type LessonResourceType = 'file' | 'video';
+export type LessonResourceKind = 'pdf' | 'word' | 'video' | 'youtube' | 'other';
+export type ResourceReviewStatus = 'pending' | 'approved' | 'rejected';
 
 export type LessonResourceItem = {
   id: number;
   lesson_id: number;
   resource_type: LessonResourceType;
+  resource_kind: LessonResourceKind;
   url: string;
   filename: string | null;
   mime_type: string | null;
   size_bytes: number | null;
   preview_url: string | null;
+  review_status: ResourceReviewStatus;
+  review_reason: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
   created_at: string;
+};
+
+export type PendingLessonResourceQuery = {
+  page?: number;
+  page_size?: number;
+  q?: string;
+  kind?: LessonResourceKind | 'all';
+  course_id?: number;
+};
+
+export type PendingLessonResourceListItem = LessonResourceItem & {
+  course_id: number;
+  course_title: string;
+  lesson_title: string;
+  teacher_id: number;
+  is_resubmitted?: boolean;
+  last_review_decision?: 'submit' | 'approve' | 'reject' | 'resubmit' | null;
+  last_review_note?: string | null;
+  last_reviewed_at?: string | null;
+  previous_rejected_reason?: string | null;
+};
+
+export type PendingLessonResourceListResult = {
+  items: PendingLessonResourceListItem[];
+  page: number;
+  page_size: number;
+  total: number;
+};
+
+export type TeacherRejectedResourceListItem = LessonResourceItem & {
+  course_id: number;
+  course_title: string;
+  module_id: number;
+  module_title: string;
+  lesson_id: number;
+  lesson_title: string;
+  lesson_type: LessonType;
+  review_event_note: string | null;
+  review_event_at: string | null;
+};
+
+export type TeacherRejectedResourceListResult = {
+  course_id: number;
+  items: TeacherRejectedResourceListItem[];
+};
+
+export type LessonResourceReviewDecision = 'approve' | 'reject';
+
+export type LessonResourceReviewEventItem = {
+  id: number;
+  resource_id: number;
+  actor_user_id: number;
+  from_status: ResourceReviewStatus | null;
+  to_status: ResourceReviewStatus;
+  decision: 'submit' | 'approve' | 'reject' | 'resubmit';
+  note: string | null;
+  created_at: string;
+};
+
+export type LessonResourceReviewTimelineResult = {
+  resource_id: number;
+  items: LessonResourceReviewEventItem[];
 };
 
 export type CourseListItem = {
@@ -609,6 +682,15 @@ export interface CourseService {
   reviewCourseByAdmin(subjectUserId: number, courseId: number, decision: ReviewCourseDecision, note?: string | null): Promise<void>;
   getCourseReviewTimelineByAdmin(subjectUserId: number, courseId: number): Promise<CourseReviewTimelineResult>;
   getMyCourseReviewTimeline(subjectUserId: number, courseId: number): Promise<CourseReviewTimelineResult>;
+  listPendingLessonResourcesByAdmin(subjectUserId: number, query: PendingLessonResourceQuery): Promise<PendingLessonResourceListResult>;
+  reviewLessonResourceByAdmin(
+    subjectUserId: number,
+    resourceId: number,
+    decision: LessonResourceReviewDecision,
+    note?: string | null
+  ): Promise<void>;
+  getLessonResourceReviewTimelineByAdmin(subjectUserId: number, resourceId: number): Promise<LessonResourceReviewTimelineResult>;
+  listMyRejectedLessonResources(subjectUserId: number, courseId: number): Promise<TeacherRejectedResourceListResult>;
 
   getMyCourseContentTree(subjectUserId: number, courseId: number): Promise<CourseContentTree>;
   createModule(subjectUserId: number, courseId: number, request: CreateModuleRequest): Promise<{ id: number }>;

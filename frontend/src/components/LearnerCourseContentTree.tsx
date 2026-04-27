@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
-import { getAccessToken } from "../utils/authStorage";
+import { useAuth } from "../contexts/Auth";
 import "./LearnerCourseContentTree.css";
 
 type LessonType = "video" | "text" | "quiz" | "assignment";
@@ -449,7 +449,7 @@ export default function LearnerCourseContentTree(props: {
     initialLessonId = null,
     initialAssessmentKind = null,
   } = props;
-  const token = useMemo(() => getAccessToken(), []);
+  const { accessToken: token } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [resourceError, setResourceError] = useState<string | null>(null);

@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
-import { getAccessToken } from "../../utils/authStorage";
 import CourseContentTreeEditor from "../../components/CourseContentTreeEditor";
 import CourseAssessmentModal, { type CourseAssessmentModalTab } from "../../components/CourseAssessmentModal";
 import { useAuth } from "../../contexts/Auth";
@@ -63,7 +62,7 @@ export default function TeacherCourseDetailPage() {
   const params = useParams();
   const courseId = Number(params.id);
 
-  const token = useMemo(() => getAccessToken(), []);
+  const { accessToken: token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccessOpen, setSaveSuccessOpen] = useState(false);

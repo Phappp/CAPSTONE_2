@@ -58,6 +58,30 @@ type QuizPreviewConfig = {
   passing_score: number | null;
 };
 
+function normalizeQuestionKey(question: { question_text?: string | null; question_type?: string | null }): string {
+  const text = String(question?.question_text || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+  const type = String(question?.question_type || "multiple_choice").toLowerCase();
+  return `${type}::${text}`;
+}
+
+type QuestionBankPickMessage = {
+  source: "question-bank-pick";
+  courseId: number;
+  bankId: number;
+  questions: Array<{
+    id: number;
+    question_text: string;
+    question_type: "multiple_choice" | "true_false";
+    explanation?: string;
+    points?: number;
+    difficulty?: "easy" | "medium" | "hard";
+    options: Array<{ option_text: string; is_correct: boolean }>;
+  }>;
+};
+
 function defaultQuestion(): QuestionRow {
   return {
     question_text: "",
@@ -154,6 +178,7 @@ export default function ManualQuizEditor(props: {
   const [selectedBankId, setSelectedBankId] = useState<number | "">("");
   const [bankQuestions, setBankQuestions] = useState<BankQuestion[]>([]);
   const [pickedBankQuestionIds, setPickedBankQuestionIds] = useState<number[]>([]);
+  const [pendingBankImportedQuestions, setPendingBankImportedQuestions] = useState<QuestionRow[]>([]);
   const [csvFileName, setCsvFileName] = useState("");
   const [csvImportErrors, setCsvImportErrors] = useState<string[]>([]);
   const [quizCreateMode, setQuizCreateMode] = useState<"manual" | "question_bank" | "csv" | "ai">("manual");
@@ -385,10 +410,47 @@ export default function ManualQuizEditor(props: {
   useEffect(() => {
     if (!questionsOverride) return;
     if (quizCreateMode === "manual") return;
-    const next = JSON.stringify(questionsOverride);
-    const curr = JSON.stringify(questions);
-    if (next !== curr) setQuestions(questionsOverride);
-  }, [questionsOverride, questions, quizCreateMode]);
+    setQuestions((prev) => {
+      const next = JSON.stringify(questionsOverride);
+      const curr = JSON.stringify(prev);
+      if (next === curr) return prev;
+      return questionsOverride;
+    });
+  }, [questionsOverride, quizCreateMode]);
+
+  useEffect(() => {
+    const onPickMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const payload = event.data as Partial<QuestionBankPickMessage> | null;
+      if (!payload || payload.source !== "question-bank-pick") return;
+      if (selectedCourseId && Number(payload.courseId) !== Number(selectedCourseId)) return;
+      const importedRaw = Array.isArray(payload.questions) ? payload.questions : [];
+      if (!importedRaw.length) return;
+      const mapped: QuestionRow[] = importedRaw.map((item) => {
+        const qType = item.question_type === "true_false" ? "true_false" : "multiple_choice";
+        const options =
+          Array.isArray(item.options) && item.options.length >= 2
+            ? item.options.map((o) => ({
+                option_text: String(o.option_text || ""),
+                is_correct: Boolean(o.is_correct),
+              }))
+            : defaultQuestion().options;
+        return {
+          question_text: String(item.question_text || ""),
+          question_type: qType,
+          explanation: String(item.explanation || ""),
+          points: Number(item.points) > 0 ? Number(item.points) : 1,
+          difficulty: item.difficulty === "easy" || item.difficulty === "hard" ? item.difficulty : "medium",
+          options,
+        };
+      });
+      setQuizCreateMode("question_bank");
+      setPendingBankImportedQuestions((prev) => [...prev, ...mapped]);
+      toast.success(`Đã nhận ${mapped.length} câu hỏi từ Question Bank (tạm).`);
+    };
+    window.addEventListener("message", onPickMessage);
+    return () => window.removeEventListener("message", onPickMessage);
+  }, [selectedCourseId]);
 
   useEffect(() => {
     if (!externalSaveSignal) return;
@@ -409,6 +471,7 @@ export default function ManualQuizEditor(props: {
       showResults,
       showCorrect,
       questions: fingerprintQuestions,
+      pendingBankImportedQuestions,
     });
     onDirtyChange?.(Boolean(lastSavedFingerprint) && currentFingerprint !== lastSavedFingerprint);
   }, [
@@ -425,6 +488,7 @@ export default function ManualQuizEditor(props: {
     timeLimit,
     title,
     quizCreateMode,
+    pendingBankImportedQuestions,
   ]);
 
   useEffect(() => {
@@ -453,7 +517,7 @@ export default function ManualQuizEditor(props: {
               (q) => q.question_text.trim() || q.options.some((opt) => opt.option_text.trim())
             ),
           ]
-        : questions;
+        : [...questions, ...pendingBankImportedQuestions];
 
     const payload = {
       title: resolvedTitle,
@@ -522,6 +586,7 @@ export default function ManualQuizEditor(props: {
       } else {
         setQuestions(savedRows);
       }
+      setPendingBankImportedQuestions([]);
       toast.success("Đã lưu Quizz.");
     } catch (e: any) {
       toast.error(e?.message || "Lỗi.");
@@ -943,48 +1008,103 @@ export default function ManualQuizEditor(props: {
         {quizCreateMode === "question_bank" && (
           <>
             <div className="mq-question-card" style={{ marginBottom: 12 }}>
-              <div className="mq-question-head">
-                <strong>Import từ Question Bank</strong>
+              <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ width: "auto" }}
+                  onClick={() => {
+                    if (!selectedCourseId) return;
+                    const params = new URLSearchParams({ mode: "pick" });
+                    if (selectedBankId) params.set("bankId", String(selectedBankId));
+                    if (lessonId !== "") params.set("lessonId", String(lessonId));
+                    const contextKey = `qb-pick-context:${selectedCourseId}:${lessonId === "" ? "na" : String(lessonId)}`;
+                    const existingKeys = [
+                      ...savedQuestions,
+                      ...questions,
+                      ...pendingBankImportedQuestions,
+                    ]
+                      .map((q) => normalizeQuestionKey(q))
+                      .filter(Boolean);
+                    const uniqueKeys = Array.from(new Set(existingKeys));
+                    try {
+                      window.localStorage.setItem(
+                        contextKey,
+                        JSON.stringify({
+                          questionKeys: uniqueKeys,
+                          updatedAt: Date.now(),
+                        })
+                      );
+                      params.set("contextKey", contextKey);
+                    } catch {
+                      // no-op: nếu localStorage không khả dụng thì vẫn mở tab pick bình thường
+                    }
+                    window.open(
+                      `/teacher/courses/${selectedCourseId}/question-banks?${params.toString()}`,
+                      "_blank"
+                    );
+                  }}
+                  disabled={!selectedCourseId}
+                >
+                  Mở Bank để import câu hỏi
+                </button>
               </div>
-              <div className="form-grid" style={{ marginTop: 8 }}>
-                <div className="field">
-                  <label>Ngân hàng câu hỏi</label>
-                  <select
-                    value={selectedBankId}
-                    onChange={(e) => setSelectedBankId(e.target.value ? Number(e.target.value) : "")}
-                    disabled={!questionBanks.length}
-                  >
-                    {questionBanks.length ? null : <option value="">Chưa có Question Bank</option>}
-                    {questionBanks.map((bank) => (
-                      <option key={bank.id} value={bank.id}>
-                        {bank.name}
-                      </option>
-                    ))}
-                  </select>
+              <div style={{ marginTop: 10, border: "1px dashed #cbd5e1", borderRadius: 8, padding: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <strong>Danh sách câu hỏi tạm từ Question Bank</strong>
+                  {!!pendingBankImportedQuestions.length && (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ width: "auto", padding: "4px 8px" }}
+                      onClick={() => setPendingBankImportedQuestions([])}
+                    >
+                      Xóa danh sách tạm
+                    </button>
+                  )}
                 </div>
+                {!pendingBankImportedQuestions.length ? (
+                  <p style={{ margin: 0, color: "#64748b" }}>
+                    Chưa có câu hỏi tạm. Mở Bank để chọn câu hỏi, sau đó bấm Lưu Quiz để chèn vào danh sách chính.
+                  </p>
+                ) : (
+                  <div style={{ maxHeight: 220, overflow: "auto", display: "grid", gap: 6 }}>
+                    {pendingBankImportedQuestions.map((q, idx) => (
+                      <div
+                        key={`pending-bank-q-${idx}`}
+                        style={{
+                          border: "1px solid #e2e8f0",
+                          borderRadius: 8,
+                          padding: "8px 10px",
+                          background: "#f8fafc",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>
+                            {q.question_text || "(trống)"}
+                          </div>
+                          <div style={{ fontSize: 12, color: "#64748b" }}>
+                            {q.question_type === "true_false" ? "Đúng/Sai" : "Trắc nghiệm"} · {q.points} điểm
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          style={{ width: "auto", padding: "4px 8px", flexShrink: 0 }}
+                          onClick={() =>
+                            setPendingBankImportedQuestions((prev) => prev.filter((_, qIdx) => qIdx !== idx))
+                          }
+                        >
+                          Bỏ
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div style={{ maxHeight: 180, overflow: "auto", border: "1px solid #e5e7eb", borderRadius: 8, padding: 8 }}>
-                {bankQuestions.map((item) => (
-                  <label key={item.id} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "flex-start" }}>
-                    <input
-                      type="checkbox"
-                      checked={pickedBankQuestionIds.includes(item.id)}
-                      onChange={(e) =>
-                        setPickedBankQuestionIds((prev) =>
-                          e.target.checked ? [...prev, item.id] : prev.filter((id) => id !== item.id)
-                        )
-                      }
-                    />
-                    <span>
-                      {item.question_text} <em style={{ color: "#64748b" }}>({item.question_type})</em>
-                    </span>
-                  </label>
-                ))}
-                {!bankQuestions.length ? <p style={{ margin: 0, color: "#64748b" }}>Không có câu hỏi phù hợp để import.</p> : null}
-              </div>
-              <button type="button" className="btn-secondary" style={{ marginTop: 8 }} onClick={importSelectedBankQuestions}>
-                Import câu đã chọn
-              </button>
             </div>
           </>
         )}

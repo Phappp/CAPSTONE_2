@@ -7,17 +7,18 @@ interface GoogleLoginButtonProps {
     onError?: (error: string) => void;
     className?: string;
     text?: string;
+    onClick?: () => Promise<void> | void;
 }
 
 export default function GoogleLoginButton({
     onError,
     className = "",
-    text = "Đăng nhập với Google"
+    text = "Đăng nhập với Google",
+    onClick,
 }: GoogleLoginButtonProps) {
     const [loading, setLoading] = useState(false);
 
-    const handleGoogleLogin = async () => {
-        setLoading(true);
+    const handleGoogleRedirect = async () => {
         try {
             // Lấy URL xác thực Google từ server
             const authUrl = await apiGetGoogleAuthUrl();
@@ -25,6 +26,19 @@ export default function GoogleLoginButton({
             window.location.href = authUrl;
         } catch (error: any) {
             onError?.(error.message || "Không thể kết nối đến Google");
+        }
+    };
+
+    const handleGoogleLogin = async () => {
+        setLoading(true);
+        try {
+            if (onClick) {
+                await onClick();
+                return;
+            }
+            await handleGoogleRedirect();
+        } catch (error: any) {
+            onError?.(error?.message || "Không thể kết nối đến Google");
         } finally {
             setLoading(false);
         }

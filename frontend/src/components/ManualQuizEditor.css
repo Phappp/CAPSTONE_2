@@ -84,6 +84,52 @@
   margin-top: 12px;
 }
 
+/* Đồng bộ style cho các control chưa có class riêng */
+.manual-quiz-editor .field select,
+.manual-quiz-editor .field input[type="file"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--gray-200, #e5e7eb);
+  border-radius: var(--radius-md, 10px);
+  background: #fff;
+  font-size: 14px;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.manual-quiz-editor .field input[type="file"] {
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.manual-quiz-editor .field select:focus,
+.manual-quiz-editor .field input[type="file"]:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+}
+
+.manual-quiz-editor table input,
+.manual-quiz-editor table select {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 13px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.manual-quiz-editor table input:focus,
+.manual-quiz-editor table select:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.16);
+}
+
 /* Select Loại / Độ khó trong thẻ câu hỏi (modal soạn Quizz) */
 .manual-quiz-editor .mq-field-select label {
   font-size: 0.8rem;

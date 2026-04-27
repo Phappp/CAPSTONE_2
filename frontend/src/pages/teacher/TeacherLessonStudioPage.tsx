@@ -10,9 +10,6 @@ import {
   Youtube,
   Trash2,
   Eye,
-  Edit3,
-  Info,
-  Play,
   File,
   Image,
   Link as LinkIcon,
@@ -21,7 +18,6 @@ import {
   Loader2,
   RefreshCw,
   Plus,
-  X,
   Timer,
   Send,
   Volume2,
@@ -31,157 +27,38 @@ import {
   ChevronRight,
   Pencil,
 } from "lucide-react";
-import LessonRichTextEditor from "../../components/LessonRichTextEditor";
-import ManualQuizEditor from "../../components/ManualQuizEditor";
-import AssignmentEditor from "../../components/AssignmentEditor";
 import { ASSIGNMENTS_API } from "../../api/assignments";
 import { COURSES_API } from "../../api/courses";
 import { url } from "../../baseUrl";
 import { useAuth } from "../../contexts/Auth";
+import type {
+  AssignmentKind,
+  AssignmentShortAnswerQuestion,
+  AssignmentStudioPreview,
+  ContentTree,
+  LessonItem,
+  LessonResource,
+  ModuleItem,
+  QuizPreviewConfig,
+  SavedQuizQuestion,
+} from "./lesson-studio/types";
+import {
+  buildLessonHtmlPayload,
+  formatFileSize,
+  getReviewStatusLabel,
+  isLikelyVideoFile,
+  isLikelyVideoResource,
+  parseYoutubeVideoId,
+  shuffleBySeed,
+  truncateLabel,
+} from "./lesson-studio/utils";
+import {
+  AssignmentEditorSection,
+  ContentEditorSection,
+  LessonInfoCard,
+  QuizEditorSection,
+} from "./lesson-studio/EditorSections";
 import "./TeacherDashboard.css";
-
-type LessonResource = {
-  id: number;
-  lesson_id: number;
-  resource_type: "file" | "video";
-  url: string;
-  filename: string | null;
-  mime_type: string | null;
-  size_bytes: number | null;
-  preview_url?: string | null;
-  created_at: string;
-};
-
-type LessonItem = {
-  id: number;
-  module_id: number;
-  title: string;
-  description: string | null;
-  lesson_type: "video" | "text" | "quiz" | "assignment";
-  order_index: number;
-};
-
-type ModuleItem = {
-  id: number;
-  title: string;
-  lessons: LessonItem[];
-};
-
-type ContentTree = {
-  modules: ModuleItem[];
-};
-
-type SavedQuizQuestion = {
-  question_text: string;
-  options: Array<{ option_text: string; is_correct: boolean }>;
-  explanation: string;
-  points: number;
-  difficulty: "easy" | "medium" | "hard";
-  question_type: "multiple_choice" | "true_false";
-};
-
-type QuizPreviewConfig = {
-  time_limit_minutes: number | null;
-  passing_score: number | null;
-};
-
-type AssignmentShortAnswerQuestion = {
-  id: string;
-  question_text: string;
-  order_index: number;
-};
-
-type AssignmentStudioPreview = {
-  assignment_id?: number;
-  description: string;
-  due_date: string | null;
-  max_score: number;
-  passing_score: number | null;
-  allow_late_submission: boolean;
-  late_submission_days: number;
-  late_penalty_percent: number;
-  allow_resubmission: boolean;
-  max_resubmissions: number;
-  attachments: Array<{ file_name: string; file_path: string; signed_url: string }>;
-  assignment_kind?: "file_prompt" | "short_answer";
-  time_limit_minutes?: number | null;
-};
-type AssignmentKind = "file_prompt" | "short_answer";
-
-function buildLessonHtmlPayload(title: string, richTextHtml: string): { blob: Blob; filename: string } {
-  const safeTitle = (title || "lesson").trim();
-  const filename = `${safeTitle.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "lesson"}-notes.html`;
-  const normalizedHtml = (richTextHtml || "").trim();
-  const documentHtml = `<!doctype html>
-<html lang="vi">
-<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>${safeTitle}</title></head>
-<body>${normalizedHtml}</body>
-</html>`;
-  return {
-    blob: new Blob([documentHtml], { type: "text/html" }),
-    filename,
-  };
-}
-
-function isLikelyVideoResource(r: LessonResource): boolean {
-  const mime = (r.mime_type || "").toLowerCase();
-  const name = (r.filename || "").toLowerCase();
-  const urlLower = (r.url || "").toLowerCase();
-  if (mime.startsWith("video/")) return true;
-  if (/\.(mp4|webm|ogg|mov|m4v|avi|mkv)$/.test(name)) return true;
-  if (urlLower.includes("youtube.com") || urlLower.includes("youtu.be")) return true;
-  return false;
-}
-
-function isLikelyVideoFile(file: File): boolean {
-  if (file.type.toLowerCase().startsWith("video/")) return true;
-  return /\.(mp4|webm|ogg|mov|m4v|avi|mkv)$/i.test(file.name || "");
-}
-
-function parseYoutubeVideoId(inputUrl: string): string | null {
-  try {
-    const u = new URL((inputUrl || "").trim());
-    const host = u.hostname.replace(/^www\./, "");
-    if (host === "youtu.be") return u.pathname.split("/").filter(Boolean)[0] || null;
-    if (host.includes("youtube.com")) {
-      const v = u.searchParams.get("v");
-      if (v) return v;
-      const parts = u.pathname.split("/").filter(Boolean);
-      const idx = parts.findIndex((p) => p === "embed" || p === "shorts");
-      if (idx >= 0 && parts[idx + 1]) return parts[idx + 1];
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function formatFileSize(bytes: number | null): string {
-  if (!bytes) return "—";
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
-}
-
-function truncateLabel(text: string, maxLen = 30): string {
-  const s = String(text || "").trim();
-  if (!s) return "";
-  return s.length > maxLen ? `${s.slice(0, maxLen)}...` : s;
-}
-
-function shuffleBySeed<T>(items: T[], seedRaw: string): T[] {
-  const out = [...items];
-  let seed = 0;
-  for (let i = 0; i < seedRaw.length; i += 1) {
-    seed = (seed * 31 + seedRaw.charCodeAt(i)) >>> 0;
-  }
-  for (let i = out.length - 1; i > 0; i -= 1) {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    const j = seed % (i + 1);
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
 
 export default function TeacherLessonStudioPage() {
   const navigate = useNavigate();
@@ -213,6 +90,7 @@ export default function TeacherLessonStudioPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [courseTitle, setCourseTitle] = useState<string>("Khóa học");
+  const [courseStatus, setCourseStatus] = useState<string>("draft");
   const [lesson, setLesson] = useState<LessonItem | null>(null);
   const [lessonTitle, setLessonTitle] = useState<string>("");
   const [lessonDescription, setLessonDescription] = useState<string>("");
@@ -292,6 +170,7 @@ export default function TeacherLessonStudioPage() {
       if (!resourcesRes.ok) throw new Error((resourcesJson as any)?.message || "Không thể tải tài nguyên bài học.");
 
       setCourseTitle(String((detailJson as any)?.title || "Khóa học"));
+      setCourseStatus(String((detailJson as any)?.status || "draft"));
 
       const foundLesson = (treeJson.modules || [])
         .flatMap((m) => m.lessons || [])
@@ -731,8 +610,51 @@ export default function TeacherLessonStudioPage() {
 
   const currentVideoResource = resources.find((r) => isLikelyVideoResource(r)) || null;
   const currentYoutubeId = currentVideoResource ? parseYoutubeVideoId(currentVideoResource.url || "") : null;
+  const contentHtmlResource = resources.find((r) => (r.mime_type || "").includes("text/html")) || null;
+  const quizReviewResource =
+    resources.find(
+      (r) =>
+        String(r.url || "").includes(`/lesson/${lessonId}/quiz`) ||
+        String(r.filename || "").toUpperCase().startsWith("[QUIZ]")
+    ) || null;
+  const assignmentReviewResources = resources.filter(
+    (r) =>
+      String(r.url || "").includes(`/lesson/${lessonId}/assignment`) ||
+      String(r.filename || "").toUpperCase().startsWith("[ASSIGNMENT]")
+  );
+  const isContentRejectedContext = resources.some(
+    (r) =>
+      r.review_status === "rejected" &&
+      !String(r.url || "").includes(`/lesson/${lessonId}/quiz`) &&
+      !String(r.url || "").includes(`/lesson/${lessonId}/assignment`) &&
+      !String(r.filename || "").toUpperCase().startsWith("[QUIZ]") &&
+      !String(r.filename || "").toUpperCase().startsWith("[ASSIGNMENT]")
+  );
+  const isQuizRejectedContext = quizReviewResource?.review_status === "rejected";
+  const isAssignmentRejectedContext = assignmentReviewResources.some((r) => r.review_status === "rejected");
   const otherResources = resources.filter((r) => !isLikelyVideoResource(r) && !(r.mime_type || "").includes("text/html"));
   const pendingAttachmentFile = pendingFile && !isLikelyVideoFile(pendingFile) ? pendingFile : null;
+  const hasLessonDescription = Boolean(lessonDescription?.trim());
+  const assignmentDescriptionHtml = assignmentPreview?.description?.trim() || "";
+  const hasAssignmentAttachments = Boolean(assignmentPreview?.attachments?.length);
+  const hasAssignmentShortQuestions = assignmentShortQuestions.length > 0;
+  const hasPreviewVideo = Boolean(
+    (pendingFile && pendingFilePreviewUrl && isLikelyVideoFile(pendingFile)) || currentVideoResource
+  );
+  const hasPreviewAttachments = Boolean(pendingAttachmentFile || otherResources.length > 0);
+  const hasRichContent = useMemo(() => {
+    const plainText = String(richHtml || "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return plainText.length > 0;
+  }, [richHtml]);
+  const hasRejectedResources = useMemo(
+    () => resources.some((item) => item.review_status === "rejected"),
+    [resources]
+  );
+  const isReadOnlyByReview = courseStatus === "pending_review" && !hasRejectedResources;
   const isAssessmentLesson = lesson?.lesson_type === "quiz" || lesson?.lesson_type === "assignment";
   const activeSection: "content" | "quiz" | "assignment" = (() => {
     if (requestedSection === "quiz" || requestedSection === "assignment") return requestedSection;
@@ -881,6 +803,11 @@ export default function TeacherLessonStudioPage() {
             {successMessage}
           </div>
         )}
+        {isReadOnlyByReview && (
+          <div className="warning-message" style={{ marginBottom: "1rem" }}>
+            Khóa học đang chờ duyệt. Bạn chỉ có thể chỉnh sửa những mục đang bị từ chối.
+          </div>
+        )}
 
         {shouldPickLessonType ? (
           <div className="lesson-type-picker-screen">
@@ -889,7 +816,7 @@ export default function TeacherLessonStudioPage() {
               <button
                 type="button"
                 className="lesson-type-choice-btn choice-content"
-                disabled={selectingLessonType || saving || loading}
+                disabled={isReadOnlyByReview || selectingLessonType || saving || loading}
                 onClick={() => void chooseNewLessonType("text")}
               >
                 Bài học
@@ -897,7 +824,7 @@ export default function TeacherLessonStudioPage() {
               <button
                 type="button"
                 className="lesson-type-choice-btn choice-quiz"
-                disabled={selectingLessonType || saving || loading}
+                disabled={isReadOnlyByReview || selectingLessonType || saving || loading}
                 onClick={() => void chooseNewLessonType("quiz")}
               >
                 Quizz
@@ -905,7 +832,7 @@ export default function TeacherLessonStudioPage() {
               <button
                 type="button"
                 className="lesson-type-choice-btn choice-assignment"
-                disabled={selectingLessonType || saving || loading}
+                disabled={isReadOnlyByReview || selectingLessonType || saving || loading}
                 onClick={() => void chooseNewLessonType("assignment")}
               >
                 Bài tập
@@ -919,7 +846,7 @@ export default function TeacherLessonStudioPage() {
               <button
                 type="button"
                 className="lesson-type-choice-btn choice-assignment"
-                disabled={saving || loading}
+                disabled={isReadOnlyByReview || saving || loading}
                 onClick={() => chooseAssignmentKind("file_prompt")}
               >
                 Tự luận
@@ -927,7 +854,7 @@ export default function TeacherLessonStudioPage() {
               <button
                 type="button"
                 className="lesson-type-choice-btn choice-quiz"
-                disabled={saving || loading}
+                disabled={isReadOnlyByReview || saving || loading}
                 onClick={() => chooseAssignmentKind("short_answer")}
               >
                 Trả lời ngắn
@@ -942,782 +869,110 @@ export default function TeacherLessonStudioPage() {
             {!shouldPickLessonType && (
             <>
             {/* Block 1 - Lesson Info */}
-            <div className="studio-card">
-              <div className="studio-card-header">
-                <div className="studio-card-title">
-                  <Edit3 size={18} />
-                  <h2>Thông tin bài học</h2>
-                </div>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={saveLessonMeta}
-                >
-                  <Save size={16} />
-                  Lưu
-                </button>
-              </div>
-              <div className="studio-card-content">
-              <div className="form-group">
-                  <label className="form-label">Chương</label>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <select
-                      className="form-input"
-                      value={selectedModuleId ?? ""}
-                      onChange={(e) => setSelectedModuleId(Number(e.target.value))}
-                      disabled={saving || loading || !moduleOptions.length}
-                    >
-                      {moduleOptions.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.title}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      style={{ width: "auto", padding: "0.45rem" }}
-                      onClick={() => void createModuleFromStudio()}
-                      disabled={saving || loading}
-                      title="Thêm chương mới"
-                    >
-                      <Plus size={16} />
-                    </button>
-                  </div>
-                  {showNewModuleInput && (
-                    <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                      <input
-                        className="form-input"
-                        placeholder="Nhập tên chương mới (sẽ tạo khi bấm Lưu thông tin)"
-                        value={pendingNewModuleTitle}
-                        onChange={(e) => setPendingNewModuleTitle(e.target.value)}
-                        disabled={saving || loading}
-                      />
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        style={{ width: "auto", padding: "0.45rem" }}
-                        onClick={() => {
-                          setShowNewModuleInput(false);
-                          setPendingNewModuleTitle("");
-                        }}
-                        disabled={saving || loading}
-                        title="Hủy tạo chương mới"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">
-                    {activeSection === "quiz" ? "Quizz" : activeSection === "assignment" ? "Bài tập" : "Bài học"}
-                  </label>
-                  <input
-                    className="form-input"
-                    placeholder={
-                      activeSection === "quiz"
-                        ? "Nhập tên Quizz"
-                        : activeSection === "assignment"
-                          ? "Nhập tên bài tập"
-                          : "Nhập tên bài học"
-                    }
-                    value={lessonTitle}
-                    onChange={(e) => setLessonTitle(e.target.value)}
-                    disabled={saving || loading}
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label className="form-label">Mô tả ngắn (tùy chọn)</label>
-                  <textarea
-                    className="form-input"
-                    rows={3}
-                    placeholder="Mô tả nội dung bài học..."
-                    value={lessonDescription}
-                    onChange={(e) => setLessonDescription(e.target.value)}
-                    disabled={saving || loading}
-                  />
-                </div>
-              </div>
-            </div>
+            <LessonInfoCard
+              activeSection={activeSection}
+              lessonTitle={lessonTitle}
+              setLessonTitle={setLessonTitle}
+              lessonDescription={lessonDescription}
+              setLessonDescription={setLessonDescription}
+              moduleOptions={moduleOptions}
+              selectedModuleId={selectedModuleId}
+              setSelectedModuleId={setSelectedModuleId}
+              showNewModuleInput={showNewModuleInput}
+              setShowNewModuleInput={setShowNewModuleInput}
+              pendingNewModuleTitle={pendingNewModuleTitle}
+              setPendingNewModuleTitle={setPendingNewModuleTitle}
+              saving={saving}
+              loading={loading}
+              saveLessonMeta={saveLessonMeta}
+              createModuleFromStudio={createModuleFromStudio}
+              readOnly={isReadOnlyByReview}
+            />
 
-            {/* Block 2 - Video/Media */}
-            {activeSection === "content" && !isAssessmentLesson && (
-            <div className="studio-card">
-              <div className="studio-card-header">
-                <div className="studio-card-title">
-                  <Video size={18} />
-                  <h2>Video / Tài nguyên</h2>
-                </div>
-              </div>
-              <div className="studio-card-content">
-                <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                  <button
-                    type="button"
-                    className={videoInputMode === "file" ? "btn-primary" : "btn-secondary"}
-                    onClick={() => setVideoInputMode("file")}
-                    disabled={saving || loading}
-                    style={{ width: "auto" }}
-                  >
-                    <Upload size={16} />
-                    Upload file
-                  </button>
-                  <button
-                    type="button"
-                    className={videoInputMode === "youtube" ? "btn-primary" : "btn-secondary"}
-                    onClick={() => setVideoInputMode("youtube")}
-                    disabled={saving || loading}
-                    style={{ width: "auto" }}
-                  >
-                    <Youtube size={16} />
-                    YouTube
-                  </button>
-                </div>
+            {/* Block 2 + 3 - Content editor */}
+            <ContentEditorSection
+              activeSection={activeSection}
+              isAssessmentLesson={isAssessmentLesson}
+              videoInputMode={videoInputMode}
+              setVideoInputMode={setVideoInputMode}
+              saving={saving}
+              loading={loading}
+              setPendingFile={setPendingFile}
+              pendingFile={pendingFile}
+              uploadFile={uploadFile}
+              uploadProgress={uploadProgress}
+              youtubeUrl={youtubeUrl}
+              setYoutubeUrl={setYoutubeUrl}
+              addYoutube={addYoutube}
+              currentVideoResource={currentVideoResource}
+              currentYoutubeId={currentYoutubeId}
+              removeResource={removeResource}
+              otherResources={otherResources}
+              contentHtmlResource={contentHtmlResource}
+              saveStudio={saveStudio}
+              richHtml={richHtml}
+              setRichHtml={setRichHtml}
+              isRejectedContext={isContentRejectedContext}
+              readOnly={isReadOnlyByReview}
+            />
+            <QuizEditorSection
+              activeSection={activeSection}
+              fixedCourses={fixedCourses}
+              token={token}
+              loading={loading}
+              saving={saving}
+              courseId={courseId}
+              lessonId={lessonId}
+              lessonTitle={lessonTitle}
+              setSavedQuizQuestions={setSavedQuizQuestions}
+              setQuizPreviewConfig={setQuizPreviewConfig}
+              quizSaveSignal={quizSaveSignal}
+              setQuizSaveSignal={setQuizSaveSignal}
+              quizQuestionsDraft={quizQuestionsDraft}
+              setQuizQuestionsDraft={setQuizQuestionsDraft}
+              expandedSavedQuestions={expandedSavedQuestions}
+              setExpandedSavedQuestions={setExpandedSavedQuestions}
+              editingSavedQuestions={editingSavedQuestions}
+              setEditingSavedQuestions={setEditingSavedQuestions}
+              editingBuffers={editingBuffers}
+              setEditingBuffers={setEditingBuffers}
+              quizReviewResource={quizReviewResource}
+              isRejectedContext={Boolean(isQuizRejectedContext)}
+              readOnly={isReadOnlyByReview}
+            />
+            <AssignmentEditorSection
+              activeSection={activeSection}
+              fixedCourses={fixedCourses}
+              token={token}
+              loading={loading}
+              saving={saving}
+              lessonId={lessonId}
+              setAssignmentShortQuestions={setAssignmentShortQuestions}
+              setAssignmentPreview={setAssignmentPreview}
+              assignmentSaveSignal={assignmentSaveSignal}
+              setAssignmentSaveSignal={setAssignmentSaveSignal}
+              assignmentEditSignal={assignmentEditSignal}
+              setAssignmentEditSignal={setAssignmentEditSignal}
+              assignmentCancelEditSignal={assignmentCancelEditSignal}
+              setAssignmentCancelEditSignal={setAssignmentCancelEditSignal}
+              assignmentLocked={assignmentLocked}
+              setAssignmentLocked={setAssignmentLocked}
+              assignmentEditing={assignmentEditing}
+              setAssignmentEditing={setAssignmentEditing}
+              setAssignmentDirty={setAssignmentDirty}
+              requestedAssignmentKind={requestedAssignmentKind}
+              autoSaveKindSwitch={autoSaveKindSwitch}
+              assignmentPreview={assignmentPreview}
+              currentAssignmentKind={currentAssignmentKind}
+              assignmentShortQuestions={assignmentShortQuestions}
+              pendingAssignmentFiles={pendingAssignmentFiles}
+              setPendingAssignmentFiles={setPendingAssignmentFiles}
+              appendAssignmentAttachments={appendAssignmentAttachments}
+              removeAssignmentAttachment={removeAssignmentAttachment}
+              isRejectedContext={isAssignmentRejectedContext}
+              readOnly={isReadOnlyByReview}
+            />
 
-                {videoInputMode === "file" ? (
-                  <div className="upload-section">
-                    <div className="upload-row">
-                      <label className="btn-secondary" style={{ cursor: "pointer" }}>
-                        <Upload size={16} />
-                        Chọn file
-                        <input
-                          type="file"
-                          style={{ display: "none" }}
-                          onChange={(e) => setPendingFile(e.target.files?.[0] ?? null)}
-                          disabled={saving || loading}
-                          accept="video/*,image/*,application/pdf"
-                        />
-                      </label>
-                      <span className="file-name">
-                        {pendingFile ? pendingFile.name : "Chưa chọn file"}
-                      </span>
-                      <button
-                        type="button"
-                        className="btn-primary"
-                        onClick={uploadFile}
-                        disabled={saving || loading || !pendingFile}
-                      >
-                        {uploadProgress !== null ? `${uploadProgress}%` : "Upload"}
-                      </button>
-                    </div>
-                    {uploadProgress !== null && uploadProgress > 0 && uploadProgress < 100 && (
-                      <div className="progress-bar">
-                        <div className="progress-fill" style={{ width: `${uploadProgress}%` }} />
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="youtube-section">
-                    <div className="youtube-row">
-                      <Youtube size={18} className="youtube-icon" />
-                      <input
-                        className="form-input"
-                        placeholder="Dán link YouTube để thêm video..."
-                        value={youtubeUrl}
-                        onChange={(e) => setYoutubeUrl(e.target.value)}
-                        disabled={saving || loading}
-                      />
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={addYoutube}
-                        disabled={saving || loading || !youtubeUrl.trim()}
-                      >
-                        <Plus size={16} />
-                        Thêm
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Current video display */}
-                <div className="current-video-section">
-                  <div className="section-label">Video hiện tại</div>
-                  {currentVideoResource ? (
-                    <div className="current-video-item">
-                      <div className="video-info">
-                        {currentYoutubeId ? (
-                          <Youtube size={16} />
-                        ) : (
-                          <Video size={16} />
-                        )}
-                        <span className="video-name">
-                          {currentVideoResource.filename || currentVideoResource.url || "Video"}
-                        </span>
-                        {currentVideoResource.size_bytes && (
-                          <span className="video-size">{formatFileSize(currentVideoResource.size_bytes)}</span>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        className="btn-icon-danger"
-                        onClick={() => removeResource(currentVideoResource.id, currentVideoResource.filename || "video")}
-                        disabled={saving}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="empty-state">
-                      <Video size={32} />
-                      <p>Chưa có video. Hãy upload file hoặc thêm link YouTube.</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Other resources */}
-                {otherResources.length > 0 && (
-                  <div className="other-resources-section">
-                    <div className="section-label">Tài nguyên khác</div>
-                    {otherResources.map((r) => (
-                      <div key={r.id} className="resource-item">
-                        <div className="resource-info">
-                          <FileText size={16} />
-                          <span className="resource-name">{r.filename || "Tài nguyên"}</span>
-                          {r.size_bytes && <span className="resource-size">{formatFileSize(r.size_bytes)}</span>}
-                        </div>
-                        <button
-                          type="button"
-                          className="btn-icon-danger"
-                          onClick={() => removeResource(r.id, r.filename || "tài nguyên")}
-                          disabled={saving}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            )}
-            {activeSection === "quiz" && (
-              <div className="studio-card">
-                <div className="studio-card-header">
-                  <div className="studio-card-title">
-                    <FileText size={18} />
-                    <h2>Quizz</h2>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    onClick={() => setQuizSaveSignal((prev) => prev + 1)}
-                  >
-                    <Save size={16} />
-                    Lưu
-                  </button>
-                </div>
-                <div className="studio-card-content" style={{ paddingTop: "0.85rem" }}>
-                  <ManualQuizEditor
-                    courses={fixedCourses}
-                    token={token}
-                    loading={loading || saving}
-                    selectedCourseId={courseId}
-                    onSelectedCourseIdChange={() => {
-                      // cố định theo route hiện tại
-                    }}
-                    pickedLessonId={lessonId}
-                    embeddedMode
-                    embeddedQuizTitle={lessonTitle}
-                    showSavedQuestionsSection={false}
-                    onSavedQuestionsChange={setSavedQuizQuestions}
-                    onQuizConfigChange={setQuizPreviewConfig}
-                    hideSaveButton
-                    externalSaveSignal={quizSaveSignal}
-                    questionsOverride={quizQuestionsDraft}
-                  />
-                </div>
-              </div>
-            )}
-            {activeSection === "quiz" && (
-              <div className="studio-card">
-                <div className="studio-card-header">
-                  <div className="studio-card-title">
-                    <FileText size={18} />
-                    <h2>Danh sách câu hỏi</h2>
-                  </div>
-                  {!!quizQuestionsDraft.length && (
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        type="button"
-                        className="btn-primary"
-                        style={{ width: "auto", padding: "6px 10px" }}
-                        title="Lưu thay đổi danh sách câu hỏi"
-                        onClick={() => setQuizSaveSignal((prev) => prev + 1)}
-                      >
-                        <Save size={16} />
-                        Lưu
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        style={{ width: "auto", padding: "6px 8px" }}
-                        title="Mở rộng tất cả"
-                        onClick={() => setExpandedSavedQuestions(quizQuestionsDraft.map((_, idx) => idx))}
-                      >
-                        <ChevronDown size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        style={{ width: "auto", padding: "6px 8px" }}
-                        title="Thu gọn tất cả"
-                        onClick={() => setExpandedSavedQuestions([])}
-                      >
-                        <ChevronUp size={16} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="studio-card-content" style={{ paddingTop: "0.85rem" }}>
-                  {!quizQuestionsDraft.length ? (
-                    <p style={{ margin: 0, color: "#64748b" }}>
-                      Chưa có câu hỏi đã lưu. Nhập thủ công trong khối Quizz và bấm Lưu Quizz để cập nhật danh sách.
-                    </p>
-                  ) : (
-                    <div style={{ display: "grid", gap: 8 }}>
-                      {quizQuestionsDraft.map((item, idx) => {
-                        const correct = item.options.find((o) => o.is_correct)?.option_text || "(chưa có)";
-                        const expanded = expandedSavedQuestions.includes(idx);
-                        return (
-                          <div
-                            key={`saved-question-${idx}`}
-                            style={{
-                              border: "1px solid #e2e8f0",
-                              borderRadius: 8,
-                              padding: "8px 10px",
-                              background: "#f8fafc",
-                            }}
-                          >
-                            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-                              Câu {idx + 1}: {item.question_text || "(trống)"}
-                            </div>
-                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                              <div style={{ fontSize: 12, color: "#475569", flex: 1 }}>Đáp án đúng: {correct}</div>
-                              <button
-                                type="button"
-                                className="btn-secondary"
-                                style={{ width: "auto", padding: "4px 8px" }}
-                                title={editingSavedQuestions.includes(idx) ? "Tắt chỉnh sửa" : "Bật chỉnh sửa"}
-                                onClick={() => {
-                                  const isEditing = editingSavedQuestions.includes(idx);
-                                  setEditingSavedQuestions((prev) => {
-                                    if (isEditing) return prev.filter((x) => x !== idx);
-                                    return [...prev, idx];
-                                  });
-                                  setEditingBuffers((prev) => {
-                                    if (isEditing) {
-                                      const next = { ...prev };
-                                      delete next[idx];
-                                      return next;
-                                    }
-                                    return {
-                                      ...prev,
-                                      [idx]: JSON.parse(JSON.stringify(item)) as SavedQuizQuestion,
-                                    };
-                                  });
-                                  setExpandedSavedQuestions((prev) => (prev.includes(idx) ? prev : [...prev, idx]));
-                                }}
-                              >
-                                <Pencil size={16} />
-                              </button>
-                              <button
-                                type="button"
-                                className="btn-secondary"
-                                style={{ width: "auto", padding: "4px 8px" }}
-                                title="Xóa câu"
-                                onClick={() => setQuizQuestionsDraft((prev) => prev.filter((_, qIdx) => qIdx !== idx))}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                              <button
-                                type="button"
-                                className="btn-secondary"
-                                style={{ width: "auto", padding: "4px 8px" }}
-                                title={expanded ? "Thu gọn" : "Xem chi tiết"}
-                                onClick={() =>
-                                  setExpandedSavedQuestions((prev) =>
-                                    prev.includes(idx) ? prev.filter((x) => x !== idx) : [...prev, idx]
-                                  )
-                                }
-                              >
-                                {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                              </button>
-                            </div>
-                            {expanded && (
-                              <div style={{ marginTop: 8, display: "grid", gap: 4 }}>
-                                {editingSavedQuestions.includes(idx) ? (
-                                  <>
-                                    <div>
-                                      <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Nội dung câu hỏi</div>
-                                      <input
-                                        value={editingBuffers[idx]?.question_text ?? item.question_text}
-                                        onChange={(e) =>
-                                          setEditingBuffers((prev) => ({
-                                            ...prev,
-                                            [idx]: {
-                                              ...(prev[idx] || item),
-                                              question_text: e.target.value,
-                                            },
-                                          }))
-                                        }
-                                        placeholder="Nội dung câu hỏi"
-                                      />
-                                    </div>
-                                    {item.options.map((opt, optIdx) => (
-                                      <div key={`saved-detail-${idx}-${optIdx}`}>
-                                        <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>
-                                          {optIdx === 0 ? "Đáp án đúng" : `Đáp án ${optIdx + 1}`}
-                                        </div>
-                                        <input
-                                          value={editingBuffers[idx]?.options?.[optIdx]?.option_text ?? opt.option_text}
-                                          onChange={(e) =>
-                                            setEditingBuffers((prev) => {
-                                              const base = (prev[idx] || item) as SavedQuizQuestion;
-                                              return {
-                                                ...prev,
-                                                [idx]: {
-                                                  ...base,
-                                                  options: base.options.map((o, oIdx) =>
-                                                    oIdx === optIdx ? { ...o, option_text: e.target.value } : o
-                                                  ),
-                                                },
-                                              };
-                                            })
-                                          }
-                                          placeholder={`Đáp án ${String.fromCharCode(65 + optIdx)}`}
-                                        />
-                                      </div>
-                                    ))}
-                                    <button
-                                      type="button"
-                                      className="btn-secondary"
-                                      style={{ width: "auto", marginTop: 4 }}
-                                      onClick={() =>
-                                        setEditingBuffers((prev) => {
-                                          const base = (prev[idx] || item) as SavedQuizQuestion;
-                                          return {
-                                            ...prev,
-                                            [idx]: {
-                                              ...base,
-                                              options: [...base.options, { option_text: "", is_correct: false }],
-                                            },
-                                          };
-                                        })
-                                      }
-                                    >
-                                      + Thêm đáp án
-                                    </button>
-                                    <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                                      <button
-                                        type="button"
-                                        className="btn-primary"
-                                        style={{ width: "auto" }}
-                                        disabled={
-                                          !editingBuffers[idx] ||
-                                          JSON.stringify(editingBuffers[idx]) === JSON.stringify(item)
-                                        }
-                                        onClick={() => {
-                                          const buf = editingBuffers[idx];
-                                          if (!buf) return;
-                                          setQuizQuestionsDraft((prev) => prev.map((q, qIdx) => (qIdx === idx ? buf : q)));
-                                          setEditingSavedQuestions((prev) => prev.filter((x) => x !== idx));
-                                          setEditingBuffers((prev) => {
-                                            const next = { ...prev };
-                                            delete next[idx];
-                                            return next;
-                                          });
-                                        }}
-                                      >
-                                        Lưu
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="btn-secondary"
-                                        style={{ width: "auto" }}
-                                        onClick={() => {
-                                          setEditingSavedQuestions((prev) => prev.filter((x) => x !== idx));
-                                          setEditingBuffers((prev) => {
-                                            const next = { ...prev };
-                                            delete next[idx];
-                                            return next;
-                                          });
-                                        }}
-                                      >
-                                        Hủy
-                                      </button>
-                                    </div>
-                                  </>
-                                ) : (
-                                  <>
-                                    <div style={{ fontSize: 12, color: "#475569" }}>{item.question_text || "(trống)"}</div>
-                                    <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
-                                      {item.options.map((opt, optIdx) => (
-                                        <div
-                                          key={`saved-detail-view-${idx}-${optIdx}`}
-                                          style={{
-                                            fontSize: 12,
-                                            color: "#334155",
-                                            border: "1px solid #e2e8f0",
-                                            borderRadius: 8,
-                                            padding: "8px 10px",
-                                            background: "#ffffff",
-                                          }}
-                                        >
-                                          {String.fromCharCode(65 + optIdx)}. {opt.option_text || "(trống)"}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            {activeSection === "assignment" && (
-              <div className="studio-card">
-                <div className="studio-card-header">
-                  <div className="studio-card-title">
-                    <FileText size={18} />
-                    <h2>Bài tập</h2>
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {/* <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={switchAssignmentKindWithConfirm}
-                      disabled={saving || loading}
-                      title="Chuyển dạng bài tập"
-                    >
-                      <RefreshCw size={16} />
-                    </button> */}
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      onClick={() => setAssignmentSaveSignal((prev) => prev + 1)}
-                    >
-                      <Save size={16} />
-                      Lưu
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={() => {
-                        if (assignmentEditing) {
-                          setAssignmentLocked(true);
-                          setAssignmentEditing(false);
-                          setAssignmentCancelEditSignal((prev) => prev + 1);
-                          return;
-                        }
-                        setAssignmentLocked(false);
-                        setAssignmentEditing(true);
-                        setAssignmentEditSignal((prev) => prev + 1);
-                      }}
-                      disabled={saving || loading || !assignmentPreview}
-                    >
-                      <Pencil size={16} />
-                      {assignmentEditing ? "Hủy chỉnh sửa" : "Chỉnh sửa"}
-                    </button>
-                  </div>
-                </div>
-                <div className="studio-card-content" style={{ paddingTop: "0.85rem" }}>
-                  <AssignmentEditor
-                    courses={fixedCourses}
-                    token={token}
-                    loading={loading || saving}
-                    pickedLessonId={lessonId}
-                    embeddedMode
-                    hidePreviewSections
-                    onShortAnswerQuestionsChange={setAssignmentShortQuestions}
-                    onAssignmentPreviewChange={setAssignmentPreview}
-                    saveSignal={assignmentSaveSignal}
-                    editSignal={assignmentEditSignal}
-                    cancelEditSignal={assignmentCancelEditSignal}
-                    forceReadOnly={assignmentLocked}
-                    hidePrimarySaveButton
-                    hideInlineEditButton
-                    onSavedSuccessfully={() => {
-                      setAssignmentLocked(true);
-                      setAssignmentEditing(false);
-                    }}
-                    onDirtyChange={setAssignmentDirty}
-                    forcedAssignmentKind={requestedAssignmentKind}
-                    hideAssignmentKindSwitch={Boolean(requestedAssignmentKind)}
-                    autoSaveOnForcedKindSwitch={autoSaveKindSwitch}
-                  />
-                </div>
-              </div>
-            )}
-            {activeSection === "assignment" && (
-              <div className="studio-card">
-                <div className="studio-card-header">
-                  <div className="studio-card-title">
-                    <FileText size={18} />
-                    <h2>
-                      {currentAssignmentKind === "short_answer"
-                        ? "Danh sách câu trả lời ngắn"
-                        : "Danh sách file đính kèm"}
-                    </h2>
-                  </div>
-                </div>
-                <div className="studio-card-content" style={{ paddingTop: "0.85rem" }}>
-                  {assignmentPreview ? (
-                    <div style={{ display: "grid", gap: 8 }}>
-                      {currentAssignmentKind === "short_answer" ? (
-                        !assignmentShortQuestions.length ? (
-                          <p style={{ margin: 0, color: "#64748b" }}>
-                            Chưa có câu hỏi trả lời ngắn. Nếu bài tập ở dạng trả lời ngắn và đã lưu, danh sách sẽ hiển thị ở đây.
-                          </p>
-                        ) : (
-                          assignmentShortQuestions
-                            .slice()
-                            .sort((a, b) => a.order_index - b.order_index)
-                            .map((item, idx) => (
-                              <div
-                                key={`assignment-short-question-${item.id}-${idx}`}
-                                style={{
-                                  border: "1px solid #e2e8f0",
-                                  borderRadius: 8,
-                                  padding: "8px 10px",
-                                  background: "#f8fafc",
-                                  fontSize: 13,
-                                  color: "#334155",
-                                }}
-                              >
-                                <strong style={{ color: "#0f172a" }}>Câu {idx + 1}:</strong> {item.question_text || "(trống)"}
-                              </div>
-                            ))
-                        )
-                      ) : (
-                        <>
-                          <div
-                            style={{
-                              border: "1px dashed #cbd5e1",
-                              borderRadius: 10,
-                              padding: "10px",
-                              background: "#f8fafc",
-                              display: "grid",
-                              gap: 8,
-                            }}
-                          >
-                            <input
-                              type="file"
-                              multiple
-                              onChange={(e) => setPendingAssignmentFiles(Array.from(e.target.files || []))}
-                              disabled={saving || loading}
-                            />
-                            <div style={{ fontSize: 12, color: "#64748b" }}>
-                              {pendingAssignmentFiles.length
-                                ? `Đã chọn ${pendingAssignmentFiles.length} file để chèn thêm.`
-                                : "Chưa chọn file mới."}
-                            </div>
-                            <button
-                              type="button"
-                              className="btn-primary"
-                              style={{ width: "fit-content" }}
-                              onClick={() => void appendAssignmentAttachments()}
-                              disabled={saving || loading || !pendingAssignmentFiles.length}
-                            >
-                              <Upload size={15} />
-                              Thêm file vào danh sách
-                            </button>
-                          </div>
-                          {assignmentPreview.attachments?.length ? (
-                        assignmentPreview.attachments.map((attachment, idx) => (
-                          <div
-                            key={`assignment-attachment-${attachment.file_path}-${idx}`}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              gap: 8,
-                              border: "1px solid #e2e8f0",
-                              borderRadius: 8,
-                              padding: "8px 10px",
-                              background: "#ffffff",
-                            }}
-                          >
-                            <div
-                              style={{
-                                fontSize: 13,
-                                color: "#334155",
-                                minWidth: 0,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                              title={attachment.file_name || "Tệp đính kèm"}
-                            >
-                              {attachment.file_name || "Tệp đính kèm"}
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <a href={attachment.signed_url} target="_blank" rel="noreferrer" className="attachment-link">
-                                <LinkIcon size={14} />
-                                Mở
-                              </a>
-                              <button
-                                type="button"
-                                className="btn-secondary"
-                                style={{ width: "auto", padding: "0.35rem 0.55rem" }}
-                                onClick={() => void removeAssignmentAttachment(attachment.file_path)}
-                                disabled={saving || loading}
-                                title="Xóa file đính kèm"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                          ) : (
-                            <div style={{ fontSize: 13, color: "#64748b" }}>Chưa có file đính kèm.</div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <p style={{ margin: 0, color: "#64748b" }}>Chưa có bài tập đã lưu để hiển thị thông tin.</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Block 3 - Rich Content */}
-            {activeSection === "content" && !isAssessmentLesson ? (
-            <div className="studio-card">
-              <div className="studio-card-header">
-                <div className="studio-card-title">
-                  <FileText size={18} />
-                  <h2>Nội dung phụ</h2>
-                </div>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={saveStudio}
-                >
-                  <Save size={16} />
-                  Lưu
-                </button>
-              </div>
-              <div className="studio-card-content">
-                <LessonRichTextEditor
-                  value={richHtml}
-                  onChange={setRichHtml}
-                  disabled={saving || loading}
-                />
-                <div className="editor-hint">
-                  <Info size={14} />
-                  <span>Hỗ trợ định dạng văn bản, hình ảnh, video nhúng. Nội dung sẽ được lưu dưới dạng HTML.</span>
-                </div>
-              </div>
-            </div>
-            ) : null}
             </>
             )}
           </div>
@@ -1767,7 +1022,7 @@ export default function TeacherLessonStudioPage() {
                         {truncateLabel(lessonTitle || lesson?.title || `Bài học #${lessonId}`)}
                       </div>
                       {/* <h3 className="preview-title">{lessonTitle || lesson?.title || `Bài học #${lessonId}`}</h3> */}
-                      <p className="preview-description">{lessonDescription?.trim() || "Chưa có mô tả."}</p>
+                      {hasLessonDescription ? <p className="preview-description">{lessonDescription?.trim()}</p> : null}
                     </div>
 
                     {activeSection === "quiz" ? (
@@ -1805,9 +1060,7 @@ export default function TeacherLessonStudioPage() {
                             )}
                           </div>
                         )}
-                        {!quizQuestionsDraft.length ? (
-                          <div className="empty-attachments">Chưa có câu hỏi quiz để xem trước.</div>
-                        ) : (
+                        {quizQuestionsDraft.length ? (
                           <div style={{ display: "grid", gap: 10 }}>
                             {quizQuestionsDraft.map((item, idx) => {
                               const shuffledOptions = shuffleBySeed(item.options || [], `${item.question_text}-${idx}`);
@@ -1839,19 +1092,12 @@ export default function TeacherLessonStudioPage() {
                               );
                             })}
                           </div>
-                        )}
-                        {quizQuestionsDraft.length > 0 && (
-                          <button type="button" className="btn-primary" style={{ width: "auto", marginTop: 8 }}>
-                            <Send size={16} />
-                            Nộp bài
-                          </button>
-                        )}
+                        ) : null}
+                        
                       </div>
                     ) : activeSection === "assignment" ? (
                       <div className="preview-content">
-                        {!assignmentPreview ? (
-                          <div className="empty-attachments">Chưa có bài tập đã lưu để xem trước.</div>
-                        ) : (
+                        {!assignmentPreview ? null : (
                           <div style={{ display: "grid", gap: 10 }}>
                             <div
                               style={{
@@ -1907,25 +1153,26 @@ export default function TeacherLessonStudioPage() {
                               )}
                             </div>
 
-                            <div
-                              className="attachment-item"
-                              style={{ alignItems: "flex-start", background: "#ffffff", borderColor: "#e2e8f0" }}
-                            >
-                              <div style={{ width: "100%" }}>
-                                {/* <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Nội dung/yêu cầu</div> */}
-                                <div
-                                  className="rich-preview"
-                                  dangerouslySetInnerHTML={{
-                                    __html: assignmentPreview.description?.trim() || "<p>Chưa có nội dung.</p>",
-                                  }}
-                                />
+                            {assignmentDescriptionHtml ? (
+                              <div
+                                className="attachment-item"
+                                style={{ alignItems: "flex-start", background: "#ffffff", borderColor: "#e2e8f0" }}
+                              >
+                                <div style={{ width: "100%" }}>
+                                  <div
+                                    className="rich-preview"
+                                    dangerouslySetInnerHTML={{
+                                      __html: assignmentDescriptionHtml,
+                                    }}
+                                  />
+                                </div>
                               </div>
-                            </div>
+                            ) : null}
 
-                            <div className="attachment-item" style={{ alignItems: "flex-start" }}>
-                              <div style={{ width: "100%" }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>File đính kèm đề bài</div>
-                                {assignmentPreview.attachments?.length ? (
+                            {hasAssignmentAttachments ? (
+                              <div className="attachment-item" style={{ alignItems: "flex-start" }}>
+                                <div style={{ width: "100%" }}>
+                                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>File đính kèm đề bài</div>
                                   <div style={{ display: "grid", gap: 6 }}>
                                     {assignmentPreview.attachments.map((a, idx) => (
                                       <div
@@ -1951,61 +1198,52 @@ export default function TeacherLessonStudioPage() {
                                       </div>
                                     ))}
                                   </div>
-                                ) : (
-                                  <div style={{ fontSize: 12, color: "#64748b" }}>Chưa có file đính kèm.</div>
-                                )}
-                              </div>
-                            </div>
-
-                            {assignmentPreview.assignment_kind === "short_answer" ? (
-                              <div className="attachment-item" style={{ alignItems: "flex-start" }}>
-                                <div style={{ width: "100%" }}>
-                                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Câu hỏi trả lời ngắn</div>
-                                  {!assignmentShortQuestions.length ? (
-                                    <div style={{ fontSize: 12, color: "#64748b" }}>Chưa có câu hỏi.</div>
-                                  ) : (
-                                    <div style={{ display: "grid", gap: 6 }}>
-                                      {assignmentShortQuestions
-                                        .slice()
-                                        .sort((a, b) => a.order_index - b.order_index)
-                                        .map((q, idx) => (
-                                          <div
-                                            key={`learner-short-${q.id}-${idx}`}
-                                            style={{
-                                              border: "1px solid #e2e8f0",
-                                              borderRadius: 8,
-                                              padding: "8px 10px",
-                                              fontSize: 12,
-                                              color: "#334155",
-                                              background: "#ffffff",
-                                            }}
-                                          >
-                                            <strong style={{ color: "#0f172a" }}>Câu {idx + 1}:</strong> {q.question_text || "(trống)"}
-                                          </div>
-                                        ))}
-                                    </div>
-                                  )}
                                 </div>
                               </div>
                             ) : null}
-                            <button type="button" className="btn-primary" style={{ maxWidth: "120px" }}>
-                              <Send size={16} />
-                              Nộp bài
-                            </button>
+
+                            {assignmentPreview.assignment_kind === "short_answer" && hasAssignmentShortQuestions ? (
+                              <div className="attachment-item" style={{ alignItems: "flex-start" }}>
+                                <div style={{ width: "100%" }}>
+                                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Câu hỏi trả lời ngắn</div>
+                                  <div style={{ display: "grid", gap: 6 }}>
+                                    {assignmentShortQuestions
+                                      .slice()
+                                      .sort((a, b) => a.order_index - b.order_index)
+                                      .map((q, idx) => (
+                                        <div
+                                          key={`learner-short-${q.id}-${idx}`}
+                                          style={{
+                                            border: "1px solid #e2e8f0",
+                                            borderRadius: 8,
+                                            padding: "8px 10px",
+                                            fontSize: 12,
+                                            color: "#334155",
+                                            background: "#ffffff",
+                                          }}
+                                        >
+                                          <strong style={{ color: "#0f172a" }}>Câu {idx + 1}:</strong> {q.question_text || "(trống)"}
+                                        </div>
+                                      ))}
+                                  </div>
+                                </div>
+                              </div>
+                            ) : null}
+                            
                           </div>
                         )}
                       </div>
                     ) : (
                       <>
                         {/* Video player */}
-                        <div className="preview-video">
-                          {pendingFile && pendingFilePreviewUrl && isLikelyVideoFile(pendingFile) ? (
-                            <video controls className="video-player">
-                              <source src={pendingFilePreviewUrl} type={pendingFile.type || "video/mp4"} />
-                              Trình duyệt không hỗ trợ phát video.
-                            </video>
-                          ) : currentVideoResource ? (
-                            currentYoutubeId ? (
+                        {hasPreviewVideo ? (
+                          <div className="preview-video">
+                            {pendingFile && pendingFilePreviewUrl && isLikelyVideoFile(pendingFile) ? (
+                              <video controls className="video-player">
+                                <source src={pendingFilePreviewUrl} type={pendingFile.type || "video/mp4"} />
+                                Trình duyệt không hỗ trợ phát video.
+                              </video>
+                            ) : currentYoutubeId ? (
                               <div className="video-embed">
                                 <iframe
                                   src={`https://www.youtube.com/embed/${currentYoutubeId}?rel=0`}
@@ -2016,63 +1254,60 @@ export default function TeacherLessonStudioPage() {
                               </div>
                             ) : (
                               <video controls className="video-player">
-                                <source src={currentVideoResource.url} type={currentVideoResource.mime_type || "video/mp4"} />
+                                <source src={currentVideoResource?.url} type={currentVideoResource?.mime_type || "video/mp4"} />
                                 Trình duyệt không hỗ trợ phát video.
                               </video>
-                            )
-                          ) : (
-                            <div className="empty-video">
-                              <Play size={32} />
-                              <p>Chưa có video để xem</p>
-                            </div>
-                          )}
-                        </div>
+                            )}
+                          </div>
+                        ) : null}
 
                         {/* Attachments preview */}
-                        <div className="preview-attachments">
-                          <div className="section-label">Tài liệu đính kèm</div>
-                          {pendingAttachmentFile && (
-                            <div className="attachment-item attachment-item-draft">
-                              <div className="attachment-left">
-                                {pendingAttachmentFile.type.startsWith("image/") ? <Image size={16} /> : <File size={16} />}
-                                <span className="attachment-name">{pendingAttachmentFile.name}</span>
-                              </div>
-                              <span className="attachment-badge-draft">Bản nháp chưa lưu</span>
-                            </div>
-                          )}
-                          {otherResources.length > 0 ? (
-                            otherResources.map((r) => (
-                              <div key={r.id} className="attachment-item">
+                        {hasPreviewAttachments ? (
+                          <div className="preview-attachments">
+                            <div className="section-label">Tài liệu đính kèm</div>
+                            {pendingAttachmentFile && (
+                              <div className="attachment-item attachment-item-draft">
                                 <div className="attachment-left">
-                                  {(r.mime_type || "").startsWith("image/") ? <Image size={16} /> : <FileText size={16} />}
-                                  <span className="attachment-name">{r.filename || "Tài liệu"}</span>
-                                  {r.size_bytes ? <span className="attachment-size">{formatFileSize(r.size_bytes)}</span> : null}
+                                  {pendingAttachmentFile.type.startsWith("image/") ? <Image size={16} /> : <File size={16} />}
+                                  <span className="attachment-name">{pendingAttachmentFile.name}</span>
                                 </div>
-                                <a
-                                  href={r.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="attachment-link"
-                                >
-                                  <LinkIcon size={14} />
-                                  Mở
-                                </a>
+                                <span className="attachment-badge-draft">Bản nháp chưa lưu</span>
                               </div>
-                            ))
-                          ) : !pendingAttachmentFile ? (
-                            <div className="empty-attachments">Chưa có tài liệu đính kèm.</div>
-                          ) : null}
-                        </div>
+                            )}
+                            {otherResources.length > 0
+                              ? otherResources.map((r) => (
+                                  <div key={r.id} className="attachment-item">
+                                    <div className="attachment-left">
+                                      {(r.mime_type || "").startsWith("image/") ? <Image size={16} /> : <FileText size={16} />}
+                                      <span className="attachment-name">{r.filename || "Tài liệu"}</span>
+                                      {r.size_bytes ? <span className="attachment-size">{formatFileSize(r.size_bytes)}</span> : null}
+                                    </div>
+                                    <a
+                                      href={r.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="attachment-link"
+                                    >
+                                      <LinkIcon size={14} />
+                                      Mở
+                                    </a>
+                                  </div>
+                                ))
+                              : null}
+                          </div>
+                        ) : null}
 
                         {/* Rich content preview */}
-                        <div className="preview-content">
-                          <div
-                            className="rich-preview"
-                            dangerouslySetInnerHTML={{
-                              __html: richHtml || "<p class='empty-content'>Chưa có nội dung phụ.</p>",
-                            }}
-                          />
-                        </div>
+                        {hasRichContent ? (
+                          <div className="preview-content">
+                            <div
+                              className="rich-preview"
+                              dangerouslySetInnerHTML={{
+                                __html: richHtml,
+                              }}
+                            />
+                          </div>
+                        ) : null}
                       </>
                     )}
                   </>
@@ -2307,6 +1542,101 @@ export default function TeacherLessonStudioPage() {
         .resource-size {
           font-size: 0.7rem;
           color: #94a3b8;
+        }
+
+        .resource-review-badge {
+          font-size: 0.68rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          border-radius: 999px;
+          padding: 0.14rem 0.48rem;
+          letter-spacing: 0.02em;
+        }
+
+        .resource-review-badge.pending {
+          color: #b45309;
+          background: #ffedd5;
+        }
+
+        .resource-review-badge.approved {
+          color: #166534;
+          background: #dcfce7;
+        }
+
+        .resource-review-badge.rejected {
+          color: #b91c1c;
+          background: #fee2e2;
+        }
+
+        .reject-reason-trigger {
+          width: 22px;
+          height: 22px;
+          border: 1px solid #fecaca;
+          border-radius: 999px;
+          background: #fff1f2;
+          color: #b91c1c;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          cursor: pointer;
+        }
+
+        .reject-reason-trigger:hover {
+          background: #ffe4e6;
+        }
+
+        .btn-resubmit-warning {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.42rem;
+          min-height: 36px;
+          padding: 0.45rem 0.8rem;
+          border-radius: 10px;
+          border: 1px solid #d97706;
+          background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+          color: #ffffff;
+          font-size: 0.84rem;
+          font-weight: 700;
+          line-height: 1;
+          cursor: pointer;
+          transition: all 0.18s ease;
+          box-shadow: 0 2px 6px rgba(217, 119, 6, 0.25);
+        }
+
+        .btn-resubmit-warning:hover:not(:disabled) {
+          background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+          border-color: #b45309;
+          box-shadow: 0 4px 10px rgba(180, 83, 9, 0.3);
+          transform: translateY(-1px);
+        }
+
+        .btn-resubmit-warning:active:not(:disabled) {
+          transform: translateY(0);
+          box-shadow: 0 1px 4px rgba(180, 83, 9, 0.24);
+        }
+
+        .btn-resubmit-warning:focus-visible {
+          outline: 2px solid #fde68a;
+          outline-offset: 2px;
+        }
+
+        .btn-resubmit-warning:disabled {
+          cursor: not-allowed;
+          opacity: 0.72;
+          transform: none;
+          box-shadow: none;
+        }
+
+        .resource-review-reason {
+          font-size: 0.72rem;
+          color: #b91c1c;
+          background: #fff1f2;
+          border: 1px solid #fecdd3;
+          border-radius: 8px;
+          padding: 0.22rem 0.45rem;
+          margin-right: 0.5rem;
         }
 
         .empty-state {

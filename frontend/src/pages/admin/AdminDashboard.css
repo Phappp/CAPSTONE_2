@@ -588,6 +588,106 @@
     border: 1px solid #e2e8f0;
     padding: 1.25rem;
   }
+
+.review-tree-root,
+.review-tree-children {
+  list-style: none;
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.review-tree-node {
+  position: relative;
+  margin: 0.35rem 0;
+}
+
+.review-tree-node::before {
+  content: "";
+  position: absolute;
+  left: -0.8rem;
+  top: 0.95rem;
+  width: 0.68rem;
+  border-top: 2px solid #94a3b8;
+}
+
+.review-tree-node::after {
+  content: "";
+  position: absolute;
+  left: -0.8rem;
+  top: -0.35rem;
+  bottom: -0.35rem;
+  border-left: 2px solid #94a3b8;
+}
+
+.review-tree-root > .review-tree-node::after {
+  top: 0.95rem;
+}
+
+.review-tree-node:last-child::after {
+  bottom: 0.95rem;
+}
+
+.review-tree-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: #ffffff;
+}
+
+.review-tree-lesson-card {
+  border-top: 1px dashed #e2e8f0;
+  background: transparent;
+}
+
+.review-tree-lesson-card.is-active {
+  background: #eef6ff;
+}
+
+  .course-review-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .course-review-detail-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 0.85rem;
+    display: grid;
+    gap: 0.3rem;
+  }
+
+  .course-review-detail-card-wide {
+    grid-column: 1 / -1;
+  }
+
+  .course-review-detail-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+  }
+
+  .course-review-detail-value {
+    font-size: 0.88rem;
+    color: #0f172a;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+
+  .course-review-detail-value.quality-pass {
+    color: #166534;
+    font-weight: 600;
+  }
+
+  .course-review-detail-value.quality-warn {
+    color: #b45309;
+    font-weight: 600;
+  }
   
   .panel-header {
     margin-bottom: 1rem;
@@ -832,6 +932,10 @@
     .keys-header {
       flex-direction: column;
       align-items: flex-start;
+    }
+
+    .course-review-detail-grid {
+      grid-template-columns: 1fr;
     }
   }
   

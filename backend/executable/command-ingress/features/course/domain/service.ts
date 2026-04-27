@@ -7,6 +7,7 @@ import CourseEnrollment from '../../../../../internal/model/course_enrollment';
 import Module from '../../../../../internal/model/modules';
 import Lesson from '../../../../../internal/model/lesson';
 import LessonResource from '../../../../../internal/model/lesson_resource';
+import LessonResourceReviewEvent from '../../../../../internal/model/lesson_resource_review_event';
 import LessonCompletion from '../../../../../internal/model/lesson_completion';
 import LessonProgress from '../../../../../internal/model/lesson_progress';
 import CourseCompletionRequirement from '../../../../../internal/model/course_completion_requirements';
@@ -84,6 +85,11 @@ import {
   QuizLearnerScoresResult,
   QuizLearnerScoresRow,
   QuizLearnerAttemptRow,
+  PendingLessonResourceQuery,
+  PendingLessonResourceListResult,
+  TeacherRejectedResourceListResult,
+  LessonResourceReviewDecision,
+  LessonResourceReviewTimelineResult,
 } from '../types';
 
 function shuffleArray<T>(items: T[]): T[] {
@@ -185,7 +191,105 @@ function isCourseEffectivelyPublished(course: any, now: Date): boolean {
   return Boolean(scheduled && scheduled.getTime() <= now.getTime());
 }
 
+function getFilenameExtension(name: string | null | undefined): string {
+  const n = String(name || '').trim().toLowerCase();
+  const idx = n.lastIndexOf('.');
+  if (idx < 0) return '';
+  return n.slice(idx + 1);
+}
+
+function parseYoutubeVideoId(inputUrl: string): string | null {
+  try {
+    const u = new URL(String(inputUrl || '').trim());
+    const host = u.hostname.replace(/^www\./, '').toLowerCase();
+    if (host === 'youtu.be') {
+      const id = u.pathname.split('/').filter(Boolean)[0] || '';
+      return id || null;
+    }
+    if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
+      const v = u.searchParams.get('v');
+      if (v) return v;
+      const parts = u.pathname.split('/').filter(Boolean);
+      const idx = parts.findIndex((p) => p === 'embed' || p === 'shorts');
+      if (idx >= 0 && parts[idx + 1]) return parts[idx + 1];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function buildYoutubeEmbedUrl(videoId: string): string {
+  const id = String(videoId || '').trim();
+  return `https://www.youtube.com/embed/${id}`;
+}
+
+function classifyResourceKind(params: { mime_type?: string | null; filename?: string | null; url?: string | null }): 'pdf' | 'word' | 'video' | 'youtube' | 'other' {
+  const mime = String(params.mime_type || '').toLowerCase();
+  const ext = getFilenameExtension(params.filename);
+  const url = String(params.url || '').toLowerCase();
+
+  if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
+  if (mime.startsWith('video/')) return 'video';
+  if (['mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv', 'ogg'].includes(ext)) return 'video';
+  if (mime === 'application/pdf' || ext === 'pdf') return 'pdf';
+  if (
+    mime === 'application/msword' ||
+    mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    ext === 'doc' ||
+    ext === 'docx'
+  ) {
+    return 'word';
+  }
+  return 'other';
+}
+
+const AUTO_QUIZ_BANK_NAME = '__AUTO_QUIZ_INTERNAL_BANK__';
+
+function stripHtmlToText(input: string): string {
+  return String(input || '')
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeTextForCompare(input: string): string {
+  return String(input || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 let courseWorkflowSchemaEnsured = false;
+async function columnExists(tableName: string, columnName: string): Promise<boolean> {
+  const rows = await AppDataSource.query(
+    `
+    SELECT COUNT(*) AS total
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ?
+      AND COLUMN_NAME = ?
+    `,
+    [tableName, columnName]
+  );
+  return Number(rows?.[0]?.total || 0) > 0;
+}
+
+async function indexExists(tableName: string, indexName: string): Promise<boolean> {
+  const rows = await AppDataSource.query(
+    `
+    SELECT COUNT(*) AS total
+    FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ?
+      AND INDEX_NAME = ?
+    `,
+    [tableName, indexName]
+  );
+  return Number(rows?.[0]?.total || 0) > 0;
+}
+
 async function ensureCourseWorkflowSchema(): Promise<void> {
   if (courseWorkflowSchemaEnsured) return;
   await AppDataSource.query(
@@ -221,6 +325,272 @@ async function ensureCourseWorkflowSchema(): Promise<void> {
       UNIQUE KEY uq_course_manager_verifications_user_id (user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `,
+  );
+  await AppDataSource.query(
+    `
+    CREATE TABLE IF NOT EXISTS lesson_resource_review_events (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      resource_id BIGINT UNSIGNED NOT NULL,
+      actor_user_id BIGINT UNSIGNED NOT NULL,
+      from_status ENUM('pending','approved','rejected') NULL,
+      to_status ENUM('pending','approved','rejected') NOT NULL,
+      decision ENUM('submit','approve','reject','resubmit') NOT NULL,
+      note TEXT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_lrr_events_resource_id (resource_id),
+      KEY idx_lrr_events_created_at (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `,
+  );
+  if (!(await columnExists('lesson_resources', 'resource_kind'))) {
+    await AppDataSource.query(
+      `ALTER TABLE lesson_resources ADD COLUMN resource_kind ENUM('pdf','word','video','youtube','other') NOT NULL DEFAULT 'other'`
+    );
+  }
+  if (!(await columnExists('lesson_resources', 'review_status'))) {
+    await AppDataSource.query(
+      `ALTER TABLE lesson_resources ADD COLUMN review_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending'`
+    );
+  }
+  if (!(await columnExists('lesson_resources', 'review_reason'))) {
+    await AppDataSource.query(`ALTER TABLE lesson_resources ADD COLUMN review_reason TEXT NULL`);
+  }
+  if (!(await columnExists('lesson_resources', 'reviewed_by'))) {
+    await AppDataSource.query(`ALTER TABLE lesson_resources ADD COLUMN reviewed_by BIGINT UNSIGNED NULL`);
+  }
+  if (!(await columnExists('lesson_resources', 'reviewed_at'))) {
+    await AppDataSource.query(`ALTER TABLE lesson_resources ADD COLUMN reviewed_at DATETIME NULL`);
+  }
+
+  if (!(await indexExists('lesson_resources', 'idx_lesson_resources_review_status'))) {
+    await AppDataSource.query(`ALTER TABLE lesson_resources ADD INDEX idx_lesson_resources_review_status (review_status)`);
+  }
+  if (!(await indexExists('lesson_resources', 'idx_lesson_resources_resource_kind'))) {
+    await AppDataSource.query(`ALTER TABLE lesson_resources ADD INDEX idx_lesson_resources_resource_kind (resource_kind)`);
+  }
+  if (!(await indexExists('lesson_resources', 'idx_lesson_resources_created_at'))) {
+    await AppDataSource.query(`ALTER TABLE lesson_resources ADD INDEX idx_lesson_resources_created_at (created_at)`);
+  }
+
+  // Data fix for historical rows created before moderation flow:
+  // old rows could be marked "approved" by default although never reviewed.
+  await AppDataSource.query(
+    `
+    UPDATE lesson_resources lr
+    LEFT JOIN (
+      SELECT resource_id,
+             SUM(CASE WHEN decision IN ('approve','reject') THEN 1 ELSE 0 END) AS reviewed_events
+      FROM lesson_resource_review_events
+      GROUP BY resource_id
+    ) ev ON ev.resource_id = lr.id
+    SET
+      lr.review_status = 'pending',
+      lr.review_reason = NULL,
+      lr.reviewed_by = NULL,
+      lr.reviewed_at = NULL
+    WHERE
+      lr.review_status = 'approved'
+      AND lr.reviewed_by IS NULL
+      AND lr.reviewed_at IS NULL
+      AND COALESCE(ev.reviewed_events, 0) = 0
+    `
+  );
+
+  // Backfill marker review-items for structured content (quiz/assignment)
+  // so admin moderation can handle them through the same lesson_resources flow.
+  await AppDataSource.query(
+    `
+    INSERT INTO lesson_resources
+      (lesson_id, resource_type, url, filename, mime_type, preview_url, size_bytes, resource_kind, review_status, review_reason, reviewed_by, reviewed_at)
+    SELECT
+      q.lesson_id,
+      'file',
+      CONCAT('internal://lesson/', q.lesson_id, '/quiz'),
+      CONCAT('[QUIZ] ', COALESCE(NULLIF(TRIM(q.title), ''), 'Quiz nội dung')),
+      'application/vnd.mindbridge.review-item',
+      NULL,
+      NULL,
+      'other',
+      'pending',
+      NULL,
+      NULL,
+      NULL
+    FROM quizzes q
+    LEFT JOIN lesson_resources lr
+      ON lr.lesson_id = q.lesson_id
+     AND lr.url = CONCAT('internal://lesson/', q.lesson_id, '/quiz')
+    WHERE lr.id IS NULL
+    `
+  );
+
+  await AppDataSource.query(
+    `
+    INSERT INTO lesson_resources
+      (lesson_id, resource_type, url, filename, mime_type, preview_url, size_bytes, resource_kind, review_status, review_reason, reviewed_by, reviewed_at)
+    SELECT
+      a.lesson_id,
+      'file',
+      CONCAT('internal://lesson/', a.lesson_id, '/assignment'),
+      CONCAT('[ASSIGNMENT] ', COALESCE(NULLIF(TRIM(a.title), ''), 'Assignment nội dung')),
+      'application/vnd.mindbridge.review-item',
+      NULL,
+      NULL,
+      'other',
+      'pending',
+      NULL,
+      NULL,
+      NULL
+    FROM assignments a
+    INNER JOIN (
+      SELECT lesson_id, MAX(id) AS max_id
+      FROM assignments
+      GROUP BY lesson_id
+    ) latest ON latest.max_id = a.id
+    LEFT JOIN lesson_resources lr
+      ON lr.lesson_id = a.lesson_id
+     AND lr.url = CONCAT('internal://lesson/', a.lesson_id, '/assignment')
+    WHERE lr.id IS NULL
+    `
+  );
+
+  // Backfill granular assignment review markers (description + attachment/{idx})
+  // and remove legacy single-marker rows (.../assignment).
+  const latestAssignments = await AppDataSource.query(
+    `
+    SELECT
+      a.id,
+      a.lesson_id,
+      a.title,
+      a.attachments,
+      legacy.id AS legacy_resource_id,
+      legacy.review_status AS legacy_review_status,
+      legacy.review_reason AS legacy_review_reason,
+      legacy.reviewed_by AS legacy_reviewed_by,
+      legacy.reviewed_at AS legacy_reviewed_at
+    FROM assignments a
+    INNER JOIN (
+      SELECT lesson_id, MAX(id) AS max_id
+      FROM assignments
+      GROUP BY lesson_id
+    ) latest ON latest.max_id = a.id
+    LEFT JOIN lesson_resources legacy
+      ON legacy.lesson_id = a.lesson_id
+     AND legacy.url = CONCAT('internal://lesson/', a.lesson_id, '/assignment')
+    `
+  );
+  for (const row of latestAssignments as any[]) {
+    const lessonId = Number(row.lesson_id);
+    if (!Number.isFinite(lessonId) || lessonId <= 0) continue;
+    const baseTitle = String(row.title || '').trim() || 'Assignment nội dung';
+    let attachments: any[] = [];
+    try {
+      const parsed = typeof row.attachments === 'string' ? JSON.parse(row.attachments) : row.attachments;
+      attachments = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      attachments = [];
+    }
+    const specs: Array<{ url: string; filename: string; mime_type: string }> = [
+      {
+        url: `internal://lesson/${lessonId}/assignment/description`,
+        filename: `[ASSIGNMENT] ${baseTitle} - Mô tả`.slice(0, 255),
+        mime_type: 'text/html',
+      },
+      ...attachments.map((att: any, idx: number) => {
+        const attName = String(att?.file_name || '').trim() || `Tệp đính kèm #${idx + 1}`;
+        return {
+          url: `internal://lesson/${lessonId}/assignment/attachment/${idx}`,
+          filename: `[ASSIGNMENT] ${baseTitle} - ${attName}`.slice(0, 255),
+          mime_type: 'application/octet-stream',
+        };
+      }),
+    ];
+    const existingRows = await AppDataSource.query(
+      `
+      SELECT id, url
+      FROM lesson_resources
+      WHERE lesson_id = ?
+        AND url LIKE ?
+      `,
+      [lessonId, `internal://lesson/${lessonId}/assignment/%`]
+    );
+    const existingByUrl = new Map<string, any>();
+    for (const ex of existingRows as any[]) existingByUrl.set(String(ex.url || ''), ex);
+
+    const legacyStatus = String(row.legacy_review_status || 'pending');
+    const legacyReason = row.legacy_review_reason ?? null;
+    const legacyReviewedBy = row.legacy_reviewed_by != null ? Number(row.legacy_reviewed_by) : null;
+    const legacyReviewedAt = row.legacy_reviewed_at ?? null;
+
+    for (const spec of specs) {
+      const existing = existingByUrl.get(spec.url);
+      if (existing) {
+        await AppDataSource.query(
+          `
+          UPDATE lesson_resources
+          SET filename = ?, mime_type = ?
+          WHERE id = ?
+          `,
+          [spec.filename, spec.mime_type, Number(existing.id)]
+        );
+        continue;
+      }
+      await AppDataSource.query(
+        `
+        INSERT INTO lesson_resources
+          (lesson_id, resource_type, url, filename, mime_type, preview_url, size_bytes, resource_kind, review_status, review_reason, reviewed_by, reviewed_at)
+        VALUES
+          (?, 'file', ?, ?, ?, NULL, NULL, 'other', ?, ?, ?, ?)
+        `,
+        [
+          lessonId,
+          spec.url,
+          spec.filename,
+          spec.mime_type,
+          legacyStatus === 'approved' || legacyStatus === 'rejected' ? legacyStatus : 'pending',
+          legacyStatus === 'rejected' ? legacyReason : null,
+          legacyStatus === 'approved' || legacyStatus === 'rejected' ? legacyReviewedBy : null,
+          legacyStatus === 'approved' || legacyStatus === 'rejected' ? legacyReviewedAt : null,
+        ]
+      );
+    }
+
+    if (row.legacy_resource_id != null) {
+      await AppDataSource.query(`DELETE FROM lesson_resources WHERE id = ?`, [Number(row.legacy_resource_id)]);
+    }
+  }
+
+  // Backfill YouTube resources created before embed normalization.
+  await AppDataSource.query(
+    `
+    UPDATE lesson_resources
+    SET resource_kind = 'youtube',
+        resource_type = 'video'
+    WHERE LOWER(COALESCE(url, '')) LIKE '%youtube.com%'
+       OR LOWER(COALESCE(url, '')) LIKE '%youtu.be%'
+    `
+  );
+
+  await AppDataSource.query(
+    `
+    UPDATE lesson_resources
+    SET url = CONCAT(
+      'https://www.youtube.com/embed/',
+      SUBSTRING_INDEX(SUBSTRING_INDEX(url, 'v=', -1), '&', 1)
+    )
+    WHERE LOWER(COALESCE(url, '')) LIKE '%youtube.com/watch?v=%'
+    `
+  );
+
+  await AppDataSource.query(
+    `
+    UPDATE lesson_resources
+    SET url = CONCAT(
+      'https://www.youtube.com/embed/',
+      SUBSTRING_INDEX(SUBSTRING_INDEX(url, '?', 1), '/', -1)
+    )
+    WHERE LOWER(COALESCE(url, '')) LIKE '%youtu.be/%'
+    `
   );
   courseWorkflowSchemaEnsured = true;
 }
@@ -421,15 +791,170 @@ export class CourseServiceImpl implements CourseService {
     );
   }
 
-  private async ensureCourseMeetsQualityGate(courseId: number): Promise<void> {
+  private async logLessonResourceReviewEvent(params: {
+    resourceId: number;
+    actorUserId: number;
+    fromStatus: 'pending' | 'approved' | 'rejected' | null;
+    toStatus: 'pending' | 'approved' | 'rejected';
+    decision: 'submit' | 'approve' | 'reject' | 'resubmit';
+    note?: string | null;
+  }): Promise<void> {
+    await ensureCourseWorkflowSchema();
+    await AppDataSource.query(
+      `
+      INSERT INTO lesson_resource_review_events (resource_id, actor_user_id, from_status, to_status, decision, note)
+      VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [params.resourceId, params.actorUserId, params.fromStatus, params.toStatus, params.decision, params.note ?? null],
+    );
+  }
+
+  private async upsertStructuredLessonReviewResource(params: {
+    lessonId: number;
+    actorUserId: number;
+    kind: 'quiz' | 'assignment';
+    title?: string | null;
+  }): Promise<void> {
+    const resourceRepo = AppDataSource.getRepository(LessonResource);
+    const markerUrl = `internal://lesson/${params.lessonId}/${params.kind}`;
+    const markerName =
+      params.kind === 'quiz'
+        ? `[QUIZ] ${String(params.title || 'Quiz nội dung').trim()}`
+        : `[ASSIGNMENT] ${String(params.title || 'Assignment nội dung').trim()}`;
+
+    const existing = await resourceRepo.findOne({
+      where: { lesson_id: params.lessonId, url: markerUrl } as any,
+      order: { id: 'DESC' } as any,
+    });
+    const fromStatus = existing
+      ? (String((existing as any).review_status || 'pending') as 'pending' | 'approved' | 'rejected')
+      : null;
+
+    if (!existing) {
+      const created = await resourceRepo.save(
+        resourceRepo.create({
+          lesson_id: params.lessonId,
+          resource_type: 'file',
+          resource_kind: 'other',
+          url: markerUrl,
+          filename: markerName.slice(0, 255),
+          mime_type: 'application/vnd.mindbridge.review-item',
+          size_bytes: null,
+          preview_url: null,
+          review_status: 'pending',
+          review_reason: null,
+          reviewed_by: null,
+          reviewed_at: null,
+        } as any)
+      );
+      await this.logLessonResourceReviewEvent({
+        resourceId: Number((created as any).id),
+        actorUserId: params.actorUserId,
+        fromStatus: null,
+        toStatus: 'pending',
+        decision: 'submit',
+        note: `structured:${params.kind}`,
+      });
+      return;
+    }
+
+    await resourceRepo.update(
+      { id: (existing as any).id } as any,
+      {
+        filename: markerName.slice(0, 255),
+        review_status: 'pending',
+        review_reason: null,
+        reviewed_by: null,
+        reviewed_at: null,
+      } as any
+    );
+    await this.logLessonResourceReviewEvent({
+      resourceId: Number((existing as any).id),
+      actorUserId: params.actorUserId,
+      fromStatus,
+      toStatus: 'pending',
+      decision: fromStatus === 'rejected' ? 'resubmit' : 'submit',
+      note: `structured:${params.kind}`,
+    });
+  }
+
+  private async ensurePendingReviewFallsBackToDraftOnContentChange(
+    subjectUserId: number,
+    courseId: number,
+    note: string
+  ): Promise<void> {
+    const courseRepo = AppDataSource.getRepository(Course);
+    const course = await courseRepo.findOne({ where: { id: courseId } as any });
+    if (!course || (course as any).deleted_at) return;
+    const fromStatus = String((course as any).status || '') as CourseStatus;
+    if (fromStatus !== 'pending_review') return;
+    (course as any).status = 'draft';
+    (course as any).published_at = null;
+    (course as any).publish_scheduled_at = null;
+    await courseRepo.save(course as any);
+    await this.logCourseReviewEvent({
+      courseId,
+      actorUserId: subjectUserId,
+      fromStatus,
+      toStatus: 'draft',
+      decision: 'revert_draft',
+      note,
+    });
+  }
+
+  private ensureCourseEditableForTeacher(course: any): void {
+    const status = String((course as any)?.status || '');
+    if (status === 'pending_review') {
+      throw new Error('Khóa học đang chờ duyệt. Vui lòng thu hồi yêu cầu duyệt để tiếp tục chỉnh sửa.');
+    }
+  }
+
+  private async ensureCanEditRejectedResourceWhilePendingReview(
+    course: any,
+    params: { resourceId?: number; lessonId?: number; markerPrefix?: 'quiz' | 'assignment' }
+  ): Promise<void> {
+    const status = String((course as any)?.status || '');
+    if (status !== 'pending_review') return;
+
+    const resourceRepo = AppDataSource.getRepository(LessonResource);
+    if (params.resourceId && Number(params.resourceId) > 0) {
+      const row = await resourceRepo.findOne({ where: { id: Number(params.resourceId) } as any });
+      if (row && String((row as any).review_status || '') === 'rejected') return;
+      throw new Error('Khóa học đang chờ duyệt. Chỉ được sửa mục đang bị từ chối.');
+    }
+
+    if (params.lessonId) {
+      const qb = resourceRepo
+        .createQueryBuilder('r')
+        .where('r.lesson_id = :lessonId', { lessonId: Number(params.lessonId) })
+        .andWhere('r.review_status = :status', { status: 'rejected' });
+      if (params.markerPrefix) {
+        const markerPrefix = `internal://lesson/${Number(params.lessonId)}/${params.markerPrefix}`;
+        qb.andWhere('r.url LIKE :prefix', { prefix: `${markerPrefix}%` });
+      }
+      const rejectedMarker = await qb.getOne();
+      if (rejectedMarker) return;
+      throw new Error('Khóa học đang chờ duyệt. Chỉ được sửa mục đang bị từ chối.');
+    }
+
+    throw new Error('Khóa học đang chờ duyệt. Chỉ được sửa mục đang bị từ chối.');
+  }
+
+  private async ensureCourseMeetsSubmissionGate(courseId: number): Promise<void> {
     const courseRepo = AppDataSource.getRepository(Course);
     const moduleRepo = AppDataSource.getRepository(Module);
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const resourceRepo = AppDataSource.getRepository(LessonResource);
+    const quizRepo = AppDataSource.getRepository(Quiz);
+    const quizQuestionRepo = AppDataSource.getRepository(QuizQuestion);
+    const assignmentRepo = AppDataSource.getRepository(Assignment);
     const course = await courseRepo.findOne({ where: { id: courseId } as any });
     if (!course || (course as any).deleted_at) throw new Error('Không tìm thấy khóa học.');
 
     const issues: string[] = [];
+    const MIN_QUIZ_QUESTIONS = 3;
+    const MIN_FILE_PROMPT_DESC_LENGTH = 20;
+    const MIN_RICH_TEXT_CONTENT_LENGTH = 30;
     if (!String(course.title || '').trim()) issues.push('Thiếu tiêu đề khóa học.');
     if (!String((course as any).short_description || '').trim()) issues.push('Thiếu mô tả ngắn.');
     if (!String((course as any).full_description || '').trim()) issues.push('Thiếu mô tả chi tiết.');
@@ -446,9 +971,197 @@ export class CourseServiceImpl implements CourseService {
     const resources = lessonIds.length
       ? await resourceRepo.createQueryBuilder('r').where('r.lesson_id IN (:...lessonIds)', { lessonIds }).getMany()
       : [];
+    const resourcesByLesson = new Map<number, any[]>();
+    for (const r of resources as any[]) {
+      const lid = Number((r as any).lesson_id);
+      const arr = resourcesByLesson.get(lid) || [];
+      arr.push(r);
+      resourcesByLesson.set(lid, arr);
+    }
+
+    const quizzes = lessonIds.length
+      ? await quizRepo.find({ where: { lesson_id: In(lessonIds) } as any })
+      : [];
+    const quizByLesson = new Map<number, any>();
+    for (const q of quizzes as any[]) {
+      quizByLesson.set(Number((q as any).lesson_id), q);
+    }
+    const quizIds = (quizzes as any[]).map((q) => Number((q as any).id)).filter((id) => Number.isFinite(id));
+    const quizQuestions = quizIds.length
+      ? await quizQuestionRepo.find({
+          where: { quiz_id: In(quizIds) } as any,
+          relations: ['bankQuestion', 'bankQuestion.options'],
+        })
+      : [];
+    const quizQuestionsByQuizId = new Map<number, any[]>();
+    for (const qq of quizQuestions as any[]) {
+      const qid = Number((qq as any).quiz_id);
+      const arr = quizQuestionsByQuizId.get(qid) || [];
+      arr.push(qq);
+      quizQuestionsByQuizId.set(qid, arr);
+    }
+
+    const assignments = lessonIds.length
+      ? await assignmentRepo.find({ where: { lesson_id: In(lessonIds) } as any, order: { id: 'DESC' } as any })
+      : [];
+    const assignmentByLesson = new Map<number, any>();
+    for (const a of assignments as any[]) {
+      const lid = Number((a as any).lesson_id);
+      if (!assignmentByLesson.has(lid)) assignmentByLesson.set(lid, a);
+    }
+
+    for (const lesson of lessons as any[]) {
+      const lessonId = Number((lesson as any).id);
+      const lessonTitle = String((lesson as any).title || `#${lessonId}`).trim();
+      const lessonType = String((lesson as any).lesson_type || 'text');
+      const lessonResources = resourcesByLesson.get(lessonId) || [];
+      const allKinds = lessonResources.map((r) =>
+        classifyResourceKind({
+          mime_type: (r as any).mime_type,
+          filename: (r as any).filename,
+          url: (r as any).url,
+        })
+      );
+
+      if (lessonType === 'quiz') {
+        const quiz = quizByLesson.get(lessonId);
+        if (!quiz) {
+          issues.push(`Bài Quiz "${lessonTitle}" chưa có bộ câu hỏi.`);
+          continue;
+        }
+        const qRows = quizQuestionsByQuizId.get(Number((quiz as any).id)) || [];
+        if (qRows.length < MIN_QUIZ_QUESTIONS) {
+          issues.push(`Bài Quiz "${lessonTitle}" cần ít nhất ${MIN_QUIZ_QUESTIONS} câu hỏi.`);
+          continue;
+        }
+        qRows.forEach((row, idx) => {
+          const qText = String((row as any)?.bankQuestion?.question_text || '').trim();
+          if (!qText) {
+            issues.push(`Bài Quiz "${lessonTitle}" có câu ${idx + 1} bị trống nội dung.`);
+            return;
+          }
+          const optsRaw = Array.isArray((row as any)?.bankQuestion?.options) ? (row as any).bankQuestion.options : [];
+          const opts = optsRaw
+            .map((o: any) => ({
+              text: String(o?.option_text || '').trim(),
+              isCorrect: Boolean(o?.is_correct),
+            }))
+            .sort((a: any, b: any) => normalizeTextForCompare(a.text).localeCompare(normalizeTextForCompare(b.text)));
+          if (opts.length < 2) {
+            issues.push(`Bài Quiz "${lessonTitle}" có câu ${idx + 1} chưa đủ lựa chọn.`);
+            return;
+          }
+          if (opts.some((o: any) => !o.text)) {
+            issues.push(`Bài Quiz "${lessonTitle}" có câu ${idx + 1} chứa đáp án rỗng.`);
+            return;
+          }
+          const normalizedSet = new Set(opts.map((o: any) => normalizeTextForCompare(o.text)));
+          if (normalizedSet.size !== opts.length) {
+            issues.push(`Bài Quiz "${lessonTitle}" có câu ${idx + 1} bị trùng đáp án.`);
+            return;
+          }
+          const correctCount = opts.filter((o: any) => o.isCorrect).length;
+          if (correctCount !== 1) {
+            issues.push(`Bài Quiz "${lessonTitle}" có câu ${idx + 1} cần đúng 1 đáp án chính xác.`);
+          }
+        });
+        continue;
+      }
+
+      if (lessonType === 'assignment') {
+        const assignment = assignmentByLesson.get(lessonId);
+        if (!assignment) {
+          issues.push(`Bài tập "${lessonTitle}" chưa được cấu hình.`);
+          continue;
+        }
+        const title = String((assignment as any).title || '').trim();
+        const description = stripHtmlToText(String((assignment as any).description || ''));
+        const instructions = stripHtmlToText(String((assignment as any).instructions || ''));
+        const formats = safeJsonParse<any[]>((assignment as any).submission_format, []);
+        const hasSubmissionCriteria = instructions.length > 0 || (Array.isArray(formats) && formats.length > 0);
+        const kind = String((assignment as any).assignment_kind || 'file_prompt') === 'short_answer' ? 'short_answer' : 'file_prompt';
+
+        if (!title) issues.push(`Bài tập "${lessonTitle}" thiếu tiêu đề.`);
+        if (!description) issues.push(`Bài tập "${lessonTitle}" thiếu mô tả yêu cầu.`);
+        if (!hasSubmissionCriteria) {
+          issues.push(`Bài tập "${lessonTitle}" thiếu tiêu chí nộp bài (hướng dẫn hoặc định dạng nộp).`);
+        }
+
+        if (kind === 'short_answer') {
+          const shortQuestions = safeJsonParse<any[]>((assignment as any).short_answer_questions, []);
+          const validShortQuestions = shortQuestions.filter((q: any) => String(q?.question_text || '').trim().length > 0);
+          if (validShortQuestions.length < 1) {
+            issues.push(`Bài tập "${lessonTitle}" dạng trả lời ngắn cần ít nhất 1 câu hỏi.`);
+          }
+        } else {
+          if (description.length < MIN_FILE_PROMPT_DESC_LENGTH) {
+            issues.push(
+              `Bài tập "${lessonTitle}" dạng tự luận cần mô tả đề bài rõ ràng (tối thiểu ${MIN_FILE_PROMPT_DESC_LENGTH} ký tự).`
+            );
+          }
+        }
+        continue;
+      }
+
+      const hasVideo = lessonResources.some((r, idx) => {
+        const kind = allKinds[idx];
+        const mime = String((r as any).mime_type || '').toLowerCase();
+        return kind === 'video' || kind === 'youtube' || mime.startsWith('video/');
+      });
+      const hasHtmlContent = lessonResources.some((r) => {
+        const mime = String((r as any).mime_type || '').toLowerCase();
+        const size = Number((r as any).size_bytes ?? 0);
+        return mime.includes('text/html') && size >= MIN_RICH_TEXT_CONTENT_LENGTH;
+      });
+      const hasAttachment = lessonResources.some((r, idx) => {
+        const kind = allKinds[idx];
+        const mime = String((r as any).mime_type || '').toLowerCase();
+        return (
+          kind === 'pdf' ||
+          kind === 'word' ||
+          kind === 'other' ||
+          ((mime && !mime.includes('text/html') && !mime.startsWith('video/')) || (!mime && kind !== 'video' && kind !== 'youtube'))
+        );
+      });
+      if (!hasVideo && !hasHtmlContent && !hasAttachment) {
+        issues.push(
+          `Bài học "${lessonTitle}" chưa có nội dung hợp lệ (cần video, rich text hoặc tài liệu đính kèm).`
+        );
+      }
+    }
+
     if (resources.length < 1) issues.push('Khóa học cần ít nhất 1 tài nguyên học tập.');
+    const rejectedResources = (resources as any[]).filter((r) => String((r as any).review_status || '') === 'rejected');
+    if (rejectedResources.length > 0) {
+      issues.push('Có tài nguyên bị từ chối, vui lòng cập nhật trước khi gửi duyệt.');
+    }
     if (issues.length > 0) {
       throw new Error(`Khóa học chưa đạt điều kiện duyệt: ${issues.join(' ')}`);
+    }
+  }
+
+  private async ensureCourseReadyForPublish(courseId: number): Promise<void> {
+    await this.ensureCourseMeetsSubmissionGate(courseId);
+    const resourceRepo = AppDataSource.getRepository(LessonResource);
+    const moduleRepo = AppDataSource.getRepository(Module);
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+
+    const modules = await moduleRepo.find({ where: { course_id: courseId } as any });
+    const moduleIds = modules.map((m: any) => Number(m.id));
+    const lessons = moduleIds.length
+      ? await lessonRepo.createQueryBuilder('l').where('l.module_id IN (:...moduleIds)', { moduleIds }).getMany()
+      : [];
+    const lessonIds = lessons.map((l: any) => Number(l.id));
+    const resources = lessonIds.length
+      ? await resourceRepo.createQueryBuilder('r').where('r.lesson_id IN (:...lessonIds)', { lessonIds }).getMany()
+      : [];
+    const pendingCount = (resources as any[]).filter((r) => String((r as any).review_status || 'pending') === 'pending').length;
+    if (pendingCount > 0) {
+      throw new Error(`Còn ${pendingCount} tài nguyên chờ duyệt. Vui lòng xử lý hết trước khi xuất bản.`);
+    }
+    const rejectedCount = (resources as any[]).filter((r) => String((r as any).review_status || '') === 'rejected').length;
+    if (rejectedCount > 0) {
+      throw new Error(`Còn ${rejectedCount} tài nguyên bị từ chối. Vui lòng cập nhật và gửi lại trước khi xuất bản.`);
     }
   }
 
@@ -1467,7 +2180,7 @@ export class CourseServiceImpl implements CourseService {
   private async ensureCanAccessLesson(subjectUserId: number, courseId: number, lessonId: number): Promise<void> {
     const isManager = await isUserCourseManager(subjectUserId);
     if (isManager) {
-      await this.ensureOwnCourse(subjectUserId, courseId);
+      await this.ensureCourseOwnedOrAdmin(subjectUserId, courseId);
       return;
     }
 
@@ -1693,7 +2406,7 @@ export class CourseServiceImpl implements CourseService {
 
   async getMyCourseCompletionRules(subjectUserId: number, courseId: number): Promise<CourseCompletionRules> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    await this.ensureCourseOwnedOrAdmin(subjectUserId, courseId);
 
     const repo = AppDataSource.getRepository(CourseCompletionRequirement);
     const row = await repo.findOne({ where: { course_id: courseId } as any });
@@ -1714,7 +2427,8 @@ export class CourseServiceImpl implements CourseService {
     request: UpdateCourseCompletionRulesRequest
   ): Promise<CourseCompletionRules> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    this.ensureCourseEditableForTeacher(ownCourse);
 
     const repo = AppDataSource.getRepository(CourseCompletionRequirement);
     const existing = await repo.findOne({ where: { course_id: courseId } as any });
@@ -2181,7 +2895,7 @@ export class CourseServiceImpl implements CourseService {
       };
       const item = mapCourseRowToItem(row);
       try {
-        await this.ensureCourseMeetsQualityGate(Number(item.id));
+        await this.ensureCourseMeetsSubmissionGate(Number(item.id));
         item.quality_gate = { ready: true, issues: [] };
       } catch (e: any) {
         item.quality_gate = {
@@ -2216,10 +2930,13 @@ export class CourseServiceImpl implements CourseService {
   async getMyCourseDetail(subjectUserId: number, courseId: number): Promise<CourseListItem> {
     await ensureUserIsCourseManager(subjectUserId);
     const courseRepo = AppDataSource.getRepository(Course);
+    const admin = await isUserAdmin(subjectUserId);
 
     const qb = courseRepo.createQueryBuilder('c');
     qb.where('c.id = :id', { id: courseId });
-    qb.andWhere('c.created_by = :uid', { uid: subjectUserId });
+    if (!admin) {
+      qb.andWhere('c.created_by = :uid', { uid: subjectUserId });
+    }
     qb.andWhere('c.deleted_at IS NULL');
 
     qb.addSelect((subQb) => subQb.select('COUNT(*)').from(CourseEnrollment, 'ce').where('ce.course_id = c.id'), 'learners_count');
@@ -2260,7 +2977,7 @@ export class CourseServiceImpl implements CourseService {
     };
     const item = mapCourseRowToItem(row);
     try {
-      await this.ensureCourseMeetsQualityGate(Number(item.id));
+      await this.ensureCourseMeetsSubmissionGate(Number(item.id));
       item.quality_gate = { ready: true, issues: [] };
     } catch (e: any) {
       item.quality_gate = {
@@ -2273,7 +2990,7 @@ export class CourseServiceImpl implements CourseService {
 
   async getMyCourseManagerOverview(subjectUserId: number, courseId: number): Promise<CourseManagerOverview> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    await this.ensureCourseOwnedOrAdmin(subjectUserId, courseId);
 
     const detail = await this.getMyCourseDetail(subjectUserId, courseId);
     const enrollRepo = AppDataSource.getRepository(CourseEnrollment);
@@ -2393,13 +3110,14 @@ export class CourseServiceImpl implements CourseService {
 
   async getMyCoursePrerequisiteGraph(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteGraph> {
     await ensureUserIsCourseManager(subjectUserId);
-    const root = await this.ensureOwnCourse(subjectUserId, courseId);
+    const root = await this.ensureCourseOwnedOrAdmin(subjectUserId, courseId);
     return this.buildPrerequisiteGraph(root as any, subjectUserId, 'published_or_own');
   }
 
   async listMyCoursePrerequisiteOptions(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteOption[]> {
     await ensureUserIsCourseManager(subjectUserId);
-    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    const ownCourse = await this.ensureCourseOwnedOrAdmin(subjectUserId, courseId);
+    const ownerId = Number((ownCourse as any)?.created_by || subjectUserId);
     const selectedSet = new Set<number>(parsePrerequisiteCourseIds((ownCourse as any).prerequisites));
     const courseRepo = AppDataSource.getRepository(Course);
     const now = new Date();
@@ -2410,7 +3128,7 @@ export class CourseServiceImpl implements CourseService {
       .andWhere('c.id <> :courseId', { courseId })
       .andWhere(
         `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now) OR c.created_by = :uid)`,
-        { published: 'published', draft: 'draft', now, uid: subjectUserId }
+        { published: 'published', draft: 'draft', now, uid: ownerId }
       )
       .orderBy('c.title', 'ASC')
       .addOrderBy('c.id', 'ASC')
@@ -2449,6 +3167,7 @@ export class CourseServiceImpl implements CourseService {
 
     const course = await courseRepo.findOne({ where: { id: courseId, created_by: subjectUserId } as any });
     if (!course || (course as any).deleted_at) throw new Error('Không tìm thấy khóa học.');
+    this.ensureCourseEditableForTeacher(course);
 
     if (request.title != null) {
       course.title = request.title;
@@ -2502,8 +3221,12 @@ export class CourseServiceImpl implements CourseService {
     if (!course || (course as any).deleted_at) throw new Error('Không tìm thấy khóa học.');
     const fromStatus = String(course.status) as CourseStatus;
 
+    if (fromStatus === 'pending_review' && status !== 'draft') {
+      throw new Error('Khóa học đang chờ duyệt. Chỉ có thể thu hồi yêu cầu duyệt về bản nháp.');
+    }
+
     if (status === 'published') {
-      await this.ensureCourseMeetsQualityGate(courseId);
+      await this.ensureCourseReadyForPublish(courseId);
       const canDirectPublish = await isUserAdmin(subjectUserId);
       if (canDirectPublish) {
         course.status = 'published';
@@ -2540,7 +3263,7 @@ export class CourseServiceImpl implements CourseService {
         decision: 'revert_draft',
       });
     } else if (status === 'pending_review') {
-      await this.ensureCourseMeetsQualityGate(courseId);
+      await this.ensureCourseMeetsSubmissionGate(courseId);
       course.status = 'pending_review';
       course.published_at = null;
       await this.logCourseReviewEvent({
@@ -2623,7 +3346,7 @@ export class CourseServiceImpl implements CourseService {
         lessons_count: r.lessons_count,
       });
       try {
-        await this.ensureCourseMeetsQualityGate(Number(item.id));
+        await this.ensureCourseMeetsSubmissionGate(Number(item.id));
         item.quality_gate = { ready: true, issues: [] };
       } catch (e: any) {
         item.quality_gate = {
@@ -2657,7 +3380,9 @@ export class CourseServiceImpl implements CourseService {
     if (String(course.status) !== 'pending_review') {
       throw new Error('Khóa học không ở trạng thái chờ duyệt.');
     }
-    await this.ensureCourseMeetsQualityGate(courseId);
+    if (decision === 'approve') {
+      await this.ensureCourseReadyForPublish(courseId);
+    }
     const fromStatus = String(course.status) as CourseStatus;
 
     if (decision === 'approve') {
@@ -2673,6 +3398,9 @@ export class CourseServiceImpl implements CourseService {
         note,
       });
     } else if (decision === 'reject') {
+      if (!String(note || '').trim()) {
+        throw new Error('Bạn phải nhập lý do khi từ chối khóa học.');
+      }
       course.status = 'draft';
       course.published_at = null;
       (course as any).publish_scheduled_at = null;
@@ -2752,6 +3480,261 @@ export class CourseServiceImpl implements CourseService {
     };
   }
 
+  async listPendingLessonResourcesByAdmin(
+    subjectUserId: number,
+    query: PendingLessonResourceQuery
+  ): Promise<PendingLessonResourceListResult> {
+    const admin = await isUserAdmin(subjectUserId);
+    if (!admin) throw new Error('Bạn không có quyền thực hiện thao tác này.');
+    await ensureCourseWorkflowSchema();
+
+    const page = Math.max(1, Number(query.page || 1));
+    const pageSize = Math.min(50, Math.max(1, Number(query.page_size || 20)));
+    const q = String(query.q || '').trim();
+    const kind = String(query.kind || 'all').toLowerCase();
+    const courseIdFilter = Number((query as any).course_id || 0);
+
+    let where = `r.review_status = 'pending'`;
+    const params: any[] = [];
+    if (courseIdFilter > 0) {
+      where += ` AND c.id = ?`;
+      params.push(courseIdFilter);
+    }
+    if (kind && kind !== 'all') {
+      where += ` AND r.resource_kind = ?`;
+      params.push(kind);
+    }
+    if (q) {
+      where += ` AND (r.filename LIKE ? OR c.title LIKE ? OR l.title LIKE ?)`;
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+    }
+
+    const totalRows = await AppDataSource.query(
+      `
+      SELECT COUNT(*) AS total
+      FROM lesson_resources r
+      INNER JOIN lessons l ON l.id = r.lesson_id
+      INNER JOIN modules m ON m.id = l.module_id
+      INNER JOIN courses c ON c.id = m.course_id
+      WHERE ${where} AND c.deleted_at IS NULL
+      `,
+      params
+    );
+    const total = Number(totalRows?.[0]?.total || 0);
+
+    const rows = await AppDataSource.query(
+      `
+      SELECT
+        r.id, r.lesson_id, r.resource_type, r.resource_kind, r.url, r.filename, r.mime_type, r.size_bytes, r.preview_url,
+        r.review_status, r.review_reason, r.reviewed_by, r.reviewed_at, r.created_at,
+        c.id AS course_id, c.title AS course_title, l.title AS lesson_title, c.created_by AS teacher_id,
+        last_evt.decision AS last_review_decision,
+        last_evt.note AS last_review_note,
+        last_evt.created_at AS last_reviewed_at,
+        CASE
+          WHEN last_evt.decision = 'resubmit' OR (last_evt.from_status = 'rejected' AND last_evt.to_status = 'pending')
+          THEN 1
+          ELSE 0
+        END AS is_resubmitted,
+        prev_reject.note AS previous_rejected_reason
+      FROM lesson_resources r
+      INNER JOIN lessons l ON l.id = r.lesson_id
+      INNER JOIN modules m ON m.id = l.module_id
+      INNER JOIN courses c ON c.id = m.course_id
+      LEFT JOIN (
+        SELECT e1.resource_id, e1.decision, e1.note, e1.from_status, e1.to_status, e1.created_at
+        FROM lesson_resource_review_events e1
+        INNER JOIN (
+          SELECT resource_id, MAX(id) AS last_id
+          FROM lesson_resource_review_events
+          GROUP BY resource_id
+        ) latest ON latest.last_id = e1.id
+      ) last_evt ON last_evt.resource_id = r.id
+      LEFT JOIN (
+        SELECT e2.resource_id, e2.note
+        FROM lesson_resource_review_events e2
+        INNER JOIN (
+          SELECT resource_id, MAX(id) AS last_reject_id
+          FROM lesson_resource_review_events
+          WHERE decision = 'reject'
+          GROUP BY resource_id
+        ) rej ON rej.last_reject_id = e2.id
+      ) prev_reject ON prev_reject.resource_id = r.id
+      WHERE ${where} AND c.deleted_at IS NULL
+      ORDER BY
+        CASE
+          WHEN (last_evt.decision = 'resubmit' OR (last_evt.from_status = 'rejected' AND last_evt.to_status = 'pending')) THEN 0
+          ELSE 1
+        END ASC,
+        COALESCE(last_evt.created_at, r.created_at) DESC,
+        r.id DESC
+      LIMIT ? OFFSET ?
+      `,
+      [...params, pageSize, (page - 1) * pageSize]
+    );
+
+    return {
+      items: (rows || []).map((r: any) => ({
+        id: Number(r.id),
+        lesson_id: Number(r.lesson_id),
+        resource_type: String(r.resource_type || 'file') as any,
+        resource_kind: (r.resource_kind ?? classifyResourceKind({ mime_type: r.mime_type, filename: r.filename, url: r.url })) as any,
+        url: r.url ? getSignedDeliveryUrl(r.url) : r.url,
+        filename: r.filename ?? null,
+        mime_type: r.mime_type ?? null,
+        size_bytes: r.size_bytes != null ? Number(r.size_bytes) : null,
+        preview_url: r.preview_url ? getSignedDeliveryUrl(r.preview_url) : null,
+        review_status: (r.review_status ?? 'pending') as any,
+        review_reason: r.review_reason ?? null,
+        reviewed_by: r.reviewed_by != null ? Number(r.reviewed_by) : null,
+        reviewed_at: r.reviewed_at ? new Date(r.reviewed_at).toISOString() : null,
+        created_at: new Date(r.created_at).toISOString(),
+        course_id: Number(r.course_id),
+        course_title: String(r.course_title || ''),
+        lesson_title: String(r.lesson_title || ''),
+        teacher_id: Number(r.teacher_id),
+        is_resubmitted: Number(r.is_resubmitted || 0) === 1,
+        last_review_decision: r.last_review_decision ?? null,
+        last_review_note: r.last_review_note ?? null,
+        last_reviewed_at: r.last_reviewed_at ? new Date(r.last_reviewed_at).toISOString() : null,
+        previous_rejected_reason: r.previous_rejected_reason ?? null,
+      })),
+      page,
+      page_size: pageSize,
+      total,
+    };
+  }
+
+  async listMyRejectedLessonResources(subjectUserId: number, courseId: number): Promise<TeacherRejectedResourceListResult> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+    await ensureCourseWorkflowSchema();
+
+    const rows = await AppDataSource.query(
+      `
+      SELECT
+        r.id, r.lesson_id, r.resource_type, r.resource_kind, r.url, r.filename, r.mime_type, r.size_bytes, r.preview_url,
+        r.review_status, r.review_reason, r.reviewed_by, r.reviewed_at, r.created_at,
+        c.id AS course_id, c.title AS course_title,
+        m.id AS module_id, m.title AS module_title,
+        l.id AS lesson_id, l.title AS lesson_title, l.lesson_type,
+        rej_evt.note AS review_event_note, rej_evt.created_at AS review_event_at
+      FROM lesson_resources r
+      INNER JOIN lessons l ON l.id = r.lesson_id
+      INNER JOIN modules m ON m.id = l.module_id
+      INNER JOIN courses c ON c.id = m.course_id
+      LEFT JOIN (
+        SELECT e.resource_id, e.note, e.created_at
+        FROM lesson_resource_review_events e
+        INNER JOIN (
+          SELECT resource_id, MAX(id) AS last_reject_id
+          FROM lesson_resource_review_events
+          WHERE decision = 'reject'
+          GROUP BY resource_id
+        ) t ON t.last_reject_id = e.id
+      ) rej_evt ON rej_evt.resource_id = r.id
+      WHERE c.id = ? AND c.created_by = ? AND c.deleted_at IS NULL AND r.review_status = 'rejected'
+      ORDER BY COALESCE(r.reviewed_at, rej_evt.created_at, r.created_at) DESC, r.id DESC
+      `,
+      [courseId, subjectUserId]
+    );
+
+    return {
+      course_id: courseId,
+      items: (rows || []).map((r: any) => ({
+        id: Number(r.id),
+        lesson_id: Number(r.lesson_id),
+        resource_type: String(r.resource_type || 'file') as any,
+        resource_kind: (r.resource_kind ?? classifyResourceKind({ mime_type: r.mime_type, filename: r.filename, url: r.url })) as any,
+        url: r.url ? getSignedDeliveryUrl(r.url) : r.url,
+        filename: r.filename ?? null,
+        mime_type: r.mime_type ?? null,
+        size_bytes: r.size_bytes != null ? Number(r.size_bytes) : null,
+        preview_url: r.preview_url ? getSignedDeliveryUrl(r.preview_url) : null,
+        review_status: (r.review_status ?? 'rejected') as any,
+        review_reason: r.review_reason ?? null,
+        reviewed_by: r.reviewed_by != null ? Number(r.reviewed_by) : null,
+        reviewed_at: r.reviewed_at ? new Date(r.reviewed_at).toISOString() : null,
+        created_at: new Date(r.created_at).toISOString(),
+        course_id: Number(r.course_id),
+        course_title: String(r.course_title || ''),
+        module_id: Number(r.module_id),
+        module_title: String(r.module_title || ''),
+        lesson_title: String(r.lesson_title || ''),
+        lesson_type: String(r.lesson_type || 'text') as any,
+        review_event_note: r.review_event_note ?? null,
+        review_event_at: r.review_event_at ? new Date(r.review_event_at).toISOString() : null,
+      })),
+    };
+  }
+
+  async reviewLessonResourceByAdmin(
+    subjectUserId: number,
+    resourceId: number,
+    decision: LessonResourceReviewDecision,
+    note?: string | null
+  ): Promise<void> {
+    const admin = await isUserAdmin(subjectUserId);
+    if (!admin) throw new Error('Bạn không có quyền thực hiện thao tác này.');
+    await ensureCourseWorkflowSchema();
+
+    const resourceRepo = AppDataSource.getRepository(LessonResource);
+    const resource = await resourceRepo.findOne({ where: { id: resourceId } as any });
+    if (!resource) throw new Error('Không tìm thấy tài nguyên.');
+
+    const fromStatus = String((resource as any).review_status || 'pending') as 'pending' | 'approved' | 'rejected';
+    const toStatus = decision === 'approve' ? 'approved' : 'rejected';
+    await resourceRepo.update(
+      { id: resourceId } as any,
+      {
+        review_status: toStatus,
+        review_reason: decision === 'reject' ? (note || null) : null,
+        reviewed_by: subjectUserId,
+        reviewed_at: new Date(),
+      } as any
+    );
+    await this.logLessonResourceReviewEvent({
+      resourceId,
+      actorUserId: subjectUserId,
+      fromStatus,
+      toStatus,
+      decision: decision === 'approve' ? 'approve' : 'reject',
+      note: note || null,
+    });
+  }
+
+  async getLessonResourceReviewTimelineByAdmin(
+    subjectUserId: number,
+    resourceId: number
+  ): Promise<LessonResourceReviewTimelineResult> {
+    const admin = await isUserAdmin(subjectUserId);
+    if (!admin) throw new Error('Bạn không có quyền thực hiện thao tác này.');
+    await ensureCourseWorkflowSchema();
+
+    const rows = await AppDataSource.query(
+      `
+      SELECT id, resource_id, actor_user_id, from_status, to_status, decision, note, created_at
+      FROM lesson_resource_review_events
+      WHERE resource_id = ?
+      ORDER BY created_at DESC, id DESC
+      `,
+      [resourceId],
+    );
+    return {
+      resource_id: resourceId,
+      items: (rows || []).map((r: any) => ({
+        id: Number(r.id),
+        resource_id: Number(r.resource_id),
+        actor_user_id: Number(r.actor_user_id),
+        from_status: r.from_status ?? null,
+        to_status: r.to_status,
+        decision: r.decision,
+        note: r.note ?? null,
+        created_at: new Date(r.created_at).toISOString(),
+      })),
+    };
+  }
+
   async softDeleteMyCourse(subjectUserId: number, courseId: number): Promise<void> {
     await ensureUserIsCourseManager(subjectUserId);
     const courseRepo = AppDataSource.getRepository(Course);
@@ -2767,12 +3750,27 @@ export class CourseServiceImpl implements CourseService {
     return course;
   }
 
+  private async ensureCourseOwnedOrAdmin(subjectUserId: number, courseId: number) {
+    const admin = await isUserAdmin(subjectUserId);
+    if (admin) {
+      const courseRepo = AppDataSource.getRepository(Course);
+      const course = await courseRepo.findOne({ where: { id: courseId } as any });
+      if (!course || (course as any).deleted_at) throw new Error('Không tìm thấy khóa học.');
+      return course;
+    }
+    return this.ensureOwnCourse(subjectUserId, courseId);
+  }
+
   async getMyCourseContentTree(subjectUserId: number, courseId: number): Promise<CourseContentTree> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    await this.ensureCourseOwnedOrAdmin(subjectUserId, courseId);
 
     const moduleRepo = AppDataSource.getRepository(Module);
     const lessonRepo = AppDataSource.getRepository(Lesson);
+    const resourceRepo = AppDataSource.getRepository(LessonResource);
+    const quizRepo = AppDataSource.getRepository(Quiz);
+    const quizQuestionRepo = AppDataSource.getRepository(QuizQuestion);
+    const assignmentRepo = AppDataSource.getRepository(Assignment);
 
     const modules = await moduleRepo.find({
       where: { course_id: courseId } as any,
@@ -2789,11 +3787,151 @@ export class CourseServiceImpl implements CourseService {
           .getMany()
       : [];
 
+    const lessonIds = (lessons as any[]).map((l) => Number((l as any).id)).filter((id) => Number.isFinite(id));
+    const resources = lessonIds.length
+      ? await resourceRepo.createQueryBuilder('r').where('r.lesson_id IN (:...lessonIds)', { lessonIds }).getMany()
+      : [];
+    const resourcesByLesson = new Map<number, any[]>();
+    for (const r of resources as any[]) {
+      const lid = Number((r as any).lesson_id);
+      const arr = resourcesByLesson.get(lid) || [];
+      arr.push(r);
+      resourcesByLesson.set(lid, arr);
+    }
+
+    const quizzes = lessonIds.length ? await quizRepo.find({ where: { lesson_id: In(lessonIds) } as any }) : [];
+    const quizByLesson = new Map<number, any>();
+    for (const q of quizzes as any[]) quizByLesson.set(Number((q as any).lesson_id), q);
+    const quizIds = (quizzes as any[]).map((q) => Number((q as any).id)).filter((id) => Number.isFinite(id));
+    const quizQuestions = quizIds.length
+      ? await quizQuestionRepo.find({
+          where: { quiz_id: In(quizIds) } as any,
+          relations: ['bankQuestion', 'bankQuestion.options'],
+        })
+      : [];
+    const quizQuestionsByQuizId = new Map<number, any[]>();
+    for (const qq of quizQuestions as any[]) {
+      const qid = Number((qq as any).quiz_id);
+      const arr = quizQuestionsByQuizId.get(qid) || [];
+      arr.push(qq);
+      quizQuestionsByQuizId.set(qid, arr);
+    }
+
+    const assignments = lessonIds.length
+      ? await assignmentRepo.find({ where: { lesson_id: In(lessonIds) } as any, order: { id: 'DESC' } as any })
+      : [];
+    const assignmentByLesson = new Map<number, any>();
+    for (const a of assignments as any[]) {
+      const lid = Number((a as any).lesson_id);
+      if (!assignmentByLesson.has(lid)) assignmentByLesson.set(lid, a);
+    }
+
     const attachFlagsTree = await this.loadLessonAttachmentFlags((lessons as any[]).map((l) => Number(l.id)));
     const lessonByModule = new Map<number, CourseLessonItem[]>();
     for (const l of lessons as any[]) {
       const lid = Number(l.id);
       const arr = lessonByModule.get(l.module_id) || [];
+      const lessonType = String((l as any).lesson_type || 'text');
+      const lessonResources = resourcesByLesson.get(lid) || [];
+      let qualityIssue: string | null = null;
+
+      if (lessonType === 'quiz') {
+        const MIN_QUIZ_QUESTIONS = 3;
+        const quiz = quizByLesson.get(lid);
+        if (!quiz) {
+          qualityIssue = 'Bài quiz chưa có bộ câu hỏi.';
+        } else {
+          const qRows = quizQuestionsByQuizId.get(Number((quiz as any).id)) || [];
+          if (qRows.length < MIN_QUIZ_QUESTIONS) {
+            qualityIssue = `Quiz cần ít nhất ${MIN_QUIZ_QUESTIONS} câu hỏi.`;
+          } else {
+            for (let idx = 0; idx < qRows.length; idx += 1) {
+              const row = qRows[idx];
+              const qText = String((row as any)?.bankQuestion?.question_text || '').trim();
+              if (!qText) {
+                qualityIssue = `Câu ${idx + 1} đang trống nội dung.`;
+                break;
+              }
+              const optsRaw = Array.isArray((row as any)?.bankQuestion?.options) ? (row as any).bankQuestion.options : [];
+              const opts = optsRaw.map((o: any) => ({
+                text: String(o?.option_text || '').trim(),
+                isCorrect: Boolean(o?.is_correct),
+              }));
+              if (opts.length < 2) {
+                qualityIssue = `Câu ${idx + 1} chưa đủ lựa chọn.`;
+                break;
+              }
+              if (opts.some((o: any) => !o.text)) {
+                qualityIssue = `Câu ${idx + 1} có đáp án rỗng.`;
+                break;
+              }
+              const normalizedSet = new Set(opts.map((o: any) => normalizeTextForCompare(o.text)));
+              if (normalizedSet.size !== opts.length) {
+                qualityIssue = `Câu ${idx + 1} có đáp án bị trùng.`;
+                break;
+              }
+              const correctCount = opts.filter((o: any) => o.isCorrect).length;
+              if (correctCount !== 1) {
+                qualityIssue = `Câu ${idx + 1} cần đúng 1 đáp án chính xác.`;
+                break;
+              }
+            }
+          }
+        }
+      } else if (lessonType === 'assignment') {
+        const MIN_FILE_PROMPT_DESC_LENGTH = 20;
+        const assignment = assignmentByLesson.get(lid);
+        if (!assignment) {
+          qualityIssue = 'Bài tập chưa được cấu hình.';
+        } else {
+          const title = String((assignment as any).title || '').trim();
+          const description = stripHtmlToText(String((assignment as any).description || ''));
+          const instructions = stripHtmlToText(String((assignment as any).instructions || ''));
+          const formats = safeJsonParse<any[]>((assignment as any).submission_format, []);
+          const hasSubmissionCriteria = instructions.length > 0 || (Array.isArray(formats) && formats.length > 0);
+          const kind = String((assignment as any).assignment_kind || 'file_prompt') === 'short_answer' ? 'short_answer' : 'file_prompt';
+          if (!title) qualityIssue = 'Bài tập thiếu tiêu đề.';
+          else if (!description) qualityIssue = 'Bài tập thiếu mô tả yêu cầu.';
+          else if (!hasSubmissionCriteria) qualityIssue = 'Bài tập thiếu tiêu chí nộp bài.';
+          else if (kind === 'short_answer') {
+            const shortQuestions = safeJsonParse<any[]>((assignment as any).short_answer_questions, []);
+            const validShortQuestions = shortQuestions.filter((q: any) => String(q?.question_text || '').trim().length > 0);
+            if (validShortQuestions.length < 1) {
+              qualityIssue = 'Bài tập trả lời ngắn cần ít nhất 1 câu hỏi.';
+            }
+          } else if (description.length < MIN_FILE_PROMPT_DESC_LENGTH) {
+            qualityIssue = `Bài tập tự luận cần mô tả rõ hơn (>= ${MIN_FILE_PROMPT_DESC_LENGTH} ký tự).`;
+          }
+        }
+      } else {
+        const MIN_RICH_TEXT_CONTENT_LENGTH = 30;
+        const hasVideo = lessonResources.some((r) => {
+          const kind = classifyResourceKind({
+            mime_type: (r as any).mime_type,
+            filename: (r as any).filename,
+            url: (r as any).url,
+          });
+          const mime = String((r as any).mime_type || '').toLowerCase();
+          return kind === 'video' || kind === 'youtube' || mime.startsWith('video/');
+        });
+        const hasHtmlContent = lessonResources.some((r) => {
+          const mime = String((r as any).mime_type || '').toLowerCase();
+          const size = Number((r as any).size_bytes ?? 0);
+          return mime.includes('text/html') && size >= MIN_RICH_TEXT_CONTENT_LENGTH;
+        });
+        const hasAttachment = lessonResources.some((r) => {
+          const kind = classifyResourceKind({
+            mime_type: (r as any).mime_type,
+            filename: (r as any).filename,
+            url: (r as any).url,
+          });
+          return kind === 'pdf' || kind === 'word' || kind === 'other';
+        });
+        if (!hasVideo && !hasHtmlContent && !hasAttachment) {
+          qualityIssue = 'Bài học chưa có nội dung hợp lệ (video/rich text/tài liệu).';
+        }
+      }
+
       arr.push({
         id: l.id,
         module_id: l.module_id,
@@ -2805,6 +3943,8 @@ export class CourseServiceImpl implements CourseService {
         is_published: Boolean(l.is_published),
         has_quiz: attachFlagsTree.hasQuiz.has(lid),
         has_assignment: attachFlagsTree.hasAssignment.has(lid),
+        quality_status: qualityIssue ? 'needs_fix' : 'ok',
+        quality_issue: qualityIssue,
       });
       lessonByModule.set(l.module_id, arr);
     }
@@ -2828,7 +3968,8 @@ export class CourseServiceImpl implements CourseService {
 
   async createModule(subjectUserId: number, courseId: number, request: CreateModuleRequest): Promise<{ id: number }> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    this.ensureCourseEditableForTeacher(ownCourse);
 
     const moduleRepo = AppDataSource.getRepository(Module);
     const last = await moduleRepo.findOne({ where: { course_id: courseId } as any, order: { order_index: 'DESC' } as any });
@@ -2848,7 +3989,8 @@ export class CourseServiceImpl implements CourseService {
 
   async updateModule(subjectUserId: number, courseId: number, moduleId: number, request: UpdateModuleRequest): Promise<void> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    this.ensureCourseEditableForTeacher(ownCourse);
 
     const moduleRepo = AppDataSource.getRepository(Module);
     const mod = await moduleRepo.findOne({ where: { id: moduleId, course_id: courseId } as any });
@@ -2862,7 +4004,8 @@ export class CourseServiceImpl implements CourseService {
 
   async deleteModule(subjectUserId: number, courseId: number, moduleId: number): Promise<void> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    this.ensureCourseEditableForTeacher(ownCourse);
     const moduleRepo = AppDataSource.getRepository(Module);
     const mod = await moduleRepo.findOne({ where: { id: moduleId, course_id: courseId } as any });
     if (!mod) throw new Error('Không tìm thấy module.');
@@ -2875,7 +4018,8 @@ export class CourseServiceImpl implements CourseService {
 
   async createLesson(subjectUserId: number, courseId: number, moduleId: number, request: CreateLessonRequest): Promise<{ id: number }> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    this.ensureCourseEditableForTeacher(ownCourse);
 
     const moduleRepo = AppDataSource.getRepository(Module);
     const mod = await moduleRepo.findOne({ where: { id: moduleId, course_id: courseId } as any });
@@ -2904,7 +4048,8 @@ export class CourseServiceImpl implements CourseService {
 
   async updateLesson(subjectUserId: number, courseId: number, lessonId: number, request: UpdateLessonRequest): Promise<void> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    await this.ensureCanEditRejectedResourceWhilePendingReview(ownCourse, { lessonId });
 
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const moduleRepo = AppDataSource.getRepository(Module);
@@ -2926,7 +4071,8 @@ export class CourseServiceImpl implements CourseService {
 
   async deleteLesson(subjectUserId: number, courseId: number, lessonId: number): Promise<void> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    this.ensureCourseEditableForTeacher(ownCourse);
 
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const moduleRepo = AppDataSource.getRepository(Module);
@@ -2983,7 +4129,8 @@ export class CourseServiceImpl implements CourseService {
 
   async reorderCourseContent(subjectUserId: number, courseId: number, request: ReorderCourseContentRequest): Promise<void> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    this.ensureCourseEditableForTeacher(ownCourse);
 
     await AppDataSource.transaction(async (manager) => {
       const moduleRepo = manager.getRepository(Module);
@@ -3045,15 +4192,70 @@ export class CourseServiceImpl implements CourseService {
       order: { created_at: 'DESC', id: 'DESC' } as any,
     });
 
+    const resourceIds = (resources as any[]).map((r) => Number(r.id)).filter((id) => Number.isFinite(id));
+    const lastEventByResource = new Map<number, any>();
+    const lastRejectByResource = new Map<number, any>();
+    if (resourceIds.length) {
+      const lastRows = await AppDataSource.query(
+        `
+        SELECT e.resource_id, e.decision, e.note, e.from_status, e.to_status, e.created_at
+        FROM lesson_resource_review_events e
+        INNER JOIN (
+          SELECT resource_id, MAX(id) AS max_id
+          FROM lesson_resource_review_events
+          WHERE resource_id IN (${resourceIds.map(() => '?').join(',')})
+          GROUP BY resource_id
+        ) latest ON latest.max_id = e.id
+        `,
+        resourceIds
+      );
+      for (const row of lastRows || []) lastEventByResource.set(Number(row.resource_id), row);
+
+      const rejectRows = await AppDataSource.query(
+        `
+        SELECT e.resource_id, e.note, e.created_at
+        FROM lesson_resource_review_events e
+        INNER JOIN (
+          SELECT resource_id, MAX(id) AS max_reject_id
+          FROM lesson_resource_review_events
+          WHERE decision = 'reject' AND resource_id IN (${resourceIds.map(() => '?').join(',')})
+          GROUP BY resource_id
+        ) latest_reject ON latest_reject.max_reject_id = e.id
+        `,
+        resourceIds
+      );
+      for (const row of rejectRows || []) lastRejectByResource.set(Number(row.resource_id), row);
+    }
+
     return (resources as any[]).map((r) => ({
+      ...((): any => {
+        const lastEvt = lastEventByResource.get(Number(r.id));
+        const lastReject = lastRejectByResource.get(Number(r.id));
+        const isResubmitted = !!lastEvt && (lastEvt.decision === 'resubmit' || (lastEvt.from_status === 'rejected' && lastEvt.to_status === 'pending'));
+        return {
+          is_resubmitted: isResubmitted,
+          last_review_decision: lastEvt?.decision ?? null,
+          last_review_note: lastEvt?.note ?? null,
+          last_reviewed_at: lastEvt?.created_at ? new Date(lastEvt.created_at).toISOString() : null,
+          previous_rejected_reason: lastReject?.note ?? null,
+        };
+      })(),
       id: r.id,
       lesson_id: r.lesson_id,
       resource_type: r.resource_type,
-      url: r.url ? getSignedDeliveryUrl(r.url) : r.url,
+      resource_kind: r.resource_kind ?? classifyResourceKind({ mime_type: r.mime_type, filename: r.filename, url: r.url }),
+      url:
+        r.url && !String(r.url).startsWith('internal://')
+          ? getSignedDeliveryUrl(r.url)
+          : r.url,
       filename: r.filename ?? null,
       mime_type: r.mime_type ?? null,
       size_bytes: r.size_bytes ?? null,
       preview_url: (r as any).preview_url ? getSignedDeliveryUrl((r as any).preview_url) : null,
+      review_status: (r as any).review_status ?? 'pending',
+      review_reason: (r as any).review_reason ?? null,
+      reviewed_by: (r as any).reviewed_by != null ? Number((r as any).reviewed_by) : null,
+      reviewed_at: (r as any).reviewed_at ? new Date((r as any).reviewed_at).toISOString() : null,
       created_at: new Date(r.created_at).toISOString(),
     }));
   }
@@ -3065,7 +4267,8 @@ export class CourseServiceImpl implements CourseService {
     file: { filename: string; mime_type: string; size_bytes: number; url: string }
   ): Promise<{ id: number }> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    await this.ensureCanEditRejectedResourceWhilePendingReview(ownCourse, { lessonId });
 
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const moduleRepo = AppDataSource.getRepository(Module);
@@ -3076,18 +4279,67 @@ export class CourseServiceImpl implements CourseService {
     const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id, course_id: courseId } as any });
     if (!mod) throw new Error('Không tìm thấy bài học.');
 
+    const filename = String(file.filename || '').trim();
+    const mimeType = String(file.mime_type || '').toLowerCase().trim();
+    if (!filename) throw new Error('Tên file không hợp lệ.');
+    if (!mimeType) throw new Error('MIME type không hợp lệ.');
+
+    const resourceKind = classifyResourceKind({ mime_type: mimeType, filename, url: file.url });
+    const ext = getFilenameExtension(filename);
+    const allowedVideoExt = ['mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv', 'ogg'];
+    const isPdf = resourceKind === 'pdf';
+    const isWord = resourceKind === 'word';
+    const isVideo = resourceKind === 'video';
+    const isHtml = mimeType === 'text/html' && ext === 'html';
+
+    if (isPdf) {
+      if (mimeType !== 'application/pdf' || ext !== 'pdf') {
+        throw new Error('File PDF không hợp lệ.');
+      }
+    } else if (isWord) {
+      const validWordMime =
+        mimeType === 'application/msword' ||
+        mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      if (!validWordMime || !['doc', 'docx'].includes(ext)) {
+        throw new Error('File Word không hợp lệ.');
+      }
+    } else if (isVideo) {
+      if (!mimeType.startsWith('video/') || !allowedVideoExt.includes(ext)) {
+        throw new Error('File video không hợp lệ.');
+      }
+    } else if (isHtml) {
+      // Rich text lesson notes are uploaded as .html files.
+    } else {
+      throw new Error('Chỉ hỗ trợ tài nguyên PDF, Word, HTML hoặc video.');
+    }
+
     const isImage = file.mime_type && file.mime_type.startsWith('image/');
 
     const entity = resourceRepo.create({
       lesson_id: lessonId,
       resource_type: 'file',
       url: file.url,
-      filename: file.filename,
-      mime_type: file.mime_type,
+      filename,
+      mime_type: mimeType,
       size_bytes: file.size_bytes,
       preview_url: isImage ? file.url : null,
+      resource_kind: resourceKind,
+      review_status: 'pending',
+      review_reason: null,
+      reviewed_by: null,
+      reviewed_at: null,
     } as any);
     const saved = await resourceRepo.save(entity as any);
+    await AppDataSource.getRepository(LessonResourceReviewEvent).save(
+      AppDataSource.getRepository(LessonResourceReviewEvent).create({
+        resource_id: Number((saved as any).id),
+        actor_user_id: subjectUserId,
+        from_status: null,
+        to_status: 'pending',
+        decision: 'submit',
+        note: null,
+      } as any)
+    );
     return { id: (saved as any).id };
   }
 
@@ -3098,7 +4350,8 @@ export class CourseServiceImpl implements CourseService {
     file: { filename: string; mime_type: string; size_bytes: number; url: string }
   ): Promise<void> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    await this.ensureCanEditRejectedResourceWhilePendingReview(ownCourse, { resourceId });
 
     const resourceRepo = AppDataSource.getRepository(LessonResource);
     const lessonRepo = AppDataSource.getRepository(Lesson);
@@ -3120,7 +4373,8 @@ export class CourseServiceImpl implements CourseService {
 
   async deleteLessonResource(subjectUserId: number, courseId: number, resourceId: number): Promise<void> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    await this.ensureCanEditRejectedResourceWhilePendingReview(ownCourse, { resourceId });
 
     const resourceRepo = AppDataSource.getRepository(LessonResource);
     const lessonRepo = AppDataSource.getRepository(Lesson);
@@ -3156,6 +4410,11 @@ export class CourseServiceImpl implements CourseService {
     const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id, course_id: courseId } as any });
     if (!mod) throw new Error('Không tìm thấy tài nguyên.');
 
+    const isManager = await isUserCourseManager(subjectUserId);
+    if (!isManager && String((resource as any).review_status || 'pending') !== 'approved') {
+      throw new Error('Tài nguyên này đang chờ duyệt hoặc đã bị từ chối.');
+    }
+
     await this.ensureCanAccessLesson(subjectUserId, courseId, (lesson as any).id);
 
     const url = (resource as any).url;
@@ -3175,7 +4434,7 @@ export class CourseServiceImpl implements CourseService {
   private async ensureCanViewCourseResources(subjectUserId: number, courseId: number) {
     const isManager = await isUserCourseManager(subjectUserId);
     if (isManager) {
-      await this.ensureOwnCourse(subjectUserId, courseId);
+      await this.ensureCourseOwnedOrAdmin(subjectUserId, courseId);
       return;
     }
 
@@ -3195,7 +4454,8 @@ export class CourseServiceImpl implements CourseService {
     request: { youtube_url: string; title?: string | null }
   ): Promise<{ id: number }> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    await this.ensureCanEditRejectedResourceWhilePendingReview(ownCourse, { lessonId });
 
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const moduleRepo = AppDataSource.getRepository(Module);
@@ -3206,19 +4466,37 @@ export class CourseServiceImpl implements CourseService {
     const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id, course_id: courseId } as any });
     if (!mod) throw new Error('Không tìm thấy bài học.');
 
-    const url = String(request.youtube_url || '').trim();
-    if (!url) throw new Error('Vui lòng nhập link YouTube.');
+    const rawUrl = String(request.youtube_url || '').trim();
+    if (!rawUrl) throw new Error('Vui lòng nhập link YouTube.');
+    const videoId = parseYoutubeVideoId(rawUrl);
+    if (!videoId) throw new Error('Link YouTube không hợp lệ.');
+    const embedUrl = buildYoutubeEmbedUrl(videoId);
 
     const entity = resourceRepo.create({
       lesson_id: lessonId,
       resource_type: 'video',
-      url,
+      url: embedUrl,
       filename: request.title ? String(request.title) : null,
       mime_type: null,
       size_bytes: null,
       preview_url: null,
+      resource_kind: 'youtube',
+      review_status: 'pending',
+      review_reason: null,
+      reviewed_by: null,
+      reviewed_at: null,
     } as any);
     const saved = await resourceRepo.save(entity as any);
+    await AppDataSource.getRepository(LessonResourceReviewEvent).save(
+      AppDataSource.getRepository(LessonResourceReviewEvent).create({
+        resource_id: Number((saved as any).id),
+        actor_user_id: subjectUserId,
+        from_status: null,
+        to_status: 'pending',
+        decision: 'submit',
+        note: `youtube:${videoId}`,
+      } as any)
+    );
     return { id: Number((saved as any).id) };
   }
 
@@ -3228,7 +4506,7 @@ export class CourseServiceImpl implements CourseService {
     lessonId: number
   ): Promise<ManualQuizDetailResult | null> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    await this.ensureCourseOwnedOrAdmin(subjectUserId, courseId);
 
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const moduleRepo = AppDataSource.getRepository(Module);
@@ -3294,7 +4572,8 @@ export class CourseServiceImpl implements CourseService {
     request: ManualQuizUpsertRequest
   ): Promise<{ quiz_id: number }> {
     await ensureUserIsCourseManager(subjectUserId);
-    await this.ensureOwnCourse(subjectUserId, courseId);
+    const ownCourse = await this.ensureOwnCourse(subjectUserId, courseId);
+    await this.ensureCanEditRejectedResourceWhilePendingReview(ownCourse, { lessonId, markerPrefix: 'quiz' });
 
     const title = String(request?.title || '').trim();
     if (!title) throw new Error('Vui lòng nhập tiêu đề quiz.');
@@ -3308,7 +4587,7 @@ export class CourseServiceImpl implements CourseService {
     const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id, course_id: courseId } as any });
     if (!mod) throw new Error('Không tìm thấy bài học.');
 
-    return await AppDataSource.transaction(async (manager) => {
+    const result = await AppDataSource.transaction(async (manager) => {
       const qBankRepo = manager.getRepository(QuestionBank);
       const bqRepo = manager.getRepository(BankQuestion);
       const optRepo = manager.getRepository(BankQuestionOption);
@@ -3346,15 +4625,28 @@ export class CourseServiceImpl implements CourseService {
       }
 
       if (bankId == null) {
-        const bank = qBankRepo.create({
-          course_id: courseId,
-          name: `Quiz thủ công — ${String((lesson as any).title || 'bài học')}`,
-          description: null,
-          created_by: subjectUserId,
-          is_shared: false,
-        } as any);
-        const savedBank = await qBankRepo.save(bank as any);
-        bankId = Number((savedBank as any).id);
+        const reusableInternalBank = await qBankRepo.findOne({
+          where: {
+            course_id: courseId,
+            created_by: subjectUserId,
+            name: AUTO_QUIZ_BANK_NAME,
+          } as any,
+          order: { id: 'DESC' } as any,
+        });
+        if (reusableInternalBank) {
+          bankId = Number((reusableInternalBank as any).id);
+        } else {
+          const bank = qBankRepo.create({
+            course_id: courseId,
+            name: AUTO_QUIZ_BANK_NAME,
+            description: 'Ngân hàng nội bộ tự sinh cho quiz trong lesson studio.',
+            created_by: subjectUserId,
+            is_shared: false,
+            is_active: false,
+          } as any);
+          const savedBank = await qBankRepo.save(bank as any);
+          bankId = Number((savedBank as any).id);
+        }
       }
 
       const tl = request.time_limit_minutes != null ? Number(request.time_limit_minutes) : null;
@@ -3448,6 +4740,13 @@ export class CourseServiceImpl implements CourseService {
 
       return { quiz_id: quizId };
     });
+    await this.upsertStructuredLessonReviewResource({
+      lessonId,
+      actorUserId: subjectUserId,
+      kind: 'quiz',
+      title: title || 'Quiz nội dung',
+    });
+    return result;
   }
 
   async generateManualQuizQuestionsWithAi(

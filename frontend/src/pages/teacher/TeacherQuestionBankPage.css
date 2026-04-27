@@ -250,6 +250,11 @@ textarea.form-input {
     background: rgba(59, 130, 246, 0.05);
 }
 
+.bank-item.archived {
+    opacity: 0.78;
+    background: #f8fafc;
+}
+
 .bank-select-btn {
     flex: 1;
     text-align: left;
@@ -306,6 +311,17 @@ textarea.form-input {
 .bank-actions {
     display: flex;
     gap: 4px;
+}
+
+.archived-bank-section {
+    margin-top: 8px;
+    display: grid;
+    gap: 8px;
+}
+
+.archived-bank-list {
+    display: grid;
+    gap: 8px;
 }
 
 /* Questions Section */
@@ -698,6 +714,53 @@ textarea.form-input {
     gap: 12px;
 }
 
+.question-filter-toolbar {
+    display: grid;
+    grid-template-columns: minmax(240px, 1fr) 180px 180px auto;
+    gap: 10px;
+    margin-top: -8px;
+    margin-bottom: 12px;
+    align-items: center;
+}
+
+.warning-panel {
+    margin-top: 8px;
+    margin-bottom: 12px;
+    border: 1px solid #fdba74;
+    background: #fff7ed;
+    color: #9a3412;
+    border-radius: var(--radius-md);
+    padding: 12px;
+    display: grid;
+    gap: 8px;
+}
+
+.warning-title {
+    font-weight: 700;
+}
+
+.warning-desc {
+    font-size: 0.9rem;
+}
+
+.warning-usage-list {
+    display: grid;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.warning-usage-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    background: #ffedd5;
+    border: 1px solid #fed7aa;
+    border-radius: var(--radius-sm);
+    padding: 8px;
+    font-size: 0.8rem;
+}
+
 .question-item {
     background: white;
     border-radius: var(--radius-lg);
@@ -1006,6 +1069,10 @@ textarea.form-input {
     
     .bulk-sub-tabs {
         gap: 4px;
+    }
+
+    .question-filter-toolbar {
+        grid-template-columns: 1fr;
     }
 
     .ai-pending-item {

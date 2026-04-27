@@ -8,6 +8,10 @@ import GradeItem from '../../../../../internal/model/grade_items';
 import Submission from '../../../../../internal/model/submissions';
 import SubmissionAttachment from '../../../../../internal/model/submission_attachment';
 import CourseEnrollment from '../../../../../internal/model/course_enrollment';
+import LessonResource from '../../../../../internal/model/lesson_resource';
+import LessonResourceReviewEvent from '../../../../../internal/model/lesson_resource_review_event';
+import UserRole from '../../../../../internal/model/user_roles';
+import Role from '../../../../../internal/model/role';
 import { uploadBufferToCloudinary, getSignedDeliveryUrl, isCloudinaryEnabled } from '../../../lib/cloudinary';
 import type {
   AssignmentAttachmentPreview,
@@ -25,6 +29,17 @@ import type {
 } from '../types';
 import GradeEntity from '../../../../../internal/model/grade';
 import SubmissionFeedback from '../../../../../internal/model/submission_feedback';
+
+async function isUserAdmin(userId: number): Promise<boolean> {
+  const userRoleRepo = AppDataSource.getRepository(UserRole);
+  const roleRepo = AppDataSource.getRepository(Role);
+  const userRoles = await userRoleRepo.find({ where: { user_id: userId } as any });
+  if (!userRoles.length) return false;
+  const roleIds = userRoles.map((ur: any) => Number(ur.role_id)).filter((id) => Number.isFinite(id));
+  if (!roleIds.length) return false;
+  const roles = await roleRepo.findByIds(roleIds);
+  return roles.some((r: any) => String(r.name || '').toLowerCase() === 'admin');
+}
 
 function normalizeShortAnswerQuestionsForSave(raw: any): ShortAnswerQuestionDef[] {
   if (!Array.isArray(raw)) return [];
@@ -172,6 +187,164 @@ function normalizeTimeLimitMinutes(raw: any): number | null {
 }
 
 export class AssignmentServiceImpl implements AssignmentService {
+  private async ensureCourseEditableForTeacher(course: any, lessonId?: number): Promise<void> {
+    const status = String((course as any)?.status || '');
+    if (status !== 'pending_review') return;
+    if (!lessonId) {
+      throw new Error('Khóa học đang chờ duyệt. Chỉ được sửa mục đang bị từ chối.');
+    }
+    const resourceRepo = AppDataSource.getRepository(LessonResource);
+    const rejectedMarker = await resourceRepo
+      .createQueryBuilder('r')
+      .where('r.lesson_id = :lessonId', { lessonId: Number(lessonId) })
+      .andWhere('r.url LIKE :prefix', { prefix: `internal://lesson/${Number(lessonId)}/assignment%` })
+      .andWhere('r.review_status = :status', { status: 'rejected' })
+      .getOne();
+    if (!rejectedMarker) {
+      throw new Error('Khóa học đang chờ duyệt. Chỉ được sửa mục đang bị từ chối.');
+    }
+  }
+
+  private async ensureOwnerOrAdmin(courseId: number, subjectUserId: number): Promise<void> {
+    const courseRepo = AppDataSource.getRepository(Course);
+    const own = await courseRepo.findOne({
+      where: { id: courseId, created_by: subjectUserId, deleted_at: null as any } as any,
+    });
+    if (own) return;
+    const admin = await isUserAdmin(subjectUserId);
+    if (!admin) {
+      throw new Error('Không tìm thấy khóa học hoặc bạn không có quyền thực hiện thao tác này!');
+    }
+  }
+
+  private buildAssignmentReviewSpecs(params: {
+    lessonId: number;
+    title?: string | null;
+    attachments?: Array<{ file_name?: string | null; file_path?: string | null }> | null;
+  }): Array<{
+    url: string;
+    filename: string;
+    mime_type: string;
+    note: string;
+  }> {
+    const baseTitle = String(params.title || 'Assignment nội dung').trim() || 'Assignment nội dung';
+    const specs: Array<{ url: string; filename: string; mime_type: string; note: string }> = [
+      {
+        url: `internal://lesson/${params.lessonId}/assignment/description`,
+        filename: `[ASSIGNMENT] ${baseTitle} - Mô tả`,
+        mime_type: 'text/html',
+        note: 'assignment:description',
+      },
+    ];
+    const attachments = Array.isArray(params.attachments) ? params.attachments : [];
+    attachments.forEach((att, idx) => {
+      const attName = String(att?.file_name || '').trim() || `Tệp đính kèm #${idx + 1}`;
+      specs.push({
+        url: `internal://lesson/${params.lessonId}/assignment/attachment/${idx}`,
+        filename: `[ASSIGNMENT] ${baseTitle} - ${attName}`.slice(0, 255),
+        mime_type: 'application/octet-stream',
+        note: `assignment:attachment:${idx}`,
+      });
+    });
+    return specs;
+  }
+
+  private async upsertAssignmentReviewItem(params: {
+    lessonId: number;
+    actorUserId: number;
+    title?: string | null;
+    description?: string | null;
+    attachments?: Array<{ file_name?: string | null; file_path?: string | null }> | null;
+  }): Promise<void> {
+    const resourceRepo = AppDataSource.getRepository(LessonResource);
+    const eventRepo = AppDataSource.getRepository(LessonResourceReviewEvent);
+    const allExisting = await resourceRepo.find({
+      where: { lesson_id: params.lessonId } as any,
+      order: { id: 'DESC' } as any,
+    });
+    const assignmentResources = (allExisting as any[]).filter((row) =>
+      String((row as any).url || '').startsWith(`internal://lesson/${params.lessonId}/assignment`)
+    );
+    const existingByUrl = new Map<string, any>();
+    for (const item of assignmentResources) {
+      const rowUrl = String((item as any).url || '');
+      if (!existingByUrl.has(rowUrl)) existingByUrl.set(rowUrl, item);
+    }
+
+    const nextSpecs = this.buildAssignmentReviewSpecs({
+      lessonId: params.lessonId,
+      title: params.title,
+      attachments: params.attachments,
+    });
+    const keepUrls = new Set(nextSpecs.map((x) => x.url));
+
+    for (const spec of nextSpecs) {
+      const existing = existingByUrl.get(spec.url);
+      const fromStatus = existing
+        ? (String((existing as any).review_status || 'pending') as 'pending' | 'approved' | 'rejected')
+        : null;
+      if (!existing) {
+        const created = await resourceRepo.save(
+          resourceRepo.create({
+            lesson_id: params.lessonId,
+            resource_type: 'file',
+            resource_kind: 'other',
+            url: spec.url,
+            filename: spec.filename.slice(0, 255),
+            mime_type: spec.mime_type,
+            size_bytes: null,
+            preview_url: null,
+            review_status: 'pending',
+            review_reason: null,
+            reviewed_by: null,
+            reviewed_at: null,
+          } as any)
+        );
+        await eventRepo.save(
+          eventRepo.create({
+            resource_id: Number((created as any).id),
+            actor_user_id: params.actorUserId,
+            from_status: null,
+            to_status: 'pending',
+            decision: 'submit',
+            note: spec.note,
+          } as any)
+        );
+        continue;
+      }
+
+      await resourceRepo.update(
+        { id: (existing as any).id } as any,
+        {
+          filename: spec.filename.slice(0, 255),
+          mime_type: spec.mime_type,
+          review_status: 'pending',
+          review_reason: null,
+          reviewed_by: null,
+          reviewed_at: null,
+        } as any
+      );
+      await eventRepo.save(
+        eventRepo.create({
+          resource_id: Number((existing as any).id),
+          actor_user_id: params.actorUserId,
+          from_status: fromStatus,
+          to_status: 'pending',
+          decision: fromStatus === 'rejected' ? 'resubmit' : 'submit',
+          note: spec.note,
+        } as any)
+      );
+    }
+
+    const removeIds = assignmentResources
+      .filter((row) => !keepUrls.has(String((row as any).url || '')))
+      .map((row) => Number((row as any).id))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    if (removeIds.length > 0) {
+      await resourceRepo.delete(removeIds as any);
+    }
+  }
+
   async createAssignment(subjectUserId: number, lessonId: number, request: CreateAssignmentRequest): Promise<any> {
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const moduleRepo = AppDataSource.getRepository(Module);
@@ -192,6 +365,7 @@ export class AssignmentServiceImpl implements AssignmentService {
         where: { id: (mod as any).course_id, created_by: subjectUserId, deleted_at: null as any } as any
     });
     if (!course) throw new Error('Không tìm thấy khóa học hoặc bạn không có quyền thực hiện thao tác này!');
+    await this.ensureCourseEditableForTeacher(course, lessonId);
 
     // validate một số lỗi login nghiệp vụ
     if (request.passing_score != null && request.passing_score > request.max_score) {
@@ -217,7 +391,7 @@ export class AssignmentServiceImpl implements AssignmentService {
     }
 
     // thực thi db transaction giữa table assignments và grade_items
-    return await AppDataSource.transaction(async (manager) => {
+    const savedAssignment = await AppDataSource.transaction(async (manager) => {
       const assignmentRepo = manager.getRepository(Assignment);
       const gradeItemRepo = manager.getRepository(GradeItem);
 
@@ -263,6 +437,14 @@ export class AssignmentServiceImpl implements AssignmentService {
 
       return savedAssignment; // Trả về nếu cả 2 bảng đều insert thành công
     });
+    await this.upsertAssignmentReviewItem({
+      lessonId,
+      actorUserId: subjectUserId,
+      title: String((savedAssignment as any)?.title || request.title || 'Assignment nội dung'),
+      description: String((savedAssignment as any)?.description ?? request.description ?? ''),
+      attachments: Array.isArray((savedAssignment as any)?.attachments) ? ((savedAssignment as any).attachments as any[]) : [],
+    });
+    return savedAssignment;
   }
 
   async uploadAssignmentAttachments(
@@ -292,6 +474,7 @@ export class AssignmentServiceImpl implements AssignmentService {
       where: { id: (mod as any).course_id, created_by: subjectUserId, deleted_at: null as any } as any,
     });
     if (!course) throw new Error('Không tìm thấy khóa học hoặc bạn không có quyền thực hiện thao tác này!');
+    await this.ensureCourseEditableForTeacher(course, lessonId);
 
     const assignment = await assignmentRepo.findOne({
       where: { id: assignmentId, lesson_id: lessonId } as any,
@@ -326,6 +509,13 @@ export class AssignmentServiceImpl implements AssignmentService {
 
     assignment.attachments = attachments as any;
     await assignmentRepo.save(assignment as any);
+    await this.upsertAssignmentReviewItem({
+      lessonId,
+      actorUserId: subjectUserId,
+      title: String((assignment as any)?.title || 'Assignment nội dung'),
+      description: String((assignment as any)?.description ?? ''),
+      attachments: attachments as any[],
+    });
 
     return (attachments as any as AssignmentAttachmentPreview[]).map((a) => ({
       ...a,
@@ -359,7 +549,6 @@ export class AssignmentServiceImpl implements AssignmentService {
   }> {
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const moduleRepo = AppDataSource.getRepository(Module);
-    const courseRepo = AppDataSource.getRepository(Course);
     const assignmentRepo = AppDataSource.getRepository(Assignment);
 
     const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
@@ -368,10 +557,7 @@ export class AssignmentServiceImpl implements AssignmentService {
     const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id } as any });
     if (!mod) throw new Error('Không tìm thấy module chứa bài học này!');
 
-    const course = await courseRepo.findOne({
-      where: { id: (mod as any).course_id, created_by: subjectUserId, deleted_at: null as any } as any,
-    });
-    if (!course) throw new Error('Không tìm thấy khóa học hoặc bạn không có quyền thực hiện thao tác này!');
+    await this.ensureOwnerOrAdmin(Number((mod as any).course_id), subjectUserId);
 
     const assignment = await assignmentRepo.findOne({
       where: { id: assignmentId, lesson_id: lessonId } as any,
@@ -511,6 +697,7 @@ export class AssignmentServiceImpl implements AssignmentService {
       where: { id: (mod as any).course_id, created_by: subjectUserId, deleted_at: null as any } as any,
     });
     if (!course) throw new Error('Không tìm thấy khóa học hoặc bạn không có quyền thực hiện thao tác này!');
+    await this.ensureCourseEditableForTeacher(course, lessonId);
 
     const assignment = await assignmentRepo.findOne({
       where: { id: assignmentId, lesson_id: lessonId } as any,
@@ -623,6 +810,13 @@ export class AssignmentServiceImpl implements AssignmentService {
         due_date: dueDateForGrade as any,
       } as any
     );
+    await this.upsertAssignmentReviewItem({
+      lessonId,
+      actorUserId: subjectUserId,
+      title: String((assignment as any).title || 'Assignment nội dung'),
+      description: String((assignment as any).description ?? ''),
+      attachments: Array.isArray((assignment as any).attachments) ? ((assignment as any).attachments as any[]) : [],
+    });
   }
 
   async listAssignmentSubmissions(
@@ -704,7 +898,6 @@ export class AssignmentServiceImpl implements AssignmentService {
   ): Promise<AssignmentLearnerRosterResult> {
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const moduleRepo = AppDataSource.getRepository(Module);
-    const courseRepo = AppDataSource.getRepository(Course);
     const assignmentRepo = AppDataSource.getRepository(Assignment);
 
     const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
@@ -713,10 +906,8 @@ export class AssignmentServiceImpl implements AssignmentService {
     const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id } as any });
     if (!mod) throw new Error('Không tìm thấy module chứa bài học này!');
 
-    const course = await courseRepo.findOne({
-      where: { id: (mod as any).course_id, created_by: subjectUserId, deleted_at: null as any } as any,
-    });
-    if (!course) throw new Error('Không tìm thấy khóa học hoặc bạn không có quyền thực hiện thao tác này!');
+    const courseId = Number((mod as any).course_id);
+    await this.ensureOwnerOrAdmin(courseId, subjectUserId);
 
     const assignment = await assignmentRepo.findOne({
       where: { lesson_id: lessonId } as any,
@@ -727,7 +918,6 @@ export class AssignmentServiceImpl implements AssignmentService {
     }
 
     const assignmentId = Number((assignment as any).id);
-    const courseId = Number((course as any).id);
 
     const rows = await AppDataSource.query(
       `

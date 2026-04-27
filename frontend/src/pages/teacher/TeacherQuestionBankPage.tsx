@@ -1,6 +1,6 @@
 // TeacherQuestionBankPage.tsx
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { QUESTION_BANKS_API } from "../../api/questionBanks";
@@ -14,6 +14,15 @@ type QuestionBank = {
   name: string;
   description?: string;
   is_shared: boolean;
+  is_active?: boolean;
+};
+
+type BankUsageItem = {
+  quiz_id: number;
+  lesson_id: number | null;
+  lesson_title: string | null;
+  quiz_title: string | null;
+  question_count: number;
 };
 
 type QuestionOption = {
@@ -61,9 +70,33 @@ const DIFFICULTY_LABELS: Record<BankQuestion["difficulty"], { label: string; col
 
 type MainTab = "manual" | "bulk";
 type BulkSubTab = "text" | "csv" | "ai";
+type PickImportPayload = {
+  source: "question-bank-pick";
+  courseId: number;
+  bankId: number;
+  questions: Array<{
+    id: number;
+    question_text: string;
+    question_type: "multiple_choice" | "true_false";
+    explanation?: string;
+    points?: number;
+    difficulty?: "easy" | "medium" | "hard";
+    options: Array<{ option_text: string; is_correct: boolean }>;
+  }>;
+};
+
+function normalizeQuestionKey(question: { question_text?: string | null; question_type?: string | null }): string {
+  const text = String(question?.question_text || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+  const type = String(question?.question_type || "multiple_choice").toLowerCase();
+  return `${type}::${text}`;
+}
 
 export default function TeacherQuestionBankPage() {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const courseId = Number(id);
   const token = getAccessToken();
@@ -121,15 +154,60 @@ export default function TeacherQuestionBankPage() {
   const [aiExtraInstructions, setAiExtraInstructions] = useState("");
   const [aiAttachments, setAiAttachments] = useState<Array<{ name: string; text: string }>>([]);
   const [aiPendingQuestions, setAiPendingQuestions] = useState<BankQuestion[]>([]);
+  const [questionSearch, setQuestionSearch] = useState("");
+  const [questionTypeFilter, setQuestionTypeFilter] = useState<BankQuestion["question_type"] | "all">("all");
+  const [questionDifficultyFilter, setQuestionDifficultyFilter] = useState<BankQuestion["difficulty"] | "all">("all");
+  const [deleteBlockedUsage, setDeleteBlockedUsage] = useState<{ bankId: number; quizCount: number; usages: BankUsageItem[] } | null>(null);
+  const [showArchivedBanks, setShowArchivedBanks] = useState(false);
+  const [pickedQuestionIds, setPickedQuestionIds] = useState<number[]>([]);
+  const [alreadyInQuizKeys, setAlreadyInQuizKeys] = useState<Set<string>>(new Set());
+  const [importedThisSessionIds, setImportedThisSessionIds] = useState<Set<number>>(new Set());
 
   const selectedBank = useMemo(
     () => banks.find((bank) => bank.id === selectedBankId) ?? null,
     [banks, selectedBankId]
   );
+  const activeBanks = useMemo(() => banks.filter((bank) => bank.is_active !== false), [banks]);
+  const archivedBanks = useMemo(() => banks.filter((bank) => bank.is_active === false), [banks]);
+  const requestedBankId = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const raw = Number(params.get("bankId"));
+    return Number.isFinite(raw) && raw > 0 ? raw : null;
+  }, [location.search]);
+  const isPickMode = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return String(params.get("mode") || "").toLowerCase() === "pick";
+  }, [location.search]);
+  const contextKey = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const raw = String(params.get("contextKey") || "").trim();
+    return raw || null;
+  }, [location.search]);
+  const filteredQuestions = useMemo(() => {
+    const search = questionSearch.trim().toLowerCase();
+    return questions.filter((question) => {
+      if (questionTypeFilter !== "all" && question.question_type !== questionTypeFilter) return false;
+      if (questionDifficultyFilter !== "all" && question.difficulty !== questionDifficultyFilter) return false;
+      if (!search) return true;
+      const tags = Array.isArray(question.tags) ? question.tags.join(" ").toLowerCase() : "";
+      const haystack = [
+        String(question.question_text || ""),
+        String(question.category || ""),
+        String(question.explanation || ""),
+        tags,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(search);
+    });
+  }, [questionDifficultyFilter, questionSearch, questionTypeFilter, questions]);
 
   const loadBanks = useCallback(async () => {
     if (!courseId || Number.isNaN(courseId)) return;
-    const query = new URLSearchParams({ course_id: String(courseId) });
+    const query = new URLSearchParams({
+      course_id: String(courseId),
+      include_archived: "true",
+    });
     const res = await fetch(`${url}${QUESTION_BANKS_API.list}?${query.toString()}`, {
       headers: authHeaders,
     });
@@ -139,10 +217,11 @@ export default function TeacherQuestionBankPage() {
     }
     const nextBanks = Array.isArray(data.data) ? data.data : [];
     setBanks(nextBanks);
-    if (!selectedBankId && nextBanks.length) {
-      setSelectedBankId(nextBanks[0].id);
-    } else if (selectedBankId && !nextBanks.some((item: QuestionBank) => item.id === selectedBankId)) {
-      setSelectedBankId(nextBanks.length ? nextBanks[0].id : null);
+    const active = nextBanks.filter((item: QuestionBank) => item.is_active !== false);
+    if (!selectedBankId && active.length) {
+      setSelectedBankId(active[0].id);
+    } else if (selectedBankId && !active.some((item: QuestionBank) => item.id === selectedBankId)) {
+      setSelectedBankId(active.length ? active[0].id : null);
     }
   }, [authHeaders, courseId, selectedBankId]);
 
@@ -185,6 +264,37 @@ export default function TeacherQuestionBankPage() {
   useEffect(() => {
     setAiPendingQuestions([]);
   }, [selectedBankId]);
+
+  useEffect(() => {
+    setPickedQuestionIds([]);
+  }, [selectedBankId]);
+
+  useEffect(() => {
+    if (!isPickMode || !contextKey) {
+      setAlreadyInQuizKeys(new Set());
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(contextKey);
+      if (!raw) {
+        setAlreadyInQuizKeys(new Set());
+        return;
+      }
+      const parsed = JSON.parse(raw) as { questionKeys?: string[] } | null;
+      const keys = Array.isArray(parsed?.questionKeys) ? parsed!.questionKeys : [];
+      setAlreadyInQuizKeys(new Set(keys.map((item) => String(item))));
+    } catch {
+      setAlreadyInQuizKeys(new Set());
+    }
+  }, [contextKey, isPickMode]);
+
+  useEffect(() => {
+    if (!banks.length || !requestedBankId) return;
+    const matched = banks.find((item) => Number(item.id) === requestedBankId);
+    if (matched && selectedBankId !== matched.id) {
+      setSelectedBankId(matched.id);
+    }
+  }, [banks, requestedBankId, selectedBankId]);
 
   const resetBankForm = () => {
     setBankName("");
@@ -284,9 +394,10 @@ export default function TeacherQuestionBankPage() {
   };
 
   const handleDeleteBank = async (bankId: number) => {
-    if (!window.confirm("Xóa ngân hàng câu hỏi này?")) return;
+    if (!window.confirm("Lưu trữ ngân hàng câu hỏi này? Ngân hàng lưu trữ sẽ bị ẩn khỏi danh sách chọn mới.")) return;
     setLoading(true);
     setError(null);
+    setDeleteBlockedUsage(null);
     try {
       const res = await fetch(`${url}${QUESTION_BANKS_API.deleteBank(bankId)}`, {
         method: "DELETE",
@@ -294,7 +405,7 @@ export default function TeacherQuestionBankPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data?.success === false) {
-        throw new Error(data?.message || "Không thể xóa question bank.");
+        throw new Error(String(data?.message || "Không thể lưu trữ question bank."));
       }
       if (selectedBankId === bankId) {
         setSelectedBankId(null);
@@ -302,8 +413,31 @@ export default function TeacherQuestionBankPage() {
       }
       await loadBanks();
       resetBankForm();
+      setError("Đã lưu trữ ngân hàng câu hỏi. Có thể khôi phục qua DB/Admin khi cần.");
     } catch (err: any) {
       setError(err?.message || "Lỗi xóa ngân hàng.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestoreBank = async (bankId: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${url}${QUESTION_BANKS_API.restoreBank(bankId)}`, {
+        method: "PATCH",
+        headers: authHeaders,
+        body: JSON.stringify({ is_active: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.success === false) {
+        throw new Error(data?.message || "Không thể khôi phục question bank.");
+      }
+      await loadBanks();
+      setError("Đã khôi phục ngân hàng câu hỏi.");
+    } catch (err: any) {
+      setError(err?.message || "Lỗi khôi phục ngân hàng.");
     } finally {
       setLoading(false);
     }
@@ -680,6 +814,192 @@ export default function TeacherQuestionBankPage() {
 
   if (!courseId || Number.isNaN(courseId)) return null;
 
+  if (isPickMode) {
+    const pickableQuestions = filteredQuestions.filter(
+      (q) =>
+        (q.question_type === "multiple_choice" || q.question_type === "true_false") &&
+        Array.isArray(q.options) &&
+        (q.options || []).length >= 2
+    );
+    const selectedQuestions = pickableQuestions.filter((q) => pickedQuestionIds.includes(Number(q.id)));
+    return (
+      <div className="teacher-dashboard question-bank-page">
+        <div className="dashboard-container">
+          <div className="dashboard-header">
+            <div className="header-title-section">
+              <h1 className="dashboard-title">Chọn câu hỏi từ Question Bank</h1>
+              <p className="dashboard-subtitle">Chế độ chọn nhanh để import vào Lesson Studio</p>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => navigate(`/teacher/courses/${courseId}/question-banks`)}
+              >
+                Trang quản lý Question Bank
+              </button>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => window.close()}
+              >
+                Đóng tab
+              </button>
+              <button
+                type="button"
+                className="btn-primary btn-sm"
+                disabled={!selectedBankId || !selectedQuestions.length}
+                onClick={() => {
+                  if (!selectedBankId || !selectedQuestions.length) return;
+                  const payload: PickImportPayload = {
+                    source: "question-bank-pick",
+                    courseId,
+                    bankId: selectedBankId,
+                    questions: selectedQuestions.map((q) => ({
+                      id: Number(q.id),
+                      question_text: String(q.question_text || ""),
+                      question_type: q.question_type === "true_false" ? "true_false" : "multiple_choice",
+                      explanation: q.explanation || "",
+                      points: Number(q.points || 1),
+                      difficulty: q.difficulty || "medium",
+                      options: (q.options || []).map((o) => ({
+                        option_text: String(o.option_text || ""),
+                        is_correct: Boolean(o.is_correct),
+                      })),
+                    })),
+                  };
+                  if (window.opener && !window.opener.closed) {
+                    window.opener.postMessage(payload, window.location.origin);
+                  }
+                  setImportedThisSessionIds((prev) => {
+                    const next = new Set(prev);
+                    selectedQuestions.forEach((q) => next.add(Number(q.id)));
+                    return next;
+                  });
+                  window.close();
+                }}
+              >
+                Import {selectedQuestions.length} câu đã chọn
+              </button>
+            </div>
+          </div>
+
+          {error && <div className="error-message">{error}</div>}
+
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 320px) minmax(0, 1fr)", gap: 16 }}>
+            <div className="bank-list-card">
+              <h3 className="card-subtitle">
+                <span className="material-symbols-outlined">folder_open</span>
+                Chọn ngân hàng
+              </h3>
+              <div className="bank-list">
+                {activeBanks.map((bank) => (
+                  <div key={bank.id} className={`bank-item ${selectedBankId === bank.id ? "active" : ""}`}>
+                    <button type="button" className="bank-select-btn" onClick={() => setSelectedBankId(bank.id)}>
+                      <div className="bank-info">
+                        <div className="bank-name">
+                          <span className="material-symbols-outlined">folder</span>
+                          <strong>{bank.name}</strong>
+                        </div>
+                        <p className="bank-description">{bank.description || "Không có mô tả"}</p>
+                      </div>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="questions-section">
+              <div className="question-filter-toolbar">
+                <input
+                  className="form-input"
+                  placeholder="Tìm theo nội dung, category, tags, giải thích..."
+                  value={questionSearch}
+                  onChange={(e) => setQuestionSearch(e.target.value)}
+                />
+                <select
+                  className="form-input"
+                  value={questionTypeFilter}
+                  onChange={(e) => setQuestionTypeFilter(e.target.value as BankQuestion["question_type"] | "all")}
+                >
+                  <option value="all">Tất cả loại câu</option>
+                  {QUESTION_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {TYPE_LABELS[type]}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="form-input"
+                  value={questionDifficultyFilter}
+                  onChange={(e) => setQuestionDifficultyFilter(e.target.value as BankQuestion["difficulty"] | "all")}
+                >
+                  <option value="all">Tất cả độ khó</option>
+                  {DIFFICULTIES.map((item) => (
+                    <option key={item} value={item}>
+                      {DIFFICULTY_LABELS[item].label}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" className="btn-secondary btn-sm" onClick={() => setPickedQuestionIds([])}>
+                  Bỏ chọn
+                </button>
+              </div>
+
+              <div className="questions-list">
+                {pickableQuestions.map((question) => (
+                  <div key={question.id} className="question-item">
+                    <div className="question-content">
+                      {(() => {
+                        const questionKey = normalizeQuestionKey(question);
+                        const alreadyInQuiz = alreadyInQuizKeys.has(questionKey);
+                        const importedInSession = importedThisSessionIds.has(Number(question.id));
+                        return (
+                      <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={pickedQuestionIds.includes(Number(question.id))}
+                          disabled={alreadyInQuiz}
+                          onChange={(e) =>
+                            setPickedQuestionIds((prev) =>
+                              e.target.checked
+                                ? [...prev, Number(question.id)]
+                                : prev.filter((id) => id !== Number(question.id))
+                            )
+                          }
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div className="question-text">{question.question_text}</div>
+                          <div className="question-badges">
+                            <span className={`difficulty-badge difficulty-${question.difficulty}`}>
+                              {DIFFICULTY_LABELS[question.difficulty].label}
+                            </span>
+                            <span className="type-badge">{TYPE_LABELS[question.question_type]}</span>
+                            <span className="points-badge">{question.points ?? 1} điểm</span>
+                            {alreadyInQuiz ? <span className="type-badge">Đã có trong quiz</span> : null}
+                            {!alreadyInQuiz && importedInSession ? <span className="type-badge">Đã import</span> : null}
+                          </div>
+                        </div>
+                      </label>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                ))}
+                {!pickableQuestions.length && !loading && (
+                  <div className="empty-state">
+                    <span className="material-symbols-outlined">help_outline</span>
+                    <p>Không có câu hỏi phù hợp để import</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="teacher-dashboard question-bank-page">
       <div className="dashboard-container">
@@ -711,6 +1031,46 @@ export default function TeacherQuestionBankPage() {
         </div>
 
         {error && <div className="error-message">{error}</div>}
+        {deleteBlockedUsage && (
+          <div className="warning-panel">
+            <div className="warning-title">Ngân hàng chưa thể lưu trữ</div>
+            <div className="warning-desc">
+              Đang có câu hỏi của ngân hàng này được dùng trong {deleteBlockedUsage.quizCount} quiz.
+            </div>
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              onClick={() => navigate(`/teacher/courses/${courseId}/assessments`)}
+            >
+              Đi tới danh sách quiz đang dùng
+            </button>
+            {deleteBlockedUsage.usages.length > 0 && (
+              <div className="warning-usage-list">
+                {deleteBlockedUsage.usages.slice(0, 8).map((item) => (
+                  <div key={`${item.quiz_id}-${item.lesson_id ?? "na"}`} className="warning-usage-item">
+                    <div>
+                      <strong>{item.quiz_title || `Quiz #${item.quiz_id}`}</strong>
+                      <div>{item.lesson_title || (item.lesson_id ? `Lesson #${item.lesson_id}` : "Chưa xác định lesson")}</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      onClick={() =>
+                        navigate(
+                          item.lesson_id
+                            ? `/teacher/courses/${courseId}/lessons/${item.lesson_id}/studio?section=quiz`
+                            : `/teacher/courses/${courseId}/assessments`
+                        )
+                      }
+                    >
+                      Mở
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Two Column Layout */}
         <div className="question-bank-layout">
@@ -785,7 +1145,7 @@ export default function TeacherQuestionBankPage() {
                 Danh sách ngân hàng
               </h3>
               <div className="bank-list">
-                {banks.map((bank) => (
+                {activeBanks.map((bank) => (
                   <div 
                     key={bank.id} 
                     className={`bank-item ${selectedBankId === bank.id ? "active" : ""}`}
@@ -813,17 +1173,48 @@ export default function TeacherQuestionBankPage() {
                       <button className="icon-btn" onClick={() => startEditBank(bank)} title="Sửa">
                         <span className="material-symbols-outlined">edit</span>
                       </button>
-                      <button className="icon-btn danger" onClick={() => void handleDeleteBank(bank.id)} title="Xóa">
-                        <span className="material-symbols-outlined">delete</span>
+                      <button className="icon-btn danger" onClick={() => void handleDeleteBank(bank.id)} title="Lưu trữ">
+                        <span className="material-symbols-outlined">archive</span>
                       </button>
                     </div>
                   </div>
                 ))}
-                {!banks.length && !loading && (
+                {!activeBanks.length && !loading && (
                   <div className="empty-state small">
                     <span className="material-symbols-outlined">inbox</span>
                     <p>Chưa có ngân hàng câu hỏi nào</p>
                     <p className="empty-hint">Hãy tạo ngân hàng đầu tiên để bắt đầu</p>
+                  </div>
+                )}
+                {archivedBanks.length > 0 && (
+                  <div className="archived-bank-section">
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      onClick={() => setShowArchivedBanks((prev) => !prev)}
+                    >
+                      {showArchivedBanks ? "Ẩn ngân hàng đã lưu trữ" : `Xem ngân hàng đã lưu trữ (${archivedBanks.length})`}
+                    </button>
+                    {showArchivedBanks && (
+                      <div className="archived-bank-list">
+                        {archivedBanks.map((bank) => (
+                          <div key={`archived-${bank.id}`} className="bank-item archived">
+                            <div className="bank-info">
+                              <div className="bank-name">
+                                <span className="material-symbols-outlined">inventory_2</span>
+                                <strong>{bank.name}</strong>
+                              </div>
+                              <p className="bank-description">{bank.description || "Không có mô tả"}</p>
+                            </div>
+                            <div className="bank-actions">
+                              <button className="icon-btn" onClick={() => void handleRestoreBank(bank.id)} title="Khôi phục">
+                                <span className="material-symbols-outlined">restore</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1226,11 +1617,55 @@ export default function TeacherQuestionBankPage() {
                 <div className="section-header">
                   <span className="material-symbols-outlined section-icon">list_alt</span>
                   <h2 className="section-title">Danh sách câu hỏi</h2>
-                  <span className="question-total">{questions.length} câu hỏi</span>
+                  <span className="question-total">{filteredQuestions.length}/{questions.length} câu hỏi</span>
+                </div>
+
+                <div className="question-filter-toolbar">
+                  <input
+                    className="form-input"
+                    placeholder="Tìm theo nội dung, category, tags, giải thích..."
+                    value={questionSearch}
+                    onChange={(e) => setQuestionSearch(e.target.value)}
+                  />
+                  <select
+                    className="form-input"
+                    value={questionTypeFilter}
+                    onChange={(e) => setQuestionTypeFilter(e.target.value as BankQuestion["question_type"] | "all")}
+                  >
+                    <option value="all">Tất cả loại câu</option>
+                    {QUESTION_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {TYPE_LABELS[type]}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="form-input"
+                    value={questionDifficultyFilter}
+                    onChange={(e) => setQuestionDifficultyFilter(e.target.value as BankQuestion["difficulty"] | "all")}
+                  >
+                    <option value="all">Tất cả độ khó</option>
+                    {DIFFICULTIES.map((item) => (
+                      <option key={item} value={item}>
+                        {DIFFICULTY_LABELS[item].label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-sm"
+                    onClick={() => {
+                      setQuestionSearch("");
+                      setQuestionTypeFilter("all");
+                      setQuestionDifficultyFilter("all");
+                    }}
+                  >
+                    Xóa lọc
+                  </button>
                 </div>
 
                 <div className="questions-list">
-                  {questions.map((question) => (
+                  {filteredQuestions.map((question) => (
                     <div key={question.id} className="question-item">
                       <div className="question-content">
                         <div className="question-header">
@@ -1283,11 +1718,20 @@ export default function TeacherQuestionBankPage() {
                       </div>
                     </div>
                   ))}
-                  {!questions.length && !loading && (
+                  {!filteredQuestions.length && !loading && (
                     <div className="empty-state">
                       <span className="material-symbols-outlined">help_outline</span>
-                      <p>Chưa có câu hỏi nào trong ngân hàng này</p>
-                      <p className="empty-hint">Hãy thêm câu hỏi đầu tiên bằng form bên trên hoặc nhập hàng loạt</p>
+                      {questions.length ? (
+                        <>
+                          <p>Không có câu hỏi khớp bộ lọc hiện tại</p>
+                          <p className="empty-hint">Hãy đổi từ khóa hoặc reset bộ lọc để xem thêm câu hỏi</p>
+                        </>
+                      ) : (
+                        <>
+                          <p>Chưa có câu hỏi nào trong ngân hàng này</p>
+                          <p className="empty-hint">Hãy thêm câu hỏi đầu tiên bằng form bên trên hoặc nhập hàng loạt</p>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

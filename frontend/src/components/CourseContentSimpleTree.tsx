@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
-import { getAccessToken } from "../utils/authStorage";
+import { useAuth } from "../contexts/Auth";
 import "./CourseContentSimpleTree.css";
 
 type LessonNode = {
@@ -11,7 +11,15 @@ type LessonNode = {
   open_at?: string | null;
   is_published?: boolean;
   lesson_type?: "video" | "text" | "quiz" | "assignment";
+  quality_status?: "ok" | "needs_fix";
+  quality_issue?: string | null;
 };
+
+type LessonResourceReviewItem = {
+  review_status?: "pending" | "approved" | "rejected";
+};
+
+type ReviewState = "approved" | "rejected" | "pending" | "empty";
 
 type ModuleNode = {
   id: number;
@@ -42,9 +50,9 @@ function getLessonTypeBadge(lessonType?: LessonNode["lesson_type"]): { icon: str
   return { icon: "menu_book", className: "is-content", title: "Bài học" };
 }
 
-export default function CourseContentSimpleTree({ courseId }: { courseId: number }) {
+export default function CourseContentSimpleTree({ courseId, readOnly = false }: { courseId: number; readOnly?: boolean }) {
   const navigate = useNavigate();
-  const token = useMemo(() => getAccessToken(), []);
+  const { accessToken: token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modules, setModules] = useState<ModuleNode[]>([]);
@@ -57,6 +65,42 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
   const [draggingLesson, setDraggingLesson] = useState<{ moduleId: number; lessonId: number } | null>(null);
   const [dragOverLessonId, setDragOverLessonId] = useState<number | null>(null);
   const [dragOverLessonModuleId, setDragOverLessonModuleId] = useState<number | null>(null);
+  const [reviewStateByLesson, setReviewStateByLesson] = useState<Record<number, ReviewState>>({});
+
+  const getReviewStateFromItems = (items: LessonResourceReviewItem[]): ReviewState => {
+    if (!Array.isArray(items) || !items.length) return "empty";
+    const hasRejected = items.some((x) => x.review_status === "rejected");
+    if (hasRejected) return "rejected";
+    const hasPending = items.some((x) => x.review_status === "pending");
+    if (hasPending) return "pending";
+    const hasApproved = items.some((x) => x.review_status === "approved");
+    if (hasApproved) return "approved";
+    return "empty";
+  };
+
+  const getModuleReviewState = (moduleId: number): ReviewState => {
+    const module = modules.find((m) => m.id === moduleId);
+    if (!module) return "empty";
+    const states = (module.lessons || []).map((l) => reviewStateByLesson[l.id] || "empty");
+    const hasAny = states.some((s) => s !== "empty");
+    if (!hasAny) return "empty";
+    if (states.some((s) => s === "rejected")) return "rejected";
+    if (states.some((s) => s === "pending")) return "pending";
+    return "approved";
+  };
+
+  const renderReviewIcon = (state: ReviewState) => {
+    if (state === "approved") {
+      return <span className="material-symbols-outlined review-status-icon approved" title="Đã duyệt">check_circle</span>;
+    }
+    if (state === "rejected") {
+      return <span className="material-symbols-outlined review-status-icon rejected" title="Bị từ chối">cancel</span>;
+    }
+    if (state === "pending") {
+      return <span className="material-symbols-outlined review-status-icon pending" title="Chờ duyệt">hourglass_top</span>;
+    }
+    return <span className="material-symbols-outlined review-status-icon empty" title="Chưa có tài nguyên">help</span>;
+  };
 
   const toLocalDatetime = (iso?: string | null) => {
     if (!iso) return "";
@@ -145,6 +189,42 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
       .catch((e: any) => setError(e?.message || "Không thể tải cấu trúc nội dung."))
       .finally(() => setLoading(false));
   }, [courseId, fetchTree]);
+
+  useEffect(() => {
+    const lessonIds = modules.flatMap((m) => (m.lessons || []).map((l) => Number(l.id))).filter((id) => Number.isFinite(id));
+    if (!lessonIds.length) {
+      setReviewStateByLesson({});
+      return;
+    }
+    let cancelled = false;
+    const fetchReviewStates = async () => {
+      try {
+        const entries = await Promise.all(
+          lessonIds.map(async (lessonId) => {
+            const res = await fetch(`${url}${COURSES_API.listLessonResources(courseId, lessonId)}`, {
+              headers: {
+                "Content-Type": "application/json",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+            });
+            const json = (await res.json().catch(() => ({}))) as { items?: LessonResourceReviewItem[] };
+            if (!res.ok) return [lessonId, "empty" as ReviewState] as const;
+            return [lessonId, getReviewStateFromItems(Array.isArray(json.items) ? json.items : [])] as const;
+          })
+        );
+        if (cancelled) return;
+        const map: Record<number, ReviewState> = {};
+        for (const [lessonId, state] of entries) map[lessonId] = state;
+        setReviewStateByLesson(map);
+      } catch {
+        if (!cancelled) setReviewStateByLesson({});
+      }
+    };
+    void fetchReviewStates();
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId, modules, token]);
 
   const updateModuleOpenAt = async (moduleId: number, valueIso: string | null) => {
     try {
@@ -439,29 +519,31 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
         >
           {showDisabledSection ? "Ẩn mục đã disable" : `Mục đã disable (${disabledCount})`}
         </button>
-        <button
-          type="button"
-          className="tree-add-btn"
-          title="Tạo bài học và mở Studio"
-          onClick={() => void openStudioByPlusIcon()}
-          disabled={openingStudio}
-        >
-          <span className="material-symbols-outlined">add</span>
-        </button>
+        {!readOnly ? (
+          <button
+            type="button"
+            className="tree-add-btn"
+            title="Tạo bài học và mở Studio"
+            onClick={() => void openStudioByPlusIcon()}
+            disabled={openingStudio}
+          >
+            <span className="material-symbols-outlined">add</span>
+          </button>
+        ) : null}
       </div>
       <ul className="tree-root">
         {activeModules.map((m) => (
           <li
             key={m.id}
             className={`tree-node module-node ${draggingModuleId === m.id ? "is-dragging" : ""} ${dragOverModuleId === m.id && draggingModuleId !== m.id ? "is-drag-over" : ""}`}
-            draggable
+            draggable={!readOnly}
             onDragStart={() => {
               setDraggingModuleId(m.id);
               setDragOverModuleId(null);
             }}
             onDragOver={(e) => {
               e.preventDefault();
-              if (draggingModuleId && draggingModuleId !== m.id) {
+              if (!readOnly && draggingModuleId && draggingModuleId !== m.id) {
                 setDragOverModuleId(m.id);
               }
             }}
@@ -470,7 +552,7 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
               const fromId = draggingModuleId;
               setDragOverModuleId(null);
               setDraggingModuleId(null);
-              if (fromId && fromId !== m.id) {
+              if (!readOnly && fromId && fromId !== m.id) {
                 void reorderModules(fromId, m.id);
               }
             }}
@@ -480,6 +562,7 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
             }}
           >
             <div className="tree-title-row">
+              <span className="tree-review-status-wrap">{renderReviewIcon(getModuleReviewState(m.id))}</span>
               <div className="tree-title">{m.title || `Chương #${m.id}`}</div>
               {m.open_at ? (
                 <span
@@ -487,8 +570,12 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                   role="button"
                   tabIndex={0}
                   title="Bấm để đổi ngày mở khóa"
-                  onClick={() => openScheduleEditor(`m:${m.id}`, m.open_at)}
+                  onClick={() => {
+                    if (readOnly) return;
+                    openScheduleEditor(`m:${m.id}`, m.open_at);
+                  }}
                   onKeyDown={(e) => {
+                    if (readOnly) return;
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       openScheduleEditor(`m:${m.id}`, m.open_at);
@@ -496,20 +583,22 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                   }}
                 >
                   <span>{toDisplaySchedule(m.open_at)}</span>
-                  <button
-                    type="button"
-                    className="tree-schedule-chip-close"
-                    title="Xóa điều kiện mở khóa"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void updateModuleOpenAt(m.id, null);
-                    }}
-                  >
-                    <span className="material-symbols-outlined">close</span>
-                  </button>
+                  {!readOnly ? (
+                    <button
+                      type="button"
+                      className="tree-schedule-chip-close"
+                      title="Xóa điều kiện mở khóa"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void updateModuleOpenAt(m.id, null);
+                      }}
+                    >
+                      <span className="material-symbols-outlined">close</span>
+                    </button>
+                  ) : null}
                 </span>
               ) : null}
-              {!m.open_at ? (
+              {!m.open_at && !readOnly ? (
                 <button
                   type="button"
                   className="tree-icon-btn"
@@ -519,14 +608,16 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                   <span className="material-symbols-outlined">schedule</span>
                 </button>
               ) : null}
-              <button
-                type="button"
-                className="tree-disable-btn"
-                title="Disable chương"
-                onClick={() => void updateModulePublished(m.id, false)}
-              >
-                Disable
-              </button>
+              {!readOnly ? (
+                <button
+                  type="button"
+                  className="tree-disable-btn"
+                  title="Disable chương"
+                  onClick={() => void updateModulePublished(m.id, false)}
+                >
+                  Disable
+                </button>
+              ) : null}
               {scheduleEditorKey === `m:${m.id}` && (
                 <div className="tree-schedule-editor">
                   <input
@@ -542,6 +633,7 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                         },
                       }))
                     }
+                    disabled={readOnly}
                   />
                   <input
                     type="number"
@@ -562,6 +654,7 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                         },
                       }));
                     }}
+                    disabled={readOnly}
                   />
                   <span className="tree-time-sep">:</span>
                   <input
@@ -580,6 +673,7 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                         },
                       }))
                     }
+                    disabled={readOnly}
                   />
                   <select
                     className="tree-datetime-input tree-period-input"
@@ -593,11 +687,12 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                         },
                       }))
                     }
+                    disabled={readOnly}
                   >
                     <option value="AM">AM</option>
                     <option value="PM">PM</option>
                   </select>
-                  <button type="button" className="tree-save-btn" onClick={() => void saveScheduleForModule(m.id)}>
+                  <button type="button" className="tree-save-btn" onClick={() => void saveScheduleForModule(m.id)} disabled={readOnly}>
                     Lưu
                   </button>
                 </div>
@@ -626,11 +721,12 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
               >
                 {m.lessons.map((l) => {
                   const lessonTypeBadge = getLessonTypeBadge(l.lesson_type);
+                  const lessonReviewState = reviewStateByLesson[l.id] || "empty";
                   return (
                   <li
                     key={l.id}
                     className={`tree-node lesson-node ${draggingLesson?.lessonId === l.id ? "is-dragging" : ""} ${dragOverLessonId === l.id && draggingLesson?.lessonId !== l.id ? "is-drag-over" : ""}`}
-                    draggable
+                    draggable={!readOnly}
                     onDragStart={(e) => {
                       e.stopPropagation();
                       setDraggingLesson({ moduleId: m.id, lessonId: l.id });
@@ -640,7 +736,7 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                     onDragOver={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      if (draggingLesson && draggingLesson.lessonId !== l.id) {
+                      if (!readOnly && draggingLesson && draggingLesson.lessonId !== l.id) {
                         setDragOverLessonId(l.id);
                         setDragOverLessonModuleId(m.id);
                       }
@@ -652,7 +748,7 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                       setDragOverLessonId(null);
                       setDragOverLessonModuleId(null);
                       setDraggingLesson(null);
-                      if (dragging && dragging.lessonId !== l.id) {
+                      if (!readOnly && dragging && dragging.lessonId !== l.id) {
                         void reorderLessons(dragging.moduleId, dragging.lessonId, m.id, l.id);
                       }
                     }}
@@ -664,6 +760,7 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                     }}
                   >
                     <div className="tree-title-row">
+                      <span className="tree-review-status-wrap">{renderReviewIcon(lessonReviewState)}</span>
                       {lessonTypeBadge ? (
                         <span className={`tree-lesson-type-icon ${lessonTypeBadge.className}`} title={lessonTypeBadge.title}>
                           <span className="material-symbols-outlined">{lessonTypeBadge.icon}</span>
@@ -677,14 +774,26 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                       >
                         {l.title || `Bài học #${l.id}`}
                       </button>
+                      {l.quality_status === "needs_fix" ? (
+                        <span
+                          className="tree-quality-badge is-warning"
+                          title={l.quality_issue || "Bài học chưa đạt điều kiện chất lượng để gửi duyệt."}
+                        >
+                          Chưa đạt
+                        </span>
+                      ) : null}
                       {l.open_at ? (
                         <span
                           className="tree-schedule-chip tree-schedule-chip-action is-set"
                           role="button"
                           tabIndex={0}
                           title="Bấm để đổi ngày mở khóa"
-                          onClick={() => openScheduleEditor(`l:${l.id}`, l.open_at)}
+                          onClick={() => {
+                            if (readOnly) return;
+                            openScheduleEditor(`l:${l.id}`, l.open_at);
+                          }}
                           onKeyDown={(e) => {
+                            if (readOnly) return;
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
                               openScheduleEditor(`l:${l.id}`, l.open_at);
@@ -692,20 +801,22 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                           }}
                         >
                           <span>{toDisplaySchedule(l.open_at)}</span>
-                          <button
-                            type="button"
-                            className="tree-schedule-chip-close"
-                            title="Xóa điều kiện mở khóa"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void updateLessonOpenAt(l.id, null);
-                            }}
-                          >
-                            <span className="material-symbols-outlined">close</span>
-                          </button>
+                          {!readOnly ? (
+                            <button
+                              type="button"
+                              className="tree-schedule-chip-close"
+                              title="Xóa điều kiện mở khóa"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void updateLessonOpenAt(l.id, null);
+                              }}
+                            >
+                              <span className="material-symbols-outlined">close</span>
+                            </button>
+                          ) : null}
                         </span>
                       ) : null}
-                      {!l.open_at ? (
+                      {!l.open_at && !readOnly ? (
                         <button
                           type="button"
                           className="tree-icon-btn"
@@ -715,14 +826,16 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                           <span className="material-symbols-outlined">schedule</span>
                         </button>
                       ) : null}
-                      <button
-                        type="button"
-                        className="tree-disable-btn"
-                        title="Disable bài học"
-                        onClick={() => void updateLessonPublished(l.id, false)}
-                      >
-                        Disable
-                      </button>
+                      {!readOnly ? (
+                        <button
+                          type="button"
+                          className="tree-disable-btn"
+                          title="Disable bài học"
+                          onClick={() => void updateLessonPublished(l.id, false)}
+                        >
+                          Disable
+                        </button>
+                      ) : null}
                       {scheduleEditorKey === `l:${l.id}` && (
                         <div className="tree-schedule-editor">
                           <input
@@ -738,6 +851,7 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                                 },
                               }))
                             }
+                            disabled={readOnly}
                           />
                           <input
                             type="number"
@@ -758,6 +872,7 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                                 },
                               }));
                             }}
+                            disabled={readOnly}
                           />
                           <span className="tree-time-sep">:</span>
                           <input
@@ -776,6 +891,7 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                                 },
                               }))
                             }
+                            disabled={readOnly}
                           />
                           <select
                             className="tree-datetime-input tree-period-input"
@@ -789,11 +905,12 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                                 },
                               }))
                             }
+                            disabled={readOnly}
                           >
                             <option value="AM">AM</option>
                             <option value="PM">PM</option>
                           </select>
-                          <button type="button" className="tree-save-btn" onClick={() => void saveScheduleForLesson(l.id)}>
+                          <button type="button" className="tree-save-btn" onClick={() => void saveScheduleForLesson(l.id)} disabled={readOnly}>
                             Lưu
                           </button>
                         </div>
@@ -817,7 +934,7 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
                   setDragOverLessonId(null);
                   setDragOverLessonModuleId(null);
                   setDraggingLesson(null);
-                  if (dragging) {
+                  if (!readOnly && dragging) {
                     void reorderLessons(dragging.moduleId, dragging.lessonId, m.id, null);
                   }
                 }}
@@ -831,7 +948,7 @@ export default function CourseContentSimpleTree({ courseId }: { courseId: number
       {!activeModules.length ? (
         <div className="content-simple-tree-state">Không còn mục đang hiển thị. Hãy khôi phục trong phần mục đã disable.</div>
       ) : null}
-      {showDisabledSection && (
+      {!readOnly && showDisabledSection && (
         <div className="tree-disabled-section">
           <div className="tree-disabled-title">Chương/Bài học đã Disable</div>
           {!disabledCount ? (

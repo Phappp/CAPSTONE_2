@@ -10,6 +10,15 @@ const upload = multer({
   limits: { fileSize: 100 * 1024 * 1024 },
 });
 
+const ALLOWED_VIDEO_EXT = ['mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv', 'ogg'];
+const ALLOWED_DOC_EXT = ['pdf', 'doc', 'docx', 'html'];
+
+function getFileExtension(filename: string): string {
+  const s = String(filename || '').toLowerCase().trim();
+  const idx = s.lastIndexOf('.');
+  return idx >= 0 ? s.slice(idx + 1) : '';
+}
+
 const initCourseUploadRoute = (controller: CourseController) => {
   const router = express.Router();
 
@@ -28,6 +37,21 @@ const initCourseUploadRoute = (controller: CourseController) => {
           res.status(400).json({ message: 'Vui lòng chọn file.' });
           return;
         }
+        const mimeType = String(file.mimetype || '').toLowerCase().trim();
+        const ext = getFileExtension(file.originalname);
+        const isVideo = mimeType.startsWith('video/');
+        const isPdf = mimeType === 'application/pdf' && ext === 'pdf';
+        const isWord =
+          (mimeType === 'application/msword' && ext === 'doc') ||
+          (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' && ext === 'docx');
+        const isHtml = mimeType === 'text/html' && ext === 'html';
+        const videoExtAllowed = ALLOWED_VIDEO_EXT.includes(ext);
+        if ((isVideo && !videoExtAllowed) || (!isVideo && !isPdf && !isWord && !isHtml)) {
+          res.status(400).json({
+            message: 'Chỉ hỗ trợ file PDF, Word (.doc/.docx), HTML (.html) hoặc video hợp lệ.',
+          });
+          return;
+        }
 
         if (!isCloudinaryEnabled()) {
           res.status(500).json({
@@ -38,7 +62,6 @@ const initCourseUploadRoute = (controller: CourseController) => {
         }
 
         // Video dùng resource_type 'video' (giới hạn 100MB); file khác (PDF, Word, audio...) dùng 'raw' (giới hạn 10MB).
-        const isVideo = (file.mimetype || '').startsWith('video/');
         const resultUpload = await uploadBufferToCloudinary({
           buffer: file.buffer,
           folder: `capstone/courses/${courseId}/lessons/${lessonId}/resources`,
@@ -49,11 +72,11 @@ const initCourseUploadRoute = (controller: CourseController) => {
         const sizeBytes = resultUpload.bytes;
         const result = await controller.service.createLessonFileResource(uid, courseId, lessonId, {
           filename: file.originalname,
-          mime_type: file.mimetype,
+          mime_type: mimeType,
           size_bytes: sizeBytes,
           url,
         });
-        res.status(201).json({ id: result.id, url });
+        res.status(201).json({ id: result.id, url, review_status: 'pending' });
       } catch (err) {
         next(err);
       }

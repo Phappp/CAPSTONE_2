@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
-import { getAccessToken } from "../../utils/authStorage";
+import { useAuth } from "../../contexts/Auth";
 import "./CoursesCatalogPage.css";
 
 type PublishedCourse = {
@@ -39,7 +39,7 @@ function levelBadge(level: string) {
 
 export default function CoursesCatalogPage() {
   const navigate = useNavigate();
-  const token = useMemo(() => getAccessToken(), []);
+  const { accessToken: token } = useAuth();
 
   const [qInput, setQInput] = useState("");
   const [q, setQ] = useState("");

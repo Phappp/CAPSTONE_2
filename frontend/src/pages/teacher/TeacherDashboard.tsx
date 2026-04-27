@@ -4,7 +4,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
-import { getAccessToken } from "../../utils/authStorage";
 import { useAuth } from "../../contexts/Auth";
 import CommonModal from "../../components/CommonModal";
 import "./TeacherDashboard.css";
@@ -12,7 +11,7 @@ import "./TeacherDashboard.css";
 type CourseViewMode = "list" | "grid" | "compact";
 
 export default function TeacherDashboard() {
-  const { user } = useAuth();
+  const { user, accessToken: token } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const TAB_STORAGE_KEY = "teacher_courses_tab";
@@ -166,7 +165,6 @@ export default function TeacherDashboard() {
     });
   }, [result, timeFilterEnabled, timeFrom, timeTo]);
 
-  const token = useMemo(() => getAccessToken(), []);
 
   const fetchStats = async () => {
     const res = await fetch(`${url}${COURSES_API.myStats}`, {
@@ -989,7 +987,7 @@ export default function TeacherDashboard() {
                     </div>
 
                     <div className="course-actions" data-course-actions-menu="root">
-                      <button
+                      {/* <button
                         className="action-trigger"
                         onClick={(e) => {
                           e.preventDefault();
@@ -999,7 +997,7 @@ export default function TeacherDashboard() {
                         disabled={loading}
                       >
                         <span className="material-symbols-outlined">more_horiz</span>
-                      </button>
+                      </button> */}
 
                       {openMenuCourseId === c.id && (
                         <div className="action-menu">

@@ -353,6 +353,68 @@ export type PendingReviewCourse = {
   };
 };
 
+export type PendingLessonResource = {
+  id: number;
+  lesson_id: number;
+  resource_type: "file" | "video";
+  resource_kind: "pdf" | "word" | "video" | "youtube" | "other";
+  url: string;
+  filename: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  preview_url: string | null;
+  review_status: "pending" | "approved" | "rejected";
+  review_reason: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+  course_id: number;
+  course_title: string;
+  lesson_title: string;
+  teacher_id: number;
+  is_resubmitted?: boolean;
+  last_review_decision?: "submit" | "approve" | "reject" | "resubmit" | null;
+  last_review_note?: string | null;
+  last_reviewed_at?: string | null;
+  previous_rejected_reason?: string | null;
+};
+
+export type TeacherRejectedLessonResource = {
+  id: number;
+  lesson_id: number;
+  resource_type: "file" | "video";
+  resource_kind: "pdf" | "word" | "video" | "youtube" | "other";
+  url: string;
+  filename: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  preview_url: string | null;
+  review_status: "pending" | "approved" | "rejected";
+  review_reason: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+  course_id: number;
+  course_title: string;
+  module_id: number;
+  module_title: string;
+  lesson_title: string;
+  lesson_type: "text" | "video" | "quiz" | "assignment";
+  review_event_note: string | null;
+  review_event_at: string | null;
+};
+
+export type LessonResourceReviewTimelineItem = {
+  id: number;
+  resource_id: number;
+  actor_user_id: number;
+  from_status: "pending" | "approved" | "rejected" | null;
+  to_status: "pending" | "approved" | "rejected";
+  decision: "submit" | "approve" | "reject" | "resubmit";
+  note: string | null;
+  created_at: string;
+};
+
 export type CourseReviewTimelineItem = {
   id: number;
   course_id: number;
@@ -428,6 +490,88 @@ export async function apiReviewCourseByAdmin(params: {
   if (!res.ok) {
     throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_COURSE_REVIEW_FAILED");
   }
+}
+
+export async function apiGetPendingLessonResources(params: {
+  accessToken: string;
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  kind?: "pdf" | "word" | "video" | "youtube" | "other" | "all";
+  courseId?: number;
+}): Promise<{ items: PendingLessonResource[]; page: number; page_size: number; total: number }> {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.pageSize) q.set("page_size", String(params.pageSize));
+  if (params.q?.trim()) q.set("q", params.q.trim());
+  if (params.kind && params.kind !== "all") q.set("kind", params.kind);
+  if (params.courseId) q.set("course_id", String(params.courseId));
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}${COURSES_API.adminPendingLessonResources}${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_PENDING_RESOURCE_FETCH_FAILED");
+  }
+  return data as { items: PendingLessonResource[]; page: number; page_size: number; total: number };
+}
+
+export async function apiGetMyRejectedLessonResources(params: {
+  accessToken: string;
+  courseId: number;
+}): Promise<{ course_id: number; items: TeacherRejectedLessonResource[] }> {
+  const res = await fetch(`${API_BASE_URL}${COURSES_API.myRejectedResources(params.courseId)}`, {
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as any)?.message || (data as any)?.code || "TEACHER_REJECTED_RESOURCE_FETCH_FAILED");
+  }
+  return data as { course_id: number; items: TeacherRejectedLessonResource[] };
+}
+
+export async function apiReviewLessonResourceByAdmin(params: {
+  accessToken: string;
+  resourceId: number;
+  decision: "approve" | "reject";
+  note?: string;
+}): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${COURSES_API.adminReviewLessonResource(params.resourceId)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+    body: JSON.stringify({
+      decision: params.decision,
+      note: params.note?.trim() || undefined,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_RESOURCE_REVIEW_FAILED");
+  }
+}
+
+export async function apiGetLessonResourceReviewTimeline(params: {
+  accessToken: string;
+  resourceId: number;
+}): Promise<{ resource_id: number; items: LessonResourceReviewTimelineItem[] }> {
+  const res = await fetch(`${API_BASE_URL}${COURSES_API.adminReviewLessonResourceTimeline(params.resourceId)}`, {
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_RESOURCE_REVIEW_TIMELINE_FAILED");
+  }
+  return data as { resource_id: number; items: LessonResourceReviewTimelineItem[] };
 }
 
 export async function apiGetCourseReviewTimeline(params: {

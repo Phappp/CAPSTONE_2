@@ -1,14 +1,14 @@
 import { useLayoutEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import LearnerQuizTake from "../../components/LearnerQuizTake";
-import { getAccessToken } from "../../utils/authStorage";
+import { useAuth } from "../../contexts/Auth";
 import "./LearnerQuizTakePage.css";
 
 export default function LearnerQuizTakePage() {
   const { courseId, lessonId } = useParams();
   const [search] = useSearchParams();
   const navigate = useNavigate();
-  const token = useMemo(() => getAccessToken(), []);
+  const { accessToken: token } = useAuth();
   const [ready, setReady] = useState(false);
 
   const cid = Number(courseId);

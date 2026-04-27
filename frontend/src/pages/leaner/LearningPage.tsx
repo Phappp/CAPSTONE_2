@@ -4,7 +4,7 @@ import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { ASSIGNMENTS_API } from "../../api/assignments";
-import { getAccessToken } from "../../utils/authStorage";
+import { useAuth } from "../../contexts/Auth";
 import type { ModuleItem } from "../../components/LearnerCourseContentTree";
 import "./LearningPage.css";
 
@@ -54,7 +54,7 @@ export default function LearningPage() {
   const courseId = Number(params.id);
   const slug = String(params.slug || "");
 
-  const token = useMemo(() => getAccessToken(), []);
+  const { accessToken: token } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

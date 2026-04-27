@@ -11,7 +11,9 @@ import {
   CreateModuleBody,
   LearnerLessonProgressBody,
   ListPendingReviewCoursesQuery,
+  ListPendingLessonResourcesQuery,
   ReviewCourseBody,
+  ReviewLessonResourceBody,
   UpdateCourseCompletionRulesBody,
   ListMyCoursesQuery,
   ListPublishedCoursesQuery,
@@ -336,6 +338,54 @@ export class CourseController extends BaseController {
     });
   }
 
+  async listPendingLessonResourcesByAdmin(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const query = new ListPendingLessonResourcesQuery(req.query);
+      const uid = Number(req.getSubject());
+      const result = await this.service.listPendingLessonResourcesByAdmin(uid, {
+        page: query.page,
+        page_size: query.page_size,
+        q: query.q,
+        kind: query.kind,
+        course_id: query.course_id,
+      });
+      res.status(200).json(result);
+    });
+  }
+
+  async listMyRejectedLessonResources(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const result = await this.service.listMyRejectedLessonResources(uid, courseId);
+      res.status(200).json(result);
+    });
+  }
+
+  async reviewLessonResourceByAdmin(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const body = new ReviewLessonResourceBody(req.body);
+      const validateResult = await body.validate();
+      if (!validateResult.ok) {
+        responseValidationError(res, validateResult.errors[0]);
+        return;
+      }
+      const uid = Number(req.getSubject());
+      const resourceId = Number(req.params.resourceId);
+      await this.service.reviewLessonResourceByAdmin(uid, resourceId, body.decision, body.note);
+      res.sendStatus(204);
+    });
+  }
+
+  async getLessonResourceReviewTimelineByAdmin(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const resourceId = Number(req.params.resourceId);
+      const timeline = await this.service.getLessonResourceReviewTimelineByAdmin(uid, resourceId);
+      res.status(200).json(timeline);
+    });
+  }
+
   async getCourseReviewTimelineByAdmin(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
       const uid = Number(req.getSubject());
@@ -459,7 +509,7 @@ export class CourseController extends BaseController {
       const courseId = Number(req.params.id);
       const lessonId = Number(req.params.lessonId);
       const result = await this.service.createLessonYoutubeResource(uid, courseId, lessonId, body as any);
-      res.status(201).json({ id: result.id });
+      res.status(201).json({ id: result.id, review_status: 'pending' });
     });
   }
 
@@ -484,24 +534,56 @@ export class CourseController extends BaseController {
         resourceId
       );
 
-      const axRes = await axios.get(url, {
-        responseType: 'stream',
-        validateStatus: () => true,
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Accept: '*/*',
-        },
-      });
-      if (axRes.status !== 200) {
-        res.status(502).json({ message: 'Không thể tải file từ kho lưu trữ.' });
+      const lowerUrl = String(url || '').toLowerCase();
+      const isYoutube =
+        lowerUrl.includes('youtube.com') ||
+        lowerUrl.includes('youtu.be') ||
+        lowerUrl.includes('/youtube/embed/');
+      const mime = String(mime_type || '').toLowerCase();
+      const ext = String(filename || '').toLowerCase().split('.').pop() || '';
+      const isOfficeDoc =
+        ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext) ||
+        mime.includes('msword') ||
+        mime.includes('officedocument') ||
+        mime.includes('application/vnd.ms-');
+      if (isYoutube) {
+        res.status(200).json({ url, mime_type, filename });
+        return;
+      }
+      if (isOfficeDoc) {
+        res.status(200).json({ url, mime_type, filename });
         return;
       }
 
-      res.setHeader('Content-Type', mime_type || 'application/octet-stream');
-      const safeName = (filename || 'file').replace(/"/g, '%22');
-      res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
-      axRes.data.pipe(res);
+      try {
+        const axRes = await axios.get(url, {
+          responseType: 'stream',
+          validateStatus: () => true,
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            Accept: '*/*',
+          },
+        });
+        if (axRes.status !== 200) {
+          res.status(502).json({ message: 'Không thể tải file từ kho lưu trữ.' });
+          return;
+        }
+
+        res.setHeader('Content-Type', mime_type || 'application/octet-stream');
+        const safeName = (filename || 'file').replace(/"/g, '%22');
+        res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+        axRes.data.pipe(res);
+      } catch (e: any) {
+        const code = String(e?.code || e?.cause?.code || '');
+        // Fallback cho môi trường nội bộ không resolve DNS cloud storage:
+        // trả URL gốc để FE mở trực tiếp thay vì fail toàn bộ endpoint.
+        if (code === 'ENOTFOUND') {
+          res.status(200).json({ url, mime_type, filename });
+          return;
+        }
+        throw e;
+      }
     });
   }
 

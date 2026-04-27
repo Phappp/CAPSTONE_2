@@ -4,13 +4,13 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
-import { getAccessToken } from "../../utils/authStorage";
+import { useAuth } from "../../contexts/Auth";
 import CourseContentSimpleTree from "../../components/CourseContentSimpleTree";
 import TeacherCourseAssessmentsPage from "./TeacherCourseAssessmentsPage";
 import "./TeacherDashboard.css";
 import "./TeacherCourseContentBuilderPage.css";
 
-type CourseStatus = "draft" | "published" | "archived";
+type CourseStatus = "draft" | "pending_review" | "published" | "archived";
 
 type CourseDetail = {
   id: number;
@@ -56,7 +56,7 @@ export default function TeacherCourseDetailPage() {
   const params = useParams();
   const courseId = Number(params.id);
 
-  const token = useMemo(() => getAccessToken(), []);
+  const { accessToken: token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccessOpen, setSaveSuccessOpen] = useState(false);
@@ -96,6 +96,7 @@ export default function TeacherCourseDetailPage() {
     status: CourseStatus;
   }>(null);
   const [openStatusMenu, setOpenStatusMenu] = useState(false);
+  const [withdrawingReview, setWithdrawingReview] = useState(false);
 
   const [rulesLoading, setRulesLoading] = useState(false);
   const [rulesError, setRulesError] = useState<string | null>(null);
@@ -430,6 +431,7 @@ export default function TeacherCourseDetailPage() {
   const getStatusClassName = (status: CourseStatus) => {
     switch (status) {
       case "published": return "status-published";
+      case "pending_review": return "status-draft";
       case "draft": return "status-draft";
       case "archived": return "status-archived";
       default: return "";
@@ -439,6 +441,7 @@ export default function TeacherCourseDetailPage() {
   const getStatusLabel = (status: CourseStatus) => {
     switch (status) {
       case "published": return "Đã xuất bản";
+      case "pending_review": return "Chờ duyệt";
       case "draft": return "Bản nháp";
       case "archived": return "Đã lưu trữ";
       default: return status;
@@ -475,6 +478,35 @@ export default function TeacherCourseDetailPage() {
       setRulesLoading(false);
     }
   };
+
+  const withdrawReviewRequest = async () => {
+    if (!courseId || Number.isNaN(courseId)) return;
+    const confirmed = window.confirm("Thu hồi yêu cầu duyệt để mở khóa chỉnh sửa?");
+    if (!confirmed) return;
+    setWithdrawingReview(true);
+    setError(null);
+    try {
+      const res = await fetch(`${url}${COURSES_API.setStatus(courseId)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ status: "draft" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as any)?.message || "Không thể thu hồi yêu cầu duyệt.");
+      await fetchDetail();
+      setSelectedStatus("draft");
+      setOpenStatusMenu(false);
+    } catch (e: any) {
+      setError(e?.message || "Không thể thu hồi yêu cầu duyệt.");
+    } finally {
+      setWithdrawingReview(false);
+    }
+  };
+
+  const isReadOnlyByReview = course?.status === "pending_review";
 
   if (!courseId || Number.isNaN(courseId)) return null;
 
@@ -590,12 +622,23 @@ export default function TeacherCourseDetailPage() {
                   <h2>Thông tin cơ bản</h2>
                 </div>
                 <div className="section-card-actions">
+                  {isReadOnlyByReview ? (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={withdrawReviewRequest}
+                      disabled={loading || withdrawingReview}
+                    >
+                      <span className="material-symbols-outlined">undo</span>
+                      {withdrawingReview ? "Đang thu hồi..." : "Thu hồi yêu cầu duyệt"}
+                    </button>
+                  ) : null}
                   <div className="dropdown">
                     <button
                       type="button"
                       className="icon-btn"
                       onClick={() => setOpenStatusMenu(!openStatusMenu)}
-                      disabled={loading}
+                      disabled={loading || isReadOnlyByReview}
                     >
                       <span className="material-symbols-outlined">more_vert</span>
                     </button>
@@ -608,7 +651,7 @@ export default function TeacherCourseDetailPage() {
                             setOpenStatusMenu(false);
                             void setStatusNow("draft");
                           }}
-                          disabled={loading}
+                          disabled={loading || isReadOnlyByReview}
                         >
                           <span className="material-symbols-outlined">edit_note</span>
                           Đặt thành bản nháp
@@ -621,7 +664,7 @@ export default function TeacherCourseDetailPage() {
                               setOpenStatusMenu(false);
                               void setStatusNow("published");
                             }}
-                            disabled={loading}
+                            disabled={loading || isReadOnlyByReview}
                           >
                             <span className="material-symbols-outlined">public</span>
                             Đặt thành đã xuất bản
@@ -634,7 +677,7 @@ export default function TeacherCourseDetailPage() {
                             setOpenStatusMenu(false);
                             void setStatusNow("archived");
                           }}
-                          disabled={loading}
+                          disabled={loading || isReadOnlyByReview}
                         >
                           <span className="material-symbols-outlined">archive</span>
                           {course?.status === "archived" ? "Đang lưu trữ" : "Đặt thành lưu trữ"}
@@ -647,7 +690,7 @@ export default function TeacherCourseDetailPage() {
                             setOpenStatusMenu(false);
                             del();
                           }}
-                          disabled={loading}
+                          disabled={loading || isReadOnlyByReview}
                         >
                           <span className="material-symbols-outlined">delete</span>
                           Xóa khóa học
@@ -659,7 +702,7 @@ export default function TeacherCourseDetailPage() {
                     type="button"
                     className="btn-primary"
                     onClick={save}
-                    disabled={loading || !isDirty}
+                    disabled={loading || !isDirty || isReadOnlyByReview}
                   >
                     <span className="material-symbols-outlined">save</span>
                     Lưu thay đổi
@@ -677,7 +720,7 @@ export default function TeacherCourseDetailPage() {
                         className="form-input"
                         value={form.title}
                         onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-                        disabled={loading}
+                        disabled={loading || isReadOnlyByReview}
                         placeholder="Nhập tên khóa học"
                       />
                     </div>
@@ -689,7 +732,7 @@ export default function TeacherCourseDetailPage() {
                         rows={3}
                         value={form.short_description}
                         onChange={(e) => setForm((p) => ({ ...p, short_description: e.target.value }))}
-                        disabled={loading}
+                        disabled={loading || isReadOnlyByReview}
                         placeholder="Mô tả ngắn gọn về khóa học..."
                       />
                     </div>
@@ -701,7 +744,7 @@ export default function TeacherCourseDetailPage() {
                         rows={6}
                         value={form.full_description}
                         onChange={(e) => setForm((p) => ({ ...p, full_description: e.target.value }))}
-                        disabled={loading}
+                        disabled={loading || isReadOnlyByReview}
                         placeholder="Mô tả chi tiết nội dung khóa học..."
                       />
                     </div>
@@ -713,7 +756,7 @@ export default function TeacherCourseDetailPage() {
                         className="form-input"
                         value={form.publish_scheduled_at || ""}
                         onChange={(e) => setForm((p) => ({ ...p, publish_scheduled_at: e.target.value }))}
-                        disabled={loading}
+                        disabled={loading || isReadOnlyByReview}
                       />
                     </div>
                   </div>
@@ -726,7 +769,7 @@ export default function TeacherCourseDetailPage() {
                         className="form-input"
                         value={form.level}
                         onChange={(e) => setForm((p) => ({ ...p, level: e.target.value }))}
-                        disabled={loading}
+                        disabled={loading || isReadOnlyByReview}
                       >
                         <option value="beginner">Cơ bản</option>
                         <option value="intermediate">Trung cấp</option>
@@ -740,7 +783,7 @@ export default function TeacherCourseDetailPage() {
                         className="form-input"
                         value={form.language}
                         onChange={(e) => setForm((p) => ({ ...p, language: e.target.value }))}
-                        disabled={loading}
+                        disabled={loading || isReadOnlyByReview}
                       >
                         <option value="vi">Tiếng Việt</option>
                         <option value="en">English</option>
@@ -764,7 +807,7 @@ export default function TeacherCourseDetailPage() {
                               placeholder="Đường dẫn ảnh (tùy chọn)"
                               value={form.thumbnail_url}
                               onChange={(e) => setForm((p) => ({ ...p, thumbnail_url: e.target.value }))}
-                              disabled={loading}
+                              disabled={loading || isReadOnlyByReview}
                             />
                             <label className="btn-secondary btn-sm" style={{ cursor: "pointer", margin: 0 }}>
                               <span className="material-symbols-outlined">upload</span>
@@ -774,6 +817,7 @@ export default function TeacherCourseDetailPage() {
                                 accept="image/*"
                                 style={{ display: "none" }}
                                 onChange={async (e) => {
+                                  if (isReadOnlyByReview) return;
                                   const f = e.target.files?.[0];
                                   e.currentTarget.value = "";
                                   if (!f) return;
@@ -798,7 +842,7 @@ export default function TeacherCourseDetailPage() {
                                     console.error(err);
                                   }
                                 }}
-                                disabled={loading}
+                                disabled={loading || isReadOnlyByReview}
                               />
                             </label>
                           </div>
@@ -823,7 +867,7 @@ export default function TeacherCourseDetailPage() {
                                   return { ...p, learning_objectives: copy };
                                 })
                               }
-                              disabled={loading}
+                              disabled={loading || isReadOnlyByReview}
                             />
                             <button
                               type="button"
@@ -835,7 +879,7 @@ export default function TeacherCourseDetailPage() {
                                   return { ...p, learning_objectives: copy.length ? copy : [""] };
                                 })
                               }
-                              disabled={loading}
+                              disabled={loading || isReadOnlyByReview}
                             >
                               <span className="material-symbols-outlined">delete</span>
                             </button>
@@ -850,7 +894,7 @@ export default function TeacherCourseDetailPage() {
                               learning_objectives: [...p.learning_objectives, ""],
                             }))
                           }
-                          disabled={loading}
+                          disabled={loading || isReadOnlyByReview}
                         >
                           <span className="material-symbols-outlined">add</span>
                           Thêm mục tiêu
@@ -870,6 +914,7 @@ export default function TeacherCourseDetailPage() {
                                 key={c.id}
                                 className={`prerequisite-item ${checked ? "selected" : ""} ${isDisabled ? "disabled" : ""}`}
                                 onClick={() => {
+                                  if (isReadOnlyByReview) return;
                                   if (isDisabled) return;
                                   setForm((p) => {
                                     const set = new Set(
@@ -887,7 +932,7 @@ export default function TeacherCourseDetailPage() {
                                   <input
                                     type="checkbox"
                                     checked={checked}
-                                    disabled={isDisabled}
+                                    disabled={isDisabled || isReadOnlyByReview}
                                     onChange={() => {}}
                                   />
                                   <span className="prerequisite-title">{c.title}</span>
@@ -929,7 +974,7 @@ export default function TeacherCourseDetailPage() {
                 </div>
               </div>
               <div className="section-card-content content-editor-wrapper">
-                <CourseContentSimpleTree courseId={courseId} />
+                <CourseContentSimpleTree courseId={courseId} readOnly={isReadOnlyByReview} />
               </div>
             </div>
           )}
@@ -962,7 +1007,7 @@ export default function TeacherCourseDetailPage() {
                     type="button"
                     className="btn-secondary btn-sm"
                     onClick={fetchCompletionRules}
-                    disabled={rulesLoading}
+                    disabled={rulesLoading || isReadOnlyByReview}
                   >
                     <span className="material-symbols-outlined">refresh</span>
                     Tải lại
@@ -971,7 +1016,7 @@ export default function TeacherCourseDetailPage() {
                     type="button"
                     className="btn-primary"
                     onClick={saveCompletionRules}
-                    disabled={rulesLoading}
+                    disabled={rulesLoading || isReadOnlyByReview}
                   >
                     <span className="material-symbols-outlined">save</span>
                     Lưu quy tắc
@@ -993,7 +1038,7 @@ export default function TeacherCourseDetailPage() {
                         step="1"
                         value={rulesDraft.video_min_seconds}
                         onChange={(e) => setRulesDraft((p) => ({ ...p, video_min_seconds: e.target.value }))}
-                        disabled={rulesLoading}
+                        disabled={rulesLoading || isReadOnlyByReview}
                       />
                     </div>
                     <div className="form-group">
@@ -1006,7 +1051,7 @@ export default function TeacherCourseDetailPage() {
                         step="0.1"
                         value={rulesDraft.video_min_percent}
                         onChange={(e) => setRulesDraft((p) => ({ ...p, video_min_percent: e.target.value }))}
-                        disabled={rulesLoading}
+                        disabled={rulesLoading || isReadOnlyByReview}
                       />
                     </div>
                   </div>
@@ -1020,7 +1065,7 @@ export default function TeacherCourseDetailPage() {
                         step="1"
                         value={rulesDraft.text_min_seconds}
                         onChange={(e) => setRulesDraft((p) => ({ ...p, text_min_seconds: e.target.value }))}
-                        disabled={rulesLoading}
+                        disabled={rulesLoading || isReadOnlyByReview}
                       />
                     </div>
                   </div>

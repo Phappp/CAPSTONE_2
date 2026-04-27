@@ -129,6 +129,35 @@ export class ReviewCourseBody extends RequestDto {
   }
 }
 
+export class ListPendingLessonResourcesQuery extends RequestDto {
+  page?: number;
+  page_size?: number;
+  q?: string;
+  kind?: 'pdf' | 'word' | 'video' | 'youtube' | 'other' | 'all';
+  course_id?: number;
+
+  constructor(query: any) {
+    super();
+    if (query?.page != null) this.page = Number(query.page);
+    if (query?.page_size != null) this.page_size = Number(query.page_size);
+    if (query?.q != null) this.q = String(query.q);
+    if (query?.kind != null) this.kind = String(query.kind).toLowerCase() as any;
+    if (query?.course_id != null) this.course_id = Number(query.course_id);
+  }
+}
+
+export class ReviewLessonResourceBody extends RequestDto {
+  @Length(1, 20)
+  decision: 'approve' | 'reject';
+  note?: string | null;
+
+  constructor(body: any) {
+    super();
+    this.decision = String(body?.decision || '') as any;
+    this.note = body?.note != null ? String(body.note) : null;
+  }
+}
+
 export class ListMyCoursesQuery extends RequestDto {
   status?: CourseStatus | 'all';
   q?: string;

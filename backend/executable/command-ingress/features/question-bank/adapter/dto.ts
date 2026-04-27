@@ -123,11 +123,16 @@ export class UpdateQuestionBankBody extends RequestDto {
     @IsBoolean()
     is_shared?: boolean;
 
+    @IsOptional()
+    @IsBoolean()
+    is_active?: boolean;
+
     constructor(body: any) {
       super();
       if (body?.name != null) this.name = String(body.name);
       if (body?.description != null) this.description = String(body.description);
       if (body?.is_shared != null) this.is_shared = Boolean(body.is_shared);
+      if (body?.is_active != null) this.is_active = Boolean(body.is_active);
     }
 }
 

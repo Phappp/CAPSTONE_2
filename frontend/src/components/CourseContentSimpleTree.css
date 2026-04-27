@@ -127,6 +127,32 @@
   flex-wrap: nowrap;
 }
 
+.tree-review-status-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.review-status-icon {
+  font-size: 16px;
+}
+
+.review-status-icon.approved {
+  color: #16a34a;
+}
+
+.review-status-icon.rejected {
+  color: #dc2626;
+}
+
+.review-status-icon.pending {
+  color: #b45309;
+}
+
+.review-status-icon.empty {
+  color: #64748b;
+}
+
 .tree-schedule-chip {
   font-size: 0.76rem;
   line-height: 1;
@@ -222,6 +248,27 @@
   width: 100%;
   text-align: left;
   cursor: pointer;
+}
+
+.tree-quality-badge {
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0.25rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.tree-quality-badge.is-warning {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
+.tree-quality-badge.is-ok {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
 }
 
 .tree-lesson-type-icon {

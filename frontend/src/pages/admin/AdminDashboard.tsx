@@ -1,5 +1,6 @@
 // AdminDashboard.tsx
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Menu,
@@ -136,6 +137,7 @@ export default function AdminDashboard() {
   const [reviewPage, setReviewPage] = useState(1);
   const [reviewQ, setReviewQ] = useState("");
   const [reviewActionLoading, setReviewActionLoading] = useState<number | null>(null);
+  const [reviewPhaseByCourse, setReviewPhaseByCourse] = useState<Record<number, string>>({});
 
   // Manager verifications state
   const [verificationPage, setVerificationPage] = useState(1);
@@ -598,16 +600,30 @@ export default function AdminDashboard() {
       showNotice("Bạn không có quyền duyệt khóa học.", "Lỗi quyền", "error");
       return;
     }
-    const note = window.prompt(decision === "reject" ? "Lý do từ chối (khuyến nghị nhập):" : "Ghi chú duyệt (tùy chọn):", "");
+    const note = window.prompt(decision === "reject" ? "Lý do từ chối (bắt buộc):" : "Ghi chú duyệt (tùy chọn):", "");
+    if (decision === "reject" && !String(note || "").trim()) {
+      showNotice("Bạn phải nhập lý do khi từ chối khóa học.", "Lỗi", "error");
+      return;
+    }
     if (!window.confirm(`${decision === "approve" ? "Duyệt" : "Từ chối"} khóa học "${course.title}" (#${course.id})?`)) return;
     setReviewActionLoading(course.id);
+    setReviewPhaseByCourse((prev) => ({ ...prev, [course.id]: "Đang xử lý" }));
     try {
       await apiReviewCourseByAdmin({ accessToken: accessToken || "", courseId: course.id, decision, note: note || undefined });
       await pendingReviewQuery.refetch();
-      showNotice(`Đã ${decision === "approve" ? "duyệt" : "từ chối"} khóa học.`, "Thành công", "success");
+      showNotice(
+        decision === "approve" ? "Đã duyệt khóa học." : "Đã từ chối khóa học.",
+        "Thành công",
+        "success"
+      );
     } catch (e: any) {
       showNotice(`Thao tác thất bại: ${String(e?.message || e)}`, "Lỗi", "error");
     } finally {
+      setReviewPhaseByCourse((prev) => {
+        const copy = { ...prev };
+        delete copy[course.id];
+        return copy;
+      });
       setReviewActionLoading(null);
     }
   };
@@ -943,11 +959,13 @@ export default function AdminDashboard() {
             q={reviewQ}
             setQ={setReviewQ}
             actionLoading={reviewActionLoading}
+            phaseByCourse={reviewPhaseByCourse}
             onReview={reviewCourse}
             onViewTimeline={viewReviewTimeline}
             refetch={pendingReviewQuery.refetch}
           />
         )}
+
 
         {view === "manager_verifications" && (
           <ManagerVerificationsPanel
@@ -1241,10 +1259,75 @@ function CourseReviewsPanel({
   q,
   setQ,
   actionLoading,
+  phaseByCourse,
   onReview,
   onViewTimeline,
   refetch,
 }: any) {
+  const navigate = useNavigate();
+  const [selectedCourse, setSelectedCourse] = useState<PendingReviewCourse | null>(null);
+
+  if (selectedCourse) {
+    const qualityGateReady = Boolean(selectedCourse.quality_gate?.ready);
+    const qualityGateIssues = selectedCourse.quality_gate?.issues?.length
+      ? selectedCourse.quality_gate.issues.join(" | ")
+      : "Không có lỗi";
+
+    return (
+      <div className="panel" style={{ padding: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, color: "#0f172a" }}>
+            Duyệt khóa học &gt; {selectedCourse.title} (#{selectedCourse.id})
+          </div>
+          <button className="btn-secondary" onClick={() => setSelectedCourse(null)}>
+            Quay lại danh sách
+          </button>
+        </div>
+
+        <div className="course-review-detail-grid">
+          <div className="course-review-detail-card">
+            <div className="course-review-detail-label">Slug</div>
+            <div className="course-review-detail-value">/{selectedCourse.slug}</div>
+          </div>
+          <div className="course-review-detail-card">
+            <div className="course-review-detail-label">Danh mục</div>
+            <div className="course-review-detail-value">{selectedCourse.category || "—"}</div>
+          </div>
+          <div className="course-review-detail-card">
+            <div className="course-review-detail-label">Cập nhật</div>
+            <div className="course-review-detail-value">{new Date(selectedCourse.updated_at).toLocaleString("vi-VN")}</div>
+          </div>
+          <div className="course-review-detail-card">
+            <div className="course-review-detail-label">Chất lượng</div>
+            <div className={`course-review-detail-value ${qualityGateReady ? "quality-pass" : "quality-warn"}`}>
+              {qualityGateReady ? "Đạt" : "Chưa đạt"}
+            </div>
+          </div>
+          <div className="course-review-detail-card course-review-detail-card-wide">
+            <div className="course-review-detail-label">Mô tả ngắn</div>
+            <div className="course-review-detail-value">{selectedCourse.short_description || "—"}</div>
+          </div>
+          <div className="course-review-detail-card course-review-detail-card-wide">
+            <div className="course-review-detail-label">Ghi chú kiểm tra chất lượng</div>
+            <div className="course-review-detail-value">{qualityGateIssues}</div>
+          </div>
+        </div>
+
+        <div className="action-buttons">
+          <button
+            className="btn-small"
+            onClick={() => navigate(`/admin/courses/${selectedCourse.id}/content-review`)}
+          >
+            Duyệt nội dung
+          </button>
+          <button className="btn-small" onClick={() => onViewTimeline(selectedCourse)}>
+            Lịch sử
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="filters-card">
@@ -1262,24 +1345,31 @@ function CourseReviewsPanel({
       <div className="table-container">
         <table className="admin-table">
           <thead>
-            <tr><th>Khóa học</th><th>Danh mục</th><th>Slug</th><th>Kiểm tra chất lượng</th><th>Cập nhật</th><th>Thao tác</th></tr>
+            <tr><th>Khóa học</th><th>Danh mục</th><th>Slug</th><th>Kiểm tra chất lượng</th><th>Phase</th><th>Cập nhật</th><th>Thao tác</th></tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={6} className="table-empty"><RefreshCw size={20} style={{ animation: "spin 1s linear infinite" }} /> Đang tải...</td></tr>}
-            {isError && <tr><td colSpan={6} className="table-empty"><AlertCircle size={20} /> Không thể tải danh sách</td></tr>}
-            {!isLoading && !isError && data.length === 0 && <tr><td colSpan={6} className="table-empty">Không có khóa học nào chờ duyệt</td></tr>}
+            {isLoading && <tr><td colSpan={7} className="table-empty"><RefreshCw size={20} style={{ animation: "spin 1s linear infinite" }} /> Đang tải...</td></tr>}
+            {isError && <tr><td colSpan={7} className="table-empty"><AlertCircle size={20} /> Không thể tải danh sách</td></tr>}
+            {!isLoading && !isError && data.length === 0 && <tr><td colSpan={7} className="table-empty">Không có khóa học nào chờ duyệt</td></tr>}
             {data.map((course: any) => (
               <tr key={course.id}>
                 <td><div className="user-name">{course.title}</div><div className="user-id">#{course.id}</div></td>
                 <td>{course.category || "—"}</td>
                 <td>/{course.slug}</td>
                 <td>{course.quality_gate?.ready ? <Check size={16} style={{ color: "#16a34a" }} /> : <AlertCircle size={16} style={{ color: "#b45309" }} />}</td>
+                <td>
+                  {phaseByCourse?.[course.id] ? (
+                    <span className="status-badge-text warning">{phaseByCourse[course.id]}</span>
+                  ) : (
+                    <span style={{ color: "#94a3b8" }}>—</span>
+                  )}
+                </td>
                 <td>{new Date(course.updated_at).toLocaleString("vi-VN")}</td>
                 <td>
                   <div className="action-buttons">
-                    <button className="btn-small" onClick={() => onReview(course, "approve")} disabled={actionLoading === course.id}>Duyệt</button>
-                    <button className="btn-small btn-danger" onClick={() => onReview(course, "reject")} disabled={actionLoading === course.id}>Từ chối</button>
-                    <button className="btn-small" onClick={() => onViewTimeline(course)}>Lịch sử</button>
+                    <button className="btn-small" onClick={() => setSelectedCourse(course)}>
+                      Tiến hành duyệt
+                    </button>
                   </div>
                 </td>
               </tr>

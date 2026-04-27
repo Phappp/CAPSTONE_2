@@ -85,6 +85,7 @@ export default function SessionReauthModal({
         <GoogleLoginButton
           text="Đăng nhập lại bằng Google"
           onError={handleGoogleError}
+          onClick={handleGoogleClick}
           className="session-reauth-google-btn"
         />
 

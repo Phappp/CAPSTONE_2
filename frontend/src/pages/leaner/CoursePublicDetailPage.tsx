@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
-import { getAccessToken } from "../../utils/authStorage";
+import { useAuth } from "../../contexts/Auth";
 import PrerequisiteGraph, { type PrerequisiteGraphData } from "../../components/PrerequisiteGraph";
 import "./CoursePublicDetailPage.css";
 
@@ -72,7 +72,7 @@ export default function CoursePublicDetailPage() {
   const navigate = useNavigate();
   const params = useParams();
   const slug = String(params.slug || "");
-  const token = useMemo(() => getAccessToken(), []);
+  const { accessToken: token } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
