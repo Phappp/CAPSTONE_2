@@ -14,6 +14,7 @@ export const COURSES_API = {
   adminReviewLessonResourceTimeline: (resourceId: number | string) => `${COURSES_API_BASE}/resources/${resourceId}/admin-review/timeline`,
   myReviewTimeline: (id: number | string) => `${COURSES_API_BASE}/${id}/review-timeline`,
   myRejectedResources: (id: number | string) => `${COURSES_API_BASE}/${id}/rejected-resources`,
+  myPendingResources: (id: number | string) => `${COURSES_API_BASE}/${id}/pending-resources`,
   detail: (id: number | string) => `${COURSES_API_BASE}/${id}`,
   /** GV: thống kê tổng quan một khóa học (biểu đồ, enrollment, …). */
   managerOverview: (id: number | string) => `${COURSES_API_BASE}/${id}/manager-overview`,

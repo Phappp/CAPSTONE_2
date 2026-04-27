@@ -76,6 +76,20 @@ type RejectedResourceItem = {
   review_event_at: string | null;
 };
 
+type PendingResourceItem = {
+  id: number;
+  module_id: number;
+  module_title: string;
+  lesson_id: number;
+  lesson_title: string;
+  lesson_type: "video" | "text" | "quiz" | "assignment";
+  resource_kind: "pdf" | "word" | "video" | "youtube" | "other";
+  filename: string | null;
+  created_at: string;
+  is_resubmitted?: boolean;
+  last_reviewed_at?: string | null;
+};
+
 function BarChartMini({ data }: { data: { label: string; value: number; color: string }[] }) {
   const w = 500;
   const h = 200;
@@ -233,6 +247,7 @@ export default function TeacherCourseOverviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ManagerOverview | null>(null);
   const [rejectedResources, setRejectedResources] = useState<RejectedResourceItem[]>([]);
+  const [pendingResources, setPendingResources] = useState<PendingResourceItem[]>([]);
   const [submittingReview, setSubmittingReview] = useState(false);
 
   const [graphModalOpen, setGraphModalOpen] = useState(false);
@@ -333,13 +348,23 @@ export default function TeacherCourseOverviewPage() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
+      const pendingRes = await fetch(`${url}${COURSES_API.myPendingResources(courseId)}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
       const rejectedJson = (await rejectedRes.json().catch(() => ({}))) as { items?: RejectedResourceItem[]; message?: string };
+      const pendingJson = (await pendingRes.json().catch(() => ({}))) as { items?: PendingResourceItem[]; message?: string };
       if (!rejectedRes.ok) throw new Error(rejectedJson?.message || "Không thể tải danh sách nội dung bị từ chối.");
+      if (!pendingRes.ok) throw new Error(pendingJson?.message || "Không thể tải danh sách nội dung đang chờ duyệt.");
       setRejectedResources(Array.isArray(rejectedJson.items) ? rejectedJson.items : []);
+      setPendingResources(Array.isArray(pendingJson.items) ? pendingJson.items : []);
     } catch (e: any) {
       setError(e?.message || "Đã xảy ra lỗi.");
       setData(null);
       setRejectedResources([]);
+      setPendingResources([]);
     } finally {
       setLoading(false);
     }
@@ -517,6 +542,46 @@ export default function TeacherCourseOverviewPage() {
         {!error && rejectedResources.length > 0 && (
           <div className="warning-message warning-message--rejected">
             Có {rejectedResources.length} nội dung bị từ chối. Vui lòng mở mục cần sửa để cập nhật và gửi lại.
+          </div>
+        )}
+
+        {!error && c?.status === "pending_review" && pendingResources.length > 0 && (
+          <div className="chart-card" style={{ marginBottom: 16 }}>
+            <div className="chart-card-header">
+              <span className="chart-card-icon material-symbols-outlined">pending_actions</span>
+              <h3 className="chart-card-title">Nội dung đang chờ duyệt ({pendingResources.length})</h3>
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {pendingResources.slice(0, 8).map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 10,
+                    padding: "8px 12px",
+                    background: item.is_resubmitted ? "#f8fafc" : "#ffffff",
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {item.filename || `${item.lesson_title} - ${item.resource_kind}`}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>
+                      {item.module_title} / {item.lesson_title}
+                    </div>
+                  </div>
+                  <span className={`status-badge ${item.is_resubmitted ? "status-badge--draft" : "status-badge--pending_review"}`}>
+                    {item.is_resubmitted ? "Gửi lại" : "Mới gửi"}
+                  </span>
+                </div>
+              ))}
+              {pendingResources.length > 8 && (
+                <div style={{ fontSize: 12, color: "#64748b" }}>Và {pendingResources.length - 8} mục khác...</div>
+              )}
+            </div>
           </div>
         )}
 

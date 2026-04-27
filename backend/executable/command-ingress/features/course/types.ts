@@ -275,6 +275,26 @@ export type TeacherRejectedResourceListResult = {
   items: TeacherRejectedResourceListItem[];
 };
 
+export type TeacherPendingResourceListItem = LessonResourceItem & {
+  course_id: number;
+  course_title: string;
+  module_id: number;
+  module_title: string;
+  lesson_id: number;
+  lesson_title: string;
+  lesson_type: LessonType;
+  is_resubmitted?: boolean;
+  last_review_decision?: 'submit' | 'approve' | 'reject' | 'resubmit' | null;
+  last_review_note?: string | null;
+  last_reviewed_at?: string | null;
+  previous_rejected_reason?: string | null;
+};
+
+export type TeacherPendingResourceListResult = {
+  course_id: number;
+  items: TeacherPendingResourceListItem[];
+};
+
 export type LessonResourceReviewDecision = 'approve' | 'reject';
 
 export type LessonResourceReviewEventItem = {
@@ -691,6 +711,7 @@ export interface CourseService {
   ): Promise<void>;
   getLessonResourceReviewTimelineByAdmin(subjectUserId: number, resourceId: number): Promise<LessonResourceReviewTimelineResult>;
   listMyRejectedLessonResources(subjectUserId: number, courseId: number): Promise<TeacherRejectedResourceListResult>;
+  listMyPendingLessonResources(subjectUserId: number, courseId: number): Promise<TeacherPendingResourceListResult>;
 
   getMyCourseContentTree(subjectUserId: number, courseId: number): Promise<CourseContentTree>;
   createModule(subjectUserId: number, courseId: number, request: CreateModuleRequest): Promise<{ id: number }>;

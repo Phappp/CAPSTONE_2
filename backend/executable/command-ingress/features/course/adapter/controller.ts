@@ -362,6 +362,15 @@ export class CourseController extends BaseController {
     });
   }
 
+  async listMyPendingLessonResources(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const result = await this.service.listMyPendingLessonResources(uid, courseId);
+      res.status(200).json(result);
+    });
+  }
+
   async reviewLessonResourceByAdmin(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
       const body = new ReviewLessonResourceBody(req.body);

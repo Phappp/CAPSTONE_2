@@ -258,6 +258,10 @@ export default function AdminCourseContentReviewPage() {
     if (!courseId || Number.isNaN(courseId)) return;
     setLoading(true);
     setError(null);
+    // Clear per-lesson preview cache so admin always sees latest quiz/assignment data after teacher resubmit.
+    setQuizByLesson({});
+    setAssignmentByLesson({});
+    setLessonExtraLoading({});
     try {
       const treeRes = await fetch(`${url}${COURSES_API.contentTree(courseId)}`, {
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -400,6 +404,54 @@ export default function AdminCourseContentReviewPage() {
     [resourcesByLesson]
   );
 
+  const pickNextAssignmentResourceKeyToReview = useCallback(
+    (lessonId: number, currentResourceId: number): string | null => {
+      const assignment = assignmentByLesson[lessonId];
+      const resources = resourcesByLesson[lessonId] || [];
+      if (!assignment || !resources.length) return null;
+
+      const orderedKeys: string[] = [];
+      if (String(assignment.description || "").trim()) {
+        orderedKeys.push("assignment-html");
+      }
+      (assignment.attachments || []).forEach((_, idx) => {
+        orderedKeys.push(`assignment-file-${idx}`);
+      });
+      if (!orderedKeys.length) return null;
+
+      const pendingKeys = new Set<string>();
+      for (const item of resources) {
+        if (item.review_status !== "pending") continue;
+        const parsed = parseAssignmentReviewUrl(lessonId, item.url);
+        if (!parsed) continue;
+        if (parsed.kind === "description") {
+          pendingKeys.add("assignment-html");
+        } else if (typeof parsed.attachmentIndex === "number") {
+          pendingKeys.add(`assignment-file-${parsed.attachmentIndex}`);
+        }
+      }
+
+      const pendingOrdered = orderedKeys.filter((key) => pendingKeys.has(key));
+      if (!pendingOrdered.length) return null;
+
+      const currentResource = resources.find((item) => item.id === currentResourceId);
+      const parsedCurrent = currentResource ? parseAssignmentReviewUrl(lessonId, currentResource.url) : null;
+      const currentKey =
+        parsedCurrent?.kind === "description"
+          ? "assignment-html"
+          : typeof parsedCurrent?.attachmentIndex === "number"
+          ? `assignment-file-${parsedCurrent.attachmentIndex}`
+          : null;
+
+      if (!currentKey) return pendingOrdered[0];
+      const idx = pendingOrdered.indexOf(currentKey);
+      if (idx >= 0 && idx + 1 < pendingOrdered.length) return pendingOrdered[idx + 1];
+      const nextAny = pendingOrdered.find((key) => key !== currentKey);
+      return nextAny || null;
+    },
+    [assignmentByLesson, resourcesByLesson]
+  );
+
   const viewLessonAsLearner = async (lessonId: number) => {
     setSelectedLessonId(lessonId);
     const lessonType = (tree?.modules || [])
@@ -446,8 +498,19 @@ export default function AdminCourseContentReviewPage() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((json as any)?.message || "Không thể duyệt tài nguyên.");
       const next = pickNextResourceToReview(resource.lesson_id, resource.id);
+      const nextAssignmentKey = parseAssignmentReviewUrl(resource.lesson_id, resource.url)
+        ? pickNextAssignmentResourceKeyToReview(resource.lesson_id, resource.id)
+        : null;
       await load();
-      if (next) {
+      if (nextAssignmentKey) {
+        setSelectedLessonId(resource.lesson_id);
+        setSelectedAssignmentResourceByLesson((prev) => ({
+          ...prev,
+          [resource.lesson_id]: nextAssignmentKey,
+        }));
+        clearPreview();
+        setSelectedResourceId(null);
+      } else if (next) {
         setSelectedLessonId(resource.lesson_id);
         setSelectedResourceId(next.id);
         await openPreview(next);
@@ -1191,6 +1254,41 @@ export default function AdminCourseContentReviewPage() {
                       </div>
                     )}
 
+                    {preview.resource &&
+                      selectedLesson.lesson_type !== "quiz" &&
+                      selectedLesson.lesson_type !== "assignment" && (
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          gap: 8,
+                          marginBottom: 10,
+                          background: "#ffffff",
+                          padding: "6px 8px",
+                          borderRadius: 10,
+                          border: "1px solid #e2e8f0",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="btn-small"
+                          title="Duyệt tài nguyên đang mở"
+                          disabled={!canApprove(preview.resource)}
+                          onClick={() => void reviewResource(preview.resource as LessonResource, "approve")}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>check_circle</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-small btn-danger"
+                          title="Từ chối tài nguyên đang mở"
+                          disabled={actionLoadingId === preview.resource.id}
+                          onClick={() => void reviewResource(preview.resource as LessonResource, "reject")}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>cancel</span>
+                        </button>
+                      </div>
+                    )}
                     {selectedLesson.lesson_type !== "quiz" && selectedLesson.lesson_type !== "assignment" && !!selectedResources.length && (
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, marginBottom: 10 }}>
                         {selectedResources.map((r, idx) => {

@@ -88,6 +88,7 @@ import {
   PendingLessonResourceQuery,
   PendingLessonResourceListResult,
   TeacherRejectedResourceListResult,
+  TeacherPendingResourceListResult,
   LessonResourceReviewDecision,
   LessonResourceReviewTimelineResult,
 } from '../types';
@@ -3668,6 +3669,95 @@ export class CourseServiceImpl implements CourseService {
     };
   }
 
+  async listMyPendingLessonResources(subjectUserId: number, courseId: number): Promise<TeacherPendingResourceListResult> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+    await ensureCourseWorkflowSchema();
+
+    const rows = await AppDataSource.query(
+      `
+      SELECT
+        r.id, r.lesson_id, r.resource_type, r.resource_kind, r.url, r.filename, r.mime_type, r.size_bytes, r.preview_url,
+        r.review_status, r.review_reason, r.reviewed_by, r.reviewed_at, r.created_at,
+        c.id AS course_id, c.title AS course_title,
+        m.id AS module_id, m.title AS module_title,
+        l.id AS lesson_id, l.title AS lesson_title, l.lesson_type,
+        last_evt.decision AS last_review_decision,
+        last_evt.note AS last_review_note,
+        last_evt.created_at AS last_reviewed_at,
+        CASE
+          WHEN last_evt.decision = 'resubmit' OR (last_evt.from_status = 'rejected' AND last_evt.to_status = 'pending')
+          THEN 1
+          ELSE 0
+        END AS is_resubmitted,
+        prev_reject.note AS previous_rejected_reason
+      FROM lesson_resources r
+      INNER JOIN lessons l ON l.id = r.lesson_id
+      INNER JOIN modules m ON m.id = l.module_id
+      INNER JOIN courses c ON c.id = m.course_id
+      LEFT JOIN (
+        SELECT e1.resource_id, e1.decision, e1.note, e1.from_status, e1.to_status, e1.created_at
+        FROM lesson_resource_review_events e1
+        INNER JOIN (
+          SELECT resource_id, MAX(id) AS last_id
+          FROM lesson_resource_review_events
+          GROUP BY resource_id
+        ) latest ON latest.last_id = e1.id
+      ) last_evt ON last_evt.resource_id = r.id
+      LEFT JOIN (
+        SELECT e2.resource_id, e2.note
+        FROM lesson_resource_review_events e2
+        INNER JOIN (
+          SELECT resource_id, MAX(id) AS last_reject_id
+          FROM lesson_resource_review_events
+          WHERE decision = 'reject'
+          GROUP BY resource_id
+        ) rej ON rej.last_reject_id = e2.id
+      ) prev_reject ON prev_reject.resource_id = r.id
+      WHERE c.id = ? AND c.created_by = ? AND c.deleted_at IS NULL AND r.review_status = 'pending'
+      ORDER BY
+        CASE
+          WHEN (last_evt.decision = 'resubmit' OR (last_evt.from_status = 'rejected' AND last_evt.to_status = 'pending')) THEN 0
+          ELSE 1
+        END ASC,
+        COALESCE(last_evt.created_at, r.created_at) DESC,
+        r.id DESC
+      `,
+      [courseId, subjectUserId]
+    );
+
+    return {
+      course_id: courseId,
+      items: (rows || []).map((r: any) => ({
+        id: Number(r.id),
+        lesson_id: Number(r.lesson_id),
+        resource_type: String(r.resource_type || 'file') as any,
+        resource_kind: (r.resource_kind ?? classifyResourceKind({ mime_type: r.mime_type, filename: r.filename, url: r.url })) as any,
+        url: r.url ? getSignedDeliveryUrl(r.url) : r.url,
+        filename: r.filename ?? null,
+        mime_type: r.mime_type ?? null,
+        size_bytes: r.size_bytes != null ? Number(r.size_bytes) : null,
+        preview_url: r.preview_url ? getSignedDeliveryUrl(r.preview_url) : null,
+        review_status: (r.review_status ?? 'pending') as any,
+        review_reason: r.review_reason ?? null,
+        reviewed_by: r.reviewed_by != null ? Number(r.reviewed_by) : null,
+        reviewed_at: r.reviewed_at ? new Date(r.reviewed_at).toISOString() : null,
+        created_at: new Date(r.created_at).toISOString(),
+        course_id: Number(r.course_id),
+        course_title: String(r.course_title || ''),
+        module_id: Number(r.module_id),
+        module_title: String(r.module_title || ''),
+        lesson_title: String(r.lesson_title || ''),
+        lesson_type: String(r.lesson_type || 'text') as any,
+        is_resubmitted: Number(r.is_resubmitted || 0) === 1,
+        last_review_decision: r.last_review_decision ?? null,
+        last_review_note: r.last_review_note ?? null,
+        last_reviewed_at: r.last_reviewed_at ? new Date(r.last_reviewed_at).toISOString() : null,
+        previous_rejected_reason: r.previous_rejected_reason ?? null,
+      })),
+    };
+  }
+
   async reviewLessonResourceByAdmin(
     subjectUserId: number,
     resourceId: number,
@@ -3700,6 +3790,49 @@ export class CourseServiceImpl implements CourseService {
       toStatus,
       decision: decision === 'approve' ? 'approve' : 'reject',
       note: note || null,
+    });
+
+    const courseRows = await AppDataSource.query(
+      `
+      SELECT c.id AS course_id, c.status AS course_status
+      FROM lesson_resources r
+      INNER JOIN lessons l ON l.id = r.lesson_id
+      INNER JOIN modules m ON m.id = l.module_id
+      INNER JOIN courses c ON c.id = m.course_id
+      WHERE r.id = ?
+      LIMIT 1
+      `,
+      [resourceId]
+    );
+    const courseId = Number(courseRows?.[0]?.course_id || 0);
+    const courseStatus = String(courseRows?.[0]?.course_status || '');
+    if (!courseId || courseStatus !== 'pending_review') return;
+
+    const unresolvedRows = await AppDataSource.query(
+      `
+      SELECT COUNT(1) AS total
+      FROM lesson_resources r
+      INNER JOIN lessons l ON l.id = r.lesson_id
+      INNER JOIN modules m ON m.id = l.module_id
+      WHERE m.course_id = ? AND r.review_status IN ('pending', 'rejected')
+      `,
+      [courseId]
+    );
+    const unresolvedCount = Number(unresolvedRows?.[0]?.total || 0);
+    if (unresolvedCount > 0) return;
+
+    const courseRepo = AppDataSource.getRepository(Course);
+    await courseRepo.update(
+      { id: courseId } as any,
+      { status: 'published' } as any,
+    );
+    await this.logCourseReviewEvent({
+      courseId,
+      actorUserId: subjectUserId,
+      fromStatus: 'pending_review',
+      toStatus: 'published',
+      decision: 'approve',
+      note: 'Tự động mở khóa khóa học sau khi đã duyệt xong toàn bộ cập nhật.',
     });
   }
 
@@ -4273,6 +4406,7 @@ export class CourseServiceImpl implements CourseService {
     const lessonRepo = AppDataSource.getRepository(Lesson);
     const moduleRepo = AppDataSource.getRepository(Module);
     const resourceRepo = AppDataSource.getRepository(LessonResource);
+    const reviewEventRepo = AppDataSource.getRepository(LessonResourceReviewEvent);
 
     const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
     if (!lesson) throw new Error('Không tìm thấy bài học.');
@@ -4315,6 +4449,56 @@ export class CourseServiceImpl implements CourseService {
 
     const isImage = file.mime_type && file.mime_type.startsWith('image/');
 
+    const existingResources = await resourceRepo.find({
+      where: { lesson_id: lessonId } as any,
+      order: { id: 'DESC' } as any,
+    });
+    const isStructuredMarker = (row: any) => String((row as any)?.url || '').startsWith(`internal://lesson/${lessonId}/`);
+    const pickRejectedFirst = (rows: any[]) => rows.find((r) => String((r as any).review_status || '') === 'rejected') || rows[0] || null;
+
+    let targetToUpdate: any = null;
+    if (isHtml) {
+      const htmlRows = (existingResources as any[]).filter(
+        (r) => !isStructuredMarker(r) && String((r as any).mime_type || '').toLowerCase().includes('text/html')
+      );
+      targetToUpdate = pickRejectedFirst(htmlRows);
+    } else if (isWord || isPdf) {
+      const sameKindRows = (existingResources as any[]).filter(
+        (r) => !isStructuredMarker(r) && String((r as any).resource_kind || 'other') === resourceKind
+      );
+      targetToUpdate = pickRejectedFirst(sameKindRows);
+    }
+
+    if (targetToUpdate) {
+      const fromStatus = String((targetToUpdate as any).review_status || 'pending') as 'pending' | 'approved' | 'rejected';
+      await resourceRepo.update(
+        { id: Number((targetToUpdate as any).id) } as any,
+        {
+          url: file.url,
+          filename,
+          mime_type: mimeType,
+          size_bytes: file.size_bytes,
+          preview_url: isImage ? file.url : null,
+          resource_kind: resourceKind,
+          review_status: 'pending',
+          review_reason: null,
+          reviewed_by: null,
+          reviewed_at: null,
+        } as any
+      );
+      await reviewEventRepo.save(
+        reviewEventRepo.create({
+          resource_id: Number((targetToUpdate as any).id),
+          actor_user_id: subjectUserId,
+          from_status: fromStatus,
+          to_status: 'pending',
+          decision: fromStatus === 'rejected' ? 'resubmit' : 'submit',
+          note: null,
+        } as any)
+      );
+      return { id: Number((targetToUpdate as any).id) };
+    }
+
     const entity = resourceRepo.create({
       lesson_id: lessonId,
       resource_type: 'file',
@@ -4330,8 +4514,8 @@ export class CourseServiceImpl implements CourseService {
       reviewed_at: null,
     } as any);
     const saved = await resourceRepo.save(entity as any);
-    await AppDataSource.getRepository(LessonResourceReviewEvent).save(
-      AppDataSource.getRepository(LessonResourceReviewEvent).create({
+    await reviewEventRepo.save(
+      reviewEventRepo.create({
         resource_id: Number((saved as any).id),
         actor_user_id: subjectUserId,
         from_status: null,

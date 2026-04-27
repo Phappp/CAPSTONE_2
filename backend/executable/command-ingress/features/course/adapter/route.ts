@@ -41,6 +41,7 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
   router.route('/resources/:resourceId/admin-review/timeline').get(requireAuthorizedUser, controller.getLessonResourceReviewTimelineByAdmin.bind(controller));
   router.route('/:id/review-timeline').get(requireAuthorizedUser, controller.getMyCourseReviewTimeline.bind(controller));
   router.route('/:id/rejected-resources').get(requireAuthorizedUser, controller.listMyRejectedLessonResources.bind(controller));
+  router.route('/:id/pending-resources').get(requireAuthorizedUser, controller.listMyPendingLessonResources.bind(controller));
 
   // Content builder (modules & lessons)
   router.route('/:id/content').get(requireAuthorizedUser, controller.getMyCourseContentTree.bind(controller));
