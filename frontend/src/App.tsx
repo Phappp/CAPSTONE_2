@@ -1,45 +1,54 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import LoginPage from "./pages/LoginPage";
-import RegisterPage from "./pages/RegisterPage";
-import ForgotPasswordPage from "./pages/ForgotPasswordPage";
-import ResetPasswordPage from "./pages/ResetPasswordPage";
-import OAuthRedirectPage from "./pages/OAuthRedirectPage"; // Thêm import
-import StudentDashboard from "./pages/StudentDashboard";
-import TeacherDashboard from "./pages/TeacherDashboard";
-import AdminDashboard from "./pages/AdminDashboard";
-import CreateCoursePage from "./pages/CreateCoursePage";
-import TeacherCourseDetailPage from "./pages/TeacherCourseDetailPage";
-import TeacherCourseOverviewPage from "./pages/TeacherCourseOverviewPage";
-import TeacherQuestionBankPage from "./pages/TeacherQuestionBankPage";
-import TeacherCourseAssessmentsPage from "./pages/TeacherCourseAssessmentsPage";
-import TeacherCourseContentBuilderPage from "./pages/TeacherCourseContentBuilderPage";
-import TeacherQuizEditorPage from "./pages/TeacherQuizEditorPage";
-import TeacherAssignmentEditorPage from "./pages/TeacherAssignmentEditorPage";
-import CoursesCatalogPage from "./pages/CoursesCatalogPage";
-import CoursePublicDetailPage from "./pages/CoursePublicDetailPage";
+import LoginPage from "./pages/authentication/LoginPage";
+import RegisterPage from "./pages/authentication/RegisterPage";
+import ForgotPasswordPage from "./pages/authentication/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/authentication/ResetPasswordPage";
+import OAuthRedirectPage from "./pages/authentication/OAuthRedirectPage"; // Thêm import
+import StudentDashboard from "./pages/leaner/StudentDashboard";
+import TeacherDashboard from "./pages/teacher/TeacherDashboard";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminCourseContentReviewPage from "./pages/admin/AdminCourseContentReviewPage";
+import CreateCoursePage from "./pages/teacher/CreateCoursePage";
+import TeacherCourseDetailPage from "./pages/teacher/TeacherCourseDetailPage";
+import TeacherCourseOverviewPage from "./pages/teacher/TeacherCourseOverviewPage";
+import TeacherQuestionBankPage from "./pages/teacher/TeacherQuestionBankPage";
+import TeacherCourseAssessmentsPage from "./pages/teacher/TeacherCourseAssessmentsPage";
+import TeacherCourseContentBuilderPage from "./pages/teacher/TeacherCourseContentBuilderPage";
+import TeacherQuizEditorPage from "./pages/teacher/TeacherQuizEditorPage";
+import TeacherAssignmentEditorPage from "./pages/teacher/TeacherAssignmentEditorPage";
+import TeacherLessonStudioPage from "./pages/teacher/TeacherLessonStudioPage";
+import CoursesCatalogPage from "./pages/leaner/CoursesCatalogPage";
+import CoursePublicDetailPage from "./pages/leaner/CoursePublicDetailPage";
 import ProfilePage from "./pages/ProfilePage";
-import LearningPage from "./pages/LearningPage";
-import LearnerCourseHubPage from "./pages/LearnerCourseHubPage";
-import LearningModuleLessonsPage from "./pages/LearningModuleLessonsPage";
-import TeacherLessonRosterPage from "./pages/TeacherLessonRosterPage";
-import LearnerQuizTakePage from "./pages/LearnerQuizTakePage";
-import LearnerAssignmentSubmitPage from "./pages/LearnerAssignmentSubmitPage";
+import ProfileSecurityPage from "./pages/ProfileSecurityPage";
+import LearningPage from "./pages/leaner/LearningPage";
+import LearnerCourseHubPage from "./pages/leaner/LearnerCourseHubPage";
+import LearningModuleLessonsPage from "./pages/leaner/LearningModuleLessonsPage";
+import TeacherLessonRosterPage from "./pages/teacher/TeacherLessonRosterPage";
+import LearnerQuizTakePage from "./pages/leaner/LearnerQuizTakePage";
+import LearnerAssignmentSubmitPage from "./pages/leaner/LearnerAssignmentSubmitPage";
+import PaymentResultPage from "./pages/leaner/PaymentResultPage";
+import MockPaymentPage from "./pages/leaner/MockPaymentPage";
+import LearnerSidebarLayout from "./layouts/LearnerSidebarLayout";
 import Authentication from "./router/Authentication";
+import LandingPage from "./pages/LandingPage";
+import SystemStatusOrb from "./components/SystemStatusOrb";
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<LoginPage />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/oauth/redirect" element={<OAuthRedirectPage />} /> {/* Thêm route mới */}
+    <>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/oauth/redirect" element={<OAuthRedirectPage />} /> {/* Thêm route mới */}
 
       <Route
         path="/student/dashboard"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["learner", "student"]}>
             <StudentDashboard />
           </Authentication>
         }
@@ -47,7 +56,7 @@ export default function App() {
       <Route
         path="/teacher/dashboard"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherDashboard />
           </Authentication>
         }
@@ -60,51 +69,36 @@ export default function App() {
           </Authentication>
         }
       />
+      <Route
+        path="/profile/security"
+        element={
+          <Authentication>
+            <ProfileSecurityPage />
+          </Authentication>
+        }
+      />
 
       <Route
-        path="/courses"
         element={
-          <Authentication>
-            <CoursesCatalogPage />
+          <Authentication allowedRoles={["learner", "student"]}>
+            <LearnerSidebarLayout />
           </Authentication>
         }
-      />
-      <Route
-        path="/courses/:slug"
-        element={
-          <Authentication>
-            <CoursePublicDetailPage />
-          </Authentication>
-        }
-      />
-      <Route
-        path="/learning/:id/:slug"
-        element={
-          <Authentication>
-            <LearningPage />
-          </Authentication>
-        }
-      />
-      <Route
-        path="/learning/:id/:slug/modules/:moduleId"
-        element={
-          <Authentication>
-            <LearningModuleLessonsPage />
-          </Authentication>
-        }
-      />
-      <Route
-        path="/my-courses/:id/:slug"
-        element={
-          <Authentication>
-            <LearnerCourseHubPage />
-          </Authentication>
-        }
-      />
+      >
+        <Route path="/courses" element={<CoursesCatalogPage />} />
+        <Route path="/courses/:slug" element={<CoursePublicDetailPage />} />
+        <Route path="/learning/:id/:slug" element={<LearningPage />} />
+        <Route path="/learning/:id/:slug/modules/:moduleId" element={<LearningModuleLessonsPage />} />
+        <Route path="/my-courses/:id/:slug" element={<LearnerCourseHubPage />} />
+        <Route path="/learner/quiz/:courseId/:lessonId" element={<LearnerQuizTakePage />} />
+        <Route path="/learner/assignment/:lessonId" element={<LearnerAssignmentSubmitPage />} />
+        <Route path="/mock-payment" element={<MockPaymentPage />} />
+        <Route path="/payment-result" element={<PaymentResultPage />} />
+      </Route>
       <Route
         path="/teacher/courses/new"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <CreateCoursePage />
           </Authentication>
         }
@@ -112,7 +106,7 @@ export default function App() {
       <Route
         path="/teacher/courses/:id/edit"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherCourseDetailPage />
           </Authentication>
         }
@@ -120,7 +114,7 @@ export default function App() {
       <Route
         path="/teacher/courses/:id/content"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher", "admin"]}>
             <TeacherCourseContentBuilderPage />
           </Authentication>
         }
@@ -128,7 +122,7 @@ export default function App() {
       <Route
         path="/teacher/courses/:id/question-banks"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherQuestionBankPage />
           </Authentication>
         }
@@ -136,7 +130,7 @@ export default function App() {
       <Route
         path="/teacher/courses/:id/quiz-editor"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherQuizEditorPage />
           </Authentication>
         }
@@ -144,7 +138,7 @@ export default function App() {
       <Route
         path="/teacher/courses/:id/assignment-editor"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherAssignmentEditorPage />
           </Authentication>
         }
@@ -152,7 +146,7 @@ export default function App() {
       <Route
         path="/teacher/courses/:id/assessments"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherCourseAssessmentsPage />
           </Authentication>
         }
@@ -160,31 +154,23 @@ export default function App() {
       <Route
         path="/teacher/courses/:id/lessons/:lessonId/roster"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherLessonRosterPage />
           </Authentication>
         }
       />
       <Route
-        path="/learner/quiz/:courseId/:lessonId"
+        path="/teacher/courses/:id/lessons/:lessonId/studio"
         element={
-          <Authentication>
-            <LearnerQuizTakePage />
-          </Authentication>
-        }
-      />
-      <Route
-        path="/learner/assignment/:lessonId"
-        element={
-          <Authentication>
-            <LearnerAssignmentSubmitPage />
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <TeacherLessonStudioPage />
           </Authentication>
         }
       />
       <Route
         path="/teacher/courses/:id"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherCourseOverviewPage />
           </Authentication>
         }
@@ -192,13 +178,22 @@ export default function App() {
       <Route
         path="/admin"
         element={
-          <Authentication>
+          <Authentication allowedRoles={["admin"]}>
             <AdminDashboard />
           </Authentication>
         }
       />
-
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      <Route
+        path="/admin/courses/:id/content-review"
+        element={
+          <Authentication allowedRoles={["admin"]}>
+            <AdminCourseContentReviewPage />
+          </Authentication>
+        }
+      />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      <SystemStatusOrb />
+    </>
   );
 }

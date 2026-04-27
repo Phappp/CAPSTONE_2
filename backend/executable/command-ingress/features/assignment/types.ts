@@ -43,6 +43,7 @@ export type CreateAssignmentRequest = {
     allowed_formats: AssignmentFormat[];
     assignment_kind?: AssignmentKind;
     short_answer_questions?: ShortAnswerQuestionDef[] | null;
+    time_limit_minutes?: number | null;
 };
 
 export type UploadedAssignmentFile = {
@@ -110,6 +111,7 @@ export type UpdateAssignmentRequest = Partial<{
   allowed_formats: AssignmentFormat[];
   assignment_kind: AssignmentKind;
   short_answer_questions: ShortAnswerQuestionDef[] | null;
+  time_limit_minutes: number | null;
 }>;
 
 export interface AssignmentService {
@@ -144,6 +146,7 @@ export interface AssignmentService {
       created_at: string;
       assignment_kind: AssignmentKind;
       short_answer_questions: ShortAnswerQuestionDef[];
+      time_limit_minutes: number | null;
     }>;
 
     getLearnerAssignmentForLesson(
@@ -166,6 +169,7 @@ export interface AssignmentService {
       attachments: AssignmentAttachmentPreview[];
       assignment_kind: AssignmentKind;
       short_answer_questions: ShortAnswerQuestionDef[];
+      time_limit_minutes: number | null;
     }>;
 
     updateAssignment(

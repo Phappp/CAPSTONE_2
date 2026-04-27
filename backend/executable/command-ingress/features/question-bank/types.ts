@@ -1,15 +1,27 @@
 import { CreateQuestionBankBody, AddBankQuestionBody } from './adapter/dto';
 
+export type QuestionBankUsageItem = {
+    quiz_id: number;
+    lesson_id: number | null;
+    lesson_title: string | null;
+    quiz_title: string | null;
+    question_count: number;
+};
+
 export interface QuestionBankService {
     createBank(req: CreateQuestionBankBody) : Promise<any>;
     addQuestion(req: AddBankQuestionBody) : Promise<any>;
     addQuestionsBatch(reqs: AddBankQuestionBody[]): Promise<any[]>;
-    listBanks(userId: number, courseId?: number): Promise<any[]>;
+    listBanks(userId: number, courseId?: number, includeArchived?: boolean): Promise<any[]>;
+    getBankUsage(bankId: number, userId: number): Promise<{
+      quiz_count: number;
+      usages: QuestionBankUsageItem[];
+    }>;
     getBankQuestions(bankId: number, userId: number): Promise<any[]>;
     updateBank(
       bankId: number,
       userId: number,
-      payload: { name?: string; description?: string; is_shared?: boolean }
+      payload: { name?: string; description?: string; is_shared?: boolean; is_active?: boolean }
     ): Promise<any>;
     deleteBank(bankId: number, userId: number): Promise<void>;
     updateQuestion(

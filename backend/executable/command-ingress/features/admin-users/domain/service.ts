@@ -5,15 +5,24 @@ import Role from '../../../../../internal/model/role';
 import AuditLog from '../../../../../internal/model/audit_log';
 import OpenRouterSetting from '../../../../../internal/model/openrouter_setting';
 import OpenRouterKey from '../../../../../internal/model/openrouter_key';
+import PaymentRevenueLedger from '../../../../../internal/model/payment_revenue_ledger';
 import {
   BulkUserActionRequest,
+  CourseManagerVerificationItem,
+  CourseManagerVerificationStatus,
+  ListCourseManagerVerificationsQuery,
   ListAuditLogsQuery,
   ListUsersQuery,
   CreateOpenRouterKeyRequest,
+  ReviewCourseManagerVerificationRequest,
   UpdateOpenRouterConfigRequest,
   UpdateOpenRouterKeyRequest,
   UpdateUserRoleRequest,
   UpdateUserStatusRequest,
+  AdminRevenueSummary,
+  AdminRevenueSummaryQuery,
+  AdminRevenueByTeacherQuery,
+  AdminRevenueByTeacherResult,
 } from '../types';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -21,6 +30,7 @@ import crypto from 'crypto';
 export class AdminUserService {
   private static readonly rateLimitStore = new Map<string, { count: number; windowStartMs: number }>();
   private static openRouterKeySchemaEnsured = false;
+  private static courseManagerVerificationSchemaEnsured = false;
 
   private async ensureOpenRouterKeySchema(): Promise<void> {
     if (AdminUserService.openRouterKeySchemaEnsured) return;
@@ -60,6 +70,60 @@ export class AdminUserService {
     }
 
     AdminUserService.openRouterKeySchemaEnsured = true;
+  }
+
+  private async ensureCourseManagerVerificationSchema(): Promise<void> {
+    if (AdminUserService.courseManagerVerificationSchemaEnsured) return;
+    await AppDataSource.query(
+      `
+      CREATE TABLE IF NOT EXISTS course_manager_verifications (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT UNSIGNED NOT NULL,
+        status ENUM('pending','verified','rejected','suspended') NOT NULL DEFAULT 'pending',
+        application_note TEXT NULL,
+        expertise_areas VARCHAR(500) NULL,
+        years_experience INT NULL,
+        organization_name VARCHAR(255) NULL,
+        portfolio_url VARCHAR(500) NULL,
+        certificate_links TEXT NULL,
+        teaching_statement TEXT NULL,
+        review_note TEXT NULL,
+        reviewed_by BIGINT UNSIGNED NULL,
+        reviewed_at DATETIME NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_course_manager_verifications_user_id (user_id),
+        KEY idx_course_manager_verifications_status (status),
+        KEY idx_course_manager_verifications_reviewed_by (reviewed_by)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `,
+    );
+    const ensureColumn = async (columnName: string, ddl: string) => {
+      const exists = await AppDataSource.query(
+        `
+        SELECT 1
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'course_manager_verifications'
+          AND COLUMN_NAME = ?
+        LIMIT 1
+        `,
+        [columnName],
+      );
+      if (!Array.isArray(exists) || exists.length === 0) {
+        await AppDataSource.query(
+          `ALTER TABLE course_manager_verifications ADD COLUMN ${ddl}`,
+        );
+      }
+    };
+    await ensureColumn('expertise_areas', 'expertise_areas VARCHAR(500) NULL');
+    await ensureColumn('years_experience', 'years_experience INT NULL');
+    await ensureColumn('organization_name', 'organization_name VARCHAR(255) NULL');
+    await ensureColumn('portfolio_url', 'portfolio_url VARCHAR(500) NULL');
+    await ensureColumn('certificate_links', 'certificate_links TEXT NULL');
+    await ensureColumn('teaching_statement', 'teaching_statement TEXT NULL');
+    AdminUserService.courseManagerVerificationSchemaEnsured = true;
   }
 
   private async assertAdmin(userId: number): Promise<void> {
@@ -371,6 +435,7 @@ export class AdminUserService {
     context?: { ip?: string | null },
   ): Promise<void> {
     await this.assertAdmin(actorUserId);
+    await this.ensureCourseManagerVerificationSchema();
     const userRepo = AppDataSource.getRepository(User);
     const roleRepo = AppDataSource.getRepository(Role);
     const userRoleRepo = AppDataSource.getRepository(UserRole);
@@ -418,6 +483,21 @@ export class AdminUserService {
       target_role_id: role.id,
       ip_address: context?.ip ?? null,
     });
+
+    if (payload.role === 'course_manager') {
+      await AppDataSource.query(
+        `
+        INSERT INTO course_manager_verifications (user_id, status, application_note, review_note, reviewed_by, reviewed_at)
+        VALUES (?, 'pending', NULL, NULL, NULL, NULL)
+        ON DUPLICATE KEY UPDATE
+          status = IF(status = 'verified', status, 'pending'),
+          review_note = IF(status = 'verified', review_note, NULL),
+          reviewed_by = IF(status = 'verified', reviewed_by, NULL),
+          reviewed_at = IF(status = 'verified', reviewed_at, NULL)
+        `,
+        [user.id],
+      );
+    }
   }
 
   async bulkAction(
@@ -426,6 +506,7 @@ export class AdminUserService {
     context?: { ip?: string | null },
   ): Promise<void> {
     await this.assertAdmin(actorUserId);
+    await this.ensureCourseManagerVerificationSchema();
     if (!payload.user_ids || payload.user_ids.length === 0) {
       return;
     }
@@ -501,6 +582,23 @@ export class AdminUserService {
         user_ids: payload.user_ids,
         ip_address: context?.ip ?? null,
       });
+
+      if (payload.role === 'course_manager') {
+        for (const uid of payload.user_ids) {
+          await AppDataSource.query(
+            `
+            INSERT INTO course_manager_verifications (user_id, status, application_note, review_note, reviewed_by, reviewed_at)
+            VALUES (?, 'pending', NULL, NULL, NULL, NULL)
+            ON DUPLICATE KEY UPDATE
+              status = IF(status = 'verified', status, 'pending'),
+              review_note = IF(status = 'verified', review_note, NULL),
+              reviewed_by = IF(status = 'verified', reviewed_by, NULL),
+              reviewed_at = IF(status = 'verified', reviewed_at, NULL)
+            `,
+            [uid],
+          );
+        }
+      }
     }
   }
 
@@ -658,6 +756,172 @@ export class AdminUserService {
       })),
       pagination: { total, page, limit, pages },
     };
+  }
+
+  async listCourseManagerVerifications(
+    actorUserId: number,
+    query: ListCourseManagerVerificationsQuery,
+  ): Promise<{ items: CourseManagerVerificationItem[]; pagination: { total: number; page: number; limit: number; pages: number } }> {
+    await this.assertAdmin(actorUserId);
+    await this.ensureCourseManagerVerificationSchema();
+    await AppDataSource.query(
+      `
+      INSERT INTO course_manager_verifications (user_id, status, application_note, review_note, reviewed_by, reviewed_at)
+      SELECT ur.user_id, 'pending', NULL, NULL, NULL, NULL
+      FROM user_roles ur
+      INNER JOIN roles r ON r.id = ur.role_id
+      LEFT JOIN course_manager_verifications cmv ON cmv.user_id = ur.user_id
+      WHERE LOWER(r.name) = 'course_manager' AND cmv.user_id IS NULL
+      `,
+    );
+    const page = query.page > 0 ? query.page : 1;
+    const limit = query.limit > 0 && query.limit <= 100 ? query.limit : 10;
+    const offset = (page - 1) * limit;
+    const q = String(query.q || '').trim();
+    const status = query.status && query.status !== 'all' ? query.status : null;
+
+    const whereParts: string[] = ['1=1'];
+    const params: any[] = [];
+    if (status) {
+      whereParts.push('cmv.status = ?');
+      params.push(status);
+    }
+    if (q) {
+      whereParts.push('(u.email LIKE ? OR u.full_name LIKE ?)');
+      params.push(`%${q}%`, `%${q}%`);
+    }
+    const whereSql = whereParts.join(' AND ');
+
+    const totalRows = await AppDataSource.query(
+      `
+      SELECT COUNT(*) as total
+      FROM course_manager_verifications cmv
+      INNER JOIN users u ON u.id = cmv.user_id
+      WHERE ${whereSql}
+      `,
+      params,
+    );
+    const total = Number(totalRows?.[0]?.total || 0);
+
+    const rows = await AppDataSource.query(
+      `
+      SELECT
+        cmv.user_id,
+        u.full_name,
+        u.email,
+        cmv.status,
+        cmv.application_note,
+        cmv.expertise_areas,
+        cmv.years_experience,
+        cmv.organization_name,
+        cmv.portfolio_url,
+        cmv.certificate_links,
+        cmv.teaching_statement,
+        cmv.review_note,
+        cmv.reviewed_by,
+        cmv.reviewed_at,
+        cmv.created_at,
+        cmv.updated_at
+      FROM course_manager_verifications cmv
+      INNER JOIN users u ON u.id = cmv.user_id
+      WHERE ${whereSql}
+      ORDER BY
+        CASE cmv.status
+          WHEN 'pending' THEN 1
+          WHEN 'rejected' THEN 2
+          WHEN 'suspended' THEN 3
+          ELSE 4
+        END ASC,
+        cmv.updated_at DESC
+      LIMIT ? OFFSET ?
+      `,
+      [...params, limit, offset],
+    );
+
+    const items: CourseManagerVerificationItem[] = rows.map((r: any) => {
+      const fullName = String(r.full_name || '');
+      const years = r.years_experience != null ? Number(r.years_experience) : null;
+      const checklistPassed =
+        fullName.trim().length >= 5 &&
+        String(r.expertise_areas || '').trim().length >= 10 &&
+        years != null &&
+        years >= 1 &&
+        String(r.organization_name || '').trim().length >= 2 &&
+        /^https?:\/\//i.test(String(r.portfolio_url || '').trim()) &&
+        String(r.certificate_links || '').trim().length >= 10 &&
+        String(r.teaching_statement || '').trim().length >= 40;
+      return {
+        user_id: Number(r.user_id),
+        full_name: fullName,
+        email: String(r.email || ''),
+        status: String(r.status || 'pending') as CourseManagerVerificationStatus,
+        application_note: r.application_note ?? null,
+        expertise_areas: r.expertise_areas ?? null,
+        years_experience: years,
+        organization_name: r.organization_name ?? null,
+        portfolio_url: r.portfolio_url ?? null,
+        certificate_links: r.certificate_links ?? null,
+        teaching_statement: r.teaching_statement ?? null,
+        checklist_passed: checklistPassed,
+        review_note: r.review_note ?? null,
+        reviewed_by: r.reviewed_by != null ? Number(r.reviewed_by) : null,
+        reviewed_at: r.reviewed_at ? new Date(r.reviewed_at).toISOString() : null,
+        created_at: new Date(r.created_at).toISOString(),
+        updated_at: new Date(r.updated_at).toISOString(),
+      };
+    });
+
+    return {
+      items,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
+  }
+
+  async reviewCourseManagerVerification(
+    actorUserId: number,
+    userId: number,
+    payload: ReviewCourseManagerVerificationRequest,
+    context?: { ip?: string | null },
+  ): Promise<void> {
+    await this.assertAdmin(actorUserId);
+    await this.ensureCourseManagerVerificationSchema();
+    if (!['verified', 'rejected', 'suspended'].includes(payload.status)) {
+      throw new Error('Trạng thái xác minh không hợp lệ.');
+    }
+
+    const existing = await AppDataSource.query(
+      `SELECT user_id, status FROM course_manager_verifications WHERE user_id = ? LIMIT 1`,
+      [userId],
+    );
+    if (!Array.isArray(existing) || existing.length === 0) {
+      await AppDataSource.query(
+        `
+        INSERT INTO course_manager_verifications (user_id, status, application_note, review_note, reviewed_by, reviewed_at)
+        VALUES (?, 'pending', NULL, NULL, NULL, NULL)
+        `,
+        [userId],
+      );
+    }
+
+    await AppDataSource.query(
+      `
+      UPDATE course_manager_verifications
+      SET status = ?, review_note = ?, reviewed_by = ?, reviewed_at = NOW()
+      WHERE user_id = ?
+      `,
+      [payload.status, payload.note?.trim() || null, actorUserId, userId],
+    );
+
+    await this.logAction(actorUserId, 'course_manager_verification_reviewed', userId, {
+      status: payload.status,
+      note: payload.note?.trim() || null,
+      ip_address: context?.ip ?? null,
+    });
   }
 
   async getOpenRouterConfig(actorUserId: number): Promise<{
@@ -958,6 +1222,103 @@ export class AdminUserService {
     await repo.save(picked);
     const plain = this.decrypt(picked.key_encrypted);
     return { key: plain, key_id: picked.id };
+  }
+
+  async getRevenueSummary(
+    actorUserId: number,
+    query: AdminRevenueSummaryQuery,
+  ): Promise<AdminRevenueSummary> {
+    await this.assertAdmin(actorUserId);
+    const ledgerRepo = AppDataSource.getRepository(PaymentRevenueLedger);
+    const qb = ledgerRepo.createQueryBuilder('l');
+    qb.where('1=1');
+    if (query.from) qb.andWhere('l.recognized_at >= :from', { from: query.from });
+    if (query.to) qb.andWhere('l.recognized_at <= :to', { to: query.to });
+
+    const [paid, refunded] = await Promise.all([
+      qb.clone()
+        .andWhere('l.status = :status', { status: 'recognized' })
+        .select('COALESCE(SUM(l.gross_amount), 0)', 'gross_amount')
+        .addSelect('COALESCE(SUM(l.system_fee_amount), 0)', 'system_fee_amount')
+        .addSelect('COALESCE(SUM(l.net_amount), 0)', 'teacher_net_amount')
+        .addSelect('COUNT(1)', 'paid_orders')
+        .getRawOne<{ gross_amount: string; system_fee_amount: string; teacher_net_amount: string; paid_orders: string }>(),
+      qb.clone()
+        .andWhere('l.status = :status', { status: 'reversed' })
+        .select('COUNT(1)', 'refunded_orders')
+        .getRawOne<{ refunded_orders: string }>(),
+    ]);
+
+    return {
+      gross_amount: Number(paid?.gross_amount || 0),
+      system_fee_amount: Number(paid?.system_fee_amount || 0),
+      teacher_net_amount: Number(paid?.teacher_net_amount || 0),
+      paid_orders: Number(paid?.paid_orders || 0),
+      refunded_orders: Number(refunded?.refunded_orders || 0),
+    };
+  }
+
+  async listRevenueByTeacher(
+    actorUserId: number,
+    query: AdminRevenueByTeacherQuery,
+  ): Promise<AdminRevenueByTeacherResult> {
+    await this.assertAdmin(actorUserId);
+    const page = query.page > 0 ? query.page : 1;
+    const limit = query.limit > 0 && query.limit <= 100 ? query.limit : 10;
+    const offset = (page - 1) * limit;
+    const ledgerRepo = AppDataSource.getRepository(PaymentRevenueLedger);
+    const baseQb = ledgerRepo.createQueryBuilder('l')
+      .leftJoin(User, 'u', 'u.id = l.teacher_user_id');
+
+    if (query.from) baseQb.andWhere('l.recognized_at >= :from', { from: query.from });
+    if (query.to) baseQb.andWhere('l.recognized_at <= :to', { to: query.to });
+    if (query.search?.trim()) {
+      baseQb.andWhere('(u.full_name LIKE :search OR u.email LIKE :search OR CAST(l.teacher_user_id AS CHAR) LIKE :search)', {
+        search: `%${query.search.trim()}%`,
+      });
+    }
+
+    const rows = await baseQb.clone()
+      .select('l.teacher_user_id', 'teacher_user_id')
+      .addSelect('MAX(u.full_name)', 'teacher_name')
+      .addSelect('MAX(u.email)', 'teacher_email')
+      .addSelect(`COALESCE(SUM(CASE WHEN l.status = 'recognized' THEN l.gross_amount ELSE 0 END), 0)`, 'gross_amount')
+      .addSelect(`COALESCE(SUM(CASE WHEN l.status = 'recognized' THEN l.system_fee_amount ELSE 0 END), 0)`, 'system_fee_amount')
+      .addSelect(`COALESCE(SUM(CASE WHEN l.status = 'recognized' THEN l.net_amount ELSE 0 END), 0)`, 'teacher_net_amount')
+      .addSelect(`COALESCE(SUM(CASE WHEN l.status = 'recognized' THEN 1 ELSE 0 END), 0)`, 'paid_orders')
+      .addSelect(`COALESCE(SUM(CASE WHEN l.status = 'reversed' THEN 1 ELSE 0 END), 0)`, 'refunded_orders')
+      .addSelect('MAX(l.recognized_at)', 'last_recognized_at')
+      .groupBy('l.teacher_user_id')
+      .orderBy('teacher_net_amount', 'DESC')
+      .addOrderBy('l.teacher_user_id', 'DESC')
+      .offset(offset)
+      .limit(limit)
+      .getRawMany<any>();
+
+    const totalRow = await baseQb.clone()
+      .select('COUNT(DISTINCT l.teacher_user_id)', 'total')
+      .getRawOne<{ total: string }>();
+    const total = Number(totalRow?.total || 0);
+
+    return {
+      items: (rows || []).map((row: any) => ({
+        teacher_user_id: Number(row.teacher_user_id),
+        teacher_name: row.teacher_name ? String(row.teacher_name) : null,
+        teacher_email: row.teacher_email ? String(row.teacher_email) : null,
+        gross_amount: Number(row.gross_amount || 0),
+        system_fee_amount: Number(row.system_fee_amount || 0),
+        teacher_net_amount: Number(row.teacher_net_amount || 0),
+        paid_orders: Number(row.paid_orders || 0),
+        refunded_orders: Number(row.refunded_orders || 0),
+        last_recognized_at: row.last_recognized_at ? new Date(row.last_recognized_at).toISOString() : null,
+      })),
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
   }
 }
 

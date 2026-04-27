@@ -4,8 +4,12 @@ import { AdminUserService } from '../domain/service';
 import {
   BulkActionDto,
   CreateOpenRouterKeyDto,
+  AdminRevenueByTeacherDto,
+  AdminRevenueSummaryDto,
+  ListCourseManagerVerificationsDto,
   ListAuditLogsDto,
   ListUsersDto,
+  ReviewCourseManagerVerificationDto,
   UpdateOpenRouterKeyDto,
   UpdateOpenRouterConfigDto,
   UpdateRoleDto,
@@ -14,8 +18,10 @@ import {
 import {
   BulkUserActionRequest,
   CreateOpenRouterKeyRequest,
+  ListCourseManagerVerificationsQuery,
   ListAuditLogsQuery,
   ListUsersQuery,
+  ReviewCourseManagerVerificationRequest,
   UpdateOpenRouterKeyRequest,
   UpdateOpenRouterConfigRequest,
   UpdateUserRoleRequest,
@@ -290,6 +296,78 @@ export class AdminUserController {
         ip: this.getRequestIp(req),
       });
       res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async listCourseManagerVerifications(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const subject = Number(req.getSubject());
+      const q = req.query as unknown as ListCourseManagerVerificationsDto;
+      const page = q.page ? parseInt(q.page, 10) : 1;
+      const limit = q.limit ? parseInt(q.limit, 10) : 10;
+      const query: ListCourseManagerVerificationsQuery = {
+        page: Number.isNaN(page) ? 1 : page,
+        limit: Number.isNaN(limit) ? 10 : limit,
+        q: q.q,
+        status: (q.status as any) || 'all',
+      };
+      const data = await this.service.listCourseManagerVerifications(subject, query);
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async reviewCourseManagerVerification(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const subject = Number(req.getSubject());
+      const userId = Number(req.params.userId);
+      const body = req.body as ReviewCourseManagerVerificationDto;
+      const payload: ReviewCourseManagerVerificationRequest = {
+        status: body.status as any,
+        note: body.note,
+      };
+      await this.service.reviewCourseManagerVerification(subject, userId, payload, {
+        ip: this.getRequestIp(req),
+      });
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getRevenueSummary(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const subject = Number(req.getSubject());
+      const q = req.query as unknown as AdminRevenueSummaryDto;
+      const query = {
+        from: q.from ? new Date(q.from) : null,
+        to: q.to ? new Date(q.to) : null,
+      };
+      const data = await this.service.getRevenueSummary(subject, query);
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async listRevenueByTeacher(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const subject = Number(req.getSubject());
+      const q = req.query as unknown as AdminRevenueByTeacherDto;
+      const page = q.page ? parseInt(q.page, 10) : 1;
+      const limit = q.limit ? parseInt(q.limit, 10) : 10;
+      const query = {
+        page: Number.isNaN(page) ? 1 : page,
+        limit: Number.isNaN(limit) ? 10 : limit,
+        from: q.from ? new Date(q.from) : null,
+        to: q.to ? new Date(q.to) : null,
+        search: q.search?.trim() || undefined,
+      };
+      const data = await this.service.listRevenueByTeacher(subject, query);
+      res.json({ success: true, data });
     } catch (error) {
       next(error);
     }

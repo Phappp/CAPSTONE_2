@@ -30,6 +30,9 @@ import { createProfileRoutes } from './features/profiles/adapter/route';
 import { uploadBufferToCloudinary, isCloudinaryEnabled } from './lib/cloudinary';
 
 import initQuestionBankRoute from './features/question-bank/adapter/route';
+import initPaymentRoute from './features/payments/adapter/route';
+import { PaymentController } from './features/payments/adapter/controller';
+import { PaymentServiceImpl } from './features/payments/domain/service';
 
 
 const app = express();
@@ -72,6 +75,7 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/v1/courses', initCourseRoute(new CourseController(new CourseServiceImpl())));
   app.use('/api/v1', initAssignmentRoute(new AssignmentController(new AssignmentServiceImpl())));
   app.use('/api/v1/question-banks', initQuestionBankRoute());
+  app.use('/api/v1/payments', initPaymentRoute(new PaymentController(new PaymentServiceImpl())));
   app.use(recoverMiddleware);
 
   // app.use('/search', searchRouter);
@@ -86,9 +90,9 @@ const createHttpServer = (redisClient: any) => {
 
       const result = await uploadBufferToCloudinary({
         buffer: file,
-        folder: 'avatars',
+        folder: fileName.includes("manager-docs") ? "manager-docs" : "avatars",
         originalFilename: fileName,
-        resourceType: 'image',
+        resourceType: mimeType?.startsWith("image/") ? "image" : "raw",
       });
 
       return result.secure_url;

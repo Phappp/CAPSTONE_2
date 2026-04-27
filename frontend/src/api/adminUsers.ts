@@ -20,4 +20,9 @@ export const ADMIN_USERS_API = {
     `${ADMIN_USERS_API_BASE}/openrouter-config/keys/${keyId}`,
   openrouterKeyTest: (keyId: number | string) =>
     `${ADMIN_USERS_API_BASE}/openrouter-config/keys/${keyId}/test`,
+  courseManagerVerifications: `${ADMIN_USERS_API_BASE}/course-managers/verifications`,
+  courseManagerVerificationReview: (userId: number | string) =>
+    `${ADMIN_USERS_API_BASE}/course-managers/${userId}/verification`,
+  revenueSummary: `${ADMIN_USERS_API_BASE}/revenue/summary`,
+  revenueByTeacher: `${ADMIN_USERS_API_BASE}/revenue/by-teacher`,
 } as const;

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import {
   AuthService,
+  CompleteGoogleOAuthRequest,
   ExchangeTokenResult,
   ExchangeTokenRequest,
   LoginRequest,
@@ -87,7 +88,7 @@ export class AuthServiceImpl implements AuthService {
     return jwt.verify(token, secret);
   }
 
-  async createUserIfNotExists(userProfile: any): Promise<User> {
+  async createUserIfNotExists(userProfile: any): Promise<{ user: User; isNew: boolean }> {
     const userRepository = AppDataSource.getRepository(User);
 
     if (!userProfile.email) {
@@ -96,6 +97,7 @@ export class AuthServiceImpl implements AuthService {
 
     let user = await userRepository.findOne({ where: { email: userProfile.email } });
 
+    let isNew = false;
     if (!user) {
       user = userRepository.create({
         email: userProfile.email,
@@ -107,6 +109,7 @@ export class AuthServiceImpl implements AuthService {
       });
 
       await userRepository.save(user);
+      isNew = true;
     } else {
       // Cập nhật avatar nếu user đã tồn tại nhưng chưa có avatar
       if (!user.avatar_url && userProfile.picture) {
@@ -115,7 +118,7 @@ export class AuthServiceImpl implements AuthService {
       }
     }
 
-    return user;
+    return { user, isNew };
   }
 
   private generateOtpCode(): string {
@@ -438,7 +441,7 @@ export class AuthServiceImpl implements AuthService {
       throw new Error('Không thể lấy email từ Google. Vui lòng đảm bảo bạn đã cấp quyền email.');
     }
 
-    const user = await this.createUserIfNotExists(userProfile);
+    const { user } = await this.createUserIfNotExists(userProfile);
 
     // === THÊM: Gán role mặc định cho user đăng nhập Google ===
     const userRoleRepository = AppDataSource.getRepository(UserRole);
@@ -450,28 +453,26 @@ export class AuthServiceImpl implements AuthService {
     });
 
     if (existingRoles.length === 0) {
-      // Tìm role 'learner' hoặc 'student' mặc định
-      let defaultRole = await roleRepository.findOne({
-        where: [{ name: 'learner' }, { name: 'student' }]
-      });
+      const pendingToken = jwt.sign(
+        {
+          sub: String(user.id),
+          email: user.email,
+          full_name: user.full_name,
+          avatar_url: user.avatar_url ?? null,
+          typ: 'google-role-pending',
+        },
+        this.jwtSecret,
+        { expiresIn: '10m' },
+      );
 
-      if (!defaultRole) {
-        // Tạo role mới nếu chưa tồn tại
-        defaultRole = roleRepository.create({
-          name: 'learner',
-          description: 'Default role for Google login users'
-        });
-        await roleRepository.save(defaultRole);
-      }
-
-      // Gán role cho user
-      const userRole = userRoleRepository.create({
-        user_id: user.id,
-        role_id: defaultRole.id
-      });
-      await userRoleRepository.save(userRole);
+      return {
+        requiresRoleSelection: true,
+        pendingToken,
+        email: user.email,
+        fullName: user.full_name,
+        avatarUrl: user.avatar_url ?? null,
+      };
     }
-    // === KẾT THÚC THÊM ===
 
     const sessionRepository = AppDataSource.getRepository(Session);
     const sessionID = uuidv4();
@@ -487,6 +488,66 @@ export class AuthServiceImpl implements AuthService {
       refreshToken: tokens.refreshToken,
       accessToken: tokens.accessToken,
       sub: String(user.id),
+    };
+  }
+
+  async completeGoogleOAuth(request: CompleteGoogleOAuthRequest): Promise<LoginResult> {
+    const claims = this.verifyToken(request.pendingToken, this.jwtSecret);
+    if (claims?.typ !== 'google-role-pending' || !claims?.sub) {
+      throw new Error('Phiên chọn vai trò Google không hợp lệ hoặc đã hết hạn.');
+    }
+
+    const userRepository = AppDataSource.getRepository(User);
+    const roleRepository = AppDataSource.getRepository(Role);
+    const userRoleRepository = AppDataSource.getRepository(UserRole);
+    const sessionRepository = AppDataSource.getRepository(Session);
+
+    const user = await userRepository.findOne({ where: { id: Number(claims.sub) } });
+    if (!user) {
+      throw new Error('Không tìm thấy người dùng cho phiên Google OAuth.');
+    }
+
+    const roleCandidates =
+      request.role === 'course_manager'
+        ? ['course_manager', 'teacher']
+        : ['learner', 'student'];
+
+    let selectedRole = await roleRepository.findOne({
+      where: roleCandidates.map((name) => ({ name })),
+    });
+
+    if (!selectedRole) {
+      selectedRole = roleRepository.create({
+        name: request.role,
+        description: 'Auto-created role for Google OAuth completion',
+      });
+      await roleRepository.save(selectedRole);
+    }
+
+    const existingUserRole = await userRoleRepository.findOne({
+      where: { user_id: user.id, role_id: selectedRole.id },
+    });
+    if (!existingUserRole) {
+      const userRole = userRoleRepository.create({
+        user_id: user.id,
+        role_id: selectedRole.id,
+      });
+      await userRoleRepository.save(userRole);
+    }
+
+    const sessionID = uuidv4();
+    const session = sessionRepository.create({
+      sessionID,
+      userID: String(user.id),
+    });
+    await sessionRepository.save(session);
+
+    const tokens = await this.signTokensForUser(user, sessionID);
+    const authUser = await this.mapUserToAuthUser(user);
+
+    return {
+      ...tokens,
+      user: authUser,
     };
   }
 

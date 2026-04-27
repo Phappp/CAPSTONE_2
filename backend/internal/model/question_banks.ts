@@ -7,6 +7,7 @@
  * - name/description: tên & mô tả ngân hàng
  * - created_by: user tạo ngân hàng
  * - is_shared: ngân hàng dùng chung hay private
+ * - is_active: active/archived (soft-delete)
  * - created_at/updated_at: timestamps
  */
 import {
@@ -58,6 +59,10 @@ export default class QuestionBank {
     @Column({ type: 'boolean', default: false })
     /** True nếu ngân hàng được chia sẻ cho nhiều người dùng. */
     is_shared: boolean;
+
+    @Column({ type: 'boolean', default: true })
+    /** False khi ngân hàng bị lưu trữ (archive). */
+    is_active: boolean;
 
     @CreateDateColumn()
     /** Thời điểm tạo. */

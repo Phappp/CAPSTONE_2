@@ -16,6 +16,12 @@ type UserRoleRow = {
   role_name: string;
 };
 
+type ManagerVerificationRow = {
+  status: "pending" | "verified" | "rejected" | "suspended";
+  review_note: string | null;
+  reviewed_at: Date | string | null;
+};
+
 function getPrimaryRole(roles: string[]): string | null {
   if (!roles.length) return null;
 
@@ -28,6 +34,37 @@ function getPrimaryRole(roles: string[]): string | null {
 }
 
 export class MysqlProfileRepository implements ProfileRepository {
+  private async getManagerVerification(userId: number): Promise<{
+    status: "pending" | "verified" | "rejected" | "suspended";
+    review_note: string | null;
+    reviewed_at: string | null;
+  } | null> {
+    try {
+      const rows = (await AppDataSource.query(
+        `
+        SELECT status, review_note, reviewed_at
+        FROM course_manager_verifications
+        WHERE user_id = ?
+        LIMIT 1
+        `,
+        [userId]
+      )) as ManagerVerificationRow[];
+      if (!rows.length) return null;
+      const row = rows[0];
+      return {
+        status: row.status,
+        review_note: row.review_note ?? null,
+        reviewed_at: row.reviewed_at
+          ? (row.reviewed_at instanceof Date
+              ? row.reviewed_at.toISOString()
+              : new Date(String(row.reviewed_at)).toISOString())
+          : null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   private async getUserRoles(userId: number): Promise<string[]> {
     const roleRows = (await AppDataSource.query(
       `
@@ -68,6 +105,7 @@ export class MysqlProfileRepository implements ProfileRepository {
     const row = rows[0];
     const roles = await this.getUserRoles(userId);
     const primaryRole = getPrimaryRole(roles);
+    const managerVerification = await this.getManagerVerification(userId);
 
     return {
       id: row.id,
@@ -82,6 +120,7 @@ export class MysqlProfileRepository implements ProfileRepository {
           : String(row.created_at),
       roles,
       primary_role: primaryRole,
+      manager_verification: managerVerification,
     };
   }
   
@@ -126,6 +165,7 @@ export class MysqlProfileRepository implements ProfileRepository {
     const row = rows[0];
     const roles = await this.getUserRoles(row.id);
     const primaryRole = getPrimaryRole(roles);
+    const managerVerification = await this.getManagerVerification(row.id);
 
     return {
       id: row.id,
@@ -140,6 +180,7 @@ export class MysqlProfileRepository implements ProfileRepository {
           : String(row.created_at),
       roles,
       primary_role: primaryRole,
+      manager_verification: managerVerification,
     };
   }
 

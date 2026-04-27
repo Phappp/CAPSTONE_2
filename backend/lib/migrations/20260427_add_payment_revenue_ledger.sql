@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS payment_revenue_ledger (
+  id INT NOT NULL AUTO_INCREMENT,
+  order_id INT NOT NULL,
+  course_id INT NOT NULL,
+  teacher_user_id INT NOT NULL,
+  gross_amount DECIMAL(12,2) NOT NULL,
+  system_fee_amount DECIMAL(12,2) NOT NULL,
+  net_amount DECIMAL(12,2) NOT NULL,
+  system_fee_rate_bps INT NOT NULL,
+  currency VARCHAR(10) NOT NULL DEFAULT 'VND',
+  recognized_at DATETIME NOT NULL,
+  status ENUM('recognized','reversed') NOT NULL DEFAULT 'recognized',
+  reversed_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY ux_payment_revenue_ledger_order_id (order_id),
+  KEY idx_payment_revenue_ledger_teacher_date (teacher_user_id, recognized_at),
+  KEY idx_payment_revenue_ledger_course_date (course_id, recognized_at),
+  CONSTRAINT fk_payment_revenue_ledger_order FOREIGN KEY (order_id) REFERENCES payment_orders(id)
+);

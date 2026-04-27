@@ -1,0 +1,87 @@
+.lesson-rich-editor {
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.lesson-rich-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.55rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.lesson-rich-toolbar button {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 6px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lesson-rich-toolbar button:hover {
+  background: #eef2ff;
+}
+
+.lesson-rich-toolbar .material-symbols-outlined {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.lesson-rich-content .ProseMirror {
+  min-height: 200px;
+  padding: 0.75rem 0.75rem 0.75rem 1.8rem;
+  outline: none;
+  line-height: 1.6;
+}
+
+.lesson-rich-editor.compact .lesson-rich-content .ProseMirror {
+  min-height: 130px;
+}
+
+.lesson-rich-content .ProseMirror p {
+  margin: 0.35rem 0;
+}
+
+.lesson-rich-content .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.lesson-rich-content .ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0.6rem 0;
+}
+
+.lesson-rich-content .ProseMirror th,
+.lesson-rich-content .ProseMirror td {
+  border: 1px solid #d1d5db;
+  padding: 0.45rem;
+  vertical-align: top;
+}
+
+.lesson-rich-content .ProseMirror th {
+  background: #f3f4f6;
+  font-weight: 700;
+}
+
+.lesson-rich-editor.is-disabled .lesson-rich-content .ProseMirror {
+  opacity: 0.6;
+}
+
+.lesson-rich-editor.is-disabled .lesson-rich-toolbar {
+  opacity: 0.6;
+}

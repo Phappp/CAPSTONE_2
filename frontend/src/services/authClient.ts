@@ -10,6 +10,11 @@ export type AuthUser = {
   roles?: string[];
   primary_role?: string | null;
   is_2fa_enabled?: boolean;
+  manager_verification?: {
+    status: "pending" | "verified" | "rejected" | "suspended";
+    review_note: string | null;
+    reviewed_at: string | null;
+  } | null;
 };
 
 export type AuthResponse = {
@@ -28,6 +33,11 @@ export type LoginParams = {
 
 export type GoogleAuthUrlResponse = {
   url: string;
+};
+
+export type CompleteGoogleOAuthParams = {
+  pendingToken: string;
+  role: "learner" | "course_manager";
 };
 
 export async function apiForgotPassword(params: { email: string }): Promise<void> {
@@ -194,6 +204,27 @@ export async function apiGetGoogleAuthUrl(): Promise<string> {
   return data.url;
 }
 
+export async function apiCompleteGoogleOAuth(params: CompleteGoogleOAuthParams): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}${AUTH_API.googleComplete}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      pending_token: params.pendingToken,
+      role: params.role,
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const code = data?.code || data?.message || "GOOGLE_COMPLETE_FAILED";
+    throw new Error(code);
+  }
+
+  return data as AuthResponse;
+}
+
 // Làm mới token
 export async function apiRefreshToken(params: {
   refreshToken: string;
@@ -243,5 +274,6 @@ export async function apiGetCurrentUser(accessToken: string): Promise<AuthUser> 
     avatar_url: profile?.avatar_url ?? null,
     roles: Array.isArray(profile?.roles) ? profile.roles : [],
     primary_role: profile?.primary_role ?? null,
+    manager_verification: profile?.manager_verification ?? null,
   } as AuthUser;
 }

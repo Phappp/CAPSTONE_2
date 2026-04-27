@@ -17,6 +17,7 @@ const initQuestionBankRoute = () => {
 
     // GET/PATCH/DELETE /api/v1/question-banks/:bankId
     router.route('/:bankId')
+        .get(requireAuthorizedUser, controller.getBankUsage.bind(controller))
         .patch(requireAuthorizedUser, controller.updateBank.bind(controller))
         .delete(requireAuthorizedUser, controller.deleteBank.bind(controller));
 

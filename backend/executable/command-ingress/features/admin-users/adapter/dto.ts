@@ -51,3 +51,28 @@ export interface UpdateOpenRouterKeyDto {
   clear_cooldown?: boolean;
 }
 
+export interface ListCourseManagerVerificationsDto {
+  page?: string;
+  limit?: string;
+  q?: string;
+  status?: string;
+}
+
+export interface ReviewCourseManagerVerificationDto {
+  status: string;
+  note?: string;
+}
+
+export interface AdminRevenueSummaryDto {
+  from?: string;
+  to?: string;
+}
+
+export interface AdminRevenueByTeacherDto {
+  page?: string;
+  limit?: string;
+  from?: string;
+  to?: string;
+  search?: string;
+}
+

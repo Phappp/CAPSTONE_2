@@ -1,15 +1,20 @@
-export type CourseStatus = 'draft' | 'published' | 'archived';
+export type CourseStatus = 'draft' | 'pending_review' | 'published' | 'archived';
 
 export type CreateCourseRequest = {
   title: string;
   short_description?: string | null;
   full_description?: string | null;
+  category?: string | null;
   level?: string | null;
   language?: string | null;
   thumbnail_url?: string | null;
   publish_scheduled_at?: string | null;
   learning_objectives?: string[] | null;
   prerequisites?: string[] | null;
+  price?: number | null;
+  has_certificate?: boolean;
+  estimated_hours?: number | null;
+  tags?: string[] | null;
 };
 
 export type UpdateCourseRequest = Partial<CreateCourseRequest>;
@@ -60,12 +65,17 @@ export type CourseLessonItem = {
   lesson_type: LessonType;
   order_index: number;
   open_at?: string | null;
+  is_published?: boolean;
   is_free_preview?: boolean;
   duration_minutes?: number | null;
   /** Có Quizz gắn với lesson (lesson vẫn có thể là video/text). */
   has_quiz?: boolean;
   /** Có bài tập gắn với lesson (lesson có thể không phải loại assignment). */
   has_assignment?: boolean;
+  /** Trạng thái chất lượng nội dung để hiển thị trong cây của giảng viên. */
+  quality_status?: 'ok' | 'needs_fix';
+  /** Lý do lesson chưa đạt chất lượng (nếu có). */
+  quality_issue?: string | null;
 };
 
 export type CourseModuleItem = {
@@ -75,6 +85,7 @@ export type CourseModuleItem = {
   description: string | null;
   order_index: number;
   open_at?: string | null;
+  is_published?: boolean;
   lessons: CourseLessonItem[];
 };
 
@@ -101,6 +112,7 @@ export type CourseDetail = {
   learners_count: number;
   modules_count: number;
   lessons_count: number;
+  price?: number | null;
   total_duration_minutes?: number | null;
   is_enrolled?: boolean;
   enrollment?: {
@@ -130,6 +142,7 @@ export type PublishedCourseListItem = {
   learners_count: number;
   modules_count: number;
   lessons_count: number;
+  price?: number | null;
   total_duration_minutes?: number | null;
   is_enrolled?: boolean;
   can_enroll?: boolean;
@@ -171,6 +184,7 @@ export type UpdateModuleRequest = {
   title?: string;
   description?: string | null;
   open_at?: string | null;
+  is_published?: boolean;
 };
 
 export type CreateLessonRequest = {
@@ -185,6 +199,7 @@ export type UpdateLessonRequest = {
   description?: string | null;
   lesson_type?: LessonType;
   open_at?: string | null;
+  is_published?: boolean;
 };
 
 export type ReorderModulesRequest = {
@@ -198,17 +213,106 @@ export type ReorderLessonsRequest = {
 export type ReorderCourseContentRequest = ReorderModulesRequest & ReorderLessonsRequest;
 
 export type LessonResourceType = 'file' | 'video';
+export type LessonResourceKind = 'pdf' | 'word' | 'video' | 'youtube' | 'other';
+export type ResourceReviewStatus = 'pending' | 'approved' | 'rejected';
 
 export type LessonResourceItem = {
   id: number;
   lesson_id: number;
   resource_type: LessonResourceType;
+  resource_kind: LessonResourceKind;
   url: string;
   filename: string | null;
   mime_type: string | null;
   size_bytes: number | null;
   preview_url: string | null;
+  review_status: ResourceReviewStatus;
+  review_reason: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
   created_at: string;
+};
+
+export type PendingLessonResourceQuery = {
+  page?: number;
+  page_size?: number;
+  q?: string;
+  kind?: LessonResourceKind | 'all';
+  course_id?: number;
+};
+
+export type PendingLessonResourceListItem = LessonResourceItem & {
+  course_id: number;
+  course_title: string;
+  lesson_title: string;
+  teacher_id: number;
+  is_resubmitted?: boolean;
+  last_review_decision?: 'submit' | 'approve' | 'reject' | 'resubmit' | null;
+  last_review_note?: string | null;
+  last_reviewed_at?: string | null;
+  previous_rejected_reason?: string | null;
+};
+
+export type PendingLessonResourceListResult = {
+  items: PendingLessonResourceListItem[];
+  page: number;
+  page_size: number;
+  total: number;
+};
+
+export type TeacherRejectedResourceListItem = LessonResourceItem & {
+  course_id: number;
+  course_title: string;
+  module_id: number;
+  module_title: string;
+  lesson_id: number;
+  lesson_title: string;
+  lesson_type: LessonType;
+  review_event_note: string | null;
+  review_event_at: string | null;
+};
+
+export type TeacherRejectedResourceListResult = {
+  course_id: number;
+  items: TeacherRejectedResourceListItem[];
+};
+
+export type TeacherPendingResourceListItem = LessonResourceItem & {
+  course_id: number;
+  course_title: string;
+  module_id: number;
+  module_title: string;
+  lesson_id: number;
+  lesson_title: string;
+  lesson_type: LessonType;
+  is_resubmitted?: boolean;
+  last_review_decision?: 'submit' | 'approve' | 'reject' | 'resubmit' | null;
+  last_review_note?: string | null;
+  last_reviewed_at?: string | null;
+  previous_rejected_reason?: string | null;
+};
+
+export type TeacherPendingResourceListResult = {
+  course_id: number;
+  items: TeacherPendingResourceListItem[];
+};
+
+export type LessonResourceReviewDecision = 'approve' | 'reject';
+
+export type LessonResourceReviewEventItem = {
+  id: number;
+  resource_id: number;
+  actor_user_id: number;
+  from_status: ResourceReviewStatus | null;
+  to_status: ResourceReviewStatus;
+  decision: 'submit' | 'approve' | 'reject' | 'resubmit';
+  note: string | null;
+  created_at: string;
+};
+
+export type LessonResourceReviewTimelineResult = {
+  resource_id: number;
+  items: LessonResourceReviewEventItem[];
 };
 
 export type CourseListItem = {
@@ -217,11 +321,16 @@ export type CourseListItem = {
   slug: string;
   short_description: string | null;
   full_description?: string | null;
+  category?: string | null;
   thumbnail_url: string | null;
   level: string;
   language: string;
   learning_objectives?: string[] | null;
   prerequisites?: string[] | null;
+  price?: number | null;
+  has_certificate?: boolean;
+  estimated_hours?: number | null;
+  tags?: string[] | null;
   status: CourseStatus;
   published_at: string | null;
   publish_scheduled_at?: string | null;
@@ -230,6 +339,10 @@ export type CourseListItem = {
   learners_count: number;
   modules_count: number;
   lessons_count: number;
+  quality_gate?: {
+    ready: boolean;
+    issues: string[];
+  };
 };
 
 export type CourseListResult = {
@@ -250,8 +363,98 @@ export type CourseDashboardStats = {
   total: number;
   published: number;
   draft: number;
+  pending_review: number;
   archived: number;
+  finance: {
+    currency: string;
+    gross_revenue: number;
+    platform_fee_total: number;
+    net_revenue: number;
+    paid_orders: number;
+  };
 };
+
+export type TeacherRevenueSummaryQuery = {
+  from?: string;
+  to?: string;
+};
+
+export type TeacherRevenueSummary = {
+  currency: string;
+  gross_revenue: number;
+  platform_fee_total: number;
+  net_revenue: number;
+  paid_orders: number;
+};
+
+export type TeacherRevenueTrendPoint = {
+  date: string;
+  gross_revenue: number;
+  platform_fee_total: number;
+  net_revenue: number;
+  paid_orders: number;
+};
+
+export type TeacherRevenueTrendResult = {
+  points: TeacherRevenueTrendPoint[];
+};
+
+export type TeacherRevenueTransactionsQuery = {
+  from?: string;
+  to?: string;
+  page?: number;
+  page_size?: number;
+};
+
+export type TeacherRevenueTransactionItem = {
+  order_id: number;
+  course_id: number;
+  teacher_user_id: number;
+  gross_amount: number;
+  platform_fee_amount: number;
+  net_amount: number;
+  currency: string;
+  recognized_at: string;
+  status: 'recognized' | 'reversed';
+};
+
+export type TeacherRevenueTransactionsResult = {
+  items: TeacherRevenueTransactionItem[];
+  page: number;
+  page_size: number;
+  total: number;
+};
+
+export type PendingReviewCourseQuery = {
+  page?: number;
+  page_size?: number;
+  q?: string;
+};
+
+export type PendingReviewCourseListResult = {
+  items: CourseListItem[];
+  page: number;
+  page_size: number;
+  total: number;
+};
+
+export type CourseReviewEventItem = {
+  id: number;
+  course_id: number;
+  actor_user_id: number;
+  from_status: CourseStatus | null;
+  to_status: CourseStatus;
+  decision: 'submit' | 'approve' | 'reject' | 'archive' | 'revert_draft';
+  note: string | null;
+  created_at: string;
+};
+
+export type CourseReviewTimelineResult = {
+  course_id: number;
+  items: CourseReviewEventItem[];
+};
+
+export type ReviewCourseDecision = 'approve' | 'reject';
 
 /** Tổng quan một khóa học cho màn hình quản lý (GV). */
 export type CourseManagerOverview = {
@@ -544,6 +747,12 @@ export interface CourseService {
   createCourse(subjectUserId: number, request: CreateCourseRequest): Promise<{ id: number }>;
   listMyCourses(subjectUserId: number, query: CourseListQuery): Promise<CourseListResult>;
   getMyCourseDashboardStats(subjectUserId: number): Promise<CourseDashboardStats>;
+  getMyRevenueSummary(subjectUserId: number, query: TeacherRevenueSummaryQuery): Promise<TeacherRevenueSummary>;
+  getMyRevenueTrend(subjectUserId: number, query: TeacherRevenueSummaryQuery): Promise<TeacherRevenueTrendResult>;
+  listMyRevenueTransactions(
+    subjectUserId: number,
+    query: TeacherRevenueTransactionsQuery
+  ): Promise<TeacherRevenueTransactionsResult>;
   getMyCourseDetail(subjectUserId: number, courseId: number): Promise<CourseListItem>;
   getMyCourseManagerOverview(subjectUserId: number, courseId: number): Promise<CourseManagerOverview>;
   getMyCoursePrerequisiteGraph(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteGraph>;
@@ -555,6 +764,20 @@ export interface CourseService {
   updateMyCourseCompletionRules(subjectUserId: number, courseId: number, request: UpdateCourseCompletionRulesRequest): Promise<CourseCompletionRules>;
   listMyCourseLearnerProgress(subjectUserId: number, courseId: number, query: { page?: number; page_size?: number; q?: string }): Promise<CourseLearnerProgressResult>;
   getCourseLeaderboard(subjectUserId: number, courseId: number): Promise<CourseLeaderboardResult>;
+  listPendingReviewCourses(subjectUserId: number, query: PendingReviewCourseQuery): Promise<PendingReviewCourseListResult>;
+  reviewCourseByAdmin(subjectUserId: number, courseId: number, decision: ReviewCourseDecision, note?: string | null): Promise<void>;
+  getCourseReviewTimelineByAdmin(subjectUserId: number, courseId: number): Promise<CourseReviewTimelineResult>;
+  getMyCourseReviewTimeline(subjectUserId: number, courseId: number): Promise<CourseReviewTimelineResult>;
+  listPendingLessonResourcesByAdmin(subjectUserId: number, query: PendingLessonResourceQuery): Promise<PendingLessonResourceListResult>;
+  reviewLessonResourceByAdmin(
+    subjectUserId: number,
+    resourceId: number,
+    decision: LessonResourceReviewDecision,
+    note?: string | null
+  ): Promise<void>;
+  getLessonResourceReviewTimelineByAdmin(subjectUserId: number, resourceId: number): Promise<LessonResourceReviewTimelineResult>;
+  listMyRejectedLessonResources(subjectUserId: number, courseId: number): Promise<TeacherRejectedResourceListResult>;
+  listMyPendingLessonResources(subjectUserId: number, courseId: number): Promise<TeacherPendingResourceListResult>;
 
   getMyCourseContentTree(subjectUserId: number, courseId: number): Promise<CourseContentTree>;
   createModule(subjectUserId: number, courseId: number, request: CreateModuleRequest): Promise<{ id: number }>;

@@ -57,3 +57,80 @@ export interface UpdateOpenRouterKeyRequest {
   clear_cooldown?: boolean;
 }
 
+export type CourseManagerVerificationStatus = 'pending' | 'verified' | 'rejected' | 'suspended';
+
+export interface CourseManagerVerificationItem {
+  user_id: number;
+  full_name: string;
+  email: string;
+  status: CourseManagerVerificationStatus;
+  application_note: string | null;
+  expertise_areas?: string | null;
+  years_experience?: number | null;
+  organization_name?: string | null;
+  portfolio_url?: string | null;
+  certificate_links?: string | null;
+  teaching_statement?: string | null;
+  checklist_passed: boolean;
+  review_note: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListCourseManagerVerificationsQuery {
+  page: number;
+  limit: number;
+  q?: string;
+  status?: CourseManagerVerificationStatus | 'all';
+}
+
+export interface ReviewCourseManagerVerificationRequest {
+  status: Exclude<CourseManagerVerificationStatus, 'pending'>;
+  note?: string;
+}
+
+export interface AdminRevenueSummaryQuery {
+  from?: Date | null;
+  to?: Date | null;
+}
+
+export interface AdminRevenueSummary {
+  gross_amount: number;
+  system_fee_amount: number;
+  teacher_net_amount: number;
+  paid_orders: number;
+  refunded_orders: number;
+}
+
+export interface AdminRevenueByTeacherQuery {
+  page: number;
+  limit: number;
+  from?: Date | null;
+  to?: Date | null;
+  search?: string;
+}
+
+export interface AdminRevenueByTeacherItem {
+  teacher_user_id: number;
+  teacher_name: string | null;
+  teacher_email: string | null;
+  gross_amount: number;
+  system_fee_amount: number;
+  teacher_net_amount: number;
+  paid_orders: number;
+  refunded_orders: number;
+  last_recognized_at: string | null;
+}
+
+export interface AdminRevenueByTeacherResult {
+  items: AdminRevenueByTeacherItem[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    pages: number;
+  };
+}
+

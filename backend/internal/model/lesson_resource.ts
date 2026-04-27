@@ -39,6 +39,29 @@ export default class LessonResource {
   @Column({ type: 'int', nullable: true })
   size_bytes: number;
 
+  @Column({
+    type: 'enum',
+    enum: ['pdf', 'word', 'video', 'youtube', 'other'],
+    default: 'other',
+  })
+  resource_kind: string;
+
+  @Column({
+    type: 'enum',
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'approved',
+  })
+  review_status: string;
+
+  @Column({ type: 'text', nullable: true })
+  review_reason: string;
+
+  @Column({ type: 'bigint', nullable: true })
+  reviewed_by: number | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  reviewed_at: Date | null;
+
   @CreateDateColumn()
   created_at: Date;
 }

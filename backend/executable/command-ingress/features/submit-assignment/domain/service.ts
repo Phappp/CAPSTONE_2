@@ -1,5 +1,5 @@
 /* eslint-disable no-trailing-spaces */
-import { DataSource, In } from 'typeorm';
+import { DataSource, EntityManager, In } from 'typeorm';
 import AppDataSource from '../../../../../lib/database';
 import Assignment from '../../../../../internal/model/assignment';
 import Lesson from '../../../../../internal/model/lesson';
@@ -24,6 +24,85 @@ export class SubmissionServiceImpl implements SubmissionService {
 
   constructor() {
     this.dataSource = AppDataSource;
+  }
+
+  private parseDate(value: unknown): Date | null {
+    if (!value) return null;
+    const dt = new Date(value as any);
+    if (Number.isNaN(dt.getTime())) return null;
+    return dt;
+  }
+
+  private async ensureAssignmentLessonAccessible(
+    manager: EntityManager,
+    userId: number,
+    courseId: number,
+    lesson: Lesson,
+    module: Module
+  ): Promise<void> {
+    const now = new Date();
+    const moduleOpenAt = this.parseDate((module as any).open_at);
+    if (moduleOpenAt && moduleOpenAt.getTime() > now.getTime()) {
+      throw new Error('Bài học chưa mở theo lịch.');
+    }
+    const lessonOpenAt = this.parseDate((lesson as any).open_at);
+    if (lessonOpenAt && lessonOpenAt.getTime() > now.getTime()) {
+      throw new Error('Bài học chưa mở theo lịch.');
+    }
+
+    const modules = await manager.find(Module, {
+      where: { course_id: courseId } as any,
+      order: { order_index: 'ASC', id: 'ASC' } as any,
+    });
+    const moduleIds = (modules as any[]).map((m) => Number((m as any).id)).filter((id) => id > 0);
+    if (!moduleIds.length) return;
+
+    const lessons = await manager.find(Lesson, {
+      where: { module_id: In(moduleIds) } as any,
+      order: { order_index: 'ASC', id: 'ASC' } as any,
+    });
+    const moduleOrder = new Map<number, number>(moduleIds.map((id, idx) => [id, idx]));
+    const orderedLessons = [...(lessons as any[])].sort((a, b) => {
+      const am = moduleOrder.get(Number((a as any).module_id)) ?? Number.MAX_SAFE_INTEGER;
+      const bm = moduleOrder.get(Number((b as any).module_id)) ?? Number.MAX_SAFE_INTEGER;
+      if (am !== bm) return am - bm;
+      const ao = Number((a as any).order_index ?? 0);
+      const bo = Number((b as any).order_index ?? 0);
+      if (ao !== bo) return ao - bo;
+      return Number((a as any).id) - Number((b as any).id);
+    });
+
+    const lessonId = Number((lesson as any).id);
+    const idx = orderedLessons.findIndex((l) => Number((l as any).id) === lessonId);
+    if (idx < 0) throw new Error('Bài học không hợp lệ.');
+
+    const completionRows = await manager.find(LessonCompletion, {
+      where: { user_id: userId, lesson_id: In(orderedLessons.map((l) => Number((l as any).id))) } as any,
+      select: ['lesson_id'] as any,
+    });
+    const completedSet = new Set<number>((completionRows as any[]).map((r) => Number((r as any).lesson_id)));
+
+    if (idx > 0) {
+      const prevLessonId = Number((orderedLessons[idx - 1] as any).id);
+      if (!completedSet.has(prevLessonId)) {
+        throw new Error('Bạn cần hoàn thành bài trước đó trước khi nộp bài.');
+      }
+    }
+
+    const lessonType = String((lesson as any).lesson_type || '');
+    if (lessonType === 'assignment' || lessonType === 'quiz') {
+      const moduleId = Number((lesson as any).module_id);
+      const inModule = orderedLessons.filter((l) => Number((l as any).module_id) === moduleId);
+      const selfIdx = inModule.findIndex((l) => Number((l as any).id) === lessonId);
+      if (selfIdx > 0) {
+        for (let i = 0; i < selfIdx; i++) {
+          const requiredLessonId = Number((inModule[i] as any).id);
+          if (!completedSet.has(requiredLessonId)) {
+            throw new Error('Bạn cần hoàn thành các bài trước trong chương trước khi nộp bài.');
+          }
+        }
+      }
+    }
   }
 
   async submitAssignment(req: SubmitAssignmentBody): Promise<any> {
@@ -56,6 +135,13 @@ export class SubmissionServiceImpl implements SubmissionService {
         } as any,
       });
       if (!enroll) throw new Error('Bạn chưa ghi danh khóa học này.');
+      await this.ensureAssignmentLessonAccessible(
+        queryRunner.manager,
+        Number(req.user_id),
+        Number((mod as any).course_id),
+        lesson as any,
+        mod as any
+      );
 
       const previousSubmissionsCount = await queryRunner.manager.count(Submission, {
         where: { assignment_id: req.assignment_id, user_id: req.user_id },
@@ -95,6 +181,23 @@ export class SubmissionServiceImpl implements SubmissionService {
       const filesData: { file_name: string; file_path: string; file_size: number }[] = [];
 
       if (kind === 'short_answer') {
+        const limitMinutes = Number((assignment as any).time_limit_minutes ?? 0);
+        if (Number.isFinite(limitMinutes) && limitMinutes > 0) {
+          const progressForTimer = await queryRunner.manager.findOne(LessonProgress, {
+            where: {
+              user_id: req.user_id,
+              course_id: Number((mod as any).course_id),
+              lesson_id: Number((lesson as any).id),
+            } as any,
+          });
+          const nowMs = Date.now();
+          const startedAtMs = progressForTimer?.created_at ? new Date((progressForTimer as any).created_at).getTime() : nowMs;
+          const elapsedSeconds = Math.max(0, Math.floor((nowMs - startedAtMs) / 1000));
+          const allowedSeconds = Math.max(1, Math.floor(limitMinutes * 60));
+          if (elapsedSeconds > allowedSeconds) {
+            throw new Error('Đã hết thời gian làm bài. Bạn không thể nộp thêm.');
+          }
+        }
         const qs = Array.isArray((assignment as any).short_answer_questions)
           ? (assignment as any).short_answer_questions
           : [];

@@ -107,6 +107,12 @@ export class QuestionBankController extends BaseController {
     async listBanks(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
         await this.execWithTryCatchBlock(req, res, next, async () => {
             const uid = Number(req.getSubject());
+            const includeArchivedRaw = req.query.include_archived;
+            const includeArchived =
+              includeArchivedRaw != null
+                ? ['1', 'true', 'yes'].includes(String(includeArchivedRaw).trim().toLowerCase())
+                : false;
+
             const courseIdRaw = req.query.course_id;
             const courseId =
               courseIdRaw != null && String(courseIdRaw).trim() !== ''
@@ -118,7 +124,7 @@ export class QuestionBankController extends BaseController {
                 return;
             }
 
-            const data = await this.service.listBanks(uid, courseId);
+            const data = await this.service.listBanks(uid, courseId, includeArchived);
             res.status(200).json({ success: true, data });
         });
     }
@@ -132,6 +138,19 @@ export class QuestionBankController extends BaseController {
                 return;
             }
             const data = await this.service.getBankQuestions(bankId, uid);
+            res.status(200).json({ success: true, data });
+        });
+    }
+
+    async getBankUsage(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+        await this.execWithTryCatchBlock(req, res, next, async () => {
+            const uid = Number(req.getSubject());
+            const bankId = Number(req.params.bankId);
+            if (!bankId || Number.isNaN(bankId)) {
+                res.status(400).json({ error: 'err_validation', message: ['Bank ID không hợp lệ!'] });
+                return;
+            }
+            const data = await this.service.getBankUsage(bankId, uid);
             res.status(200).json({ success: true, data });
         });
     }
@@ -156,6 +175,7 @@ export class QuestionBankController extends BaseController {
               name: body.name,
               description: body.description,
               is_shared: body.is_shared,
+              is_active: body.is_active,
             });
             res.status(200).json({ success: true, message: 'Cập nhật ngân hàng câu hỏi thành công!', data });
         });
@@ -170,7 +190,7 @@ export class QuestionBankController extends BaseController {
                 return;
             }
             await this.service.deleteBank(bankId, uid);
-            res.status(200).json({ success: true, message: 'Xóa ngân hàng câu hỏi thành công!' });
+            res.status(200).json({ success: true, message: 'Đã lưu trữ ngân hàng câu hỏi thành công.' });
         });
     }
 

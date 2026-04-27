@@ -119,6 +119,10 @@ export default class Assignment {
     /** [{ id, question_text, order_index }] */
     short_answer_questions: any;
 
+    @Column({ type: 'int', nullable: true })
+    /** Thời gian làm bài (phút), áp dụng cho dạng short_answer. */
+    time_limit_minutes: number | null;
+
     @CreateDateColumn()
     /** Thời điểm tạo. */
     created_at: Date;

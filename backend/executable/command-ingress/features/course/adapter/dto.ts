@@ -9,18 +9,24 @@ export class CreateCourseBody extends RequestDto {
 
   short_description?: string | null;
   full_description?: string | null;
+  category?: string | null;
   level?: string | null;
   language?: string | null;
   thumbnail_url?: string | null;
   publish_scheduled_at?: string | null;
   learning_objectives?: string[] | null;
   prerequisites?: string[] | null;
+  price?: number | null;
+  has_certificate?: boolean;
+  estimated_hours?: number | null;
+  tags?: string[] | null;
 
   constructor(body: any) {
     super();
     this.title = String(body?.title || '');
     this.short_description = body?.short_description != null ? String(body.short_description) : null;
     this.full_description = body?.full_description != null ? String(body.full_description) : null;
+    this.category = body?.category != null ? String(body.category) : null;
     this.level = body?.level != null ? String(body.level) : null;
     this.language = body?.language != null ? String(body.language) : null;
     this.thumbnail_url = body?.thumbnail_url != null ? String(body.thumbnail_url) : null;
@@ -31,6 +37,16 @@ export class CreateCourseBody extends RequestDto {
     this.prerequisites = Array.isArray(body?.prerequisites)
       ? body.prerequisites.map((x: any) => String(x))
       : null;
+    this.price =
+      body?.price != null && body.price !== ''
+        ? Number(body.price)
+        : null;
+    this.has_certificate = body?.has_certificate != null ? Boolean(body.has_certificate) : false;
+    this.estimated_hours =
+      body?.estimated_hours != null && body.estimated_hours !== ''
+        ? Number(body.estimated_hours)
+        : null;
+    this.tags = Array.isArray(body?.tags) ? body.tags.map((x: any) => String(x)) : null;
   }
 }
 
@@ -38,18 +54,24 @@ export class UpdateCourseBody extends RequestDto {
   title?: string;
   short_description?: string | null;
   full_description?: string | null;
+  category?: string | null;
   level?: string | null;
   language?: string | null;
   thumbnail_url?: string | null;
   publish_scheduled_at?: string | null;
   learning_objectives?: string[] | null;
   prerequisites?: string[] | null;
+  price?: number | null;
+  has_certificate?: boolean;
+  estimated_hours?: number | null;
+  tags?: string[] | null;
 
   constructor(body: any) {
     super();
     if (body?.title != null) this.title = String(body.title);
     if ('short_description' in (body || {})) this.short_description = body.short_description != null ? String(body.short_description) : null;
     if ('full_description' in (body || {})) this.full_description = body.full_description != null ? String(body.full_description) : null;
+    if ('category' in (body || {})) this.category = body.category != null ? String(body.category) : null;
     if ('level' in (body || {})) this.level = body.level != null ? String(body.level) : null;
     if ('language' in (body || {})) this.language = body.language != null ? String(body.language) : null;
     if ('thumbnail_url' in (body || {})) this.thumbnail_url = body.thumbnail_url != null ? String(body.thumbnail_url) : null;
@@ -64,6 +86,75 @@ export class UpdateCourseBody extends RequestDto {
         ? body.prerequisites.map((x: any) => String(x))
         : null;
     }
+    if ('price' in (body || {})) {
+      this.price = body?.price != null && body.price !== '' ? Number(body.price) : null;
+    }
+    if ('has_certificate' in (body || {})) {
+      this.has_certificate = body?.has_certificate != null ? Boolean(body.has_certificate) : false;
+    }
+    if ('estimated_hours' in (body || {})) {
+      this.estimated_hours =
+        body?.estimated_hours != null && body.estimated_hours !== ''
+          ? Number(body.estimated_hours)
+          : null;
+    }
+    if ('tags' in (body || {})) {
+      this.tags = Array.isArray(body?.tags) ? body.tags.map((x: any) => String(x)) : null;
+    }
+  }
+}
+
+export class ListPendingReviewCoursesQuery extends RequestDto {
+  page?: number;
+  page_size?: number;
+  q?: string;
+
+  constructor(query: any) {
+    super();
+    if (query?.page != null) this.page = Number(query.page);
+    if (query?.page_size != null) this.page_size = Number(query.page_size);
+    if (query?.q != null) this.q = String(query.q);
+  }
+}
+
+export class ReviewCourseBody extends RequestDto {
+  @Length(1, 20)
+  decision: 'approve' | 'reject';
+  note?: string | null;
+
+  constructor(body: any) {
+    super();
+    this.decision = String(body?.decision || '') as any;
+    this.note = body?.note != null ? String(body.note) : null;
+  }
+}
+
+export class ListPendingLessonResourcesQuery extends RequestDto {
+  page?: number;
+  page_size?: number;
+  q?: string;
+  kind?: 'pdf' | 'word' | 'video' | 'youtube' | 'other' | 'all';
+  course_id?: number;
+
+  constructor(query: any) {
+    super();
+    if (query?.page != null) this.page = Number(query.page);
+    if (query?.page_size != null) this.page_size = Number(query.page_size);
+    if (query?.q != null) this.q = String(query.q);
+    if (query?.kind != null) this.kind = String(query.kind).toLowerCase() as any;
+    if (query?.course_id != null) this.course_id = Number(query.course_id);
+  }
+}
+
+export class ReviewLessonResourceBody extends RequestDto {
+  @Length(1, 20)
+  decision: 'approve' | 'reject';
+  note?: string | null;
+
+  constructor(body: any) {
+    super();
+    this.decision = String(body?.decision || '') as any;
+    this.note = body?.note != null ? String(body.note) : null;
   }
 }
 
@@ -135,12 +226,14 @@ export class UpdateModuleBody extends RequestDto {
   title?: string;
   description?: string | null;
   open_at?: string | null;
+  is_published?: boolean;
 
   constructor(body: any) {
     super();
     if (body?.title != null) this.title = String(body.title);
     if ('description' in (body || {})) this.description = body?.description != null ? String(body.description) : null;
     if ('open_at' in (body || {})) this.open_at = body.open_at != null && String(body.open_at).trim() ? String(body.open_at) : null;
+    if ('is_published' in (body || {})) this.is_published = Boolean(body?.is_published);
   }
 }
 
@@ -166,6 +259,7 @@ export class UpdateLessonBody extends RequestDto {
   description?: string | null;
   lesson_type?: LessonType;
   open_at?: string | null;
+  is_published?: boolean;
 
   constructor(body: any) {
     super();
@@ -173,6 +267,7 @@ export class UpdateLessonBody extends RequestDto {
     if ('description' in (body || {})) this.description = body?.description != null ? String(body.description) : null;
     if (body?.lesson_type != null) this.lesson_type = String(body.lesson_type) as LessonType;
     if ('open_at' in (body || {})) this.open_at = body.open_at != null && String(body.open_at).trim() ? String(body.open_at) : null;
+    if ('is_published' in (body || {})) this.is_published = Boolean(body?.is_published);
   }
 }
 

@@ -3,6 +3,19 @@ import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import "./LearnerQuizTake.css";
 
+function normalizeLearnerErrorMessage(raw: unknown): string {
+  const msg = String(raw || "").trim();
+  const lower = msg.toLowerCase();
+  if (!msg) return "Đã xảy ra lỗi. Vui lòng thử lại.";
+  if (lower.includes("ghi danh hợp lệ") || lower.includes("chưa đăng ký khóa học này")) {
+    return "Bạn không còn quyền học khóa này (có thể đã dừng hoặc hết hạn).";
+  }
+  if (lower.includes("không thể truy cập bài học") || lower.includes("chưa mở theo lịch")) {
+    return "Bài học chưa mở hoặc bạn chưa đủ điều kiện truy cập.";
+  }
+  return msg;
+}
+
 type QuizPayload = {
   quiz_id: number;
   lesson_id: number;
@@ -91,7 +104,7 @@ export default function LearnerQuizTake(props: {
       }
       setQuiz(q);
     } catch (e: any) {
-      setError(e?.message || "Lỗi tải quiz.");
+      setError(normalizeLearnerErrorMessage(e?.message || "Lỗi tải quiz."));
       setQuiz(null);
     } finally {
       setLoading(false);
@@ -127,7 +140,7 @@ export default function LearnerQuizTake(props: {
       setResult(data as SubmitResult);
       if ((data as SubmitResult)?.is_passed) onCompleted();
     } catch (e: any) {
-      setError(e?.message || "Nộp bài thất bại.");
+      setError(normalizeLearnerErrorMessage(e?.message || "Nộp bài thất bại."));
     } finally {
       setSubmitting(false);
     }

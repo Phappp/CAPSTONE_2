@@ -30,6 +30,18 @@ const initAdminUserRoute: (controller: AdminUserController) => express.Router = 
   router.route('/openrouter-config/keys/:keyId/test')
     .post(controller.testOpenRouterKey.bind(controller));
 
+  router.route('/course-managers/verifications')
+    .get(controller.listCourseManagerVerifications.bind(controller));
+
+  router.route('/course-managers/:userId/verification')
+    .put(controller.reviewCourseManagerVerification.bind(controller));
+
+  router.route('/revenue/summary')
+    .get(controller.getRevenueSummary.bind(controller));
+
+  router.route('/revenue/by-teacher')
+    .get(controller.listRevenueByTeacher.bind(controller));
+
   router.route('/:userId/status')
     .put(controller.updateStatus.bind(controller));
 

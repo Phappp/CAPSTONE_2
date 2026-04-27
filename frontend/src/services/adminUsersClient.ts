@@ -1,5 +1,6 @@
 import { url as API_BASE_URL } from "../baseUrl";
 import { ADMIN_USERS_API, ADMIN_USERS_API_BASE } from "../api/adminUsers";
+import { COURSES_API } from "../api/courses";
 
 export type AdminUserRole = "learner" | "course_manager" | "admin";
 export type AdminUserStatus = "active" | "pending" | "banned" | "deleted";
@@ -336,6 +337,368 @@ export type OpenRouterConfig = {
   }>;
   active_available_keys: number;
 };
+
+export type PendingReviewCourse = {
+  id: number;
+  title: string;
+  slug: string;
+  status: "pending_review" | "draft" | "published" | "archived";
+  short_description: string | null;
+  updated_at: string;
+  created_at: string;
+  category?: string | null;
+  quality_gate?: {
+    ready: boolean;
+    issues: string[];
+  };
+};
+
+export type PendingLessonResource = {
+  id: number;
+  lesson_id: number;
+  resource_type: "file" | "video";
+  resource_kind: "pdf" | "word" | "video" | "youtube" | "other";
+  url: string;
+  filename: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  preview_url: string | null;
+  review_status: "pending" | "approved" | "rejected";
+  review_reason: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+  course_id: number;
+  course_title: string;
+  lesson_title: string;
+  teacher_id: number;
+  is_resubmitted?: boolean;
+  last_review_decision?: "submit" | "approve" | "reject" | "resubmit" | null;
+  last_review_note?: string | null;
+  last_reviewed_at?: string | null;
+  previous_rejected_reason?: string | null;
+};
+
+export type TeacherRejectedLessonResource = {
+  id: number;
+  lesson_id: number;
+  resource_type: "file" | "video";
+  resource_kind: "pdf" | "word" | "video" | "youtube" | "other";
+  url: string;
+  filename: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  preview_url: string | null;
+  review_status: "pending" | "approved" | "rejected";
+  review_reason: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+  course_id: number;
+  course_title: string;
+  module_id: number;
+  module_title: string;
+  lesson_title: string;
+  lesson_type: "text" | "video" | "quiz" | "assignment";
+  review_event_note: string | null;
+  review_event_at: string | null;
+};
+
+export type LessonResourceReviewTimelineItem = {
+  id: number;
+  resource_id: number;
+  actor_user_id: number;
+  from_status: "pending" | "approved" | "rejected" | null;
+  to_status: "pending" | "approved" | "rejected";
+  decision: "submit" | "approve" | "reject" | "resubmit";
+  note: string | null;
+  created_at: string;
+};
+
+export type CourseReviewTimelineItem = {
+  id: number;
+  course_id: number;
+  actor_user_id: number;
+  from_status: "draft" | "pending_review" | "published" | "archived" | null;
+  to_status: "draft" | "pending_review" | "published" | "archived";
+  decision: "submit" | "approve" | "reject" | "archive" | "revert_draft";
+  note: string | null;
+  created_at: string;
+};
+
+export type CourseManagerVerification = {
+  user_id: number;
+  full_name: string;
+  email: string;
+  status: "pending" | "verified" | "rejected" | "suspended";
+  application_note: string | null;
+  expertise_areas?: string | null;
+  years_experience?: number | null;
+  organization_name?: string | null;
+  portfolio_url?: string | null;
+  certificate_links?: string | null;
+  teaching_statement?: string | null;
+  checklist_passed?: boolean;
+  review_note: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminRevenueSummary = {
+  gross_amount: number;
+  system_fee_amount: number;
+  teacher_net_amount: number;
+  paid_orders: number;
+  refunded_orders: number;
+};
+
+export type AdminRevenueByTeacherItem = {
+  teacher_user_id: number;
+  teacher_name: string | null;
+  teacher_email: string | null;
+  gross_amount: number;
+  system_fee_amount: number;
+  teacher_net_amount: number;
+  paid_orders: number;
+  refunded_orders: number;
+  last_recognized_at: string | null;
+};
+
+export async function apiGetPendingReviewCourses(params: {
+  accessToken: string;
+  page?: number;
+  pageSize?: number;
+  q?: string;
+}): Promise<{ items: PendingReviewCourse[]; page: number; page_size: number; total: number }> {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.pageSize) q.set("page_size", String(params.pageSize));
+  if (params.q?.trim()) q.set("q", params.q.trim());
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}${COURSES_API.adminPendingReview}${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_PENDING_REVIEW_FETCH_FAILED");
+  }
+  return data as { items: PendingReviewCourse[]; page: number; page_size: number; total: number };
+}
+
+export async function apiReviewCourseByAdmin(params: {
+  accessToken: string;
+  courseId: number;
+  decision: "approve" | "reject";
+  note?: string;
+}): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${COURSES_API.adminReview(params.courseId)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+    body: JSON.stringify({
+      decision: params.decision,
+      note: params.note?.trim() || undefined,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_COURSE_REVIEW_FAILED");
+  }
+}
+
+export async function apiGetPendingLessonResources(params: {
+  accessToken: string;
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  kind?: "pdf" | "word" | "video" | "youtube" | "other" | "all";
+  courseId?: number;
+}): Promise<{ items: PendingLessonResource[]; page: number; page_size: number; total: number }> {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.pageSize) q.set("page_size", String(params.pageSize));
+  if (params.q?.trim()) q.set("q", params.q.trim());
+  if (params.kind && params.kind !== "all") q.set("kind", params.kind);
+  if (params.courseId) q.set("course_id", String(params.courseId));
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}${COURSES_API.adminPendingLessonResources}${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_PENDING_RESOURCE_FETCH_FAILED");
+  }
+  return data as { items: PendingLessonResource[]; page: number; page_size: number; total: number };
+}
+
+export async function apiGetMyRejectedLessonResources(params: {
+  accessToken: string;
+  courseId: number;
+}): Promise<{ course_id: number; items: TeacherRejectedLessonResource[] }> {
+  const res = await fetch(`${API_BASE_URL}${COURSES_API.myRejectedResources(params.courseId)}`, {
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as any)?.message || (data as any)?.code || "TEACHER_REJECTED_RESOURCE_FETCH_FAILED");
+  }
+  return data as { course_id: number; items: TeacherRejectedLessonResource[] };
+}
+
+export async function apiReviewLessonResourceByAdmin(params: {
+  accessToken: string;
+  resourceId: number;
+  decision: "approve" | "reject";
+  note?: string;
+}): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${COURSES_API.adminReviewLessonResource(params.resourceId)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+    body: JSON.stringify({
+      decision: params.decision,
+      note: params.note?.trim() || undefined,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_RESOURCE_REVIEW_FAILED");
+  }
+}
+
+export async function apiGetLessonResourceReviewTimeline(params: {
+  accessToken: string;
+  resourceId: number;
+}): Promise<{ resource_id: number; items: LessonResourceReviewTimelineItem[] }> {
+  const res = await fetch(`${API_BASE_URL}${COURSES_API.adminReviewLessonResourceTimeline(params.resourceId)}`, {
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_RESOURCE_REVIEW_TIMELINE_FAILED");
+  }
+  return data as { resource_id: number; items: LessonResourceReviewTimelineItem[] };
+}
+
+export async function apiGetCourseReviewTimeline(params: {
+  accessToken: string;
+  courseId: number;
+}): Promise<{ course_id: number; items: CourseReviewTimelineItem[] }> {
+  const res = await fetch(`${API_BASE_URL}${COURSES_API.adminReviewTimeline(params.courseId)}`, {
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_COURSE_REVIEW_TIMELINE_FAILED");
+  }
+  return data as { course_id: number; items: CourseReviewTimelineItem[] };
+}
+
+export async function apiGetCourseManagerVerifications(params: {
+  accessToken: string;
+  page?: number;
+  limit?: number;
+  q?: string;
+  status?: "all" | "pending" | "verified" | "rejected" | "suspended";
+}): Promise<{ items: CourseManagerVerification[]; pagination: AdminUsersPagination }> {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.limit) q.set("limit", String(params.limit));
+  if (params.q?.trim()) q.set("q", params.q.trim());
+  if (params.status && params.status !== "all") q.set("status", params.status);
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}${ADMIN_USERS_API.courseManagerVerifications}${suffix}`, {
+    headers: { Authorization: `Bearer ${params.accessToken}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.success) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_CM_VERIFICATIONS_FETCH_FAILED");
+  }
+  return data.data as { items: CourseManagerVerification[]; pagination: AdminUsersPagination };
+}
+
+export async function apiReviewCourseManagerVerification(params: {
+  accessToken: string;
+  userId: number;
+  status: "verified" | "rejected" | "suspended";
+  note?: string;
+}): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${ADMIN_USERS_API.courseManagerVerificationReview(params.userId)}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+    body: JSON.stringify({
+      status: params.status,
+      note: params.note?.trim() || undefined,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.success === false) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_CM_VERIFICATION_REVIEW_FAILED");
+  }
+}
+
+export async function apiGetAdminRevenueSummary(params: {
+  accessToken: string;
+  from?: string;
+  to?: string;
+}): Promise<AdminRevenueSummary> {
+  const q = new URLSearchParams();
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}${ADMIN_USERS_API.revenueSummary}${suffix}`, {
+    headers: { Authorization: `Bearer ${params.accessToken}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.success) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_REVENUE_SUMMARY_FAILED");
+  }
+  return data.data as AdminRevenueSummary;
+}
+
+export async function apiGetAdminRevenueByTeacher(params: {
+  accessToken: string;
+  page?: number;
+  limit?: number;
+  search?: string;
+  from?: string;
+  to?: string;
+}): Promise<{ items: AdminRevenueByTeacherItem[]; pagination: AdminUsersPagination }> {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.limit) q.set("limit", String(params.limit));
+  if (params.search?.trim()) q.set("search", params.search.trim());
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}${ADMIN_USERS_API.revenueByTeacher}${suffix}`, {
+    headers: { Authorization: `Bearer ${params.accessToken}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.success) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_REVENUE_BY_TEACHER_FAILED");
+  }
+  return data.data as { items: AdminRevenueByTeacherItem[]; pagination: AdminUsersPagination };
+}
 
 export async function apiGetOpenRouterConfig(params: {
   accessToken: string;
