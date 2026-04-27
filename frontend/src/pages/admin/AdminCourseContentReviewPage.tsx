@@ -1308,7 +1308,7 @@ export default function AdminCourseContentReviewPage() {
                             >
                               <span
                                 style={{
-                                  maxWidth: 150,
+                                  maxWidth: 300,
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
                                   whiteSpace: "nowrap",
@@ -1343,7 +1343,7 @@ export default function AdminCourseContentReviewPage() {
                           >
                             <span
                               style={{
-                                maxWidth: 150,
+                                maxWidth: 300,
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
@@ -1362,7 +1362,7 @@ export default function AdminCourseContentReviewPage() {
                       </div>
                     )}
                     {preview.loading && <div>Đang tải nội dung...</div>}
-                    {/* {preview.error && <div style={{ color: "#b91c1c" }}>{preview.error}</div>} */}
+                    {preview.error && <div style={{ color: "#b91c1c" }}>{preview.error}</div>}
                     {!preview.loading && !preview.error && !(preview.viewUrl || preview.blobUrl) && (
                       <div style={{ color: "#64748b" }}>
                       </div>

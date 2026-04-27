@@ -36,6 +36,12 @@ const initAdminUserRoute: (controller: AdminUserController) => express.Router = 
   router.route('/course-managers/:userId/verification')
     .put(controller.reviewCourseManagerVerification.bind(controller));
 
+  router.route('/revenue/summary')
+    .get(controller.getRevenueSummary.bind(controller));
+
+  router.route('/revenue/by-teacher')
+    .get(controller.listRevenueByTeacher.bind(controller));
+
   router.route('/:userId/status')
     .put(controller.updateStatus.bind(controller));
 

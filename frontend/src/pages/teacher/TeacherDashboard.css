@@ -267,6 +267,15 @@ body {
   letter-spacing: 0.5px;
 }
 
+.stat-card-value--money {
+  font-size: 1.2rem;
+}
+
+.revenue-stats-grid {
+  margin-top: -8px;
+  margin-bottom: 32px;
+}
+
 /* Charts Row */
 .charts-row {
   display: grid;
@@ -282,6 +291,64 @@ body {
   border: 1px solid var(--gray-200);
   box-shadow: var(--shadow-xs);
   transition: all 0.2s ease;
+}
+
+.transactions-card {
+  background: white;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--gray-200);
+  box-shadow: var(--shadow-xs);
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.transactions-table-wrap {
+  overflow-x: auto;
+}
+
+.transactions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.transactions-table th,
+.transactions-table td {
+  text-align: left;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--gray-100);
+  white-space: nowrap;
+}
+
+.transactions-table th {
+  color: var(--gray-500);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.tx-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.tx-status.ok {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.tx-status.warn {
+  color: #9a3412;
+  background: #ffedd5;
+}
+
+.tx-empty {
+  color: var(--gray-500);
+  text-align: center;
 }
 
 .chart-card:hover {

@@ -112,6 +112,7 @@ export type CourseDetail = {
   learners_count: number;
   modules_count: number;
   lessons_count: number;
+  price?: number | null;
   total_duration_minutes?: number | null;
   is_enrolled?: boolean;
   enrollment?: {
@@ -141,6 +142,7 @@ export type PublishedCourseListItem = {
   learners_count: number;
   modules_count: number;
   lessons_count: number;
+  price?: number | null;
   total_duration_minutes?: number | null;
   is_enrolled?: boolean;
   can_enroll?: boolean;
@@ -363,6 +365,64 @@ export type CourseDashboardStats = {
   draft: number;
   pending_review: number;
   archived: number;
+  finance: {
+    currency: string;
+    gross_revenue: number;
+    platform_fee_total: number;
+    net_revenue: number;
+    paid_orders: number;
+  };
+};
+
+export type TeacherRevenueSummaryQuery = {
+  from?: string;
+  to?: string;
+};
+
+export type TeacherRevenueSummary = {
+  currency: string;
+  gross_revenue: number;
+  platform_fee_total: number;
+  net_revenue: number;
+  paid_orders: number;
+};
+
+export type TeacherRevenueTrendPoint = {
+  date: string;
+  gross_revenue: number;
+  platform_fee_total: number;
+  net_revenue: number;
+  paid_orders: number;
+};
+
+export type TeacherRevenueTrendResult = {
+  points: TeacherRevenueTrendPoint[];
+};
+
+export type TeacherRevenueTransactionsQuery = {
+  from?: string;
+  to?: string;
+  page?: number;
+  page_size?: number;
+};
+
+export type TeacherRevenueTransactionItem = {
+  order_id: number;
+  course_id: number;
+  teacher_user_id: number;
+  gross_amount: number;
+  platform_fee_amount: number;
+  net_amount: number;
+  currency: string;
+  recognized_at: string;
+  status: 'recognized' | 'reversed';
+};
+
+export type TeacherRevenueTransactionsResult = {
+  items: TeacherRevenueTransactionItem[];
+  page: number;
+  page_size: number;
+  total: number;
 };
 
 export type PendingReviewCourseQuery = {
@@ -687,6 +747,12 @@ export interface CourseService {
   createCourse(subjectUserId: number, request: CreateCourseRequest): Promise<{ id: number }>;
   listMyCourses(subjectUserId: number, query: CourseListQuery): Promise<CourseListResult>;
   getMyCourseDashboardStats(subjectUserId: number): Promise<CourseDashboardStats>;
+  getMyRevenueSummary(subjectUserId: number, query: TeacherRevenueSummaryQuery): Promise<TeacherRevenueSummary>;
+  getMyRevenueTrend(subjectUserId: number, query: TeacherRevenueSummaryQuery): Promise<TeacherRevenueTrendResult>;
+  listMyRevenueTransactions(
+    subjectUserId: number,
+    query: TeacherRevenueTransactionsQuery
+  ): Promise<TeacherRevenueTransactionsResult>;
   getMyCourseDetail(subjectUserId: number, courseId: number): Promise<CourseListItem>;
   getMyCourseManagerOverview(subjectUserId: number, courseId: number): Promise<CourseManagerOverview>;
   getMyCoursePrerequisiteGraph(subjectUserId: number, courseId: number): Promise<CoursePrerequisiteGraph>;

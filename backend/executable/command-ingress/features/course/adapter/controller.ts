@@ -195,6 +195,43 @@ export class CourseController extends BaseController {
     });
   }
 
+  async getMyRevenueSummary(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const from = req.query.from != null ? String(req.query.from) : undefined;
+      const to = req.query.to != null ? String(req.query.to) : undefined;
+      const data = await this.service.getMyRevenueSummary(uid, { from, to });
+      res.status(200).json(data);
+    });
+  }
+
+  async getMyRevenueTrend(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const from = req.query.from != null ? String(req.query.from) : undefined;
+      const to = req.query.to != null ? String(req.query.to) : undefined;
+      const data = await this.service.getMyRevenueTrend(uid, { from, to });
+      res.status(200).json(data);
+    });
+  }
+
+  async listMyRevenueTransactions(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const from = req.query.from != null ? String(req.query.from) : undefined;
+      const to = req.query.to != null ? String(req.query.to) : undefined;
+      const page = req.query.page != null ? Number(req.query.page) : undefined;
+      const page_size = req.query.page_size != null ? Number(req.query.page_size) : undefined;
+      const data = await this.service.listMyRevenueTransactions(uid, {
+        from,
+        to,
+        page,
+        page_size,
+      });
+      res.status(200).json(data);
+    });
+  }
+
   async getMyCourseDetail(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
       const uid = Number(req.getSubject());

@@ -63,3 +63,16 @@ export interface ReviewCourseManagerVerificationDto {
   note?: string;
 }
 
+export interface AdminRevenueSummaryDto {
+  from?: string;
+  to?: string;
+}
+
+export interface AdminRevenueByTeacherDto {
+  page?: string;
+  limit?: string;
+  from?: string;
+  to?: string;
+  search?: string;
+}
+

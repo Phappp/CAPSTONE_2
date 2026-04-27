@@ -16,6 +16,14 @@ const env = cleanEnv(process.env, {
   GOOGLE_OAUTH_CLIENT_ID: str(),
   GOOGLE_OAUTH_CLIENT_SECRET: str(),
   GOOGLE_OAUTH_REDIRECT_URL: str(),
+  MOMO_PARTNER_CODE: str({ default: '' }),
+  MOMO_ACCESS_KEY: str({ default: '' }),
+  MOMO_SECRET_KEY: str({ default: '' }),
+  MOMO_RETURN_URL: str({ default: '' }),
+  MOMO_NOTIFY_URL: str({ default: '' }),
+  MOMO_ENDPOINT: str({ default: '' }),
+  PAYMENT_MOCK: bool({ default: false }),
+  PLATFORM_FEE_RATE: num({ default: 0.2 }),
 });
 
 export default env;

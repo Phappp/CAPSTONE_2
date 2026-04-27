@@ -91,3 +91,46 @@ export interface ReviewCourseManagerVerificationRequest {
   note?: string;
 }
 
+export interface AdminRevenueSummaryQuery {
+  from?: Date | null;
+  to?: Date | null;
+}
+
+export interface AdminRevenueSummary {
+  gross_amount: number;
+  system_fee_amount: number;
+  teacher_net_amount: number;
+  paid_orders: number;
+  refunded_orders: number;
+}
+
+export interface AdminRevenueByTeacherQuery {
+  page: number;
+  limit: number;
+  from?: Date | null;
+  to?: Date | null;
+  search?: string;
+}
+
+export interface AdminRevenueByTeacherItem {
+  teacher_user_id: number;
+  teacher_name: string | null;
+  teacher_email: string | null;
+  gross_amount: number;
+  system_fee_amount: number;
+  teacher_net_amount: number;
+  paid_orders: number;
+  refunded_orders: number;
+  last_recognized_at: string | null;
+}
+
+export interface AdminRevenueByTeacherResult {
+  items: AdminRevenueByTeacherItem[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    pages: number;
+  };
+}
+

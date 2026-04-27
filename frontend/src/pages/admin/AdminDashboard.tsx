@@ -38,6 +38,7 @@ import {
   Building,
   Link as LinkIcon,
   FileText as FileIcon,
+  Wallet,
   Star,
   Zap,
   Plus,
@@ -69,8 +70,12 @@ import {
   apiGetPendingReviewCourses,
   apiGetCourseManagerVerifications,
   apiGetCourseReviewTimeline,
+  apiGetAdminRevenueSummary,
+  apiGetAdminRevenueByTeacher,
   apiReviewCourseManagerVerification,
   apiReviewCourseByAdmin,
+  AdminRevenueByTeacherItem,
+  AdminRevenueSummary,
   AuditLogItem,
   CourseManagerVerification,
   PendingReviewCourse,
@@ -79,7 +84,7 @@ import "./AdminDashboard.css";
 
 type RoleFilter = "all" | "learner" | "course_manager" | "admin";
 type StatusFilter = "all" | "active" | "pending" | "banned" | "deleted";
-type AdminView = "users" | "audit_logs" | "keys" | "course_reviews" | "manager_verifications";
+type AdminView = "users" | "audit_logs" | "keys" | "course_reviews" | "manager_verifications" | "revenue";
 type AdminTier = "admin" | "non_admin";
 
 const VIEW_CONFIG: Record<AdminView, { label: string; icon: React.ReactNode; description: string }> = {
@@ -88,6 +93,7 @@ const VIEW_CONFIG: Record<AdminView, { label: string; icon: React.ReactNode; des
   keys: { label: "Khóa API", icon: <Key size={18} />, description: "Quản lý khóa API OpenRouter" },
   course_reviews: { label: "Duyệt khóa học", icon: <BookOpen size={18} />, description: "Duyệt khóa học chờ xuất bản" },
   manager_verifications: { label: "Xác minh giảng viên", icon: <UserCheck size={18} />, description: "Xác minh và cấp phép giảng viên" },
+  revenue: { label: "Doanh thu hệ thống", icon: <Wallet size={18} />, description: "Tổng quan doanh thu và đối soát theo giảng viên" },
 };
 
 export default function AdminDashboard() {
@@ -144,6 +150,10 @@ export default function AdminDashboard() {
   const [verificationQ, setVerificationQ] = useState("");
   const [verificationStatus, setVerificationStatus] = useState<"all" | "pending" | "verified" | "rejected" | "suspended">("all");
   const [verificationActionLoading, setVerificationActionLoading] = useState<number | null>(null);
+  const [revenuePage, setRevenuePage] = useState(1);
+  const [revenueSearch, setRevenueSearch] = useState("");
+  const [revenueFrom, setRevenueFrom] = useState("");
+  const [revenueTo, setRevenueTo] = useState("");
 
   // Modal state
   const [noticeModal, setNoticeModal] = useState<{ open: boolean; title: string; message: string; variant?: "info" | "warning" | "error" | "success" }>({
@@ -216,6 +226,32 @@ export default function AdminDashboard() {
         status: verificationStatus,
       }),
     enabled: !!accessToken && view === "manager_verifications",
+    keepPreviousData: true,
+  });
+
+  const revenueSummaryQuery = useQuery({
+    queryKey: ["admin-revenue-summary", { revenueFrom, revenueTo }],
+    queryFn: () =>
+      apiGetAdminRevenueSummary({
+        accessToken: accessToken || "",
+        from: revenueFrom || undefined,
+        to: revenueTo || undefined,
+      }),
+    enabled: !!accessToken && view === "revenue",
+  });
+
+  const revenueByTeacherQuery = useQuery({
+    queryKey: ["admin-revenue-by-teacher", { revenuePage, revenueSearch, revenueFrom, revenueTo }],
+    queryFn: () =>
+      apiGetAdminRevenueByTeacher({
+        accessToken: accessToken || "",
+        page: revenuePage,
+        limit: 10,
+        search: revenueSearch || undefined,
+        from: revenueFrom || undefined,
+        to: revenueTo || undefined,
+      }),
+    enabled: !!accessToken && view === "revenue",
     keepPreviousData: true,
   });
 
@@ -667,6 +703,7 @@ export default function AdminDashboard() {
     { id: "keys" as const, label: "Khóa API", icon: <Key size={18} />, disabled: !can(adminTier, "change_status") },
     { id: "course_reviews" as const, label: "Duyệt khóa học", icon: <BookOpen size={18} />, disabled: !can(adminTier, "change_status") },
     { id: "manager_verifications" as const, label: "Xác minh giảng viên", icon: <UserCheck size={18} />, disabled: !can(adminTier, "change_status") },
+    { id: "revenue" as const, label: "Doanh thu hệ thống", icon: <Wallet size={18} />, disabled: !can(adminTier, "view_audit_logs") },
   ];
 
   const closeMobileSidebar = () => setMobileOpen(false);
@@ -982,6 +1019,24 @@ export default function AdminDashboard() {
             actionLoading={verificationActionLoading}
             onReview={reviewManagerVerification}
             refetch={managerVerificationQuery.refetch}
+          />
+        )}
+
+        {view === "revenue" && (
+          <RevenuePanel
+            summary={revenueSummaryQuery.data}
+            byTeacher={revenueByTeacherQuery.data?.items ?? []}
+            pagination={revenueByTeacherQuery.data?.pagination}
+            isLoading={revenueSummaryQuery.isLoading || revenueByTeacherQuery.isLoading}
+            isError={revenueSummaryQuery.isError || revenueByTeacherQuery.isError}
+            page={revenuePage}
+            setPage={setRevenuePage}
+            search={revenueSearch}
+            setSearch={setRevenueSearch}
+            from={revenueFrom}
+            setFrom={setRevenueFrom}
+            to={revenueTo}
+            setTo={setRevenueTo}
           />
         )}
       </main>
@@ -1548,6 +1603,119 @@ function ManagerVerificationsPanel({
   );
 }
 
+function RevenuePanel({
+  summary,
+  byTeacher,
+  pagination,
+  isLoading,
+  isError,
+  page,
+  setPage,
+  search,
+  setSearch,
+  from,
+  setFrom,
+  to,
+  setTo,
+}: {
+  summary?: AdminRevenueSummary;
+  byTeacher: AdminRevenueByTeacherItem[];
+  pagination: any;
+  isLoading: boolean;
+  isError: boolean;
+  page: number;
+  setPage: (n: number) => void;
+  search: string;
+  setSearch: (s: string) => void;
+  from: string;
+  setFrom: (s: string) => void;
+  to: string;
+  setTo: (s: string) => void;
+}) {
+  return (
+    <div>
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-label">Doanh thu gộp</div>
+          <div className="stat-value">{formatMoney(summary?.gross_amount ?? 0)}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Phí hệ thống</div>
+          <div className="stat-value">{formatMoney(summary?.system_fee_amount ?? 0)}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Doanh thu giảng viên</div>
+          <div className="stat-value">{formatMoney(summary?.teacher_net_amount ?? 0)}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Đơn hàng thành công / hoàn tiền</div>
+          <div className="stat-value">
+            {(summary?.paid_orders ?? 0).toLocaleString()} / {(summary?.refunded_orders ?? 0).toLocaleString()}
+          </div>
+        </div>
+      </div>
+
+      <div className="filters-card">
+        <div className="filters-row">
+          <input
+            className="filter-input"
+            placeholder="Tìm theo tên/email/ID giảng viên..."
+            value={search}
+            onChange={(e) => {
+              setPage(1);
+              setSearch(e.target.value);
+            }}
+            style={{ minWidth: 260 }}
+          />
+          <input className="filter-input" type="date" value={from} onChange={(e) => { setPage(1); setFrom(e.target.value); }} />
+          <input className="filter-input" type="date" value={to} onChange={(e) => { setPage(1); setTo(e.target.value); }} />
+        </div>
+      </div>
+
+      <div className="table-container">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Giảng viên</th>
+              <th>Doanh thu gộp</th>
+              <th>Phí hệ thống</th>
+              <th>Doanh thu ròng</th>
+              <th>Paid / Refund</th>
+              <th>Ghi nhận gần nhất</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && <tr><td colSpan={6} className="table-empty"><RefreshCw size={20} style={{ animation: "spin 1s linear infinite" }} /> Đang tải dữ liệu doanh thu...</td></tr>}
+            {isError && !isLoading && <tr><td colSpan={6} className="table-empty"><AlertCircle size={20} /> Không thể tải dữ liệu doanh thu</td></tr>}
+            {!isLoading && !isError && byTeacher.length === 0 && <tr><td colSpan={6} className="table-empty">Không có dữ liệu đối soát</td></tr>}
+            {byTeacher.map((item) => (
+              <tr key={item.teacher_user_id}>
+                <td>
+                  <div className="user-name">{item.teacher_name || "Chưa cập nhật tên"}</div>
+                  <div className="user-id">{item.teacher_email || "—"} (#{item.teacher_user_id})</div>
+                </td>
+                <td>{formatMoney(item.gross_amount)}</td>
+                <td>{formatMoney(item.system_fee_amount)}</td>
+                <td>{formatMoney(item.teacher_net_amount)}</td>
+                <td>{item.paid_orders.toLocaleString()} / {item.refunded_orders.toLocaleString()}</td>
+                <td>{formatDateTime(item.last_recognized_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="pagination">
+        <div className="pagination-buttons">
+          <button className="btn-secondary" disabled={!pagination || page <= 1} onClick={() => setPage(Math.max(1, page - 1))}>Trước</button>
+          <button className="btn-secondary" disabled={!pagination || page >= (pagination?.pages ?? 1)} onClick={() => setPage(Math.min(pagination?.pages || 1, page + 1))}>Sau</button>
+        </div>
+        <div className="pagination-info">Trang {page} / {pagination?.pages ?? 1}</div>
+      </div>
+    </div>
+  );
+}
+
 // ==================== Helper Functions ====================
 
 function getAdminTierFromUser(user: any): AdminTier {
@@ -1597,4 +1765,13 @@ function getKeyHealthStatus(key: { is_active: boolean; is_available_now: boolean
   if (key.last_test_status === "rate_limited" || !key.is_available_now) return "limited";
   if (key.last_test_status === "ok") return "healthy";
   return "unknown";
+}
+
+function formatMoney(value: number): string {
+  return `${Number(value || 0).toLocaleString("vi-VN")} đ`;
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleString("vi-VN");
 }

@@ -1,4 +1,4 @@
-import { DataSource } from 'typeorm';
+import { Brackets, DataSource } from 'typeorm';
 import AppDataSource from '../../../../../lib/database';
 import QuestionBank from '../../../../../internal/model/question_banks';
 import BankQuestion from '../../../../../internal/model/bank_questions';
@@ -71,6 +71,19 @@ export class QuestionBankServiceImpl implements QuestionBankService {
         }
         if (bank.created_by !== userId) {
             throw new Error('Bạn không có quyền thao tác với ngân hàng câu hỏi này.');
+        }
+        return bank;
+    }
+
+    private async getReadableBankOrThrow(bankId: number, userId: number): Promise<QuestionBank> {
+        await this.ensureQuestionBankSchema();
+        const bankRepo = this.dataSource.getRepository(QuestionBank);
+        const bank = await bankRepo.findOne({ where: { id: bankId, is_active: true } as any });
+        if (!bank) {
+            throw new Error('Question bank not found!');
+        }
+        if (bank.created_by !== userId && !Boolean((bank as any).is_shared)) {
+            throw new Error('Bạn không có quyền truy cập ngân hàng câu hỏi này.');
         }
         return bank;
     }
@@ -181,14 +194,32 @@ export class QuestionBankServiceImpl implements QuestionBankService {
         await this.ensureQuestionBankSchema();
         const bankRepo = this.dataSource.getRepository(QuestionBank);
         const qb = bankRepo.createQueryBuilder('qb');
-        qb.where('qb.created_by = :userId', { userId });
+        qb.where(new Brackets((sub) => {
+            sub.where('qb.created_by = :userId', { userId });
+            sub.orWhere('qb.is_shared = :isShared', { isShared: true });
+        }));
         qb.andWhere('qb.name <> :autoName', { autoName: AUTO_QUIZ_BANK_NAME });
-        if (!includeArchived) qb.andWhere('qb.is_active = :isActive', { isActive: true });
-        if (courseId) qb.andWhere('qb.course_id = :courseId', { courseId });
+        if (!includeArchived) {
+            qb.andWhere('qb.is_active = :isActive', { isActive: true });
+        } else {
+            qb.andWhere(new Brackets((sub) => {
+                sub.where('qb.created_by = :userId', { userId });
+                sub.orWhere('qb.is_active = :isActive', { isActive: true });
+            }));
+        }
+        if (courseId) {
+            qb.andWhere(new Brackets((sub) => {
+                sub.where('qb.course_id = :courseId', { courseId });
+                sub.orWhere('qb.is_shared = :isShared', { isShared: true });
+            }));
+        }
         qb.orderBy('qb.created_at', 'DESC');
         const banks = await qb.getMany();
 
-        return banks;
+        return (banks || []).map((bank: any) => ({
+            ...bank,
+            is_owned: Number(bank.created_by) === Number(userId),
+        }));
     }
 
     async getBankUsage(bankId: number, userId: number): Promise<{ quiz_count: number; usages: any[] }> {
@@ -225,7 +256,7 @@ export class QuestionBankServiceImpl implements QuestionBankService {
 
     async getBankQuestions(bankId: number, userId: number): Promise<any[]> {
         await this.assertCourseManagerOrAdmin(userId);
-        await this.getOwnedBankOrThrow(bankId, userId);
+        await this.getReadableBankOrThrow(bankId, userId);
         const questionRepo = this.dataSource.getRepository(BankQuestion);
         return await questionRepo.find({
             where: { bank_id: bankId },

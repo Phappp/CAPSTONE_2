@@ -32,6 +32,9 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
 
   // Instructor dashboard
   router.route('/my/stats').get(requireAuthorizedUser, controller.getMyCourseDashboardStats.bind(controller));
+  router.route('/my/revenue/summary').get(requireAuthorizedUser, controller.getMyRevenueSummary.bind(controller));
+  router.route('/my/revenue/trend').get(requireAuthorizedUser, controller.getMyRevenueTrend.bind(controller));
+  router.route('/my/revenue/transactions').get(requireAuthorizedUser, controller.listMyRevenueTransactions.bind(controller));
   router.route('/my').get(requireAuthorizedUser, controller.listMyCourses.bind(controller));
   router.route('/admin/pending-review').get(requireAuthorizedUser, controller.listPendingReviewCourses.bind(controller));
   router.route('/admin/resources/pending-review').get(requireAuthorizedUser, controller.listPendingLessonResourcesByAdmin.bind(controller));

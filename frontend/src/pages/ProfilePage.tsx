@@ -6,6 +6,7 @@ import CommonModal from "../components/CommonModal";
 import { url } from "../baseUrl";
 import { PROFILE_API } from "../api/profile";
 import { useAuth } from "../contexts/Auth";
+import { getAccessToken } from "../utils/authStorage";
 import "./ProfilePage.css";
 
 interface ProfileStatistics {
@@ -130,7 +131,7 @@ export default function ProfilePage() {
     const fetchProfile = async () => {
       setLoading(true);
       try {
-        const token = localStorage.getItem("access_token");
+        const token = getAccessToken();
         const res = await fetch(`${url}${PROFILE_API.getProfile}`, {
           headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         });
@@ -173,7 +174,7 @@ export default function ProfilePage() {
       setManagerReadinessLoading(true);
       setManagerReadinessError(null);
       try {
-        const token = localStorage.getItem("access_token");
+        const token = getAccessToken();
         const res = await fetch(`${url}${PROFILE_API.courseManagerReadiness}`, {
           headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         });
@@ -259,7 +260,7 @@ export default function ProfilePage() {
     setErrorMessage(null);
     setSuccessMessage(null);
     try {
-      const token = localStorage.getItem("access_token");
+      const token = getAccessToken();
       const fullName = `${form.first_name} ${form.last_name}`.trim().replace(/\s+/g, " ");
       if (fullName.length < 2) {
         throw new Error("Vui lòng nhập họ và tên hợp lệ.");
@@ -351,7 +352,7 @@ export default function ProfilePage() {
     if (!avatarPreview) return;
     setAvatarUploading(true);
     try {
-      const token = localStorage.getItem("access_token");
+      const token = getAccessToken();
       const blob = await (await fetch(avatarPreview)).blob();
       const file = new File([blob], "avatar.jpg", { type: "image/jpeg" });
       const fd = new FormData();
@@ -385,7 +386,7 @@ export default function ProfilePage() {
         setModalState({ open: false, title: "", message: "" });
         setAvatarDeleting(true);
         try {
-          const token = localStorage.getItem("access_token");
+          const token = getAccessToken();
           const res = await fetch(`${url}${PROFILE_API.deleteAvatar}`, {
             method: "DELETE",
             headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -453,7 +454,7 @@ export default function ProfilePage() {
     if (file.size > 10 * 1024 * 1024) return setErrorMessage("Dung lượng file tối đa 10MB.");
     setUploadingEvidence(true);
     try {
-      const token = localStorage.getItem("access_token");
+      const token = getAccessToken();
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch(`${url}${PROFILE_API.uploadCourseManagerDocument}`, {

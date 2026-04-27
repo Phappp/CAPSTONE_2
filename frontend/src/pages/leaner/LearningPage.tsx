@@ -8,6 +8,19 @@ import { useAuth } from "../../contexts/Auth";
 import type { ModuleItem } from "../../components/LearnerCourseContentTree";
 import "./LearningPage.css";
 
+function normalizeLearnerErrorMessage(raw: unknown): string {
+  const msg = String(raw || "").trim();
+  const lower = msg.toLowerCase();
+  if (!msg) return "Đã xảy ra lỗi. Vui lòng thử lại.";
+  if (lower.includes("ghi danh hợp lệ") || lower.includes("chưa đăng ký khóa học này")) {
+    return "Bạn không còn quyền học khóa này (có thể đã dừng hoặc hết hạn).";
+  }
+  if (lower.includes("không thể truy cập bài học") || lower.includes("chưa mở theo lịch")) {
+    return "Bài học chưa mở hoặc bạn chưa đủ điều kiện truy cập.";
+  }
+  return msg;
+}
+
 type CourseDetail = {
   id: number;
   title: string;
@@ -133,7 +146,7 @@ export default function LearningPage() {
       const nextCourse = json as CourseDetail;
       setCourse(nextCourse);
     } catch (e: any) {
-      setError(e?.message || "Đã xảy ra lỗi.");
+      setError(normalizeLearnerErrorMessage(e?.message || "Đã xảy ra lỗi."));
     } finally {
       setLoading(false);
     }
@@ -284,7 +297,7 @@ export default function LearningPage() {
         }
       } catch (e: any) {
         if (!alive) return;
-        setLessonModalError(e?.message || "Không tải được tài nguyên.");
+        setLessonModalError(normalizeLearnerErrorMessage(e?.message || "Không tải được tài nguyên."));
         setLessonModalResource(null);
       } finally {
         if (alive) setLessonModalLoading(false);

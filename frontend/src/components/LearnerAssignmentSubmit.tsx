@@ -3,6 +3,22 @@ import { url } from "../baseUrl";
 import { ASSIGNMENTS_API } from "../api/assignments";
 import "./LearnerQuizTake.css";
 
+function normalizeLearnerErrorMessage(raw: unknown): string {
+  const msg = String(raw || "").trim();
+  const lower = msg.toLowerCase();
+  if (!msg) return "Đã xảy ra lỗi. Vui lòng thử lại.";
+  if (lower.includes("ghi danh hợp lệ") || lower.includes("chưa ghi danh")) {
+    return "Bạn không còn quyền học khóa này (có thể đã dừng hoặc hết hạn).";
+  }
+  if (lower.includes("chưa mở theo lịch") || lower.includes("không thể truy cập bài học")) {
+    return "Bài học chưa mở hoặc bạn chưa đủ điều kiện truy cập.";
+  }
+  if (lower.includes("hết thời gian làm bài")) {
+    return "Đã hết thời gian làm bài. Bạn không thể nộp thêm.";
+  }
+  return msg;
+}
+
 export type MyAssignmentGradeRow = {
   title?: string;
   max_score?: number;
@@ -128,7 +144,7 @@ export default function LearnerAssignmentSubmit(props: {
         setShortAnswers(init);
       }
     } catch (e: any) {
-      setError(e?.message || "Lỗi tải bài tập.");
+      setError(normalizeLearnerErrorMessage(e?.message || "Lỗi tải bài tập."));
     } finally {
       setLoading(false);
     }
@@ -214,7 +230,7 @@ export default function LearnerAssignmentSubmit(props: {
       }
       onSubmitted();
     } catch (e: any) {
-      setError(e?.message || "Nộp bài thất bại.");
+      setError(normalizeLearnerErrorMessage(e?.message || "Nộp bài thất bại."));
     } finally {
       setSubmitting(false);
     }

@@ -1,5 +1,5 @@
 // TeacherLessonStudioPage.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -290,6 +290,15 @@ export default function TeacherLessonStudioPage() {
   };
 
   const removeResource = async (resourceId: number, resourceName?: string) => {
+    const targetResource = resources.find((r) => r.id === resourceId) || null;
+    if (
+      courseStatus === "pending_review" &&
+      targetResource &&
+      targetResource.review_status === "rejected"
+    ) {
+      setError("Không thể xóa tài nguyên đang bị từ chối khi khóa học chờ duyệt. Vui lòng sửa và gửi lại.");
+      return;
+    }
     if (!window.confirm(`Bạn có chắc muốn xóa tài nguyên "${resourceName || "này"}"?`)) return;
     setSaving(true);
     setError(null);
@@ -654,6 +663,14 @@ export default function TeacherLessonStudioPage() {
     () => resources.some((item) => item.review_status === "rejected"),
     [resources]
   );
+  const canDeleteResource = useCallback(
+    (resource: LessonResource | null | undefined) => {
+      if (!resource) return false;
+      if (courseStatus === "pending_review" && resource.review_status === "rejected") return false;
+      return true;
+    },
+    [courseStatus]
+  );
   const isReadOnlyByReview = courseStatus === "pending_review" && !hasRejectedResources;
   const isAssessmentLesson = lesson?.lesson_type === "quiz" || lesson?.lesson_type === "assignment";
   const activeSection: "content" | "quiz" | "assignment" = (() => {
@@ -907,6 +924,7 @@ export default function TeacherLessonStudioPage() {
               currentVideoResource={currentVideoResource}
               currentYoutubeId={currentYoutubeId}
               removeResource={removeResource}
+              canDeleteResource={canDeleteResource}
               otherResources={otherResources}
               contentHtmlResource={contentHtmlResource}
               saveStudio={saveStudio}

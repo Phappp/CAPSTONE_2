@@ -24,6 +24,8 @@ import QuestionOption from '../../../../../internal/model/question_option';
 import QuizResponse from '../../../../../internal/model/quiz_response';
 import QuizResponseOption from '../../../../../internal/model/quiz_response_options';
 import Assignment from '../../../../../internal/model/assignment';
+import PaymentOrder from '../../../../../internal/model/payment_order';
+import PaymentRevenueLedger from '../../../../../internal/model/payment_revenue_ledger';
 import OpenRouterKey from '../../../../../internal/model/openrouter_key';
 import OpenRouterSetting from '../../../../../internal/model/openrouter_setting';
 import AuditLog from '../../../../../internal/model/audit_log';
@@ -31,6 +33,11 @@ import crypto from 'crypto';
 
 import {
   CourseDashboardStats,
+  TeacherRevenueSummary,
+  TeacherRevenueSummaryQuery,
+  TeacherRevenueTransactionsQuery,
+  TeacherRevenueTransactionsResult,
+  TeacherRevenueTrendResult,
   CourseContentTree,
   CourseListItem,
   CourseListQuery,
@@ -720,6 +727,7 @@ function mapToPublishedCourseListItem(row: any): PublishedCourseListItem {
     learners_count: Number(row.learners_count ?? 0),
     modules_count: Number(row.modules_count ?? 0),
     lessons_count: Number(row.lessons_count ?? 0),
+    price: row.price != null ? Number(row.price) : null,
     total_duration_minutes: row.total_duration_minutes ? Number(row.total_duration_minutes) : null,
     // COUNT(*) from SQL drivers thường trả về string ("0"/"1"), nên ép kiểu số.
     is_enrolled: Number(row.is_enrolled ?? 0) > 0,
@@ -750,6 +758,16 @@ function parsePrerequisiteCourseIds(prerequisites: unknown): number[] {
     .map((x) => Number(String(x).trim()))
     .filter((n) => Number.isInteger(n) && n > 0);
   return Array.from(new Set(ids));
+}
+
+function parseRevenueDateRange(query: TeacherRevenueSummaryQuery): { from?: Date; to?: Date } {
+  const fromRaw = query?.from ? String(query.from).trim() : '';
+  const toRaw = query?.to ? String(query.to).trim() : '';
+  const from = fromRaw ? new Date(`${fromRaw}T00:00:00.000Z`) : undefined;
+  const to = toRaw ? new Date(`${toRaw}T23:59:59.999Z`) : undefined;
+  const validFrom = from && !Number.isNaN(from.getTime()) ? from : undefined;
+  const validTo = to && !Number.isNaN(to.getTime()) ? to : undefined;
+  return { from: validFrom, to: validTo };
 }
 
 export class CourseServiceImpl implements CourseService {
@@ -1471,6 +1489,7 @@ export class CourseServiceImpl implements CourseService {
         thumbnail_url: r.c_thumbnail_url ?? r.thumbnail_url,
         level: r.c_level ?? r.level,
         language: r.c_language ?? r.language,
+        price: r.c_price ?? r.price,
         published_at: r.c_published_at ?? r.published_at,
         learners_count: r.learners_count,
         modules_count: r.modules_count,
@@ -1594,6 +1613,7 @@ export class CourseServiceImpl implements CourseService {
       learners_count: Number(raw.learners_count ?? 0),
       modules_count: Number(raw.modules_count ?? 0),
       lessons_count: Number(raw.lessons_count ?? 0),
+      price: raw.c_price ?? raw.price,
       total_duration_minutes: raw.total_duration_minutes ? Number(raw.total_duration_minutes) : null,
       is_enrolled: !!raw.enrollment,
       enrollment: safeJsonParse<any | null>(raw.enrollment, null),
@@ -1676,6 +1696,7 @@ export class CourseServiceImpl implements CourseService {
   async enrollCourse(subjectUserId: number, courseId: number): Promise<EnrollmentResult> {
     const courseRepo = AppDataSource.getRepository(Course);
     const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    const paymentOrderRepo = AppDataSource.getRepository(PaymentOrder);
 
     // Check if course exists and is effectively published (including scheduled publish time).
     const now = new Date();
@@ -1691,6 +1712,21 @@ export class CourseServiceImpl implements CourseService {
     
     if (!course) {
       throw new Error('Khóa học không tồn tại hoặc chưa được xuất bản.');
+    }
+
+    const price = Number((course as any).price ?? 0);
+    if (Number.isFinite(price) && price > 0) {
+      const paidOrder = await paymentOrderRepo.findOne({
+        where: {
+          user_id: subjectUserId,
+          course_id: courseId,
+          status: 'paid' as any,
+        } as any,
+        order: { id: 'DESC' } as any,
+      });
+      if (!paidOrder) {
+        throw new Error('Khóa học trả phí yêu cầu thanh toán thành công trước khi đăng ký.');
+      }
     }
 
     // Check prerequisite courses: learner must complete all prerequisite courses first.
@@ -1849,14 +1885,18 @@ export class CourseServiceImpl implements CourseService {
   async getMyLearningCourse(subjectUserId: number, courseId: number): Promise<CourseDetail> {
     const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
 
-    // Check if user is enrolled
+    // Only active/completed enrollments are allowed to access learning flow.
     const enrollment = await enrollmentRepo.findOne({
-      where: { user_id: subjectUserId, course_id: courseId } as any,
+      where: {
+        user_id: subjectUserId,
+        course_id: courseId,
+        status: In(['active', 'completed']),
+      } as any,
       relations: ['course'],
     });
 
     if (!enrollment) {
-      throw new Error('Bạn chưa đăng ký khóa học này.');
+      throw new Error('Bạn chưa có ghi danh hợp lệ cho khóa học này (đã dừng hoặc hết hạn).');
     }
 
     const course = (enrollment as any).course;
@@ -2172,9 +2212,13 @@ export class CourseServiceImpl implements CourseService {
   private async ensureEnrolledLearner(subjectUserId: number, courseId: number): Promise<CourseEnrollment> {
     const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
     const enrollment = await enrollmentRepo.findOne({
-      where: { user_id: subjectUserId, course_id: courseId } as any,
+      where: {
+        user_id: subjectUserId,
+        course_id: courseId,
+        status: In(['active', 'completed']),
+      } as any,
     });
-    if (!enrollment) throw new Error('Bạn chưa đăng ký khóa học này.');
+    if (!enrollment) throw new Error('Bạn chưa có ghi danh hợp lệ cho khóa học này (đã dừng hoặc hết hạn).');
     return enrollment as any;
   }
 
@@ -2918,14 +2962,130 @@ export class CourseServiceImpl implements CourseService {
   async getMyCourseDashboardStats(subjectUserId: number): Promise<CourseDashboardStats> {
     await ensureUserCanAccessInstructorDashboard(subjectUserId);
     const courseRepo = AppDataSource.getRepository(Course);
+    const revenueRepo = AppDataSource.getRepository(PaymentRevenueLedger);
 
     const total = await courseRepo.count({ where: { created_by: subjectUserId, deleted_at: null as any } });
     const draft = await courseRepo.count({ where: { created_by: subjectUserId, status: 'draft', deleted_at: null as any } });
     const pending_review = await courseRepo.count({ where: { created_by: subjectUserId, status: 'pending_review', deleted_at: null as any } });
     const published = await courseRepo.count({ where: { created_by: subjectUserId, status: 'published', deleted_at: null as any } });
     const archived = await courseRepo.count({ where: { created_by: subjectUserId, status: 'archived', deleted_at: null as any } });
+    const sumRow = await revenueRepo
+      .createQueryBuilder('r')
+      .select('COALESCE(SUM(r.gross_amount), 0)', 'gross')
+      .addSelect('COALESCE(SUM(r.system_fee_amount), 0)', 'fee')
+      .addSelect('COALESCE(SUM(r.net_amount), 0)', 'net')
+      .addSelect('COUNT(*)', 'paid_orders')
+      .where('r.teacher_user_id = :uid', { uid: subjectUserId })
+      .andWhere('r.status = :status', { status: 'recognized' })
+      .getRawOne();
+    const finance = {
+      currency: 'VND',
+      gross_revenue: Number(sumRow?.gross || 0),
+      platform_fee_total: Number(sumRow?.fee || 0),
+      net_revenue: Number(sumRow?.net || 0),
+      paid_orders: Number(sumRow?.paid_orders || 0),
+    };
 
-    return { total, draft, pending_review, published, archived };
+    return { total, draft, pending_review, published, archived, finance };
+  }
+
+  async getMyRevenueSummary(
+    subjectUserId: number,
+    query: TeacherRevenueSummaryQuery
+  ): Promise<TeacherRevenueSummary> {
+    await ensureUserCanAccessInstructorDashboard(subjectUserId);
+    const revenueRepo = AppDataSource.getRepository(PaymentRevenueLedger);
+    const { from, to } = parseRevenueDateRange(query);
+    const qb = revenueRepo
+      .createQueryBuilder('r')
+      .select('COALESCE(SUM(r.gross_amount), 0)', 'gross')
+      .addSelect('COALESCE(SUM(r.system_fee_amount), 0)', 'fee')
+      .addSelect('COALESCE(SUM(r.net_amount), 0)', 'net')
+      .addSelect('COUNT(*)', 'paid_orders')
+      .where('r.teacher_user_id = :uid', { uid: subjectUserId })
+      .andWhere('r.status = :status', { status: 'recognized' });
+    if (from) qb.andWhere('r.recognized_at >= :from', { from });
+    if (to) qb.andWhere('r.recognized_at <= :to', { to });
+    const row = await qb.getRawOne();
+    return {
+      currency: 'VND',
+      gross_revenue: Number(row?.gross || 0),
+      platform_fee_total: Number(row?.fee || 0),
+      net_revenue: Number(row?.net || 0),
+      paid_orders: Number(row?.paid_orders || 0),
+    };
+  }
+
+  async getMyRevenueTrend(
+    subjectUserId: number,
+    query: TeacherRevenueSummaryQuery
+  ): Promise<TeacherRevenueTrendResult> {
+    await ensureUserCanAccessInstructorDashboard(subjectUserId);
+    const revenueRepo = AppDataSource.getRepository(PaymentRevenueLedger);
+    const { from, to } = parseRevenueDateRange(query);
+    const qb = revenueRepo
+      .createQueryBuilder('r')
+      .select('DATE(r.recognized_at)', 'date')
+      .addSelect('COALESCE(SUM(r.gross_amount), 0)', 'gross')
+      .addSelect('COALESCE(SUM(r.system_fee_amount), 0)', 'fee')
+      .addSelect('COALESCE(SUM(r.net_amount), 0)', 'net')
+      .addSelect('COUNT(*)', 'paid_orders')
+      .where('r.teacher_user_id = :uid', { uid: subjectUserId })
+      .andWhere('r.status = :status', { status: 'recognized' })
+      .groupBy('DATE(r.recognized_at)')
+      .orderBy('DATE(r.recognized_at)', 'ASC');
+    if (from) qb.andWhere('r.recognized_at >= :from', { from });
+    if (to) qb.andWhere('r.recognized_at <= :to', { to });
+    const rows = await qb.getRawMany();
+    return {
+      points: (rows as any[]).map((r) => ({
+        date: String(r.date || ''),
+        gross_revenue: Number(r.gross || 0),
+        platform_fee_total: Number(r.fee || 0),
+        net_revenue: Number(r.net || 0),
+        paid_orders: Number(r.paid_orders || 0),
+      })),
+    };
+  }
+
+  async listMyRevenueTransactions(
+    subjectUserId: number,
+    query: TeacherRevenueTransactionsQuery
+  ): Promise<TeacherRevenueTransactionsResult> {
+    await ensureUserCanAccessInstructorDashboard(subjectUserId);
+    const revenueRepo = AppDataSource.getRepository(PaymentRevenueLedger);
+    const { from, to } = parseRevenueDateRange(query);
+    const page = Math.max(1, Number(query.page || 1));
+    const pageSize = Math.min(50, Math.max(1, Number(query.page_size || 20)));
+    const qb = revenueRepo
+      .createQueryBuilder('r')
+      .where('r.teacher_user_id = :uid', { uid: subjectUserId })
+      .andWhere('r.status = :status', { status: 'recognized' })
+      .orderBy('r.recognized_at', 'DESC')
+      .addOrderBy('r.id', 'DESC');
+    if (from) qb.andWhere('r.recognized_at >= :from', { from });
+    if (to) qb.andWhere('r.recognized_at <= :to', { to });
+    const total = await qb.getCount();
+    const items = await qb
+      .skip((page - 1) * pageSize)
+      .take(pageSize)
+      .getMany();
+    return {
+      items: (items as any[]).map((r) => ({
+        order_id: Number(r.order_id),
+        course_id: Number(r.course_id),
+        teacher_user_id: Number(r.teacher_user_id),
+        gross_amount: Number(r.gross_amount || 0),
+        platform_fee_amount: Number(r.system_fee_amount || 0),
+        net_amount: Number(r.net_amount || 0),
+        currency: String(r.currency || 'VND'),
+        recognized_at: new Date(r.recognized_at).toISOString(),
+        status: String(r.status || 'recognized') as 'recognized' | 'reversed',
+      })),
+      page,
+      page_size: pageSize,
+      total,
+    };
   }
 
   async getMyCourseDetail(subjectUserId: number, courseId: number): Promise<CourseListItem> {

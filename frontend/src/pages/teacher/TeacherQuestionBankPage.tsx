@@ -11,10 +11,12 @@ import "./TeacherQuestionBankPage.css";
 type QuestionBank = {
   id: number;
   course_id: number;
+  created_by?: number;
   name: string;
   description?: string;
   is_shared: boolean;
   is_active?: boolean;
+  is_owned?: boolean;
 };
 
 type BankUsageItem = {
@@ -167,6 +169,10 @@ export default function TeacherQuestionBankPage() {
     () => banks.find((bank) => bank.id === selectedBankId) ?? null,
     [banks, selectedBankId]
   );
+  const canManageSelectedBank = useMemo(() => {
+    if (!selectedBank) return false;
+    return selectedBank.is_owned ?? true;
+  }, [selectedBank]);
   const activeBanks = useMemo(() => banks.filter((bank) => bank.is_active !== false), [banks]);
   const archivedBanks = useMemo(() => banks.filter((bank) => bank.is_active === false), [banks]);
   const requestedBankId = useMemo(() => {
@@ -332,6 +338,10 @@ export default function TeacherQuestionBankPage() {
   };
 
   const startEditBank = (bank: QuestionBank) => {
+    if (!(bank.is_owned ?? true)) {
+      setError("Bạn chỉ có thể chỉnh sửa ngân hàng câu hỏi do mình tạo.");
+      return;
+    }
     setEditingBank(bank);
     setBankName(bank.name);
     setBankDescription(bank.description ?? "");
@@ -394,6 +404,11 @@ export default function TeacherQuestionBankPage() {
   };
 
   const handleDeleteBank = async (bankId: number) => {
+    const targetBank = banks.find((item) => item.id === bankId);
+    if (targetBank && !(targetBank.is_owned ?? true)) {
+      setError("Bạn chỉ có thể lưu trữ ngân hàng câu hỏi do mình tạo.");
+      return;
+    }
     if (!window.confirm("Lưu trữ ngân hàng câu hỏi này? Ngân hàng lưu trữ sẽ bị ẩn khỏi danh sách chọn mới.")) return;
     setLoading(true);
     setError(null);
@@ -422,6 +437,11 @@ export default function TeacherQuestionBankPage() {
   };
 
   const handleRestoreBank = async (bankId: number) => {
+    const targetBank = banks.find((item) => item.id === bankId);
+    if (targetBank && !(targetBank.is_owned ?? true)) {
+      setError("Bạn chỉ có thể khôi phục ngân hàng câu hỏi do mình tạo.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -447,6 +467,10 @@ export default function TeacherQuestionBankPage() {
     e.preventDefault();
     if (!selectedBankId) {
       setError("Vui lòng chọn ngân hàng câu hỏi.");
+      return;
+    }
+    if (!canManageSelectedBank) {
+      setError("Ngân hàng global chỉ cho phép xem và chọn import. Bạn không thể chỉnh sửa trực tiếp.");
       return;
     }
     setLoading(true);
@@ -508,6 +532,10 @@ export default function TeacherQuestionBankPage() {
 
   const handleDeleteQuestion = async (questionId: number) => {
     if (!selectedBankId) return;
+    if (!canManageSelectedBank) {
+      setError("Ngân hàng global chỉ cho phép xem và chọn import. Bạn không thể chỉnh sửa trực tiếp.");
+      return;
+    }
     if (!window.confirm("Xóa câu hỏi này?")) return;
     setLoading(true);
     setError(null);
@@ -587,6 +615,9 @@ export default function TeacherQuestionBankPage() {
 
   const bulkCreateQuestions = async (payloads: any[]) => {
     if (!selectedBankId) throw new Error("Vui lòng chọn ngân hàng câu hỏi.");
+    if (!canManageSelectedBank) {
+      throw new Error("Ngân hàng global chỉ cho phép xem và chọn import. Bạn không thể chỉnh sửa trực tiếp.");
+    }
     const res = await fetch(`${url}${QUESTION_BANKS_API.addQuestionsBatch(selectedBankId)}`, {
       method: "POST",
       headers: authHeaders,
@@ -732,6 +763,10 @@ export default function TeacherQuestionBankPage() {
     }
     if (!aiTopic.trim()) {
       setError("Vui lòng nhập chủ đề để AI tạo câu hỏi.");
+      return;
+    }
+    if (!canManageSelectedBank) {
+      setError("Ngân hàng global chỉ cho phép xem và chọn import. Bạn không thể chỉnh sửa trực tiếp.");
       return;
     }
 
@@ -1169,14 +1204,16 @@ export default function TeacherQuestionBankPage() {
                         )}
                       </div>
                     </button>
-                    <div className="bank-actions">
-                      <button className="icon-btn" onClick={() => startEditBank(bank)} title="Sửa">
-                        <span className="material-symbols-outlined">edit</span>
-                      </button>
-                      <button className="icon-btn danger" onClick={() => void handleDeleteBank(bank.id)} title="Lưu trữ">
-                        <span className="material-symbols-outlined">archive</span>
-                      </button>
-                    </div>
+                    {(bank.is_owned ?? true) ? (
+                      <div className="bank-actions">
+                        <button className="icon-btn" onClick={() => startEditBank(bank)} title="Sửa">
+                          <span className="material-symbols-outlined">edit</span>
+                        </button>
+                        <button className="icon-btn danger" onClick={() => void handleDeleteBank(bank.id)} title="Lưu trữ">
+                          <span className="material-symbols-outlined">archive</span>
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ))}
                 {!activeBanks.length && !loading && (
@@ -1206,11 +1243,13 @@ export default function TeacherQuestionBankPage() {
                               </div>
                               <p className="bank-description">{bank.description || "Không có mô tả"}</p>
                             </div>
-                            <div className="bank-actions">
-                              <button className="icon-btn" onClick={() => void handleRestoreBank(bank.id)} title="Khôi phục">
-                                <span className="material-symbols-outlined">restore</span>
-                              </button>
-                            </div>
+                            {(bank.is_owned ?? true) ? (
+                              <div className="bank-actions">
+                                <button className="icon-btn" onClick={() => void handleRestoreBank(bank.id)} title="Khôi phục">
+                                  <span className="material-symbols-outlined">restore</span>
+                                </button>
+                              </div>
+                            ) : null}
                           </div>
                         ))}
                       </div>
@@ -1225,6 +1264,11 @@ export default function TeacherQuestionBankPage() {
           <div className="questions-section">
             {selectedBank ? (
               <>
+                {!canManageSelectedBank && (
+                  <div className="warning-message" style={{ marginBottom: 12 }}>
+                    Đây là ngân hàng global do giảng viên khác chia sẻ. Bạn có thể xem và import, nhưng không thể chỉnh sửa.
+                  </div>
+                )}
                 {/* Selected Bank Header */}
                 <div className="selected-bank-header">
                   <div className="selected-bank-info">
@@ -1245,10 +1289,12 @@ export default function TeacherQuestionBankPage() {
                   <button
                     type="button"
                     className={`tab-btn ${activeMainTab === "manual" ? "active" : ""}`}
+                    disabled={!canManageSelectedBank}
                     onClick={() => {
                       setActiveMainTab("manual");
                       resetQuestionForm();
                     }}
+                    title={!canManageSelectedBank ? "Chỉ có thể chỉnh sửa với ngân hàng do bạn sở hữu" : undefined}
                   >
                     <span className="material-symbols-outlined">edit_note</span>
                     {editingQuestion ? "Sửa câu hỏi" : "Thêm câu hỏi"}
@@ -1256,11 +1302,13 @@ export default function TeacherQuestionBankPage() {
                   <button
                     type="button"
                     className={`tab-btn ${activeMainTab === "bulk" ? "active" : ""}`}
+                    disabled={!canManageSelectedBank}
                     onClick={() => {
                       setActiveMainTab("bulk");
                       resetQuestionForm();
                       resetBulkForms();
                     }}
+                    title={!canManageSelectedBank ? "Chỉ có thể chỉnh sửa với ngân hàng do bạn sở hữu" : undefined}
                   >
                     <span className="material-symbols-outlined">upload_file</span>
                     Nhập hàng loạt

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
+import { PAYMENTS_API } from "../../api/payments";
 import { useAuth } from "../../contexts/Auth";
 import "./CoursesCatalogPage.css";
 
@@ -19,6 +20,7 @@ type PublishedCourse = {
   modules_count: number;
   lessons_count: number;
   total_duration_minutes?: number | null;
+  price?: number | null;
   is_enrolled?: boolean;
   can_enroll?: boolean;
 };
@@ -35,6 +37,16 @@ function levelBadge(level: string) {
   if (level === "intermediate") return { label: "Trung cấp", className: "badge badge--blue" };
   if (level === "advanced") return { label: "Nâng cao", className: "badge badge--purple" };
   return { label: level, className: "badge" };
+}
+
+function formatVnd(amount: number): string {
+  try {
+    return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(
+      amount
+    );
+  } catch {
+    return `${amount} VND`;
+  }
 }
 
 export default function CoursesCatalogPage() {
@@ -103,6 +115,34 @@ export default function CoursesCatalogPage() {
     }
   };
 
+  const checkoutPaidCourse = async (courseId: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${url}${PAYMENTS_API.createMomoOrder}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ course_id: courseId }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { payment_url?: string; message?: string; status?: string };
+      if (!res.ok) throw new Error(json?.message || "Không thể tạo đơn thanh toán.");
+      if (json?.status === "paid") {
+        window.alert("Bạn đã thanh toán khóa học này trước đó. Vào Dashboard để tiếp tục học.");
+        navigate("/student/dashboard");
+        return;
+      }
+      if (!json?.payment_url) throw new Error("Không nhận được liên kết thanh toán từ MoMo.");
+      window.location.href = json.payment_url;
+    } catch (e: any) {
+      setError(e?.message || "Không thể bắt đầu thanh toán.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const t = window.setTimeout(() => setQ(qInput), 450);
     return () => window.clearTimeout(t);
@@ -130,17 +170,8 @@ export default function CoursesCatalogPage() {
         <div className="catalog__headerRow">
           <div style={{ minWidth: 0 }}>
             <h1 className="catalog__title">Khám phá khóa học</h1>
-            <p className="catalog__subtitle">Các khóa học đã xuất bản dành cho học viên.</p>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button
-              type="button"
-              className="btn btn--secondary"
-              onClick={() => navigate("/student/dashboard")}
-              disabled={loading}
-            >
-              ← Dashboard
-            </button>
             <AvatarMenu />
           </div>
         </div>
@@ -184,6 +215,9 @@ export default function CoursesCatalogPage() {
                   </div>
                   <h3 className="card__title">{c.title}</h3>
                   <p className="card__desc">{c.short_description || "—"}</p>
+                  <div style={{ marginBottom: 10, fontWeight: 800, color: "#0f172a" }}>
+                    {Number(c.price ?? 0) > 0 ? `Học phí: ${formatVnd(Number(c.price))}` : "Miễn phí"}
+                  </div>
 
                   <div style={{ display: "flex", gap: 10 }}>
                     <button
@@ -197,11 +231,17 @@ export default function CoursesCatalogPage() {
                     <button
                       type="button"
                       className="btn btn--primary"
-                      onClick={() => enroll(c.id)}
+                      onClick={() => {
+                        if (Number(c.price ?? 0) > 0) {
+                          void checkoutPaidCourse(c.id);
+                          return;
+                        }
+                        void enroll(c.id);
+                      }}
                       disabled={loading || c.can_enroll === false}
-                      title="Đăng ký khóa học"
+                      title={Number(c.price ?? 0) > 0 ? "Thanh toán khóa học" : "Đăng ký khóa học"}
                     >
-                      {c.can_enroll === false ? "Chưa đủ điều kiện" : "Đăng ký"}
+                      {c.can_enroll === false ? "Chưa đủ điều kiện" : Number(c.price ?? 0) > 0 ? "Mua khóa học" : "Đăng ký"}
                     </button>
                   </div>
                   {c.can_enroll === false ? (

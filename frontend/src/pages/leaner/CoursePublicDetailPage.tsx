@@ -1,11 +1,38 @@
+// CoursePublicDetailPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
+import { PAYMENTS_API } from "../../api/payments";
 import { useAuth } from "../../contexts/Auth";
 import PrerequisiteGraph, { type PrerequisiteGraphData } from "../../components/PrerequisiteGraph";
 import "./CoursePublicDetailPage.css";
+import {
+  BookOpen,
+  Users,
+  Layers3,
+  ListChecks,
+  Clock,
+  DollarSign,
+  Award,
+  CheckCircle,
+  XCircle,
+  ArrowLeft,
+  GraduationCap,
+  Target,
+  FileText,
+  Play,
+  Lock,
+  Star,
+  TrendingUp,
+  Calendar,
+  Globe,
+  BarChart3,
+  ChevronRight,
+  Shield,
+  Sparkles
+} from 'lucide-react';
 
 type CourseDetail = {
   id: number;
@@ -22,6 +49,7 @@ type CourseDetail = {
   modules_count: number;
   lessons_count: number;
   total_duration_minutes?: number | null;
+  price?: number | null;
   is_enrolled?: boolean;
   enrollment?: { status: string; progress_percent: number } | null;
   instructors: { id: number; full_name: string; avatar_url: string | null; is_primary: boolean }[];
@@ -36,16 +64,33 @@ type PrerequisiteCourseOption = {
 };
 
 function levelLabel(level: string) {
-  if (level === "beginner") return "Cơ bản";
-  if (level === "intermediate") return "Trung cấp";
-  if (level === "advanced") return "Nâng cao";
-  return level || "—";
+  if (level === "beginner") return { label: "Beginner", color: "#16a34a", bg: "#dcfce7" };
+  if (level === "intermediate") return { label: "Intermediate", color: "#2563eb", bg: "#dbeafe" };
+  if (level === "advanced") return { label: "Advanced", color: "#7c3aed", bg: "#f3e8ff" };
+  return { label: level || "—", color: "#6b7280", bg: "#f3f4f6" };
 }
 
 function languageLabel(lang: string) {
   if (lang === "vi") return "Tiếng Việt";
   if (lang === "en") return "English";
   return lang || "—";
+}
+
+function formatVnd(amount: number): string {
+  try {
+    return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(amount);
+  } catch {
+    return `${amount} VND`;
+  }
+}
+
+function formatDuration(minutes: number | null | undefined): string {
+  if (!minutes) return "—";
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours === 0) return `${mins} mins`;
+  if (mins === 0) return `${hours} hr${hours > 1 ? 's' : ''}`;
+  return `${hours}h ${mins}m`;
 }
 
 function toStringList(value: any): string[] {
@@ -60,10 +105,7 @@ function toStringList(value: any): string[] {
     } catch {
       // ignore
     }
-    return s
-      .split(/\r?\n|•|\u2022|-/g)
-      .map((x) => x.trim())
-      .filter(Boolean);
+    return s.split(/\r?\n|•|\u2022|-/g).map((x) => x.trim()).filter(Boolean);
   }
   return [String(value)];
 }
@@ -81,6 +123,7 @@ export default function CoursePublicDetailPage() {
   const [myEnrollmentStatusByCourseId, setMyEnrollmentStatusByCourseId] = useState<Record<number, string>>({});
   const [prerequisiteGraph, setPrerequisiteGraph] = useState<PrerequisiteGraphData | null>(null);
   const [graphModalOpen, setGraphModalOpen] = useState(false);
+  const [expandedModules, setExpandedModules] = useState<Record<number, boolean>>({});
 
   const fetchDetail = async () => {
     const res = await fetch(`${url}${COURSES_API.catalogDetail(slug)}`, {
@@ -90,7 +133,7 @@ export default function CoursePublicDetailPage() {
       },
     });
     const json = (await res.json().catch(() => ({}))) as Partial<CourseDetail> & { message?: string };
-    if (!res.ok) throw new Error(json?.message || "Không thể tải chi tiết khóa học.");
+    if (!res.ok) throw new Error(json?.message || "Cannot load course details.");
     setCourse(json as CourseDetail);
   };
 
@@ -188,7 +231,7 @@ export default function CoursePublicDetailPage() {
 
   const enroll = async () => {
     if (!course) return;
-    const ok = window.confirm("Đăng ký khóa học này?");
+    const ok = window.confirm("Enroll in this course?");
     if (!ok) return;
     setLoading(true);
     setError(null);
@@ -200,14 +243,47 @@ export default function CoursePublicDetailPage() {
         },
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((json as any)?.message || "Không thể đăng ký khóa học.");
+      if (!res.ok) throw new Error((json as any)?.message || "Cannot enroll in course.");
       await fetchDetail();
-      window.alert("Đăng ký thành công. Vào Dashboard học viên để xem khóa học của bạn.");
+      window.alert("Successfully enrolled! Go to Student Dashboard to view your courses.");
     } catch (e: any) {
-      setError(e?.message || "Đã xảy ra lỗi.");
+      setError(e?.message || "An error occurred.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const checkoutPaidCourse = async () => {
+    if (!course) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${url}${PAYMENTS_API.createMomoOrder}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ course_id: course.id }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { payment_url?: string; message?: string; status?: string };
+      if (!res.ok) throw new Error(json?.message || "Cannot create payment order.");
+      if (json?.status === "paid") {
+        window.alert("You have already paid for this course. Go to Dashboard to continue learning.");
+        navigate(`/my-courses/${course.id}/${course.slug}`);
+        return;
+      }
+      if (!json?.payment_url) throw new Error("No payment URL received from MoMo.");
+      window.location.href = json.payment_url;
+    } catch (e: any) {
+      setError(e?.message || "Cannot start payment process.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleModule = (moduleId: number) => {
+    setExpandedModules(prev => ({ ...prev, [moduleId]: !prev[moduleId] }));
   };
 
   useEffect(() => {
@@ -218,224 +294,414 @@ export default function CoursePublicDetailPage() {
     setLoading(true);
     setError(null);
     fetchDetail()
-      .catch((e: any) => setError(e?.message || "Đã xảy ra lỗi."))
+      .catch((e: any) => setError(e?.message || "An error occurred."))
       .finally(() => setLoading(false));
     void fetchPrerequisiteCatalog();
     void fetchMyEnrollmentStatus();
     void fetchPrerequisiteGraph();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  const level = levelLabel(course?.level || "");
+  const isFree = (course?.price ?? 0) === 0;
 
   return (
     <div className="course-detail-page">
-      <div className="course-detail-container">
-        <div className="course-detail-header">
-          <button
-            type="button"
-            onClick={() => navigate("/courses")}
-            className="back-button"
-            disabled={loading}
-          >
-            ← Quay lại
-          </button>
-          <AvatarMenu />
-        </div>
-
-        {error ? (
-          <div className="error-message">
-            {error}
+      {/* Header */}
+      <div className="course-detail-header-bg">
+        <div className="container">
+          <div className="course-detail-header">
+            <button type="button" onClick={() => navigate("/courses")} className="back-button" disabled={loading}>
+              <ArrowLeft size={18} />
+              Back to Courses
+            </button>
+            <AvatarMenu />
           </div>
-        ) : null}
+        </div>
+      </div>
 
-        {course ? (
-          <div className="course-card">
-            {course.thumbnail_url ? (
-              <img 
-                src={course.thumbnail_url} 
-                alt={course.title} 
-                className="course-thumbnail" 
-              />
-            ) : null}
-            <div className="course-content">
-              <h1 className="course-title">{course.title}</h1>
-              <div className="course-short-description">
-                {course.short_description || "—"}
-              </div>
-
-              <div className="course-stats">
-                <span>Cấp độ: {levelLabel(course.level)}</span>
-                <span>·</span>
-                <span>Ngôn ngữ: {languageLabel(course.language)}</span>
-                <span>·</span>
-                <span>Học viên: {course.learners_count ?? 0}</span>
-                <span>·</span>
-                <span>Chương: {course.modules_count ?? 0}</span>
-                <span>·</span>
-                <span>Bài học: {course.lessons_count ?? 0}</span>
-                {course.total_duration_minutes != null ? (
-                  <>
-                    <span>·</span>
-                    <span>Tổng thời lượng: {course.total_duration_minutes} phút</span>
-                  </>
-                ) : null}
-              </div>
-
-              <div className="course-actions">
-                <button
-                  type="button"
-                  onClick={enroll}
-                  disabled={loading || !!course.is_enrolled || hasUnfinishedPrerequisites}
-                  className={`enroll-button ${course.is_enrolled ? "enrolled" : ""}`}
-                >
-                  {course.is_enrolled
-                    ? "Đã đăng ký"
-                    : hasUnfinishedPrerequisites
-                      ? "Chưa đủ điều kiện"
-                      : "Đăng ký"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate("/student/dashboard")}
-                  disabled={loading}
-                  className="dashboard-button"
-                >
-                  Về Dashboard
-                </button>
-              </div>
-              {hasUnfinishedPrerequisites ? (
-                <div style={{ marginTop: 8, color: "#b91c1c", fontWeight: 700 }}>
-                  Bạn cần hoàn thành các khóa tiên quyết trước khi đăng ký.
+      {/* Hero Section */}
+      {course && !loading && (
+        <div className="course-hero" style={{ backgroundImage: course.thumbnail_url ? `url(${course.thumbnail_url})` : undefined }}>
+          <div className="course-hero-overlay">
+            <div className="container">
+              <div className="course-hero-content">
+                <div className="course-badges">
+                  <span className="badge-level" style={{ backgroundColor: level.bg, color: level.color }}>
+                    {level.label}
+                  </span>
+                  <span className="badge-status">
+                    {isFree ? "FREE" : "PAID"}
+                  </span>
+                  {course.is_enrolled && (
+                    <span className="badge-enrolled">
+                      <CheckCircle size={14} />
+                      Enrolled
+                    </span>
+                  )}
                 </div>
-              ) : null}
+                <h1 className="course-hero-title">{course.title}</h1>
+                <p className="course-hero-description">{course.short_description || "No description provided."}</p>
+                
+                <div className="course-hero-stats">
+                  <div className="hero-stat">
+                    <Users size={16} />
+                    <span>{course.learners_count?.toLocaleString() || 0} learners</span>
+                  </div>
+                  <div className="hero-stat">
+                    <Layers3 size={16} />
+                    <span>{course.modules_count || 0} modules</span>
+                  </div>
+                  <div className="hero-stat">
+                    <ListChecks size={16} />
+                    <span>{course.lessons_count || 0} lessons</span>
+                  </div>
+                  <div className="hero-stat">
+                    <Clock size={16} />
+                    <span>{formatDuration(course.total_duration_minutes)}</span>
+                  </div>
+                  <div className="hero-stat">
+                    <Globe size={16} />
+                    <span>{languageLabel(course.language)}</span>
+                  </div>
+                </div>
 
-              {Array.isArray(course.instructors) && course.instructors.length ? (
-                <div className="course-full-description">
-                  <h3 style={{ margin: "16px 0 8px 0" }}>Giảng viên</h3>
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    {course.instructors.map((ins) => (
-                      <div key={ins.id} style={{ display: "flex", gap: 10, alignItems: "center", border: "1px solid #e5e7eb", borderRadius: 12, padding: "8px 10px" }}>
-                        {ins.avatar_url ? (
-                          <img src={ins.avatar_url} alt={ins.full_name} style={{ width: 34, height: 34, borderRadius: 999, objectFit: "cover" }} />
-                        ) : (
-                          <div style={{ width: 34, height: 34, borderRadius: 999, background: "#e5e7eb" }} />
-                        )}
-                        <div style={{ fontWeight: 900 }}>
-                          {ins.full_name}
-                          {ins.is_primary ? <span style={{ marginLeft: 8, fontWeight: 800, color: "#2563eb" }}>(Chính)</span> : null}
-                        </div>
+                <div className="course-hero-actions">
+                  {course.is_enrolled ? (
+                    <button 
+                      className="btn-continue"
+                      onClick={() => navigate(`/my-courses/${course.id}/${course.slug}`)}
+                    >
+                      <Play size={18} />
+                      Continue Learning
+                    </button>
+                  ) : (
+                    <button
+                      className={`btn-enroll ${hasUnfinishedPrerequisites ? "disabled" : ""}`}
+                      onClick={() => {
+                        if (hasUnfinishedPrerequisites) return;
+                        if (!isFree) {
+                          void checkoutPaidCourse();
+                        } else {
+                          void enroll();
+                        }
+                      }}
+                      disabled={loading || hasUnfinishedPrerequisites}
+                    >
+                      {hasUnfinishedPrerequisites ? (
+                        <>
+                          <Lock size={18} />
+                          Prerequisites Required
+                        </>
+                      ) : !isFree ? (
+                        <>
+                          <DollarSign size={18} />
+                          {formatVnd(course.price || 0)}
+                        </>
+                      ) : (
+                        <>
+                          <GraduationCap size={18} />
+                          Enroll for Free
+                        </>
+                      )}
+                    </button>
+                  )}
+                  <button className="btn-dashboard" onClick={() => navigate("/student/dashboard")}>
+                    Go to Dashboard
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="loading-container">
+          <div className="spinner-large"></div>
+          <p>Loading course details...</p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="container">
+          <div className="error-card">
+            <div className="error-icon">⚠️</div>
+            <div className="error-content">
+              <h3>Unable to load course</h3>
+              <p>{error}</p>
+              <button onClick={() => window.location.reload()} className="btn-retry">Try Again</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Course Content */}
+      {course && !loading && (
+        <div className="container">
+          <div className="course-layout">
+            {/* Main Content */}
+            <div className="course-main">
+              {/* What You'll Learn */}
+              {toStringList(course.learning_objectives).length > 0 && (
+                <div className="content-card">
+                  <div className="card-header">
+                    <Target size={22} className="card-icon" />
+                    <h2>What You'll Learn</h2>
+                  </div>
+                  <div className="objectives-grid">
+                    {toStringList(course.learning_objectives).map((item, idx) => (
+                      <div key={idx} className="objective-item">
+                        <CheckCircle size={16} className="check-icon" />
+                        <span>{item}</span>
                       </div>
                     ))}
                   </div>
                 </div>
-              ) : null}
+              )}
 
-              {toStringList(course.learning_objectives).length ? (
-                <div className="course-full-description">
-                  <h3 style={{ margin: "16px 0 8px 0" }}>Bạn sẽ học được</h3>
-                  <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    {toStringList(course.learning_objectives).map((x, idx) => (
-                      <li key={idx} style={{ marginBottom: 6 }}>{x}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {prerequisiteItems.length ? (
-                <div className="course-full-description">
-                  <h3 style={{ margin: "16px 0 8px 0" }}>Yêu cầu trước khi học</h3>
-                  <div className="prerequisite-grid">
-                    {prerequisiteItems.map((x, idx) => (
-                      <div key={`${x.label}-${idx}`} className="prerequisite-card">
-                        {x.thumbnail_url ? (
-                          <img src={x.thumbnail_url} alt={x.label} className="prerequisite-card__thumb" />
-                        ) : (
-                          <div className="prerequisite-card__thumb prerequisite-card__thumb--empty">No image</div>
+              {/* Course Content / Modules */}
+              {Array.isArray(course.modules) && course.modules.length > 0 && (
+                <div className="content-card">
+                  <div className="card-header">
+                    <BookOpen size={22} className="card-icon" />
+                    <h2>Course Content</h2>
+                  </div>
+                  <div className="modules-list">
+                    {course.modules.map((module, idx) => (
+                      <div key={module.id} className="module-item">
+                        <button className="module-header" onClick={() => toggleModule(module.id)}>
+                          <div className="module-left">
+                            <span className="module-number">{String(idx + 1).padStart(2, '0')}</span>
+                            <span className="module-title">{module.title}</span>
+                          </div>
+                          <div className="module-right">
+                            <span className="module-lesson-count">{module.lessons?.length || 0} lessons</span>
+                            <ChevronRight size={18} className={`module-chevron ${expandedModules[module.id] ? 'expanded' : ''}`} />
+                          </div>
+                        </button>
+                        {expandedModules[module.id] && (
+                          <div className="module-lessons">
+                            {(module.lessons || []).map((lesson, lidx) => (
+                              <div key={lesson.id} className="lesson-item">
+                                <div className="lesson-left">
+                                  <div className="lesson-icon">
+                                    {lesson.is_free_preview ? <Play size={14} className="preview-icon" /> : <Lock size={14} className="lock-icon" />}
+                                  </div>
+                                  <span className="lesson-title">
+                                    {lidx + 1}. {lesson.title}
+                                  </span>
+                                </div>
+                                {lesson.is_free_preview && (
+                                  <span className="preview-badge">Preview</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         )}
-                        <div className="prerequisite-card__content">
-                          {x.isLinkedCourse ? (
-                            <button type="button" onClick={() => navigate(`/courses/${x.slug}`)} className="prerequisite-card__titleBtn">
-                              {x.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Prerequisites */}
+              {prerequisiteItems.length > 0 && (
+                <div className="content-card">
+                  <div className="card-header">
+                    <Shield size={22} className="card-icon" />
+                    <h2>Prerequisites</h2>
+                  </div>
+                  <div className="prerequisites-grid">
+                    {prerequisiteItems.map((item, idx) => (
+                      <div key={idx} className="prerequisite-card-new">
+                        <div className="prereq-image">
+                          {item.thumbnail_url ? (
+                            <img src={item.thumbnail_url} alt={item.label} />
+                          ) : (
+                            <div className="prereq-placeholder">
+                              <BookOpen size={24} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="prereq-info">
+                          {item.isLinkedCourse ? (
+                            <button className="prereq-title-btn" onClick={() => navigate(`/courses/${item.slug}`)}>
+                              {item.label}
                             </button>
                           ) : (
-                            <div className="prerequisite-card__title">{x.label}</div>
+                            <span className="prereq-title">{item.label}</span>
                           )}
-                          {x.isLinkedCourse ? (
-                            <div className={`prerequisite-card__status ${x.isCompleted ? "done" : "pending"}`}>
-                              {x.isCompleted ? "✓ Đã hoàn thành" : "✗ Chưa hoàn thành"}
+                          {item.isLinkedCourse && (
+                            <div className={`prereq-status ${item.isCompleted ? "completed" : "pending"}`}>
+                              {item.isCompleted ? <CheckCircle size={14} /> : <XCircle size={14} />}
+                              <span>{item.isCompleted ? "Completed" : "Not Completed"}</span>
                             </div>
-                          ) : null}
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {hasUnfinishedPrerequisites && (
+                    <div className="prereq-warning">
+                      <Lock size={16} />
+                      <span>Complete all prerequisite courses before enrolling in this course.</span>
+                    </div>
+                  )}
+
+                  <button className="btn-view-graph" onClick={() => setGraphModalOpen(true)}>
+                    <TrendingUp size={16} />
+                    View Prerequisite Graph
+                  </button>
+                </div>
+              )}
+
+              {/* Full Description */}
+              {course.full_description && (
+                <div className="content-card">
+                  <div className="card-header">
+                    <FileText size={22} className="card-icon" />
+                    <h2>Full Description</h2>
+                  </div>
+                  <div className="full-description" dangerouslySetInnerHTML={{ __html: course.full_description }} />
+                </div>
+              )}
+            </div>
+
+            {/* Sidebar */}
+            <div className="course-sidebar">
+              {/* Instructor Card */}
+              {Array.isArray(course.instructors) && course.instructors.length > 0 && (
+                <div className="sidebar-card">
+                  <h3 className="sidebar-card-title">
+                    <GraduationCap size={18} />
+                    Instructor{course.instructors.length > 1 ? 's' : ''}
+                  </h3>
+                  <div className="instructors-list">
+                    {course.instructors.map((instructor) => (
+                      <div key={instructor.id} className="instructor-item">
+                        <div className="instructor-avatar">
+                          {instructor.avatar_url ? (
+                            <img src={instructor.avatar_url} alt={instructor.full_name} />
+                          ) : (
+                            <div className="avatar-placeholder">
+                              {instructor.full_name.charAt(0)}
+                            </div>
+                          )}
+                        </div>
+                        <div className="instructor-info">
+                          <div className="instructor-name">
+                            {instructor.full_name}
+                            {instructor.is_primary && <span className="primary-badge">Primary</span>}
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
-              ) : null}
+              )}
 
-              <div className="course-full-description">
-                <h3 style={{ margin: "16px 0 8px 0" }}>Sơ đồ tiên quyết</h3>
-                <button type="button" className="dashboard-button" onClick={() => setGraphModalOpen(true)}>
-                  Xem sơ đồ tiên quyết
-                </button>
+              {/* Course Stats Card */}
+              <div className="sidebar-card">
+                <h3 className="sidebar-card-title">
+                  <BarChart3 size={18} />
+                  Course Statistics
+                </h3>
+                <div className="stats-list">
+                  <div className="stat-item">
+                    <Users size={16} />
+                    <span>{course.learners_count?.toLocaleString() || 0} total learners</span>
+                  </div>
+                  <div className="stat-item">
+                    <Layers3 size={16} />
+                    <span>{course.modules_count || 0} modules</span>
+                  </div>
+                  <div className="stat-item">
+                    <ListChecks size={16} />
+                    <span>{course.lessons_count || 0} lessons</span>
+                  </div>
+                  <div className="stat-item">
+                    <Clock size={16} />
+                    <span>{formatDuration(course.total_duration_minutes)} total</span>
+                  </div>
+                  <div className="stat-item">
+                    <Globe size={16} />
+                    <span>{languageLabel(course.language)}</span>
+                  </div>
+                </div>
               </div>
 
-              {course.full_description ? (
-                <div className="course-full-description">
-                  <h3 style={{ margin: "16px 0 8px 0" }}>Mô tả chi tiết</h3>
-                  {course.full_description}
-                </div>
-              ) : null}
-
-              {Array.isArray(course.modules) && course.modules.length ? (
-                <div className="course-full-description">
-                  <h3 style={{ margin: "16px 0 8px 0" }}>Nội dung khóa học</h3>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {course.modules.map((m, midx) => (
-                      <div key={m.id} style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 12, background: "#fff" }}>
-                        <div style={{ fontWeight: 900, marginBottom: 8 }}>
-                          Chương {midx + 1}: {m.title}
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          {(m.lessons || []).map((l, lidx) => (
-                            <div key={l.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 10px", border: "1px solid #f1f5f9", borderRadius: 12, background: "#fafafa" }}>
-                              <div style={{ fontWeight: 800 }}>
-                                Bài {lidx + 1}: {l.title}
-                              </div>
-                              {l.is_free_preview ? (
-                                <span className="badge badge--blue">Preview</span>
-                              ) : (
-                                <span style={{ color: "#6b7280", fontWeight: 700 }}>—</span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+              {/* Price Card (if not enrolled) */}
+              {!course.is_enrolled && !isFree && (
+                <div className="sidebar-card price-card">
+                  <div className="price-amount">{formatVnd(course.price || 0)}</div>
+                  <div className="price-features">
+                    <div className="price-feature">
+                      <CheckCircle size={16} />
+                      <span>Full lifetime access</span>
+                    </div>
+                    <div className="price-feature">
+                      <CheckCircle size={16} />
+                      <span>Certificate of completion</span>
+                    </div>
+                    <div className="price-feature">
+                      <CheckCircle size={16} />
+                      <span>30-day money-back guarantee</span>
+                    </div>
                   </div>
+                  <button
+                    className={`price-enroll-btn ${hasUnfinishedPrerequisites ? "disabled" : ""}`}
+                    onClick={() => {
+                      if (hasUnfinishedPrerequisites) return;
+                      void checkoutPaidCourse();
+                    }}
+                    disabled={hasUnfinishedPrerequisites}
+                  >
+                    {hasUnfinishedPrerequisites ? "Complete Prerequisites First" : `Buy Now - ${formatVnd(course.price || 0)}`}
+                  </button>
                 </div>
-              ) : null}
-            </div>
-          </div>
-        ) : (
-          <div className="empty-state">
-            {loading ? "Đang tải..." : "Không có dữ liệu."}
-          </div>
-        )}
-      </div>
-      {graphModalOpen ? (
-        <div className="save-success-modal-overlay" role="dialog" aria-modal="true">
-          <div className="save-success-modal" style={{ width: "min(1200px, 96vw)" }}>
-            <div className="save-success-modal-title">Sơ đồ tiên quyết</div>
-            <div style={{ maxHeight: "70vh", overflow: "auto", marginTop: 8 }}>
-              <PrerequisiteGraph data={prerequisiteGraph} onOpenCourse={(s) => navigate(`/courses/${s}`)} />
-            </div>
-            <div className="save-success-modal-actions">
-              <button type="button" className="primary-button" onClick={() => setGraphModalOpen(false)}>
-                Đóng
-              </button>
+              )}
+
+              {/* Free Badge */}
+              {!course.is_enrolled && isFree && (
+                <div className="sidebar-card free-card">
+                  <Sparkles size={32} />
+                  <h4>Free Course</h4>
+                  <p>Enroll now and start learning today at no cost!</p>
+                  <button
+                    className="free-enroll-btn"
+                    onClick={() => void enroll()}
+                    disabled={hasUnfinishedPrerequisites}
+                  >
+                    {hasUnfinishedPrerequisites ? "Complete Prerequisites First" : "Enroll for Free"}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      ) : null}
+      )}
+
+      {/* Prerequisite Graph Modal */}
+      {graphModalOpen && (
+        <div className="modal-overlay" onClick={() => setGraphModalOpen(false)}>
+          <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Prerequisite Graph</h3>
+              <button className="modal-close" onClick={() => setGraphModalOpen(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <PrerequisiteGraph data={prerequisiteGraph} onOpenCourse={(s) => navigate(`/courses/${s}`)} />
+            </div>
+            <div className="modal-footer">
+              <button className="modal-btn-close" onClick={() => setGraphModalOpen(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

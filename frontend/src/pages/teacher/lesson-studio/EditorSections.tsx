@@ -198,6 +198,7 @@ type ContentEditorSectionProps = {
   currentVideoResource: LessonResource | null;
   currentYoutubeId: string | null;
   removeResource: (resourceId: number, resourceName?: string) => Promise<void>;
+  canDeleteResource: (resource: LessonResource | null | undefined) => boolean;
   otherResources: LessonResource[];
   contentHtmlResource: LessonResource | null;
   saveStudio: () => Promise<void>;
@@ -224,6 +225,7 @@ export function ContentEditorSection({
   currentVideoResource,
   currentYoutubeId,
   removeResource,
+  canDeleteResource,
   otherResources,
   contentHtmlResource,
   saveStudio,
@@ -342,7 +344,12 @@ export function ContentEditorSection({
                   type="button"
                   className="btn-icon-danger"
                   onClick={() => void removeResource(currentVideoResource.id, currentVideoResource.filename || "video")}
-                  disabled={readOnly || saving}
+                  disabled={readOnly || saving || !canDeleteResource(currentVideoResource)}
+                  title={
+                    !canDeleteResource(currentVideoResource)
+                      ? "Tài nguyên bị từ chối phải sửa và gửi lại, không thể xóa khi khóa học chờ duyệt."
+                      : "Xóa tài nguyên"
+                  }
                 >
                   <Trash2 size={16} />
                 </button>
@@ -375,7 +382,12 @@ export function ContentEditorSection({
                     type="button"
                     className="btn-icon-danger"
                     onClick={() => void removeResource(r.id, r.filename || "tài nguyên")}
-                    disabled={saving}
+                    disabled={saving || !canDeleteResource(r)}
+                    title={
+                      !canDeleteResource(r)
+                        ? "Tài nguyên bị từ chối phải sửa và gửi lại, không thể xóa khi khóa học chờ duyệt."
+                        : "Xóa tài nguyên"
+                    }
                   >
                     <Trash2 size={16} />
                   </button>

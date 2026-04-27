@@ -59,6 +59,8 @@ export default function CourseContentSimpleTree({ courseId, readOnly = false }: 
   const [scheduleEditorKey, setScheduleEditorKey] = useState<string | null>(null);
   const [scheduleDrafts, setScheduleDrafts] = useState<Record<string, ScheduleDraft>>({});
   const [openingStudio, setOpeningStudio] = useState(false);
+  const [showCreateModuleModal, setShowCreateModuleModal] = useState(false);
+  const [newModuleTitle, setNewModuleTitle] = useState("Chương 1");
   const [showDisabledSection, setShowDisabledSection] = useState(false);
   const [draggingModuleId, setDraggingModuleId] = useState<number | null>(null);
   const [dragOverModuleId, setDragOverModuleId] = useState<number | null>(null);
@@ -355,6 +357,39 @@ export default function CourseContentSimpleTree({ courseId, readOnly = false }: 
     }
   };
 
+  const createFirstModule = async (title: string) => {
+    if (readOnly) return;
+    const normalizedTitle = String(title || "").trim();
+    if (!normalizedTitle) {
+      setError("Vui lòng nhập tên chương.");
+      return;
+    }
+    setOpeningStudio(true);
+    setError(null);
+    try {
+      const res = await fetch(`${url}${COURSES_API.createModule(courseId)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          title: normalizedTitle,
+          description: null,
+          open_at: null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as any)?.message || "Không thể tạo chương đầu tiên.");
+      setShowCreateModuleModal(false);
+      await fetchTree();
+    } catch (e: any) {
+      setError(e?.message || "Không thể tạo chương đầu tiên.");
+    } finally {
+      setOpeningStudio(false);
+    }
+  };
+
   const deleteModulePermanently = async (moduleId: number, moduleTitle?: string) => {
     if (!window.confirm(`Xóa vĩnh viễn chương "${moduleTitle || "này"}" và toàn bộ bài học bên trong?`)) return;
     setOpeningStudio(true);
@@ -506,7 +541,63 @@ export default function CourseContentSimpleTree({ courseId, readOnly = false }: 
 
   if (loading) return <div className="content-simple-tree-state">Đang tải cấu trúc nội dung...</div>;
   if (error) return <div className="content-simple-tree-state error">{error}</div>;
-  if (!modules.length) return <div className="content-simple-tree-state">Chưa có chương/bài học.</div>;
+  if (!modules.length) {
+    return (
+      <div className="content-simple-tree-state-empty">
+        {!readOnly ? (
+          <>
+            <button
+              type="button"
+              className="tree-start-first-module-btn"
+              onClick={() => {
+                setNewModuleTitle("Chương 1");
+                setShowCreateModuleModal(true);
+              }}
+              disabled={openingStudio}
+            >
+              <span className="material-symbols-outlined">add</span>
+              {openingStudio ? "Đang tạo..." : "Bắt đầu tạo chương đầu tiên"}
+            </button>
+            {showCreateModuleModal ? (
+              <div className="tree-modal-backdrop" role="dialog" aria-modal="true">
+                <div className="tree-modal-card">
+                  <div className="tree-modal-title">Đặt tên chương đầu tiên</div>
+                  <input
+                    type="text"
+                    className="tree-modal-input"
+                    value={newModuleTitle}
+                    onChange={(e) => setNewModuleTitle(e.target.value)}
+                    placeholder="Ví dụ: Chương 1 - Nhập môn"
+                    autoFocus
+                    maxLength={120}
+                    disabled={openingStudio}
+                  />
+                  <div className="tree-modal-actions">
+                    <button
+                      type="button"
+                      className="tree-modal-cancel-btn"
+                      onClick={() => setShowCreateModuleModal(false)}
+                      disabled={openingStudio}
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="button"
+                      className="tree-modal-confirm-btn"
+                      onClick={() => void createFirstModule(newModuleTitle)}
+                      disabled={openingStudio || !newModuleTitle.trim()}
+                    >
+                      {openingStudio ? "Đang tạo..." : "Tạo chương"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="content-simple-tree">

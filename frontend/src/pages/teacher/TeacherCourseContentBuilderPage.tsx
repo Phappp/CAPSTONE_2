@@ -23,6 +23,7 @@ type CourseDetail = {
   language: string;
   learning_objectives?: string[] | string | null;
   prerequisites?: string[] | string | null;
+  price?: number | null;
   status: CourseStatus;
   published_at: string | null;
   publish_scheduled_at?: string | null;
@@ -76,6 +77,7 @@ export default function TeacherCourseDetailPage() {
     title: "",
     short_description: "",
     full_description: "",
+    price: "",
     level: "beginner",
     language: "vi",
     thumbnail_url: "",
@@ -87,6 +89,7 @@ export default function TeacherCourseDetailPage() {
     title: string;
     short_description: string;
     full_description: string;
+    price: string;
     level: string;
     language: string;
     thumbnail_url: string;
@@ -116,6 +119,7 @@ export default function TeacherCourseDetailPage() {
       form.title !== initialForm.title ||
       form.short_description !== initialForm.short_description ||
       form.full_description !== initialForm.full_description ||
+      form.price !== initialForm.price ||
       form.level !== initialForm.level ||
       form.language !== initialForm.language ||
       form.thumbnail_url !== initialForm.thumbnail_url ||
@@ -230,6 +234,7 @@ export default function TeacherCourseDetailPage() {
       title: data.title ?? "",
       short_description: data.short_description ?? "",
       full_description: data.full_description ?? "",
+      price: data.price != null ? String(data.price) : "",
       level: data.level ?? "beginner",
       language: data.language ?? "vi",
       thumbnail_url: data.thumbnail_url ?? "",
@@ -332,6 +337,7 @@ export default function TeacherCourseDetailPage() {
         title: form.title,
         short_description: form.short_description,
         full_description: form.full_description,
+        price: form.price.trim() ? Number(form.price) : null,
         level: form.level,
         language: form.language,
         learning_objectives: form.learning_objectives.map((x) => x.trim()).filter(Boolean),
@@ -763,6 +769,18 @@ export default function TeacherCourseDetailPage() {
 
                   {/* Right Column */}
                   <div className="info-group">
+                    <div className="form-group">
+                      <label>Giá (VNĐ)</label>
+                      <input
+                        className="form-input"
+                        inputMode="numeric"
+                        value={form.price}
+                        onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))}
+                        disabled={loading || isReadOnlyByReview}
+                        placeholder="Để trống nếu miễn phí"
+                      />
+                    </div>
+
                     <div className="form-group">
                       <label>Cấp độ</label>
                       <select

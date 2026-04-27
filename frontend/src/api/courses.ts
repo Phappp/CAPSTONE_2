@@ -5,6 +5,9 @@ export const COURSES_API_BASE = "/api/v1/courses";
 export const COURSES_API = {
   createCourse: `${COURSES_API_BASE}`,
   myStats: `${COURSES_API_BASE}/my/stats`,
+  myRevenueSummary: `${COURSES_API_BASE}/my/revenue/summary`,
+  myRevenueTrend: `${COURSES_API_BASE}/my/revenue/trend`,
+  myRevenueTransactions: `${COURSES_API_BASE}/my/revenue/transactions`,
   myList: `${COURSES_API_BASE}/my`,
   adminPendingReview: `${COURSES_API_BASE}/admin/pending-review`,
   adminPendingLessonResources: `${COURSES_API_BASE}/admin/resources/pending-review`,

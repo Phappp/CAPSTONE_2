@@ -25,7 +25,43 @@ export default function TeacherDashboard() {
     draft: number;
     pending_review?: number;
     archived: number;
+    finance?: {
+      currency: string;
+      gross_revenue: number;
+      platform_fee_total: number;
+      net_revenue: number;
+      paid_orders: number;
+    };
   } | null>(null);
+  const [revenueSummary, setRevenueSummary] = useState<{
+    currency: string;
+    gross_revenue: number;
+    platform_fee_total: number;
+    net_revenue: number;
+    paid_orders: number;
+  } | null>(null);
+  const [revenueTrend, setRevenueTrend] = useState<
+    Array<{
+      date: string;
+      gross_revenue: number;
+      platform_fee_total: number;
+      net_revenue: number;
+      paid_orders: number;
+    }>
+  >([]);
+  const [revenueTransactions, setRevenueTransactions] = useState<
+    Array<{
+      order_id: number;
+      course_id: number;
+      gross_amount: number;
+      platform_fee_amount: number;
+      net_amount: number;
+      currency: string;
+      recognized_at: string;
+      status: "recognized" | "reversed";
+    }>
+  >([]);
+  const [financeLoading, setFinanceLoading] = useState(false);
   const [tab, setTab] = useState<"all" | "published" | "draft" | "pending_review" | "archived">(() => {
     try {
       const saved = window.localStorage.getItem(TAB_STORAGE_KEY);
@@ -200,11 +236,53 @@ export default function TeacherDashboard() {
     setResult(data);
   };
 
+  const fetchRevenue = async () => {
+    setFinanceLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (timeFilterEnabled && timeFrom) params.set("from", timeFrom);
+      if (timeFilterEnabled && timeTo) params.set("to", timeTo);
+
+      const [summaryRes, trendRes, txRes] = await Promise.all([
+        fetch(`${url}${COURSES_API.myRevenueSummary}?${params.toString()}`, {
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }),
+        fetch(`${url}${COURSES_API.myRevenueTrend}?${params.toString()}`, {
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }),
+        fetch(`${url}${COURSES_API.myRevenueTransactions}?${params.toString()}`, {
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }),
+      ]);
+      const summaryJson = await summaryRes.json().catch(() => ({}));
+      const trendJson = await trendRes.json().catch(() => ({}));
+      const txJson = await txRes.json().catch(() => ({}));
+      if (!summaryRes.ok) throw new Error(summaryJson?.message || "Không thể tải tổng quan doanh thu.");
+      if (!trendRes.ok) throw new Error(trendJson?.message || "Không thể tải xu hướng doanh thu.");
+      if (!txRes.ok) throw new Error(txJson?.message || "Không thể tải giao dịch doanh thu.");
+
+      setRevenueSummary(summaryJson as any);
+      setRevenueTrend(Array.isArray((trendJson as any)?.points) ? (trendJson as any).points : []);
+      setRevenueTransactions(Array.isArray((txJson as any)?.items) ? (txJson as any).items : []);
+    } finally {
+      setFinanceLoading(false);
+    }
+  };
+
   const refetch = async () => {
     setLoading(true);
     setError(null);
     try {
-      await Promise.all([fetchStats(), fetchList()]);
+      await Promise.all([fetchStats(), fetchList(), fetchRevenue()]);
     } catch (e: any) {
       setError(e?.message || "Đã xảy ra lỗi.");
     } finally {
@@ -262,7 +340,7 @@ export default function TeacherDashboard() {
       (async () => {
         setLoading(true);
         try {
-          await Promise.all([fetchStats(), fetchList({ nextPage: 1 })]);
+          await Promise.all([fetchStats(), fetchList({ nextPage: 1 }), fetchRevenue()]);
         } catch (e: any) {
           setError(e?.message || "Đã xảy ra lỗi.");
         } finally {
@@ -273,6 +351,14 @@ export default function TeacherDashboard() {
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, q, sort.sort_by, sort.sort_dir]);
+
+  useEffect(() => {
+    if (section !== "dashboard") return;
+    void fetchRevenue().catch(() => {
+      // ignore UI error noise, summary cards fallback to 0
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section, timeFilterEnabled, timeFrom, timeTo]);
 
   const handleSetStatus = async (
     courseId: number,
@@ -620,6 +706,26 @@ export default function TeacherDashboard() {
     );
   };
 
+  const formatVnd = (amount: number) => {
+    try {
+      return new Intl.NumberFormat("vi-VN", {
+        style: "currency",
+        currency: "VND",
+        maximumFractionDigits: 0,
+      }).format(amount);
+    } catch {
+      return `${amount} VND`;
+    }
+  };
+
+  const revenueLabels = revenueTrend.map((p) => {
+    const d = new Date(p.date);
+    return Number.isNaN(d.getTime())
+      ? p.date
+      : d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+  });
+  const revenueNetValues = revenueTrend.map((p) => Number(p.net_revenue || 0));
+
   return (
     <div className="teacher-dashboard">
       <div className="dashboard-container">
@@ -725,6 +831,45 @@ export default function TeacherDashboard() {
               ))}
             </div>
 
+            <div className="stats-grid revenue-stats-grid">
+              {[
+                {
+                  label: "Doanh thu gộp",
+                  value: formatVnd(Number(revenueSummary?.gross_revenue ?? stats?.finance?.gross_revenue ?? 0)),
+                  icon: "payments",
+                  color: "#16a34a",
+                },
+                {
+                  label: "Phí nền tảng",
+                  value: formatVnd(Number(revenueSummary?.platform_fee_total ?? stats?.finance?.platform_fee_total ?? 0)),
+                  icon: "account_balance",
+                  color: "#f59e0b",
+                },
+                {
+                  label: "Doanh thu ròng",
+                  value: formatVnd(Number(revenueSummary?.net_revenue ?? stats?.finance?.net_revenue ?? 0)),
+                  icon: "account_balance_wallet",
+                  color: "#2563eb",
+                },
+                {
+                  label: "Đơn đã thanh toán",
+                  value: String(Number(revenueSummary?.paid_orders ?? stats?.finance?.paid_orders ?? 0)),
+                  icon: "receipt_long",
+                  color: "#8b5cf6",
+                },
+              ].map((c) => (
+                <div key={c.label} className="stat-card">
+                  <div className="stat-card-icon" style={{ background: `${c.color}10`, color: c.color }}>
+                    <span className="material-symbols-outlined">{c.icon}</span>
+                  </div>
+                  <div className="stat-card-content">
+                    <div className="stat-card-value stat-card-value--money">{financeLoading ? "..." : c.value}</div>
+                    <div className="stat-card-title">{c.label}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
             {/* Charts Row 1 */}
             <div className="charts-row">
               <div className="chart-card">
@@ -772,12 +917,12 @@ export default function TeacherDashboard() {
 
               <div className="chart-card">
                 <div className="chart-card-header">
-                  <span className="chart-card-icon material-symbols-outlined">people</span>
-                  <h3 className="chart-card-title">Xu hướng học viên đăng ký</h3>
+                  <span className="chart-card-icon material-symbols-outlined">monitoring</span>
+                  <h3 className="chart-card-title">Xu hướng doanh thu ròng</h3>
                 </div>
                 <LineChart
-                  labels={learnersSeries.labels}
-                  values={learnersSeries.buckets}
+                  labels={revenueLabels.length ? revenueLabels : learnersSeries.labels}
+                  values={revenueNetValues.length ? revenueNetValues : learnersSeries.buckets}
                 />
               </div>
             </div>
@@ -811,6 +956,51 @@ export default function TeacherDashboard() {
                   <div className="quick-stat-value">—</div>
                   <div className="quick-stat-label">Đánh giá TB</div>
                 </div>
+              </div>
+            </div>
+
+            <div className="transactions-card">
+              <div className="chart-card-header">
+                <span className="chart-card-icon material-symbols-outlined">receipt_long</span>
+                <h3 className="chart-card-title">Giao dịch doanh thu gần đây</h3>
+              </div>
+              <div className="transactions-table-wrap">
+                <table className="transactions-table">
+                  <thead>
+                    <tr>
+                      <th>Mã đơn</th>
+                      <th>Ngày ghi nhận</th>
+                      <th>Doanh thu gộp</th>
+                      <th>Phí nền tảng</th>
+                      <th>Doanh thu ròng</th>
+                      <th>Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {revenueTransactions.length ? (
+                      revenueTransactions.slice(0, 8).map((t) => (
+                        <tr key={t.order_id}>
+                          <td>#{t.order_id}</td>
+                          <td>{new Date(t.recognized_at).toLocaleString("vi-VN")}</td>
+                          <td>{formatVnd(Number(t.gross_amount || 0))}</td>
+                          <td>{formatVnd(Number(t.platform_fee_amount || 0))}</td>
+                          <td>{formatVnd(Number(t.net_amount || 0))}</td>
+                          <td>
+                            <span className={`tx-status ${t.status === "recognized" ? "ok" : "warn"}`}>
+                              {t.status === "recognized" ? "Đã ghi nhận" : "Đảo bút toán"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="tx-empty">
+                          Chưa có giao dịch doanh thu trong khoảng thời gian đã chọn.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </>

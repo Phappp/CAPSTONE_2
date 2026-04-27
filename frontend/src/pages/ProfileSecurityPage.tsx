@@ -5,6 +5,7 @@ import AvatarMenu from "../components/AvatarMenu";
 import { url } from "../baseUrl";
 import { PROFILE_API } from "../api/profile";
 import { useAuth } from "../contexts/Auth";
+import { getAccessToken } from "../utils/authStorage";
 import "./ProfilePage.css";
 
 export default function ProfileSecurityPage() {
@@ -45,7 +46,7 @@ export default function ProfileSecurityPage() {
     setErrorMessage(null);
     setSuccessMessage(null);
     try {
-      const token = localStorage.getItem("access_token");
+      const token = getAccessToken();
       const res = await fetch(`${url}${PROFILE_API.changePassword}`, {
         method: "PUT",
         headers: {
@@ -78,7 +79,7 @@ export default function ProfileSecurityPage() {
     setErrorMessage(null);
     setSuccessMessage(null);
     try {
-      const token = localStorage.getItem("access_token");
+      const token = getAccessToken();
       const res = await fetch(`${url}${PROFILE_API.updateSecurity}`, {
         method: "PATCH",
         headers: {

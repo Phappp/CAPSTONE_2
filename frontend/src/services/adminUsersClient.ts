@@ -446,6 +446,26 @@ export type CourseManagerVerification = {
   updated_at: string;
 };
 
+export type AdminRevenueSummary = {
+  gross_amount: number;
+  system_fee_amount: number;
+  teacher_net_amount: number;
+  paid_orders: number;
+  refunded_orders: number;
+};
+
+export type AdminRevenueByTeacherItem = {
+  teacher_user_id: number;
+  teacher_name: string | null;
+  teacher_email: string | null;
+  gross_amount: number;
+  system_fee_amount: number;
+  teacher_net_amount: number;
+  paid_orders: number;
+  refunded_orders: number;
+  last_recognized_at: string | null;
+};
+
 export async function apiGetPendingReviewCourses(params: {
   accessToken: string;
   page?: number;
@@ -634,6 +654,50 @@ export async function apiReviewCourseManagerVerification(params: {
   if (!res.ok || data?.success === false) {
     throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_CM_VERIFICATION_REVIEW_FAILED");
   }
+}
+
+export async function apiGetAdminRevenueSummary(params: {
+  accessToken: string;
+  from?: string;
+  to?: string;
+}): Promise<AdminRevenueSummary> {
+  const q = new URLSearchParams();
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}${ADMIN_USERS_API.revenueSummary}${suffix}`, {
+    headers: { Authorization: `Bearer ${params.accessToken}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.success) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_REVENUE_SUMMARY_FAILED");
+  }
+  return data.data as AdminRevenueSummary;
+}
+
+export async function apiGetAdminRevenueByTeacher(params: {
+  accessToken: string;
+  page?: number;
+  limit?: number;
+  search?: string;
+  from?: string;
+  to?: string;
+}): Promise<{ items: AdminRevenueByTeacherItem[]; pagination: AdminUsersPagination }> {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.limit) q.set("limit", String(params.limit));
+  if (params.search?.trim()) q.set("search", params.search.trim());
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}${ADMIN_USERS_API.revenueByTeacher}${suffix}`, {
+    headers: { Authorization: `Bearer ${params.accessToken}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.success) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_REVENUE_BY_TEACHER_FAILED");
+  }
+  return data.data as { items: AdminRevenueByTeacherItem[]; pagination: AdminUsersPagination };
 }
 
 export async function apiGetOpenRouterConfig(params: {

@@ -249,6 +249,7 @@ export default function TeacherCourseOverviewPage() {
   const [rejectedResources, setRejectedResources] = useState<RejectedResourceItem[]>([]);
   const [pendingResources, setPendingResources] = useState<PendingResourceItem[]>([]);
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [withdrawingReview, setWithdrawingReview] = useState(false);
 
   const [graphModalOpen, setGraphModalOpen] = useState(false);
   const [graphLoading, setGraphLoading] = useState(false);
@@ -398,6 +399,31 @@ export default function TeacherCourseOverviewPage() {
       setError(e?.message || "Không thể gửi duyệt khóa học.");
     } finally {
       setSubmittingReview(false);
+    }
+  }, [courseId, load, token]);
+
+  const withdrawReviewRequest = useCallback(async () => {
+    if (!courseId || Number.isNaN(courseId)) return;
+    const confirmed = window.confirm("Thu hồi yêu cầu duyệt để quay về bản nháp và tiếp tục chỉnh sửa?");
+    if (!confirmed) return;
+    setWithdrawingReview(true);
+    setError(null);
+    try {
+      const res = await fetch(`${url}${COURSES_API.setStatus(courseId)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ status: "draft" }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { message?: string };
+      if (!res.ok) throw new Error(json?.message || "Không thể thu hồi yêu cầu duyệt.");
+      await load();
+    } catch (e: any) {
+      setError(e?.message || "Không thể thu hồi yêu cầu duyệt.");
+    } finally {
+      setWithdrawingReview(false);
     }
   }, [courseId, load, token]);
 
@@ -592,15 +618,26 @@ export default function TeacherCourseOverviewPage() {
             <div className="course-hero">
               <div className="course-hero-top-right">
                 {c.status === "pending_review" ? (
-                  <button
-                    className="btn-secondary"
-                    onClick={() => navigate(`/teacher/courses/${courseId}/content?tab=content`)}
-                    disabled={loading}
-                    title="Mở nội dung bị từ chối để sửa và gửi lại"
-                  >
-                    <span className="material-symbols-outlined">build</span>
-                    {rejectedResources.length > 0 ? `Mở mục cần sửa (${rejectedResources.length})` : "Mở mục cần sửa"}
-                  </button>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <button
+                      className="btn-secondary"
+                      onClick={() => navigate(`/teacher/courses/${courseId}/content?tab=content`)}
+                      disabled={loading || withdrawingReview}
+                      title="Mở nội dung bị từ chối để sửa và gửi lại"
+                    >
+                      <span className="material-symbols-outlined">build</span>
+                      {rejectedResources.length > 0 ? `Mở mục cần sửa (${rejectedResources.length})` : "Mở mục cần sửa"}
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      onClick={() => void withdrawReviewRequest()}
+                      disabled={loading || withdrawingReview}
+                      title="Thu hồi yêu cầu duyệt để quay về bản nháp"
+                    >
+                      <span className="material-symbols-outlined">undo</span>
+                      {withdrawingReview ? "Đang thu hồi..." : "Thu hồi yêu cầu duyệt"}
+                    </button>
+                  </div>
                 ) : (
                   <button
                     className="btn-primary"

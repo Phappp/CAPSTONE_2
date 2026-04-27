@@ -8,6 +8,7 @@ import GradeItem from '../../../../../internal/model/grade_items';
 import Submission from '../../../../../internal/model/submissions';
 import SubmissionAttachment from '../../../../../internal/model/submission_attachment';
 import CourseEnrollment from '../../../../../internal/model/course_enrollment';
+import LessonProgress from '../../../../../internal/model/lesson_progress';
 import LessonResource from '../../../../../internal/model/lesson_resource';
 import LessonResourceReviewEvent from '../../../../../internal/model/lesson_resource_review_event';
 import UserRole from '../../../../../internal/model/user_roles';
@@ -641,6 +642,28 @@ export class AssignmentServiceImpl implements AssignmentService {
       order: { id: 'DESC' } as any,
     });
     if (!assignment) throw new Error('Chưa có bài tập cho bài học này.');
+    const assignmentKind = parseAssignmentKind((assignment as any).assignment_kind);
+    const limitMinutes = Number((assignment as any).time_limit_minutes ?? 0);
+    if (assignmentKind === 'short_answer' && Number.isFinite(limitMinutes) && limitMinutes > 0) {
+      const progressRepo = AppDataSource.getRepository(LessonProgress);
+      const existingProgress = await progressRepo.findOne({
+        where: {
+          user_id: subjectUserId,
+          course_id: Number((mod as any).course_id),
+          lesson_id: lessonId,
+        } as any,
+      });
+      if (!existingProgress) {
+        await progressRepo.save(
+          progressRepo.create({
+            user_id: subjectUserId,
+            course_id: Number((mod as any).course_id),
+            lesson_id: lessonId,
+            time_spent_seconds: 0,
+          } as any)
+        );
+      }
+    }
 
     const fallbackAllowed: AssignmentFormat[] = ['pdf', 'docx', 'doc', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'zip', 'rar', '7z'];
     const allowedFormats = normalizeAllowedFormats(assignment.submission_format, fallbackAllowed);
@@ -667,7 +690,7 @@ export class AssignmentServiceImpl implements AssignmentService {
       max_resubmissions: Number((assignment as any).max_resubmissions ?? 1),
       allowed_formats: allowedFormats,
       attachments,
-      assignment_kind: parseAssignmentKind((assignment as any).assignment_kind),
+      assignment_kind: assignmentKind,
       short_answer_questions: mapShortAnswerQuestionsFromDb((assignment as any).short_answer_questions),
       time_limit_minutes:
         (assignment as any).time_limit_minutes != null ? Number((assignment as any).time_limit_minutes) : null,

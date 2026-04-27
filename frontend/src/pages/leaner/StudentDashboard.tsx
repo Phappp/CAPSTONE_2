@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+// StudentDashboard.tsx
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate, NavLink } from 'react-router-dom';
 import AvatarMenu from '../../components/AvatarMenu';
 import { COURSES_API } from '../../api/courses';
 import { url } from '../../baseUrl';
@@ -7,19 +8,21 @@ import { getAccessToken } from '../../utils/authStorage';
 import { useAuth } from '../../contexts/Auth';
 import './StudentDashboard.css';
 import {
-  Clock,
   BookOpen,
-  Search,
-  GraduationCap,
-  Award,
   TrendingUp,
+  Award,
+  Search,
+  ChevronLeft,
+  ChevronRight,
   Loader2,
   AlertCircle,
   Sparkles,
   Users,
   Layers3,
-  ListChecks,
-  ChevronRight
+  Target,
+  LayoutDashboard,
+  Menu,
+  X
 } from 'lucide-react';
 
 // Types
@@ -38,6 +41,7 @@ interface Course {
   learners_count?: number;
   modules_count?: number;
   lessons_count?: number;
+  instructor_name?: string;
 }
 
 interface SuggestedCourse {
@@ -51,6 +55,7 @@ interface SuggestedCourse {
   learners_count?: number;
   modules_count?: number;
   lessons_count?: number;
+  instructor_name?: string;
 }
 
 interface ApiResponse {
@@ -72,95 +77,184 @@ interface Stats {
   active: number;
   completed: number;
   inProgress: number;
+  overallProgress: number;
+  certificatesEarned: number;
 }
 
 type MainTab = 'myCourses' | 'suggested';
 
+// Helper: format date
+const formatDate = (dateString: string | null) => {
+  if (!dateString) return 'Chưa bắt đầu';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+};
+
+// Sidebar Menu Items
+const menuItems = [
+  { path: '/student/dashboard', label: 'Bảng điều khiển', icon: LayoutDashboard },
+  { path: '/courses', label: 'Khám phá khóa học', icon: BookOpen },
+];
+
 export default function StudentDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const displayName = user?.full_name?.trim() || user?.email || 'bạn';
+  const displayName = user?.full_name?.trim() || user?.email || 'Học viên';
 
   // UI State
-  const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [activeMainTab, setActiveMainTab] = useState<MainTab>('myCourses');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-  // States cho khóa học của tôi
+  // States for enrolled courses
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  // States cho thống kê
+  // Stats state
   const [stats, setStats] = useState<Stats>({
     total: 0,
     active: 0,
     completed: 0,
-    inProgress: 0
+    inProgress: 0,
+    overallProgress: 0,
+    certificatesEarned: 0
   });
 
-  // States cho gợi ý khóa học
+  // Suggested courses state
   const [suggested, setSuggested] = useState<SuggestedCourse[]>([]);
   const [suggestedLoading, setSuggestedLoading] = useState(false);
   const [suggestedError, setSuggestedError] = useState<string | null>(null);
 
+  // Refs for race condition protection
+  const enrolledRequestRef = useRef(0);
+  const enrolledAbortRef = useRef<AbortController | null>(null);
+  const statsRequestRef = useRef(0);
+  const suggestedRequestRef = useRef(0);
+
   const pageSize = 9;
 
+  const buildAuthHeaders = () => {
+    const token = getAccessToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  };
+
   // Fetch enrolled courses
-  const fetchEnrolledCourses = async () => {
+  const fetchEnrolledCourses = async (opts?: {
+    nextPage?: number;
+    nextStatus?: string;
+    nextSearch?: string;
+    silent?: boolean;
+  }) => {
+    const nextPage = opts?.nextPage ?? currentPage;
+    const nextStatus = opts?.nextStatus ?? statusFilter;
+    const nextSearch = opts?.nextSearch ?? debouncedSearchTerm;
+    const requestId = ++enrolledRequestRef.current;
+    enrolledAbortRef.current?.abort();
+    const controller = new AbortController();
+    enrolledAbortRef.current = controller;
     try {
-      setLoading(true);
-      const token = getAccessToken();
+      if (!opts?.silent) setLoading(true);
 
       const params = new URLSearchParams();
-      params.set('page', String(currentPage));
+      params.set('page', String(nextPage));
       params.set('page_size', String(pageSize));
-      if (statusFilter !== 'all') params.set('status', statusFilter);
-      if (searchTerm.trim()) params.set('q', searchTerm.trim());
+      if (nextStatus !== 'all') params.set('status', nextStatus);
+      if (nextSearch.trim()) params.set('q', nextSearch.trim());
 
       const res = await fetch(`${url}${COURSES_API.myEnrollments}?${params.toString()}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: buildAuthHeaders(),
+        signal: controller.signal,
       });
 
       const data = (await res.json().catch(() => ({}))) as Partial<ApiResponse> & { message?: string };
       if (!res.ok) {
         throw new Error(data?.message || 'Không thể tải danh sách khóa học');
       }
+      if (requestId !== enrolledRequestRef.current) return;
 
       const items = Array.isArray(data.items) ? (data.items as Course[]) : [];
       const total = typeof data.total === 'number' ? data.total : 0;
 
       setCourses(items);
-      setTotalPages(Math.ceil(total / pageSize));
-
-      // Calculate stats
-      setStats({
-        total,
-        active: items.filter(c => c.status === 'active').length,
-        completed: items.filter(c => c.status === 'completed').length,
-        inProgress: items.filter(c => c.status === 'active' && c.progress_percent > 0 && c.progress_percent < 100).length
-      });
-
+      setTotalPages(Math.max(1, Math.ceil(total / pageSize)));
       setError(null);
     } catch (err: any) {
+      if (err?.name === 'AbortError') return;
+      if (requestId !== enrolledRequestRef.current) return;
       setError(err?.message || 'Không thể tải danh sách khóa học');
     } finally {
-      setLoading(false);
+      if (requestId === enrolledRequestRef.current && !opts?.silent) {
+        setLoading(false);
+      }
+    }
+  };
+
+  // Fetch enrollment stats
+  const fetchEnrollmentStats = async () => {
+    const requestId = ++statsRequestRef.current;
+    try {
+      const headers = buildAuthHeaders();
+      const totalParams = new URLSearchParams({ page: '1', page_size: '1' });
+      const completedParams = new URLSearchParams({ page: '1', page_size: '1', status: 'completed' });
+      const activeParams = new URLSearchParams({ page: '1', page_size: '500', status: 'active' });
+
+      const [totalRes, completedRes, activeRes] = await Promise.all([
+        fetch(`${url}${COURSES_API.myEnrollments}?${totalParams.toString()}`, { headers }),
+        fetch(`${url}${COURSES_API.myEnrollments}?${completedParams.toString()}`, { headers }),
+        fetch(`${url}${COURSES_API.myEnrollments}?${activeParams.toString()}`, { headers }),
+      ]);
+
+      if (!totalRes.ok || !completedRes.ok || !activeRes.ok) {
+        throw new Error('Không thể tải thống kê học tập');
+      }
+
+      const [totalData, completedData, activeData] = await Promise.all([
+        totalRes.json().catch(() => ({} as Partial<ApiResponse>)),
+        completedRes.json().catch(() => ({} as Partial<ApiResponse>)),
+        activeRes.json().catch(() => ({} as Partial<ApiResponse>)),
+      ]);
+      if (requestId !== statsRequestRef.current) return;
+      
+      const total = typeof totalData.total === 'number' ? totalData.total : 0;
+      const completed = typeof completedData.total === 'number' ? completedData.total : 0;
+      const activeItems = Array.isArray(activeData.items) ? (activeData.items as Course[]) : [];
+      const active = activeItems.length;
+      const inProgress = activeItems.filter(
+        (c) => c.progress_percent > 0 && c.progress_percent < 100
+      ).length;
+      
+      const allItems = activeItems;
+      const avgProgress = allItems.length > 0 
+        ? Math.round(allItems.reduce((sum, c) => sum + c.progress_percent, 0) / allItems.length)
+        : 0;
+      
+      const certificatesEarned = completed;
+      
+      setStats({ total, active, completed, inProgress, overallProgress: avgProgress, certificatesEarned });
+    } catch {
+      if (requestId !== statsRequestRef.current) return;
+      setStats({ total: 0, active: 0, completed: 0, inProgress: 0, overallProgress: 0, certificatesEarned: 0 });
     }
   };
 
   // Fetch suggested courses
   const fetchSuggestedCourses = async () => {
+    const requestId = ++suggestedRequestRef.current;
     try {
       setSuggestedLoading(true);
       setSuggestedError(null);
-      const token = getAccessToken();
       const params = new URLSearchParams();
       params.set('page', '1');
       params.set('page_size', '6');
@@ -168,43 +262,60 @@ export default function StudentDashboard() {
       params.set('sort_dir', 'desc');
 
       const res = await fetch(`${url}${COURSES_API.catalog}?${params.toString()}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: buildAuthHeaders(),
       });
       const data = (await res.json().catch(() => ({}))) as Partial<CatalogResponse> & { message?: string };
       if (!res.ok) throw new Error(data?.message || 'Không thể tải gợi ý khóa học');
       const items = Array.isArray(data.items) ? (data.items as SuggestedCourse[]) : [];
+      if (requestId !== suggestedRequestRef.current) return;
       setSuggested(items.filter((course) => !course.is_enrolled));
     } catch (err: any) {
+      if (requestId !== suggestedRequestRef.current) return;
       setSuggestedError(err?.message || 'Không thể tải gợi ý khóa học');
       setSuggested([]);
     } finally {
-      setSuggestedLoading(false);
+      if (requestId === suggestedRequestRef.current) {
+        setSuggestedLoading(false);
+      }
     }
   };
 
-  useEffect(() => {
-    fetchEnrolledCourses();
-  }, [currentPage, statusFilter]);
-
   // Debounce search
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchTerm !== undefined) {
-        setCurrentPage(1);
-        fetchEnrolledCourses();
-      }
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
     }, 500);
-
-    return () => clearTimeout(timer);
+    return () => window.clearTimeout(timer);
   }, [searchTerm]);
 
+  // Reset page when filters change
   useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, debouncedSearchTerm]);
+
+  // Fetch courses when dependency changes
+  useEffect(() => {
+    void fetchEnrolledCourses({
+      nextPage: currentPage,
+      nextStatus: statusFilter,
+      nextSearch: debouncedSearchTerm,
+    });
+  }, [currentPage, statusFilter, debouncedSearchTerm]);
+
+  // Initial stats and suggestions
+  useEffect(() => {
+    void fetchEnrollmentStats();
     fetchSuggestedCourses();
   }, []);
 
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      enrolledAbortRef.current?.abort();
+    };
+  }, []);
+
+  // Navigation handlers
   const openLearningHub = (courseId: number, slug: string) => {
     navigate(`/my-courses/${courseId}/${slug}`);
   };
@@ -213,40 +324,34 @@ export default function StudentDashboard() {
     navigate(`/courses/${slug}`);
   };
 
-  const getLevelBadge = (level: string) => {
-    const levels: Record<string, { label: string; className: string }> = {
-      beginner: { label: 'Cơ bản', className: 'badge badge--green' },
-      intermediate: { label: 'Trung cấp', className: 'badge badge--blue' },
-      advanced: { label: 'Nâng cao', className: 'badge badge--purple' }
-    };
-    return levels[level] || { label: level, className: 'badge badge--gray' };
+  // Helper: get level text
+  const getLevelText = (level: string): string => {
+    switch (level) {
+      case 'beginner': return 'Cơ bản';
+      case 'intermediate': return 'Trung cấp';
+      case 'advanced': return 'Nâng cao';
+      default: return level;
+    }
   };
 
-  const getStatusBadge = (status: string) => {
-    const statuses: Record<string, { label: string; className: string }> = {
-      active: { label: 'Đang học', className: 'badge badge--green' },
-      completed: { label: 'Hoàn thành', className: 'badge badge--blue' },
-      dropped: { label: 'Đã dừng', className: 'badge badge--red' },
-      expired: { label: 'Hết hạn', className: 'badge badge--gray' }
-    };
-    return statuses[status] || { label: status, className: 'badge badge--gray' };
+  // Helper: get deadline class
+  const getDeadlineClass = (index: number): string => {
+    const classes = ['deadline-red', 'deadline-blue', 'deadline-teal'];
+    return classes[index % classes.length];
   };
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'Chưa học';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+  const getDeadlineColorClass = (index: number): string => {
+    const colors = ['text-red', 'text-blue', 'text-teal'];
+    return colors[index % colors.length];
   };
 
-  const toDisplayCount = (value?: number) => {
-    if (typeof value !== 'number' || Number.isNaN(value)) return '--';
-    return String(value);
-  };
+  // Study hours mock data
+  const getStudyHours = (): number[] => [2, 3, 1.5, 4, 2.5, 3.5, 1];
+  const studyHours = getStudyHours();
+  const maxHour = Math.max(...studyHours, 5);
+  const chartHeight = 120;
 
+  // Filter suggested courses
   const visibleSuggested = useMemo(() => {
     const enrolledIds = new Set(courses.map((c) => c.course_id));
     const enrolledSlugs = new Set(courses.map((c) => c.course_slug));
@@ -265,113 +370,170 @@ export default function StudentDashboard() {
     }
   };
 
+  const getModuleLabel = (course: Course) => {
+    const currentModule = Math.ceil((course.progress_percent / 100) * (course.modules_count || 10));
+    return `Chương ${currentModule}/${course.modules_count || 10}`;
+  };
+
   return (
-    <div className="studentDash">
-      {/* Header */}
-      <div className="studentDash__topbar">
-        <div className="studentDash__container">
-          <div className="studentDash__topbarInner">
-            <div className="studentDash__brand">
-              <GraduationCap className="studentDash__brandIcon" />
-              <h1 className="studentDash__title">Học viên Dashboard</h1>
-            </div>
-            <AvatarMenu />
-          </div>
-        </div>
-      </div>
+    <div className="app-layout">
+      {isMobileSidebarOpen && (
+        <button
+          type="button"
+          className="mobile-sidebar-overlay"
+          onClick={() => setIsMobileSidebarOpen(false)}
+          aria-label="Đóng menu điều hướng"
+        />
+      )}
 
-      <div className="studentDash__container studentDash__content">
-        {/* Welcome Section */}
-        {/* <div className="studentDash__hero">
-          <h2 className="studentDash__heroTitle">Xin chào, {displayName} 👋</h2>
-          <p className="studentDash__heroDesc">Theo dõi tiến trình học tập và khám phá kiến thức mới</p>
-        </div> */}
-
-        {/* Stats Cards - Always visible */}
-        <div className="studentDash__stats">
-          <div className="statCard">
-            <div className="statCard__row">
-              <div>
-                <p className="statCard__label">Tổng khóa học</p>
-                <p className="statCard__value">{stats.total}</p>
-              </div>
-              <div className="statCard__iconBox iconBox--blue" aria-hidden="true">
-                <BookOpen />
-              </div>
-            </div>
-          </div>
-
-          <div className="statCard">
-            <div className="statCard__row">
-              <div>
-                <p className="statCard__label">Đang học</p>
-                <p className="statCard__value">{stats.active}</p>
-              </div>
-              <div className="statCard__iconBox iconBox--green" aria-hidden="true">
-                <TrendingUp />
-              </div>
-            </div>
-          </div>
-
-          <div className="statCard">
-            <div className="statCard__row">
-              <div>
-                <p className="statCard__label">Đang tiến hành</p>
-                <p className="statCard__value">{stats.inProgress}</p>
-              </div>
-              <div className="statCard__iconBox iconBox--yellow" aria-hidden="true">
-                <Clock />
-              </div>
-            </div>
-          </div>
-
-          <div className="statCard">
-            <div className="statCard__row">
-              <div>
-                <p className="statCard__label">Hoàn thành</p>
-                <p className="statCard__value">{stats.completed}</p>
-              </div>
-              <div className="statCard__iconBox iconBox--purple" aria-hidden="true">
-                <Award />
-              </div>
-            </div>
-          </div>
+      {/* Sidebar */}
+      <aside className={`sidebar ${isMobileSidebarOpen ? 'is-open' : ''}`}>
+        <div className="sidebar-brand">
+          <h1 className="brand-name">MindBridge</h1>
+          <p className="brand-subtitle">CỔNG HỌC VIÊN</p>
         </div>
 
-        {/* Expandable Filters */}
-        <div className="expandable-filters">
-          <button 
-            className="expandable-filters__header"
-            onClick={() => setIsFilterExpanded(!isFilterExpanded)}
-            type="button"
-          >
-            <div className="expandable-filters__title">
-              <span className="material-symbols-outlined">filter_list</span>
-              <span>Bộ lọc tìm kiếm</span>
-            </div>
-            <span className="material-symbols-outlined expand-icon">
-              {isFilterExpanded ? 'expand_less' : 'expand_more'}
-            </span>
+        <nav className="sidebar-nav">
+          <ul className="nav-list">
+            {menuItems.map((item) => (
+              <li key={`${item.path}-${item.label}`}>
+                <NavLink
+                  to={item.path}
+                  className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+                  onClick={() => setIsMobileSidebarOpen(false)}
+                >
+                  <item.icon size={18} />
+                  <span>{item.label}</span>
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className="sidebar-footer">
+          <button className="view-progress-btn" onClick={() => navigate('/student/dashboard')}>
+            <TrendingUp size={16} />
+            Xem tiến độ
           </button>
           
-          {isFilterExpanded && (
-            <div className="expandable-filters__content">
-              <div className="filters-row">
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="main-content">
+        {/* Header Section */}
+        <section id="section-header">
+          <div className="container header-container">
+            <div className="header-top">
+              <button
+                type="button"
+                className="mobile-menu-btn"
+                onClick={() => setIsMobileSidebarOpen((prev) => !prev)}
+                aria-label={isMobileSidebarOpen ? 'Đóng menu' : 'Mở menu'}
+                aria-expanded={isMobileSidebarOpen}
+              >
+                {isMobileSidebarOpen ? <X size={20} /> : <Menu size={20} />}
+              </button>
+              <AvatarMenu />
+            </div>
+            
+          </div>
+        </section>
+
+        {/* Overview Section */}
+        <section id="section-overview">
+          <div className="container overview-container">
+            <div className="metrics-column">
+              <div className="metrics-grid">
+                {/* Card 1: Overall Progress */}
+                <div className="metric-card">
+                  <div className="metric-header">
+                    <div className="metric-icon-wrapper">
+                      <Target size={24} strokeWidth={1.5} color="#006b5f" />
+                    </div>
+                    {stats.overallProgress > 70 && <span className="pro-badge">PRO</span>}
+                  </div>
+                  <div className="metric-content">
+                    <span className="metric-label">Tiến độ tổng quan</span>
+                    <span className="metric-value">{stats.overallProgress}%</span>
+                  </div>
+                </div>
+                {/* Card 2: Courses in Progress */}
+                <div className="metric-card">
+                  <div className="metric-header">
+                    <div className="metric-icon-wrapper">
+                      <BookOpen size={24} strokeWidth={1.5} color="#006b5f" />
+                    </div>
+                  </div>
+                  <div className="metric-content">
+                    <span className="metric-label">Khóa học đang học</span>
+                    <span className="metric-value">{stats.active}</span>
+                  </div>
+                </div>
+                {/* Card 3: Certificates Earned */}
+                <div className="metric-card">
+                  <div className="metric-header">
+                    <div className="metric-icon-wrapper">
+                      <Award size={24} strokeWidth={1.5} color="#006b5f" />
+                    </div>
+                  </div>
+                  <div className="metric-content">
+                    <span className="metric-label">Chứng chỉ đạt được</span>
+                    <span className="metric-value">{stats.certificatesEarned}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Chart Card */}
+              <div className="chart-card">
+                <div className="chart-header">
+                  <div className="chart-title-group">
+                    <h3 className="chart-title">Hoạt động học tập</h3>
+                    <p className="chart-subtitle">Số giờ học trong 7 ngày gần nhất</p>
+                  </div>
+                  <div className="chart-legend">
+                    <span className="legend-dot"></span>
+                    <span className="legend-label">Giờ</span>
+                  </div>
+                </div>
+                <div className="chart-body">
+                  <div className="x-axis">
+                    {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day, idx) => (
+                      <div key={day} className="day-col">
+                        <div 
+                          className="bar" 
+                          style={{ 
+                            height: `${(studyHours[idx] / maxHour) * chartHeight}px`,
+                            width: '24px',
+                            backgroundColor: '#006b5f',
+                            borderRadius: '4px 4px 0 0',
+                            marginBottom: '8px'
+                          }}
+                        ></div>
+                        <span>{day}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Filter Section */}
+              <div className="filter-section">
                 <div className="search-field">
-                  <Search className="search-field__icon" />
+                  <Search size={18} className="search-icon" />
                   <input
                     type="text"
                     placeholder="Tìm kiếm khóa học..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="input"
+                    className="search-input"
                   />
                 </div>
-                <div className="filters-actions">
+                <div className="filter-actions">
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="select"
+                    className="filter-select"
                   >
                     <option value="all">Tất cả trạng thái</option>
                     <option value="active">Đang học</option>
@@ -379,321 +541,255 @@ export default function StudentDashboard() {
                     <option value="dropped">Đã dừng</option>
                     <option value="expired">Hết hạn</option>
                   </select>
+                  <button onClick={() => navigate('/courses')} className="explore-btn">
+                    <Sparkles size={16} />
+                    Khám phá thêm
+                  </button>
+                </div>
+
+                {/* Tabs */}
+                <div className="main-tabs">
                   <button
-                    onClick={() => navigate('/courses')}
-                    className="btn btn--primary"
+                    type="button"
+                    className={`tab-btn ${activeMainTab === 'myCourses' ? 'active' : ''}`}
+                    onClick={() => handleTabChange('myCourses')}
                   >
                     <BookOpen size={16} />
-                    Khám phá thêm
+                    Khóa học của tôi
+                  </button>
+                  <button
+                    type="button"
+                    className={`tab-btn ${activeMainTab === 'suggested' ? 'active' : ''}`}
+                    onClick={() => handleTabChange('suggested')}
+                  >
+                    <Sparkles size={16} />
+                    Gợi ý cho bạn
                   </button>
                 </div>
               </div>
             </div>
-          )}
-        </div>
 
-        {/* Main Tabs */}
-        <div className="main-tabs">
-          <button
-            type="button"
-            className={`tab-btn ${activeMainTab === 'myCourses' ? 'active' : ''}`}
-            onClick={() => handleTabChange('myCourses')}
-          >
-            <span className="material-symbols-outlined">folder_open</span>
-            Khóa học của tôi
-          </button>
-          <button
-            type="button"
-            className={`tab-btn ${activeMainTab === 'suggested' ? 'active' : ''}`}
-            onClick={() => handleTabChange('suggested')}
-          >
-            <span className="material-symbols-outlined">recommend</span>
-            Gợi ý cho bạn
-          </button>
-        </div>
+            {/* Sidebar Column - Deadlines & Promo */}
+            <div className="sidebar-column">
+              <div className="sidebar-card">
+                <div className="sidebar-header">
+                  <h3 className="sidebar-title">Hạn nộp sắp tới</h3>
+                  <button type="button" className="view-all" onClick={() => navigate('/courses')}>Xem tất cả</button>
+                </div>
+                <div className="deadline-list">
+                  {courses.filter(c => c.status === 'active' && c.progress_percent < 100).slice(0, 3).map((course, idx) => (
+                    <div key={course.id} className={`deadline-item ${getDeadlineClass(idx)}`}>
+                      <span className={`deadline-date ${getDeadlineColorClass(idx)}`}>
+                        {idx === 0 ? 'Sắp đến hạn' : formatDate(course.last_accessed_at) || 'Đang học'}
+                      </span>
+                      <h4 className="deadline-title">{course.course_title}</h4>
+                      <p className="deadline-course">Tiến độ: {course.progress_percent}%</p>
+                    </div>
+                  ))}
+                  {courses.filter(c => c.status === 'active').length === 0 && (
+                    <div className="deadline-item deadline-teal">
+                      <span className="deadline-date text-teal">Không có hạn nộp</span>
+                      <h4 className="deadline-title">Bạn đang theo kịp tiến độ!</h4>
+                      <p className="deadline-course">Khám phá thêm khóa học để tiếp tục học</p>
+                    </div>
+                  )}
+                </div>
 
-        {/* Tab Content: My Courses */}
-        {activeMainTab === 'myCourses' && (
-          <>
+                <div className="promo-box">
+                  <div className="promo-blur"></div>
+                  <div className="promo-content">
+                    <h4 className="promo-title">Nâng cấp gói Plus</h4>
+                    <p className="promo-desc">Mở khóa quyền truy cập không giới hạn vào các chứng chỉ chuyên nghiệp.</p>
+                    <button className="promo-btn">Tìm hiểu thêm</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Continue Learning Section */}
+        <section id="section-continue-learning">
+          <div className="container continue-learning-container">
+            <div className="section-header">
+              <h2 className="section-title">Tiếp tục học</h2>
+              <div className="nav-buttons">
+                <button 
+                  className="nav-btn" 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button 
+                  className="nav-btn"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+
             {/* Loading State */}
-            {loading && (
-              <div className="studentDash__center">
-                <Loader2 className="studentDash__brandIcon" style={{ animation: 'spin 1s linear infinite' }} />
+            {loading && activeMainTab === 'myCourses' && (
+              <div className="loading-center">
+                <Loader2 className="spinner" />
               </div>
             )}
 
             {/* Error State */}
-            {error && !loading && (
-              <div className="studentDash__error">
+            {error && activeMainTab === 'myCourses' && !loading && (
+              <div className="error-card">
                 <AlertCircle size={20} />
                 <div>
-                  <p className="studentDash__errorTitle">Có lỗi xảy ra</p>
-                  <p className="studentDash__errorMsg">{error}</p>
-                  <button
-                    onClick={fetchEnrolledCourses}
-                    className="btn btn--link"
-                  >
-                    Thử lại
-                  </button>
+                  <p className="error-title">Đã xảy ra lỗi</p>
+                  <p className="error-msg">{error}</p>
+                  <button onClick={() => fetchEnrolledCourses()} className="retry-btn">Thử lại</button>
                 </div>
+              </div>
+            )}
+
+            {/* My Courses Grid */}
+            {activeMainTab === 'myCourses' && !loading && !error && courses.length > 0 && (
+              <div className="courses-grid">
+                {courses.slice(0, 6).map((course) => (
+                  <div 
+                    key={course.id} 
+                    className="course-card"
+                    onClick={() => openLearningHub(course.course_id, course.course_slug)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openLearningHub(course.course_id, course.course_slug);
+                      }
+                    }}
+                    aria-label={`Mở khóa học ${course.course_title}`}
+                  >
+                    <div className="course-image-wrapper">
+                      {course.course_thumbnail ? (
+                        <img src={course.course_thumbnail} alt={course.course_title} className="course-image" />
+                      ) : (
+                        <div className="course-image-placeholder">
+                          <BookOpen size={40} strokeWidth={1} />
+                        </div>
+                      )}
+                      <span className="course-badge">{getModuleLabel(course)}</span>
+                    </div>
+                    <div className="course-info">
+                      <h4 className="course-title">{course.course_title}</h4>
+                      <p className="course-instructor">{course.instructor_name || 'Giảng viên khóa học'}</p>
+                      <div className="course-progress">
+                        <div className="progress-header">
+                          <span>Tiến độ</span>
+                          <span className="progress-percent">{course.progress_percent}%</span>
+                        </div>
+                        <div className="progress-bar-bg">
+                          <div className="progress-bar-fill" style={{ width: `${course.progress_percent}%` }}></div>
+                        </div>
+                      </div>
+                      <button className="resume-btn">Học tiếp</button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
             {/* Empty State */}
-            {!loading && !error && courses.length === 0 && (
-              <div className="studentDash__empty">
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12, color: '#9ca3af' }}>
-                  <BookOpen size={64} />
-                </div>
-                <h3 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 8px 0' }}>Chưa có khóa học nào</h3>
-                <p style={{ color: '#6b7280', margin: '0 0 18px 0' }}>
-                  Bạn chưa đăng ký khóa học nào. Hãy khám phá và đăng ký ngay!
-                </p>
-                <button
-                  onClick={() => navigate('/courses')}
-                  className="btn btn--primary"
-                >
-                  <BookOpen size={18} />
-                  Khám phá khóa học
-                </button>
+            {activeMainTab === 'myCourses' && !loading && !error && courses.length === 0 && (
+              <div className="empty-state">
+                <div className="empty-icon"><BookOpen size={48} strokeWidth={1} /></div>
+                <h3>Chưa có khóa học nào</h3>
+                <p>Bạn chưa đăng ký khóa học nào. Bắt đầu hành trình học ngay hôm nay!</p>
+                <button onClick={() => navigate('/courses')} className="btn-primary">Khám phá khóa học</button>
               </div>
             )}
 
-            {/* Course Grid */}
-            {!loading && !error && courses.length > 0 && (
-              <>
-                <div className="studentDash__grid">
-                  {courses.map((course) => {
-                    const level = getLevelBadge(course.course_level);
-                    const status = getStatusBadge(course.status);
-
-                    return (
-                      <div
-                        key={course.id}
-                        className="courseCard courseCard--clickable"
+            {/* Suggested Courses Tab */}
+            {activeMainTab === 'suggested' && (
+              <div className="suggested-section">
+                {suggestedLoading ? (
+                  <div className="loading-center">
+                    <Loader2 className="spinner" />
+                  </div>
+                ) : suggestedError ? (
+                  <div className="error-card">
+                    <AlertCircle size={20} />
+                    <div>
+                      <p className="error-title">Không thể tải gợi ý</p>
+                      <p className="error-msg">{suggestedError}</p>
+                      <button onClick={fetchSuggestedCourses} className="retry-btn">Thử lại</button>
+                    </div>
+                  </div>
+                ) : visibleSuggested.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon"><Sparkles size={48} strokeWidth={1} /></div>
+                    <h3>Chưa có gợi ý nào</h3>
+                    <p>Quay lại sau để xem các gợi ý khóa học phù hợp hơn.</p>
+                    <button onClick={() => navigate('/courses')} className="btn-primary">Xem tất cả khóa học</button>
+                  </div>
+                ) : (
+                  <div className="courses-grid">
+                    {visibleSuggested.slice(0, 6).map((course) => (
+                      <div 
+                        key={course.id} 
+                        className="course-card"
+                        onClick={() => openCoursePublicDetail(course.slug)}
                         role="button"
                         tabIndex={0}
-                        onClick={() => openLearningHub(course.course_id, course.course_slug)}
                         onKeyDown={(e) => {
-                          if (e.key !== 'Enter' && e.key !== ' ') return;
-                          openLearningHub(course.course_id, course.course_slug);
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            openCoursePublicDetail(course.slug);
+                          }
                         }}
-                        aria-label={`Mở khóa học: ${course.course_title}`}
+                        aria-label={`Xem chi tiết khóa học ${course.title}`}
                       >
-                        {/* Thumbnail */}
-                        <div className="courseCard__thumb">
-                          {course.course_thumbnail ? (
-                            <img
-                              src={course.course_thumbnail}
-                              alt={course.course_title}
-                            />
+                        <div className="course-image-wrapper">
+                          {course.thumbnail_url ? (
+                            <img src={course.thumbnail_url} alt={course.title} className="course-image" />
                           ) : (
-                            <div className="courseCard__thumbPlaceholder">
-                              <BookOpen size={48} />
+                            <div className="course-image-placeholder">
+                              <BookOpen size={40} strokeWidth={1} />
                             </div>
                           )}
-
-                          {/* Status Badge */}
-                          <div className="badgePosTopRight">
-                            <span className={status.className}>
-                              {status.label}
-                            </span>
-                          </div>
-
-                          {/* Level Badge */}
-                          <div className="badgePosBottomLeft">
-                            <span className={level.className}>
-                              {level.label}
-                            </span>
-                          </div>
+                          <span className="course-badge">{getLevelText(course.level)}</span>
                         </div>
-
-                        {/* Content */}
-                        <div className="courseCard__body">
-                          <h3 className="courseCard__title">
-                            {course.course_title}
-                          </h3>
-
-                          {/* Progress */}
-                          <div className="courseCard__progress">
-                            <div className="courseCard__progressRow">
-                              <span>Tiến độ</span>
-                              <span className="courseCard__progressPct">{course.progress_percent}%</span>
-                            </div>
-                            <div className="progressBar" role="progressbar" aria-valuenow={course.progress_percent} aria-valuemin={0} aria-valuemax={100}>
-                              <div
-                                className="progressBar__fill"
-                                style={{ width: `${course.progress_percent}%` }}
-                              />
-                            </div>
+                        <div className="course-info">
+                          <h4 className="course-title">{course.title}</h4>
+                          <p className="course-instructor">{course.instructor_name || 'Khóa học nổi bật'}</p>
+                          <div className="course-stats">
+                            <span className="stat-badge"><Users size={12} /> {course.learners_count || 0} học viên</span>
+                            <span className="stat-badge"><Layers3 size={12} /> {course.modules_count || 0} chương</span>
                           </div>
-
-                          {/* Course stats */}
-                          <div className="courseCard__quickStats">
-                            <div className="quickStat">
-                              <Users size={14} />
-                              <span>{toDisplayCount(course.learners_count)}</span>
-                            </div>
-                            <div className="quickStat">
-                              <Layers3 size={14} />
-                              <span>{toDisplayCount(course.modules_count)}</span>
-                            </div>
-                            <div className="quickStat">
-                              <ListChecks size={14} />
-                              <span>{toDisplayCount(course.lessons_count)}</span>
-                            </div>
-                          </div>
-
-                          {/* Completed badge */}
-                          {course.status === 'completed' && (
-                            <div className="courseCard__completed">
-                              <Award size={16} />
-                              <span>Hoàn thành: {formatDate(course.completed_at)}</span>
-                            </div>
-                          )}
+                          <button className="resume-btn">Xem chi tiết</button>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="studentDash__pagination">
-                    <button
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="btn btn--secondary"
-                    >
-                      Trước
-                    </button>
-                    <span className="studentDash__pageLabel">
-                      Trang {currentPage} / {totalPages}
-                    </span>
-                    <button
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="btn btn--secondary"
-                    >
-                      Sau
-                    </button>
+                    ))}
                   </div>
                 )}
-              </>
+              </div>
             )}
-          </>
-        )}
 
-        {/* Tab Content: Suggested Courses */}
-        {activeMainTab === 'suggested' && (
-          <div className="studentDash__suggested" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
-            {suggestedLoading ? (
-              <div className="studentDash__center" style={{ padding: '48px 0' }}>
-                <Loader2 className="studentDash__brandIcon" style={{ animation: 'spin 1s linear infinite' }} />
-              </div>
-            ) : suggestedError ? (
-              <div className="studentDash__error">
-                <AlertCircle size={20} />
-                <div>
-                  <p className="studentDash__errorTitle">Không thể tải gợi ý</p>
-                  <p className="studentDash__errorMsg">{suggestedError}</p>
-                  <button
-                    onClick={fetchSuggestedCourses}
-                    className="btn btn--link"
-                  >
-                    Thử lại
-                  </button>
-                </div>
-              </div>
-            ) : visibleSuggested.length === 0 ? (
-              <div className="studentDash__empty">
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12, color: '#9ca3af' }}>
-                  <Sparkles size={64} />
-                </div>
-                <h3 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 8px 0' }}>Chưa có gợi ý nào</h3>
-                <p style={{ color: '#6b7280', margin: '0 0 18px 0' }}>
-                  Hiện tại chưa có khóa học mới nào dành cho bạn. Hãy quay lại sau nhé!
-                </p>
-                <button
-                  onClick={() => navigate('/courses')}
-                  className="btn btn--primary"
-                >
-                  <BookOpen size={18} />
-                  Khám phá tất cả khóa học
+            {/* Pagination */}
+            {activeMainTab === 'myCourses' && totalPages > 1 && !loading && !error && courses.length > 0 && (
+              <div className="pagination">
+                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="page-btn">
+                  <ChevronLeft size={16} />
+                  Trước
+                </button>
+                <span className="page-info">Trang {currentPage} / {totalPages}</span>
+                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="page-btn">
+                  Sau
+                  <ChevronRight size={16} />
                 </button>
               </div>
-            ) : (
-              <>
-                <div className="studentDash__suggestedHeader">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Sparkles size={24} color="#2563eb" />
-                    <h3 className="studentDash__suggestedTitle">Gợi ý khóa học</h3>
-                    <span className="studentDash__suggestedBadge">Phổ biến nhất</span>
-                  </div>
-                  <button
-                    className="btn btn--secondary"
-                    type="button"
-                    onClick={() => navigate('/courses')}
-                  >
-                    Xem tất cả
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-
-                <div className="studentDash__grid">
-                  {visibleSuggested.map((course) => {
-                    const level = getLevelBadge(course.level);
-                    return (
-                      <div
-                        key={course.id}
-                        className="courseCard courseCard--clickable"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => openCoursePublicDetail(course.slug)}
-                        onKeyDown={(e) => {
-                          if (e.key !== 'Enter' && e.key !== ' ') return;
-                          openCoursePublicDetail(course.slug);
-                        }}
-                        aria-label={`Xem khóa học: ${course.title}`}
-                      >
-                        <div className="courseCard__thumb">
-                          {course.thumbnail_url ? (
-                            <img src={course.thumbnail_url} alt={course.title} />
-                          ) : (
-                            <div className="courseCard__thumbPlaceholder">
-                              <BookOpen size={48} />
-                            </div>
-                          )}
-                          <div className="badgePosBottomLeft">
-                            <span className={level.className}>{level.label}</span>
-                          </div>
-                        </div>
-                        <div className="courseCard__body">
-                          <h3 className="courseCard__title">{course.title}</h3>
-                          <div className="courseCard__quickStats">
-                            <div className="quickStat">
-                              <Users size={14} />
-                              <span>{toDisplayCount(course.learners_count)}</span>
-                            </div>
-                            <div className="quickStat">
-                              <Layers3 size={14} />
-                              <span>{toDisplayCount(course.modules_count)}</span>
-                            </div>
-                            <div className="quickStat">
-                              <ListChecks size={14} />
-                              <span>{toDisplayCount(course.lessons_count)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
             )}
           </div>
-        )}
-      </div>
+        </section>
+      </main>
     </div>
   );
 }

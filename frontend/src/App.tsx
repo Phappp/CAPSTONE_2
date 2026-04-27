@@ -27,6 +27,9 @@ import LearningModuleLessonsPage from "./pages/leaner/LearningModuleLessonsPage"
 import TeacherLessonRosterPage from "./pages/teacher/TeacherLessonRosterPage";
 import LearnerQuizTakePage from "./pages/leaner/LearnerQuizTakePage";
 import LearnerAssignmentSubmitPage from "./pages/leaner/LearnerAssignmentSubmitPage";
+import PaymentResultPage from "./pages/leaner/PaymentResultPage";
+import MockPaymentPage from "./pages/leaner/MockPaymentPage";
+import LearnerSidebarLayout from "./layouts/LearnerSidebarLayout";
 import Authentication from "./router/Authentication";
 import LandingPage from "./pages/LandingPage";
 import SystemStatusOrb from "./components/SystemStatusOrb";
@@ -76,45 +79,22 @@ export default function App() {
       />
 
       <Route
-        path="/courses"
-        element={
-          <Authentication>
-            <CoursesCatalogPage />
-          </Authentication>
-        }
-      />
-      <Route
-        path="/courses/:slug"
-        element={
-          <Authentication>
-            <CoursePublicDetailPage />
-          </Authentication>
-        }
-      />
-      <Route
-        path="/learning/:id/:slug"
         element={
           <Authentication allowedRoles={["learner", "student"]}>
-            <LearningPage />
+            <LearnerSidebarLayout />
           </Authentication>
         }
-      />
-      <Route
-        path="/learning/:id/:slug/modules/:moduleId"
-        element={
-          <Authentication allowedRoles={["learner", "student"]}>
-            <LearningModuleLessonsPage />
-          </Authentication>
-        }
-      />
-      <Route
-        path="/my-courses/:id/:slug"
-        element={
-          <Authentication allowedRoles={["learner", "student"]}>
-            <LearnerCourseHubPage />
-          </Authentication>
-        }
-      />
+      >
+        <Route path="/courses" element={<CoursesCatalogPage />} />
+        <Route path="/courses/:slug" element={<CoursePublicDetailPage />} />
+        <Route path="/learning/:id/:slug" element={<LearningPage />} />
+        <Route path="/learning/:id/:slug/modules/:moduleId" element={<LearningModuleLessonsPage />} />
+        <Route path="/my-courses/:id/:slug" element={<LearnerCourseHubPage />} />
+        <Route path="/learner/quiz/:courseId/:lessonId" element={<LearnerQuizTakePage />} />
+        <Route path="/learner/assignment/:lessonId" element={<LearnerAssignmentSubmitPage />} />
+        <Route path="/mock-payment" element={<MockPaymentPage />} />
+        <Route path="/payment-result" element={<PaymentResultPage />} />
+      </Route>
       <Route
         path="/teacher/courses/new"
         element={
@@ -184,22 +164,6 @@ export default function App() {
         element={
           <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherLessonStudioPage />
-          </Authentication>
-        }
-      />
-      <Route
-        path="/learner/quiz/:courseId/:lessonId"
-        element={
-          <Authentication allowedRoles={["learner", "student"]}>
-            <LearnerQuizTakePage />
-          </Authentication>
-        }
-      />
-      <Route
-        path="/learner/assignment/:lessonId"
-        element={
-          <Authentication allowedRoles={["learner", "student"]}>
-            <LearnerAssignmentSubmitPage />
           </Authentication>
         }
       />

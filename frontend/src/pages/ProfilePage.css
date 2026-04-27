@@ -5,8 +5,8 @@
 
 .profile-page-shell {
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
-  color: #0f172a;
-  background: #ffffff;
+  color: #091426;
+  background: #f7f9fb;
 }
 
 /* Header section */
@@ -30,8 +30,8 @@
   align-items: center;
   border-radius: 999px;
   padding: 0.3rem 0.75rem;
-  background: #e2f6ff;
-  color: #0b5f84;
+  background: #e9f7f5;
+  color: #006b5f;
   font-weight: 700;
   font-size: 0.75rem;
   text-transform: uppercase;
@@ -42,11 +42,11 @@
   margin-top: 0.6rem;
   font-size: clamp(1.6rem, 3vw, 2rem);
   font-weight: 700;
-  color: #0f172a;
+  color: #091426;
 }
 
 .profile-page-subtitle {
-  color: #475569;
+  color: #45474c;
   max-width: 680px;
   margin-top: 0.25rem;
   line-height: 1.5;
@@ -113,15 +113,15 @@
 /* Main card */
 .profile-main-card {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 24px;
-  box-shadow: 0 8px 30px -12px rgba(15, 23, 42, 0.12);
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   padding: 1.5rem 1.75rem;
   transition: box-shadow 0.2s ease;
 }
 
 .profile-main-card:hover {
-  box-shadow: 0 12px 40px -16px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 8px 22px rgba(9, 20, 38, 0.08);
 }
 
 /* Tab body */
@@ -151,16 +151,16 @@
 
 /* Glass card style */
 .profile-glass-card {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
   padding: 1.2rem;
   transition: all 0.2s ease;
 }
 
 .profile-glass-card:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  border-color: #dce5ec;
+  box-shadow: 0 6px 18px rgba(9, 20, 38, 0.07);
 }
 
 /* Avatar section */
@@ -170,9 +170,9 @@
   align-items: center;
   margin-bottom: 1.5rem;
   padding: 1rem 1.25rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
   flex-wrap: wrap;
 }
 
@@ -181,14 +181,14 @@
   height: 88px;
   border-radius: 50%;
   overflow: hidden;
-  background: linear-gradient(135deg, #00a8cc, #0f172a);
+  background: linear-gradient(135deg, #006b5f, #091426);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 2rem;
   font-weight: 700;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(0, 168, 204, 0.2);
+  box-shadow: 0 6px 14px rgba(0, 107, 95, 0.2);
 }
 
 .profile-avatar-img {
@@ -234,7 +234,7 @@
 .form-label {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #0f172a;
+  color: #091426;
 }
 
 .required-star {
@@ -245,10 +245,10 @@
 .form-input {
   width: 100%;
   padding: 12px 16px;
-  border: 1px solid #cbd5e1;
-  border-radius: 12px;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
   font-size: 0.9rem;
-  color: #0f172a;
+  color: #091426;
   outline: none;
   transition: all 0.2s ease;
   font-family: "Inter", sans-serif;
@@ -256,8 +256,8 @@
 }
 
 .form-input:focus {
-  border-color: #00a8cc;
-  box-shadow: 0 0 0 3px rgba(0, 168, 204, 0.1);
+  border-color: #006b5f;
+  box-shadow: 0 0 0 3px rgba(0, 107, 95, 0.12);
 }
 
 .form-input:disabled {
@@ -273,7 +273,7 @@
 
 .profile-field-hint {
   font-size: 0.75rem;
-  color: #64748b;
+  color: #45474c;
   line-height: 1.4;
 }
 
@@ -295,9 +295,9 @@
   gap: 0.3rem;
   max-width: 100%;
   border-radius: 999px;
-  border: 1px solid #bae6fd;
-  background: #f0f9ff;
-  color: #0c4a6e;
+  border: 1px solid #cde8e3;
+  background: #f3fbf9;
+  color: #0a4e45;
   padding: 0.22rem 0.35rem 0.22rem 0.6rem;
 }
 
@@ -318,12 +318,12 @@ textarea.form-input {
 .profile-stats-title {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #0f172a;
+  color: #091426;
   margin-bottom: 0.5rem;
 }
 
 .profile-info-card-subtitle {
-  color: #64748b;
+  color: #45474c;
   font-size: 0.75rem;
   line-height: 1.5;
   margin-bottom: 0.75rem;
@@ -354,14 +354,14 @@ textarea.form-input {
 }
 
 .profile-info-label {
-  color: #64748b;
+  color: #45474c;
   font-size: 0.8rem;
 }
 
 .profile-info-value {
   font-weight: 600;
   font-size: 0.8rem;
-  color: #0f172a;
+  color: #091426;
   text-align: right;
 }
 
@@ -428,8 +428,8 @@ textarea.form-input {
 
 .profile-security-item {
   padding: 0.9rem 1rem;
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  border: 1px solid #f1f5f9;
   background: #ffffff;
   display: flex;
   align-items: center;
@@ -439,8 +439,8 @@ textarea.form-input {
 }
 
 .profile-security-item:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  border-color: #dce5ec;
+  box-shadow: 0 4px 12px rgba(9, 20, 38, 0.06);
 }
 
 .profile-security-item-title {
@@ -476,7 +476,7 @@ textarea.form-input {
 }
 
 .profile-toggle-slider.active {
-  background: #0d9488;
+  background: #006b5f;
 }
 
 .profile-toggle-knob {
@@ -500,8 +500,8 @@ textarea.form-input {
 
 /* Security tips */
 .profile-security-tips {
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
   padding: 1rem 1.2rem;
   background: #f8fafc;
 }
@@ -545,11 +545,11 @@ textarea.form-input {
 
 /* Buttons */
 .primary-button {
-  background: linear-gradient(135deg, #0f172a, #1e293b);
+  background: #006b5f;
   color: #ffffff;
   border: none;
   padding: 0.7rem 1.5rem;
-  border-radius: 999px;
+  border-radius: 8px;
   font-weight: 600;
   font-size: 0.85rem;
   cursor: pointer;
@@ -560,9 +560,9 @@ textarea.form-input {
 }
 
 .primary-button:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.2);
-  background: linear-gradient(135deg, #1e293b, #0f172a);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 107, 95, 0.22);
+  background: #00584f;
 }
 
 .primary-button:disabled {
@@ -572,10 +572,10 @@ textarea.form-input {
 
 .secondary-button {
   background: transparent;
-  border: 1px solid #cbd5e1;
-  color: #0f172a;
+  border: 1px solid #dce5ec;
+  color: #091426;
   padding: 0.7rem 1.2rem;
-  border-radius: 999px;
+  border-radius: 8px;
   font-weight: 500;
   font-size: 0.85rem;
   cursor: pointer;
@@ -586,8 +586,8 @@ textarea.form-input {
 }
 
 .secondary-button:hover:not(:disabled) {
-  background: #f1f5f9;
-  border-color: #94a3b8;
+  background: #f7f9fb;
+  border-color: #006b5f;
   transform: translateY(-1px);
 }
 
@@ -600,17 +600,17 @@ textarea.form-input {
 .profile-success-message {
   margin-top: 1rem;
   padding: 0.75rem 1rem;
-  border-radius: 12px;
-  background: rgba(34, 197, 94, 0.08);
-  color: #166534;
+  border-radius: 8px;
+  background: rgba(0, 107, 95, 0.1);
+  color: #0a4e45;
   font-size: 0.8rem;
-  border: 1px solid rgba(34, 197, 94, 0.25);
+  border: 1px solid rgba(0, 107, 95, 0.25);
 }
 
 .error-box {
   background: #fef2f2;
   border: 1px solid #fecaca;
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 0.75rem 1rem;
   font-size: 0.8rem;
   color: #dc2626;
@@ -639,7 +639,7 @@ textarea.form-input {
 .profile-cropper-modal {
   width: min(440px, 90vw);
   background: #ffffff;
-  border-radius: 24px;
+  border-radius: 8px;
   padding: 1.25rem 1.5rem;
   box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.35);
   border: 1px solid #e2e8f0;
@@ -661,7 +661,7 @@ textarea.form-input {
 .profile-cropper-preview {
   width: 100%;
   aspect-ratio: 1 / 1;
-  border-radius: 16px;
+  border-radius: 8px;
   overflow: hidden;
   border: 1px solid #e2e8f0;
   margin-bottom: 1rem;
@@ -704,8 +704,8 @@ textarea.form-input {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  border: 1px solid #dbe4ee;
-  border-radius: 999px;
+  border: 1px solid #dce5ec;
+  border-radius: 8px;
   padding: 0.25rem 0.45rem 0.25rem 0.7rem;
   background: #fff;
 }
@@ -722,8 +722,8 @@ textarea.form-input {
 .profile-evidence-chip-btn {
   width: 24px;
   height: 24px;
-  border: 1px solid #cbd5e1;
-  border-radius: 999px;
+  border: 1px solid #dce5ec;
+  border-radius: 6px;
   background: #fff;
   color: #334155;
   display: inline-flex;

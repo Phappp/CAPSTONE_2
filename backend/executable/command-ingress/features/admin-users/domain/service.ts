@@ -5,6 +5,7 @@ import Role from '../../../../../internal/model/role';
 import AuditLog from '../../../../../internal/model/audit_log';
 import OpenRouterSetting from '../../../../../internal/model/openrouter_setting';
 import OpenRouterKey from '../../../../../internal/model/openrouter_key';
+import PaymentRevenueLedger from '../../../../../internal/model/payment_revenue_ledger';
 import {
   BulkUserActionRequest,
   CourseManagerVerificationItem,
@@ -18,6 +19,10 @@ import {
   UpdateOpenRouterKeyRequest,
   UpdateUserRoleRequest,
   UpdateUserStatusRequest,
+  AdminRevenueSummary,
+  AdminRevenueSummaryQuery,
+  AdminRevenueByTeacherQuery,
+  AdminRevenueByTeacherResult,
 } from '../types';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -1217,6 +1222,103 @@ export class AdminUserService {
     await repo.save(picked);
     const plain = this.decrypt(picked.key_encrypted);
     return { key: plain, key_id: picked.id };
+  }
+
+  async getRevenueSummary(
+    actorUserId: number,
+    query: AdminRevenueSummaryQuery,
+  ): Promise<AdminRevenueSummary> {
+    await this.assertAdmin(actorUserId);
+    const ledgerRepo = AppDataSource.getRepository(PaymentRevenueLedger);
+    const qb = ledgerRepo.createQueryBuilder('l');
+    qb.where('1=1');
+    if (query.from) qb.andWhere('l.recognized_at >= :from', { from: query.from });
+    if (query.to) qb.andWhere('l.recognized_at <= :to', { to: query.to });
+
+    const [paid, refunded] = await Promise.all([
+      qb.clone()
+        .andWhere('l.status = :status', { status: 'recognized' })
+        .select('COALESCE(SUM(l.gross_amount), 0)', 'gross_amount')
+        .addSelect('COALESCE(SUM(l.system_fee_amount), 0)', 'system_fee_amount')
+        .addSelect('COALESCE(SUM(l.net_amount), 0)', 'teacher_net_amount')
+        .addSelect('COUNT(1)', 'paid_orders')
+        .getRawOne<{ gross_amount: string; system_fee_amount: string; teacher_net_amount: string; paid_orders: string }>(),
+      qb.clone()
+        .andWhere('l.status = :status', { status: 'reversed' })
+        .select('COUNT(1)', 'refunded_orders')
+        .getRawOne<{ refunded_orders: string }>(),
+    ]);
+
+    return {
+      gross_amount: Number(paid?.gross_amount || 0),
+      system_fee_amount: Number(paid?.system_fee_amount || 0),
+      teacher_net_amount: Number(paid?.teacher_net_amount || 0),
+      paid_orders: Number(paid?.paid_orders || 0),
+      refunded_orders: Number(refunded?.refunded_orders || 0),
+    };
+  }
+
+  async listRevenueByTeacher(
+    actorUserId: number,
+    query: AdminRevenueByTeacherQuery,
+  ): Promise<AdminRevenueByTeacherResult> {
+    await this.assertAdmin(actorUserId);
+    const page = query.page > 0 ? query.page : 1;
+    const limit = query.limit > 0 && query.limit <= 100 ? query.limit : 10;
+    const offset = (page - 1) * limit;
+    const ledgerRepo = AppDataSource.getRepository(PaymentRevenueLedger);
+    const baseQb = ledgerRepo.createQueryBuilder('l')
+      .leftJoin(User, 'u', 'u.id = l.teacher_user_id');
+
+    if (query.from) baseQb.andWhere('l.recognized_at >= :from', { from: query.from });
+    if (query.to) baseQb.andWhere('l.recognized_at <= :to', { to: query.to });
+    if (query.search?.trim()) {
+      baseQb.andWhere('(u.full_name LIKE :search OR u.email LIKE :search OR CAST(l.teacher_user_id AS CHAR) LIKE :search)', {
+        search: `%${query.search.trim()}%`,
+      });
+    }
+
+    const rows = await baseQb.clone()
+      .select('l.teacher_user_id', 'teacher_user_id')
+      .addSelect('MAX(u.full_name)', 'teacher_name')
+      .addSelect('MAX(u.email)', 'teacher_email')
+      .addSelect(`COALESCE(SUM(CASE WHEN l.status = 'recognized' THEN l.gross_amount ELSE 0 END), 0)`, 'gross_amount')
+      .addSelect(`COALESCE(SUM(CASE WHEN l.status = 'recognized' THEN l.system_fee_amount ELSE 0 END), 0)`, 'system_fee_amount')
+      .addSelect(`COALESCE(SUM(CASE WHEN l.status = 'recognized' THEN l.net_amount ELSE 0 END), 0)`, 'teacher_net_amount')
+      .addSelect(`COALESCE(SUM(CASE WHEN l.status = 'recognized' THEN 1 ELSE 0 END), 0)`, 'paid_orders')
+      .addSelect(`COALESCE(SUM(CASE WHEN l.status = 'reversed' THEN 1 ELSE 0 END), 0)`, 'refunded_orders')
+      .addSelect('MAX(l.recognized_at)', 'last_recognized_at')
+      .groupBy('l.teacher_user_id')
+      .orderBy('teacher_net_amount', 'DESC')
+      .addOrderBy('l.teacher_user_id', 'DESC')
+      .offset(offset)
+      .limit(limit)
+      .getRawMany<any>();
+
+    const totalRow = await baseQb.clone()
+      .select('COUNT(DISTINCT l.teacher_user_id)', 'total')
+      .getRawOne<{ total: string }>();
+    const total = Number(totalRow?.total || 0);
+
+    return {
+      items: (rows || []).map((row: any) => ({
+        teacher_user_id: Number(row.teacher_user_id),
+        teacher_name: row.teacher_name ? String(row.teacher_name) : null,
+        teacher_email: row.teacher_email ? String(row.teacher_email) : null,
+        gross_amount: Number(row.gross_amount || 0),
+        system_fee_amount: Number(row.system_fee_amount || 0),
+        teacher_net_amount: Number(row.teacher_net_amount || 0),
+        paid_orders: Number(row.paid_orders || 0),
+        refunded_orders: Number(row.refunded_orders || 0),
+        last_recognized_at: row.last_recognized_at ? new Date(row.last_recognized_at).toISOString() : null,
+      })),
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
   }
 }
 
