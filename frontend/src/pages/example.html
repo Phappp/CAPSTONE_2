@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Course Marketplace</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        body {
+            background: #f3f5f7;
+            padding: 20px;
+            color: #1f2937;
+        }
+
+        /* Layout */
+        .wrapper {
+            display: flex;
+            gap: 30px;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 240px;
+            background: #f3f5f7;
+        }
+
+        .sidebar h3 {
+            font-size: 18px;
+            margin-bottom: 18px;
+        }
+
+        .filter-group {
+            margin-bottom: 28px;
+        }
+
+        .filter-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 14px;
+        }
+
+        .filter-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .filter-item input {
+            width: 16px;
+            height: 16px;
+            accent-color: #0f9d8a;
+        }
+
+        .clear-btn {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #0f9d8a;
+            background: #fff;
+            color: #0f9d8a;
+            font-weight: 700;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: .3s;
+        }
+
+        .clear-btn:hover {
+            background: #0f9d8a;
+            color: #fff;
+        }
+
+        /* Content */
+        .content {
+            flex: 1;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 22px;
+        }
+
+        .topbar h2 {
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .sort {
+            font-size: 14px;
+        }
+
+        .sort strong {
+            margin-left: 8px;
+        }
+
+        /* Grid */
+        .course-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 28px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .08);
+        }
+
+        .card img {
+            width: 100%;
+            height: 160px;
+            object-fit: cover;
+        }
+
+        .badge {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: #0f9d8a;
+            color: #fff;
+            font-size: 11px;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .image-wrap {
+            position: relative;
+        }
+
+        .card-body {
+            padding: 16px;
+        }
+
+        .course-title {
+            font-size: 18px;
+            font-weight: 700;
+            line-height: 1.4;
+            margin-bottom: 8px;
+        }
+
+        .instructor {
+            color: #777;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .rating {
+            color: #f5b301;
+            font-size: 14px;
+            margin-bottom: 14px;
+        }
+
+        .bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .price {
+            font-size: 28px;
+            font-weight: 800;
+        }
+
+        .view-btn {
+            background: #0f9d8a;
+            color: #fff;
+            padding: 12px 18px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        .view-btn:hover {
+            opacity: .9;
+        }
+
+        /* Pagination */
+        .pagination {
+            margin-top: 35px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .page {
+            width: 38px;
+            height: 38px;
+            border: 1px solid #d6d6d6;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .page.active {
+            background: #0f9d8a;
+            color: #fff;
+            border-color: #0f9d8a;
+        }
+
+        /* Responsive */
+        @media(max-width:1100px) {
+            .course-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media(max-width:768px) {
+            .wrapper {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+            }
+
+            .course-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="wrapper">
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <h3>☰ Categories</h3>
+
+            <div class="filter-group">
+                <div class="filter-item"><input checked type="checkbox"> AI & Machine Learning</div>
+                <div class="filter-item"><input type="checkbox"> Business Strategy</div>
+                <div class="filter-item"><input type="checkbox"> Tech Stack Mastery</div>
+                <div class="filter-item"><input type="checkbox"> Design & UX</div>
+            </div>
+
+            <div class="filter-group">
+                <div class="filter-title">Difficulty</div>
+                <div class="filter-item"><input type="checkbox"> Beginner</div>
+                <div class="filter-item"><input checked type="checkbox"> Professional</div>
+                <div class="filter-item"><input type="checkbox"> Expert</div>
+            </div>
+
+            <div class="filter-group">
+                <div class="filter-title">Instructor</div>
+                <div class="filter-item"><input type="checkbox"> Top Rated</div>
+                <div class="filter-item"><input type="checkbox"> Verified Only</div>
+            </div>
+
+            <button class="clear-btn">Clear All Filters</button>
+        </aside>
+
+        <!-- Content -->
+        <main class="content">
+
+            <div class="topbar">
+                <h2>Showing 248 premium courses</h2>
+                <div class="sort">Sort by: <strong>Most Popular ▼</strong></div>
+            </div>
+
+            <div class="course-grid">
+
+                <!-- Card -->
+                <div class="card">
+                    <div class="image-wrap">
+                        <span class="badge">AI/ML</span>
+                        <img src="https://images.unsplash.com/photo-1518770660439-4636190af475?w=800" />
+                    </div>
+                    <div class="card-body">
+                        <div class="course-title">Advanced Neural Networks & Deep Learning</div>
+                        <div class="instructor">Dr. Sarah Jenkins</div>
+                        <div class="rating">★★★★★ (4.9)</div>
+                        <div class="bottom">
+                            <div class="price">$129.99</div>
+                            <button class="view-btn">View Course</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="image-wrap">
+                        <span class="badge">BUSINESS</span>
+                        <img src="https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=800" />
+                    </div>
+                    <div class="card-body">
+                        <div class="course-title">Strategic Product Management Masterclass</div>
+                        <div class="instructor">Marcus Thorne</div>
+                        <div class="rating">★★★★★ (4.7)</div>
+                        <div class="bottom">
+                            <div class="price">$89.99</div>
+                            <button class="view-btn">View Course</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="image-wrap">
+                        <span class="badge">TECH</span>
+                        <img src="https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=800" />
+                    </div>
+                    <div class="card-body">
+                        <div class="course-title">Full-Stack Development with Modern Architectures</div>
+                        <div class="instructor">Elena Rodriguez</div>
+                        <div class="rating">★★★★★ (4.8)</div>
+                        <div class="bottom">
+                            <div class="price">$149.99</div>
+                            <button class="view-btn">View Course</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="image-wrap">
+                        <span class="badge">AI/ML</span>
+                        <img src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5ce?w=800" />
+                    </div>
+                    <div class="card-body">
+                        <div class="course-title">Data Engineering for Scalable Analytics</div>
+                        <div class="instructor">Dr. James Wilson</div>
+                        <div class="rating">★★★★★ (5.0)</div>
+                        <div class="bottom">
+                            <div class="price">$114.99</div>
+                            <button class="view-btn">View Course</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="image-wrap">
+                        <span class="badge">DESIGN</span>
+                        <img src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=800" />
+                    </div>
+                    <div class="card-body">
+                        <div class="course-title">UX Research Methods & Behavioral Analytics</div>
+                        <div class="instructor">Sophia Chen</div>
+                        <div class="rating">★★★★★ (4.6)</div>
+                        <div class="bottom">
+                            <div class="price">$79.99</div>
+                            <button class="view-btn">View Course</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="image-wrap">
+                        <span class="badge">BUSINESS</span>
+                        <img src="https://images.unsplash.com/photo-1552664730-d307ca884978?w=800" />
+                    </div>
+                    <div class="card-body">
+                        <div class="course-title">Agile Leadership & Organizational Growth</div>
+                        <div class="instructor">David Grahams</div>
+                        <div class="rating">★★★★★ (4.9)</div>
+                        <div class="bottom">
+                            <div class="price">$99.99</div>
+                            <button class="view-btn">View Course</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination">
+                <div class="page">‹</div>
+                <div class="page active">1</div>
+                <div class="page">2</div>
+                <div class="page">3</div>
+                <div class="page">...</div>
+                <div class="page">12</div>
+                <div class="page">›</div>
+            </div>
+
+        </main>
+    </div>
+
+</body>
+
+</html>

@@ -15,17 +15,24 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
   // Enrollment routes
   router.route('/:id/enroll').post(requireAuthorizedUser, controller.enrollCourse.bind(controller));
   router.route('/my-enrollments').get(requireAuthorizedUser, controller.listMyEnrollments.bind(controller));
+  router.route('/my/learning-activity').get(requireAuthorizedUser, controller.getMyLearningActivity.bind(controller));
   router.route('/:id/learning').get(requireAuthorizedUser, controller.getMyLearningCourse.bind(controller));
   router.route('/:id/progress').get(requireAuthorizedUser, controller.getMyCourseProgress.bind(controller));
   router.route('/:id/leaderboard').get(requireAuthorizedUser, controller.getCourseLeaderboard.bind(controller));
   router.route('/:id/lessons/:lessonId/progress').post(requireAuthorizedUser, controller.addLessonProgressHeartbeat.bind(controller));
   router.route('/:id/lessons/:lessonId/complete').post(requireAuthorizedUser, controller.completeLesson.bind(controller));
+  router.route('/:id/lessons/:lessonId/summary').get(requireAuthorizedUser, controller.getLessonSummary.bind(controller));
+  router.route('/:id/lessons/:lessonId/summary/request').post(requireAuthorizedUser, controller.requestLessonSummary.bind(controller));
+  router.route('/:id/lessons/:lessonId/summary/regenerate').post(requireAuthorizedUser, controller.regenerateLessonSummary.bind(controller));
   router.route('/:id/lessons/:lessonId/quiz/take').get(requireAuthorizedUser, controller.getLearnerQuizTake.bind(controller));
   router.route('/:id/lessons/:lessonId/quiz/submit').post(requireAuthorizedUser, controller.submitLearnerQuizTake.bind(controller));
   /** Giảng viên: điểm quiz theo từng học viên (ghi danh). */
   router
     .route('/:id/lessons/:lessonId/quiz/learner-scores')
     .get(requireAuthorizedUser, controller.listQuizLearnerScoresForLesson.bind(controller));
+  router
+    .route('/:id/lessons/:lessonId/quiz/attempts/:attemptId')
+    .get(requireAuthorizedUser, controller.getQuizAttemptDetailForTeacher.bind(controller));
 
   // Create course
   router.route('/').post(requireAuthorizedUser, controller.createCourse.bind(controller));
@@ -80,6 +87,7 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
   router.route('/:id').patch(requireAuthorizedUser, controller.updateMyCourse.bind(controller));
   router.route('/:id/status').patch(requireAuthorizedUser, controller.setMyCourseStatus.bind(controller));
   router.route('/:id').delete(requireAuthorizedUser, controller.softDeleteMyCourse.bind(controller));
+  router.route('/:id/permanent').delete(requireAuthorizedUser, controller.hardDeleteMyCourse.bind(controller));
 
   return router;
 };

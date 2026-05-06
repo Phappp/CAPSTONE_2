@@ -364,6 +364,7 @@ export type PendingLessonResource = {
   size_bytes: number | null;
   preview_url: string | null;
   review_status: "pending" | "approved" | "rejected";
+  review_decision?: "add" | "update" | "delete";
   review_reason: string | null;
   reviewed_by: number | null;
   reviewed_at: string | null;

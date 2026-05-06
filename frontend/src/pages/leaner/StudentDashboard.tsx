@@ -1,7 +1,8 @@
 // StudentDashboard.tsx
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, NavLink } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import AvatarMenu from '../../components/AvatarMenu';
+import CoursesCatalogPage from './CoursesCatalogPage';
 import { COURSES_API } from '../../api/courses';
 import { url } from '../../baseUrl';
 import { getAccessToken } from '../../utils/authStorage';
@@ -21,8 +22,7 @@ import {
   Layers3,
   Target,
   LayoutDashboard,
-  Menu,
-  X
+  Compass,
 } from 'lucide-react';
 
 // Types
@@ -81,6 +81,15 @@ interface Stats {
   certificatesEarned: number;
 }
 
+interface LearningActivityDay {
+  date: string;
+  lessons_completed: number;
+}
+
+interface LearningActivityData {
+  daily_activity: LearningActivityDay[];
+}
+
 type MainTab = 'myCourses' | 'suggested';
 
 // Helper: format date
@@ -96,18 +105,18 @@ const formatDate = (dateString: string | null) => {
 
 // Sidebar Menu Items
 const menuItems = [
-  { path: '/student/dashboard', label: 'Bảng điều khiển', icon: LayoutDashboard },
-  { path: '/courses', label: 'Khám phá khóa học', icon: BookOpen },
+  { path: '/student/dashboard', search: '?tab=myCourses', label: 'Bảng điều khiển', icon: LayoutDashboard },
+  { path: '/student/dashboard', search: '?tab=suggested', label: 'Khám phá khóa học', icon: BookOpen },
 ];
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const displayName = user?.full_name?.trim() || user?.email || 'Học viên';
 
   // UI State
   const [activeMainTab, setActiveMainTab] = useState<MainTab>('myCourses');
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // States for enrolled courses
   const [courses, setCourses] = useState<Course[]>([]);
@@ -134,11 +143,15 @@ export default function StudentDashboard() {
   const [suggestedLoading, setSuggestedLoading] = useState(false);
   const [suggestedError, setSuggestedError] = useState<string | null>(null);
 
+  // Learning activity state
+  const [studyHours, setStudyHours] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
+
   // Refs for race condition protection
   const enrolledRequestRef = useRef(0);
   const enrolledAbortRef = useRef<AbortController | null>(null);
   const statsRequestRef = useRef(0);
   const suggestedRequestRef = useRef(0);
+  const activityRequestRef = useRef(0);
 
   const pageSize = 9;
 
@@ -306,6 +319,7 @@ export default function StudentDashboard() {
   useEffect(() => {
     void fetchEnrollmentStats();
     fetchSuggestedCourses();
+    void fetchLearningActivity();
   }, []);
 
   // Cleanup
@@ -345,10 +359,28 @@ export default function StudentDashboard() {
     return colors[index % colors.length];
   };
 
-  // Study hours mock data
-  const getStudyHours = (): number[] => [2, 3, 1.5, 4, 2.5, 3.5, 1];
-  const studyHours = getStudyHours();
-  const maxHour = Math.max(...studyHours, 5);
+  // Fetch learning activity
+  const fetchLearningActivity = async () => {
+    const requestId = ++activityRequestRef.current;
+    try {
+      const res = await fetch(`${url}${COURSES_API.myLearningActivity}`, {
+        headers: buildAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Không thể tải hoạt động học tập');
+      const data = (await res.json().catch(() => ({}))) as Partial<LearningActivityData>;
+      if (requestId !== activityRequestRef.current) return;
+
+      const dailyActivity = Array.isArray(data.daily_activity) ? data.daily_activity : [];
+      console.log('[DEBUG] daily_activity:', dailyActivity);
+      const hours = dailyActivity.map(d => d.lessons_completed);
+      console.log('[DEBUG] hours:', hours);
+      setStudyHours(hours.length === 7 ? hours : [0, 0, 0, 0, 0, 0, 0]);
+    } catch {
+      if (requestId !== activityRequestRef.current) return;
+      setStudyHours([0, 0, 0, 0, 0, 0, 0]);
+    }
+  };
+  const maxHour = Math.max(...studyHours, 1);
   const chartHeight = 120;
 
   // Filter suggested courses
@@ -363,8 +395,19 @@ export default function StudentDashboard() {
     });
   }, [suggested, courses]);
 
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'suggested') {
+      setActiveMainTab('suggested');
+      if (visibleSuggested.length === 0) fetchSuggestedCourses();
+      return;
+    }
+    setActiveMainTab('myCourses');
+  }, [searchParams, visibleSuggested.length]);
+
   const handleTabChange = (tab: MainTab) => {
     setActiveMainTab(tab);
+    setSearchParams({ tab });
     if (tab === 'suggested' && visibleSuggested.length === 0) {
       fetchSuggestedCourses();
     }
@@ -375,74 +418,61 @@ export default function StudentDashboard() {
     return `Chương ${currentModule}/${course.modules_count || 10}`;
   };
 
+  const location = useLocation();
+
+  const navItems = [
+    { path: "/student/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { path: "/courses", label: "Khám phá", icon: Compass },
+  ];
+
+  const showNavSidebar = activeMainTab !== 'suggested';
+
   return (
     <div className="app-layout">
-      {isMobileSidebarOpen && (
-        <button
-          type="button"
-          className="mobile-sidebar-overlay"
-          onClick={() => setIsMobileSidebarOpen(false)}
-          aria-label="Đóng menu điều hướng"
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside className={`sidebar ${isMobileSidebarOpen ? 'is-open' : ''}`}>
-        <div className="sidebar-brand">
-          <h1 className="brand-name">MindBridge</h1>
-          <p className="brand-subtitle">CỔNG HỌC VIÊN</p>
-        </div>
-
-        <nav className="sidebar-nav">
-          <ul className="nav-list">
-            {menuItems.map((item) => (
-              <li key={`${item.path}-${item.label}`}>
-                <NavLink
-                  to={item.path}
-                  className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                  onClick={() => setIsMobileSidebarOpen(false)}
-                >
-                  <item.icon size={18} />
-                  <span>{item.label}</span>
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        <div className="sidebar-footer">
-          <button className="view-progress-btn" onClick={() => navigate('/student/dashboard')}>
-            <TrendingUp size={16} />
-            Xem tiến độ
-          </button>
-          
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="main-content">
-        {/* Header Section */}
-        <section id="section-header">
-          <div className="container header-container">
-            <div className="header-top">
-              <button
-                type="button"
-                className="mobile-menu-btn"
-                onClick={() => setIsMobileSidebarOpen((prev) => !prev)}
-                aria-label={isMobileSidebarOpen ? 'Đóng menu' : 'Mở menu'}
-                aria-expanded={isMobileSidebarOpen}
-              >
-                {isMobileSidebarOpen ? <X size={20} /> : <Menu size={20} />}
-              </button>
-              <AvatarMenu />
-            </div>
-            
+      {showNavSidebar && (
+        <nav className="catalog__nav">
+          <div className="catalog__navBrand">
+            <span className="catalog__navLogo">M</span>
           </div>
-        </section>
+          <div className="catalog__navItems">
+            {navItems.map((item) => {
+              const isActive = location.pathname === item.path || 
+                (item.path === "/courses" && location.pathname === "/courses") ||
+                (item.path === "/student/dashboard" && location.pathname === "/student/dashboard");
+              return (
+                <a
+                  key={item.path}
+                  href={item.path}
+                  className={`catalog__navItem ${isActive ? "catalog__navItem--active" : ""}`}
+                  title={item.label}
+                >
+                  <item.icon size={22} />
+                  <span className="catalog__navLabel">{item.label}</span>
+                </a>
+              );
+            })}
+          </div>
+        </nav>
+      )}
+      <main className="main-content">
+        {activeMainTab === 'suggested' ? (
+          <>
+            <CoursesCatalogPage />
+          </>
+        ) : (
+          <>
+            {/* Header Section */}
+            <section id="section-header">
+              <div className="container header-container">
+                <div className="header-top">
+                  <AvatarMenu />
+                </div>
+              </div>
+            </section>
 
-        {/* Overview Section */}
-        <section id="section-overview">
-          <div className="container overview-container">
+            {/* Overview Section */}
+            <section id="section-overview">
+              <div className="container overview-container">
             <div className="metrics-column">
               <div className="metrics-grid">
                 {/* Card 1: Overall Progress */}
@@ -489,84 +519,36 @@ export default function StudentDashboard() {
                 <div className="chart-header">
                   <div className="chart-title-group">
                     <h3 className="chart-title">Hoạt động học tập</h3>
-                    <p className="chart-subtitle">Số giờ học trong 7 ngày gần nhất</p>
+                    <p className="chart-subtitle">Số bài học hoàn thành trong 7 ngày gần nhất</p>
                   </div>
                   <div className="chart-legend">
                     <span className="legend-dot"></span>
-                    <span className="legend-label">Giờ</span>
+                    <span className="legend-label">Bài</span>
                   </div>
                 </div>
                 <div className="chart-body">
                   <div className="x-axis">
-                    {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day, idx) => (
-                      <div key={day} className="day-col">
-                        <div 
-                          className="bar" 
-                          style={{ 
-                            height: `${(studyHours[idx] / maxHour) * chartHeight}px`,
-                            width: '24px',
-                            backgroundColor: '#006b5f',
-                            borderRadius: '4px 4px 0 0',
-                            marginBottom: '8px'
-                          }}
-                        ></div>
-                        <span>{day}</span>
-                      </div>
-                    ))}
+                    {studyHours.map((_, idx) => {
+                      const date = new Date();
+                      date.setDate(date.getDate() - (6 - idx));
+                      const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+                      const dayName = dayNames[date.getDay()];
+                      return (
+                        <div key={idx} className="day-col">
+                          <div 
+                            className={`bar ${studyHours[idx] === 0 ? 'empty' : ''}`} 
+                            style={{ 
+                              height: `${(studyHours[idx] / maxHour) * chartHeight}px`,
+                            }}
+                          ></div>
+                          <span>{dayName}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
 
-              {/* Filter Section */}
-              <div className="filter-section">
-                <div className="search-field">
-                  <Search size={18} className="search-icon" />
-                  <input
-                    type="text"
-                    placeholder="Tìm kiếm khóa học..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="search-input"
-                  />
-                </div>
-                <div className="filter-actions">
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="filter-select"
-                  >
-                    <option value="all">Tất cả trạng thái</option>
-                    <option value="active">Đang học</option>
-                    <option value="completed">Hoàn thành</option>
-                    <option value="dropped">Đã dừng</option>
-                    <option value="expired">Hết hạn</option>
-                  </select>
-                  <button onClick={() => navigate('/courses')} className="explore-btn">
-                    <Sparkles size={16} />
-                    Khám phá thêm
-                  </button>
-                </div>
-
-                {/* Tabs */}
-                <div className="main-tabs">
-                  <button
-                    type="button"
-                    className={`tab-btn ${activeMainTab === 'myCourses' ? 'active' : ''}`}
-                    onClick={() => handleTabChange('myCourses')}
-                  >
-                    <BookOpen size={16} />
-                    Khóa học của tôi
-                  </button>
-                  <button
-                    type="button"
-                    className={`tab-btn ${activeMainTab === 'suggested' ? 'active' : ''}`}
-                    onClick={() => handleTabChange('suggested')}
-                  >
-                    <Sparkles size={16} />
-                    Gợi ý cho bạn
-                  </button>
-                </div>
-              </div>
             </div>
 
             {/* Sidebar Column - Deadlines & Promo */}
@@ -605,12 +587,12 @@ export default function StudentDashboard() {
                 </div>
               </div>
             </div>
-          </div>
-        </section>
+              </div>
+            </section>
 
-        {/* Continue Learning Section */}
-        <section id="section-continue-learning">
-          <div className="container continue-learning-container">
+            {/* Continue Learning Section */}
+            <section id="section-continue-learning">
+              <div className="container continue-learning-container">
             <div className="section-header">
               <h2 className="section-title">Tiếp tục học</h2>
               <div className="nav-buttons">
@@ -707,72 +689,6 @@ export default function StudentDashboard() {
               </div>
             )}
 
-            {/* Suggested Courses Tab */}
-            {activeMainTab === 'suggested' && (
-              <div className="suggested-section">
-                {suggestedLoading ? (
-                  <div className="loading-center">
-                    <Loader2 className="spinner" />
-                  </div>
-                ) : suggestedError ? (
-                  <div className="error-card">
-                    <AlertCircle size={20} />
-                    <div>
-                      <p className="error-title">Không thể tải gợi ý</p>
-                      <p className="error-msg">{suggestedError}</p>
-                      <button onClick={fetchSuggestedCourses} className="retry-btn">Thử lại</button>
-                    </div>
-                  </div>
-                ) : visibleSuggested.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-icon"><Sparkles size={48} strokeWidth={1} /></div>
-                    <h3>Chưa có gợi ý nào</h3>
-                    <p>Quay lại sau để xem các gợi ý khóa học phù hợp hơn.</p>
-                    <button onClick={() => navigate('/courses')} className="btn-primary">Xem tất cả khóa học</button>
-                  </div>
-                ) : (
-                  <div className="courses-grid">
-                    {visibleSuggested.slice(0, 6).map((course) => (
-                      <div 
-                        key={course.id} 
-                        className="course-card"
-                        onClick={() => openCoursePublicDetail(course.slug)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            openCoursePublicDetail(course.slug);
-                          }
-                        }}
-                        aria-label={`Xem chi tiết khóa học ${course.title}`}
-                      >
-                        <div className="course-image-wrapper">
-                          {course.thumbnail_url ? (
-                            <img src={course.thumbnail_url} alt={course.title} className="course-image" />
-                          ) : (
-                            <div className="course-image-placeholder">
-                              <BookOpen size={40} strokeWidth={1} />
-                            </div>
-                          )}
-                          <span className="course-badge">{getLevelText(course.level)}</span>
-                        </div>
-                        <div className="course-info">
-                          <h4 className="course-title">{course.title}</h4>
-                          <p className="course-instructor">{course.instructor_name || 'Khóa học nổi bật'}</p>
-                          <div className="course-stats">
-                            <span className="stat-badge"><Users size={12} /> {course.learners_count || 0} học viên</span>
-                            <span className="stat-badge"><Layers3 size={12} /> {course.modules_count || 0} chương</span>
-                          </div>
-                          <button className="resume-btn">Xem chi tiết</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Pagination */}
             {activeMainTab === 'myCourses' && totalPages > 1 && !loading && !error && courses.length > 0 && (
               <div className="pagination">
@@ -787,8 +703,10 @@ export default function StudentDashboard() {
                 </button>
               </div>
             )}
-          </div>
-        </section>
+              </div>
+            </section>
+          </>
+        )}
       </main>
     </div>
   );

@@ -19,6 +19,9 @@ export function isLikelyVideoResource(r: LessonResource): boolean {
   const mime = (r.mime_type || "").toLowerCase();
   const name = (r.filename || "").toLowerCase();
   const urlLower = (r.url || "").toLowerCase();
+  // Check resource_type field from database (can be 'video' or 'file')
+  const resType = (r as any).resource_type || "";
+  if (resType === "video") return true;
   if (mime.startsWith("video/")) return true;
   if (/\.(mp4|webm|ogg|mov|m4v|avi|mkv)$/.test(name)) return true;
   if (urlLower.includes("youtube.com") || urlLower.includes("youtu.be")) return true;
@@ -55,9 +58,11 @@ export function formatFileSize(bytes: number | null): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
 }
 
-export function getReviewStatusLabel(status?: LessonResource["review_status"]): { text: string; className: string } {
+export function getReviewStatusLabel(status?: LessonResource["review_status"], decision?: LessonResource["review_decision"]): { text: string; className: string } {
   if (status === "approved") return { text: "Đã duyệt", className: "approved" };
   if (status === "rejected") return { text: "Từ chối", className: "rejected" };
+  if (status === "pending" && decision === "delete") return { text: "Chờ xóa", className: "pending-delete" };
+  if (status === "pending" && decision === "update") return { text: "Chờ duyệt cập nhật", className: "pending" };
   return { text: "Chờ duyệt", className: "pending" };
 }
 

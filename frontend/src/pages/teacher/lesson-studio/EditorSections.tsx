@@ -327,11 +327,14 @@ export function ContentEditorSection({
                 <div className="video-info">
                   {currentYoutubeId ? <Youtube size={16} /> : <Video size={16} />}
                   <span className="video-name">{currentVideoResource.filename || currentVideoResource.url || "Video"}</span>
-                  <span className={`resource-review-badge ${getReviewStatusLabel(currentVideoResource.review_status).className}`}>
-                    {getReviewStatusLabel(currentVideoResource.review_status).text}
+                  <span className={`resource-review-badge ${getReviewStatusLabel(currentVideoResource.review_status, currentVideoResource.review_decision).className}`}>
+                    {getReviewStatusLabel(currentVideoResource.review_status, currentVideoResource.review_decision).text}
                   </span>
                   {currentVideoResource.review_status === "rejected" ? (
                     <RejectReasonButton reason={currentVideoResource.review_reason} />
+                  ) : null}
+                  {currentVideoResource.review_status === "pending" && currentVideoResource.review_decision === "delete" ? (
+                    <span className="resource-review-badge review-delete-pending">Đang chờ xóa</span>
                   ) : null}
                   {currentVideoResource.review_status === "pending" && currentVideoResource.is_resubmitted ? (
                     <span className="resource-review-badge review-pending">Đã gửi lại chờ duyệt</span>
@@ -369,10 +372,13 @@ export function ContentEditorSection({
                   <div className="resource-info">
                     <FileText size={16} />
                     <span className="resource-name">{r.filename || "Tài nguyên"}</span>
-                    <span className={`resource-review-badge ${getReviewStatusLabel(r.review_status).className}`}>
-                      {getReviewStatusLabel(r.review_status).text}
+                    <span className={`resource-review-badge ${getReviewStatusLabel(r.review_status, r.review_decision).className}`}>
+                      {getReviewStatusLabel(r.review_status, r.review_decision).text}
                     </span>
                     {r.review_status === "rejected" ? <RejectReasonButton reason={r.review_reason} /> : null}
+                    {r.review_status === "pending" && r.review_decision === "delete" ? (
+                      <span className="resource-review-badge review-delete-pending">Đang chờ xóa</span>
+                    ) : null}
                     {r.review_status === "pending" && r.is_resubmitted ? (
                       <span className="resource-review-badge review-pending">Đã gửi lại</span>
                     ) : null}
@@ -404,8 +410,8 @@ export function ContentEditorSection({
             <h2>Nội dung phụ</h2>
             {contentHtmlResource ? (
               <>
-                <span className={`resource-review-badge ${getReviewStatusLabel(contentHtmlResource.review_status).className}`}>
-                  {getReviewStatusLabel(contentHtmlResource.review_status).text}
+                <span className={`resource-review-badge ${getReviewStatusLabel(contentHtmlResource.review_status, contentHtmlResource.review_decision).className}`}>
+                  {getReviewStatusLabel(contentHtmlResource.review_status, contentHtmlResource.review_decision).text}
                 </span>
                 {contentHtmlResource.review_status === "rejected" ? (
                   <RejectReasonButton reason={contentHtmlResource.review_reason} />
@@ -496,8 +502,8 @@ export function QuizEditorSection({
             <h2>Quizz</h2>
             {quizReviewResource ? (
               <>
-                <span className={`resource-review-badge ${getReviewStatusLabel(quizReviewResource.review_status).className}`}>
-                  {getReviewStatusLabel(quizReviewResource.review_status).text}
+                <span className={`resource-review-badge ${getReviewStatusLabel(quizReviewResource.review_status, quizReviewResource.review_decision).className}`}>
+                  {getReviewStatusLabel(quizReviewResource.review_status, quizReviewResource.review_decision).text}
                 </span>
                 {quizReviewResource.review_status === "rejected" ? (
                   <RejectReasonButton reason={quizReviewResource.review_reason} />
