@@ -66,6 +66,7 @@ export default function TeacherCourseDetailPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccessOpen, setSaveSuccessOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<CourseStatus>("draft");
   const [form, setForm] = useState({
@@ -547,8 +548,8 @@ export default function TeacherCourseDetailPage() {
   };
 
   const del = async () => {
+    setDeleteDialogOpen(false);
     if (!ensureVerifiedForCourseActions()) return;
-    if (!window.confirm("Xóa khóa học? (soft delete)")) return;
     setLoading(true);
     setError(null);
     try {
@@ -561,6 +562,30 @@ export default function TeacherCourseDetailPage() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.message || "Không thể xóa khóa học.");
+      }
+      navigate("/teacher/dashboard");
+    } catch (e: any) {
+      setError(e?.message || "Đã xảy ra lỗi.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const hardDel = async () => {
+    setDeleteDialogOpen(false);
+    if (!ensureVerifiedForCourseActions()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${url}${COURSES_API.hardDelete(courseId)}`, {
+        method: "DELETE",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.message || "Không thể xóa vĩnh viễn khóa học.");
       }
       navigate("/teacher/dashboard");
     } catch (e: any) {
@@ -637,6 +662,46 @@ export default function TeacherCourseDetailPage() {
                   onClick={() => setSaveSuccessOpen(false)}
                 >
                   OK
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {deleteDialogOpen && (
+          <div className="save-success-modal-overlay" role="dialog" aria-modal="true">
+            <div className="save-success-modal">
+              <div className="save-success-modal-title">Xóa khóa học</div>
+              <div className="save-success-modal-message">
+                <p>Bạn có chắc chắn muốn xóa khóa học <strong>"{course?.title}"</strong> không?</p>
+                <p style={{ marginTop: "1rem" }}>Chọn loại xóa:</p>
+              </div>
+              <div className="save-success-modal-actions" style={{ flexDirection: "column", gap: "0.75rem" }}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  style={{ width: "100%", justifyContent: "center" }}
+                  onClick={() => del()}
+                  disabled={loading}
+                >
+                  Ẩn khóa học
+                </button>
+                <button
+                  type="button"
+                  className="course-action-danger"
+                  style={{ width: "100%", justifyContent: "center", padding: "0.625rem 1rem", borderRadius: "6px", border: "none", cursor: "pointer" }}
+                  onClick={() => hardDel()}
+                  disabled={loading}
+                >
+                  Xóa khóa học
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  style={{ width: "100%", justifyContent: "center" }}
+                  onClick={() => setDeleteDialogOpen(false)}
+                >
+                  Hủy
                 </button>
               </div>
             </div>
@@ -721,7 +786,7 @@ export default function TeacherCourseDetailPage() {
                   className="course-action-item course-action-danger"
                   onClick={() => {
                     setOpenStatusMenu(false);
-                    del();
+                    setDeleteDialogOpen(true);
                   }}
                   disabled={loading}
                 >
@@ -825,7 +890,7 @@ export default function TeacherCourseDetailPage() {
                     }
                     disabled={loading}
                   >
-                    Xóa
+                    Xóa 
                   </button>
                 </div>
               ))}

@@ -24,6 +24,12 @@ const env = cleanEnv(process.env, {
   MOMO_ENDPOINT: str({ default: '' }),
   PAYMENT_MOCK: bool({ default: false }),
   PLATFORM_FEE_RATE: num({ default: 0.2 }),
+  YOUTUBE_STT_ENABLED: bool({ default: false }),
+  YOUTUBE_STT_ENDPOINT: str({ default: '' }),
+  YOUTUBE_STT_MODEL: str({ default: 'large-v3' }),
+  YOUTUBE_STT_LANGUAGE: str({ default: 'vi' }),
+  YOUTUBE_STT_TIMEOUT_MS: num({ default: 120000 }),
+  YOUTUBE_STT_MAX_RETRIES: num({ default: 2 }),
 });
 
 export default env;

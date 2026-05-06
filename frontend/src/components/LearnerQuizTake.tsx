@@ -39,6 +39,7 @@ type QuizPayload = {
       question_text: string;
       selected_option_id: number | null;
       selected_option_text: string | null;
+      correct_option_ids: number[];
     }[];
   }[];
   questions: {
@@ -150,6 +151,10 @@ export default function LearnerQuizTake(props: {
     if (!result?.details) return new Map<number, SubmitResult["details"][0]>();
     return new Map(result.details.map((d) => [d.quiz_question_id, d]));
   }, [result]);
+  const questionByQq = useMemo(() => {
+    if (!quiz?.questions?.length) return new Map<number, QuizPayload["questions"][number]>();
+    return new Map(quiz.questions.map((q) => [q.quiz_question_id, q]));
+  }, [quiz]);
 
   return (
     <div className="learner-quiz-overlay" role="dialog" aria-modal="true" aria-labelledby="learner-quiz-title">
@@ -215,9 +220,40 @@ export default function LearnerQuizTake(props: {
                           <div style={{ fontWeight: 600, marginBottom: 4 }}>
                             Câu {idx + 1}: {ans.question_text}
                           </div>
-                          <div style={{ color: "#475569" }}>
-                            Đáp án đã chọn:{" "}
-                            <strong>{ans.selected_option_text || (ans.selected_option_id != null ? `#${ans.selected_option_id}` : "—")}</strong>
+                          <div className="learner-quiz-history-options">
+                            {(questionByQq.get(ans.quiz_question_id)?.options || []).map((opt) => {
+                              const selected = ans.selected_option_id != null && Number(ans.selected_option_id) === Number(opt.id);
+                              const correct = (ans.correct_option_ids || []).some((id) => Number(id) === Number(opt.id));
+                              const showCorrect = Boolean(quiz?.show_correct_answers);
+                              const isCorrectChoice = selected && correct;
+                              const isWrongChoice = selected && showCorrect && !correct;
+                              const isCorrectReveal = showCorrect && correct;
+                              return (
+                                <div
+                                  key={`${att.attempt_id}-${ans.quiz_question_id}-${opt.id}`}
+                                  className={[
+                                    "learner-quiz-history-option",
+                                    selected ? "is-selected" : "",
+                                    isCorrectChoice ? "is-correct-choice" : "",
+                                    isWrongChoice ? "is-wrong-choice" : "",
+                                    isCorrectReveal ? "is-correct-answer" : "",
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" ")}
+                                >
+                                  <span className="learner-quiz-history-option__label">{opt.option_text}</span>
+                                  <span className="learner-quiz-history-option__state">
+                                    {isCorrectChoice
+                                      ? "Ban chon (Dung)"
+                                      : isWrongChoice
+                                        ? "Ban chon"
+                                        : isCorrectReveal
+                                          ? "Dap an dung"
+                                          : ""}
+                                  </span>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       ))
@@ -266,22 +302,19 @@ export default function LearnerQuizTake(props: {
                 })}
               </div>
             ))}
-          </div>
-        ) : null}
-
-        {!loading && quiz && attemptsLeft > 0 && !result ? (
-          <div className="learner-quiz-footer">
-            <button type="button" className="learner-quiz-btn-ghost" onClick={onClose}>
-              Hủy
-            </button>
-            <button
-              type="button"
-              className="learner-quiz-btn-primary"
-              disabled={!allAnswered || submitting}
-              onClick={() => void handleSubmit()}
-            >
-              {submitting ? "Đang nộp…" : "Nộp bài"}
-            </button>
+            <div className="learner-quiz-footer">
+              <button type="button" className="learner-quiz-btn-ghost" onClick={onClose}>
+                Hủy
+              </button>
+              <button
+                type="button"
+                className="learner-quiz-btn-primary"
+                disabled={!allAnswered || submitting}
+                onClick={() => void handleSubmit()}
+              >
+                {submitting ? "Đang nộp…" : "Nộp bài"}
+              </button>
+            </div>
           </div>
         ) : null}
 
@@ -314,11 +347,11 @@ export default function LearnerQuizTake(props: {
                 })}
               </div>
             ) : null}
-            <div className="learner-quiz-footer" style={{ borderTop: "none", justifyContent: "center" }}>
+            {/* <div className="learner-quiz-footer" style={{ borderTop: "none", justifyContent: "center" }}>
               <button type="button" className="learner-quiz-btn-primary" onClick={onClose}>
                 Đóng
               </button>
-            </div>
+            </div> */}
           </div>
         ) : null}
       </div>

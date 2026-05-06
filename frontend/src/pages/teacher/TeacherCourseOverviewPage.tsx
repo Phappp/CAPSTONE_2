@@ -681,6 +681,10 @@ export default function TeacherCourseOverviewPage() {
                   <span className="material-symbols-outlined">format_list_bulleted</span>
                   Nội dung
                 </button>
+                <button className="btn-secondary" onClick={() => navigate(`/teacher/courses/${courseId}/grading`)}>
+                  <span className="material-symbols-outlined">assignment_turned_in</span>
+                  Chấm điểm
+                </button>
                 <button className="btn-secondary" onClick={openGraphModal}>
                   <span className="material-symbols-outlined">account_tree</span>
                   Sơ đồ tiên quyết
