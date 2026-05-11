@@ -45,6 +45,7 @@ type AuthContextValue = {
   user: AuthUser | null;
   accessToken: string | null;
   refreshToken: string | null;
+  remember: boolean;
   login: (params: LoginParams & { remember?: boolean; redirect?: boolean }) => Promise<AuthResponse | void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
@@ -666,6 +667,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     user,
     accessToken,
     refreshToken,
+    remember,
     login,
     loginWithGoogle,
     logout,

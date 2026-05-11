@@ -1,5 +1,5 @@
 // CommonModal.tsx
-import { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback } from "react";
 import {
   X,
   Info,
@@ -15,7 +15,8 @@ export type ModalVariant = "info" | "warning" | "error" | "success" | "question"
 type CommonModalProps = {
   open: boolean;
   title: string;
-  message: string;
+  message?: string;
+  children?: React.ReactNode;
   variant?: ModalVariant;
   confirmText?: string;
   cancelText?: string;
@@ -49,6 +50,7 @@ export default function CommonModal(props: CommonModalProps) {
     open,
     title,
     message,
+    children,
     variant = "info",
     confirmText = "Đồng ý",
     cancelText = "Hủy",
@@ -130,7 +132,7 @@ export default function CommonModal(props: CommonModalProps) {
         </div>
 
         <div className="common-modal-body">
-          <p className="common-modal-message">{message}</p>
+          {children ? children : <p className="common-modal-message">{message}</p>}
         </div>
 
         <div className="common-modal-footer">

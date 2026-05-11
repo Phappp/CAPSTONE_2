@@ -17,6 +17,14 @@ class GoogleIdentityBroker {
     clientSecret: string,
     redirectURL: string,
   }) {
+    // #region DEBUG: Hypothesis C - Broker receives values
+    // console.log('[DEBUG-C1] GoogleIdentityBroker constructor received:', {
+    //   clientID: data.clientID || '[UNDEFINED]',
+    //   clientSecret: data.clientSecret ? '[SET]' : '[UNDEFINED]',
+    //   redirectURL: data.redirectURL || '[UNDEFINED]',
+    // });
+    // #endregion
+
     const { clientID, clientSecret, redirectURL } = data;
 
     if (!clientID) {

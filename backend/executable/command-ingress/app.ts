@@ -33,6 +33,11 @@ import initQuestionBankRoute from './features/question-bank/adapter/route';
 import initPaymentRoute from './features/payments/adapter/route';
 import { PaymentController } from './features/payments/adapter/controller';
 import { PaymentServiceImpl } from './features/payments/domain/service';
+import initLiveSessionRoute from './features/live-session/adapter/route';
+import { LiveSessionController } from './features/live-session/adapter/controller';
+import { LiveSessionServiceImpl } from './features/live-session/domain/service';
+import initAiShortAnswerRoute from './features/ai-short-answer/adapter/route';
+import { AiShortAnswerController } from './features/ai-short-answer/adapter/controller';
 
 
 const app = express();
@@ -45,7 +50,6 @@ const createHttpServer = (redisClient: any) => {
     app.use(logger);
   }
   app.use(cors());
-  app.use(morgan('combined'));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
@@ -76,6 +80,8 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/v1', initAssignmentRoute(new AssignmentController(new AssignmentServiceImpl())));
   app.use('/api/v1/question-banks', initQuestionBankRoute());
   app.use('/api/v1/payments', initPaymentRoute(new PaymentController(new PaymentServiceImpl())));
+  app.use('/api/v1/live-sessions', initLiveSessionRoute(new LiveSessionController(new LiveSessionServiceImpl())));
+  app.use('/api/v1/ai', initAiShortAnswerRoute(new AiShortAnswerController()));
   app.use(recoverMiddleware);
 
   // app.use('/search', searchRouter);

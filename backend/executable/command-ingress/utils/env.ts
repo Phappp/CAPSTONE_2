@@ -30,6 +30,7 @@ const env = cleanEnv(process.env, {
   YOUTUBE_STT_LANGUAGE: str({ default: 'vi' }),
   YOUTUBE_STT_TIMEOUT_MS: num({ default: 120000 }),
   YOUTUBE_STT_MAX_RETRIES: num({ default: 2 }),
+  STARTUP_SCAN_TRANSCRIPTS: bool({ default: true }),
 });
 
 export default env;

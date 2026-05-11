@@ -260,7 +260,7 @@ export class AuthServiceImpl implements AuthService {
     const sessionID = uuidv4();
     const session = sessionRepository.create({
       sessionID,
-      userID: String(user.id),
+      userID: user.id,
     });
     await sessionRepository.save(session);
 
@@ -415,7 +415,7 @@ export class AuthServiceImpl implements AuthService {
     const sessionID = uuidv4();
     const session = sessionRepository.create({
       sessionID,
-      userID: String(user.id),
+      userID: user.id,
     });
     await sessionRepository.save(session);
 
@@ -478,7 +478,7 @@ export class AuthServiceImpl implements AuthService {
     const sessionID = uuidv4();
     const session = sessionRepository.create({
       sessionID: sessionID,
-      userID: String(user.id)
+      userID: user.id
     });
     await sessionRepository.save(session);
 
@@ -538,7 +538,7 @@ export class AuthServiceImpl implements AuthService {
     const sessionID = uuidv4();
     const session = sessionRepository.create({
       sessionID,
-      userID: String(user.id),
+      userID: user.id,
     });
     await sessionRepository.save(session);
 
@@ -611,7 +611,7 @@ export class AuthServiceImpl implements AuthService {
     const sessionID = uuidv4();
     const session = sessionRepository.create({
       sessionID,
-      userID: String(user.id),
+      userID: user.id,
     });
     await sessionRepository.save(session);
 

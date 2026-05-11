@@ -170,7 +170,7 @@ export default function MockPaymentPage() {
         {order ? (
           <div className="mock-checkout__layout">
             <section className="mock-checkout__panel">
-              <div className="mock-chip">Checkout Demo (auto success)</div>
+              {/* <div className="mock-chip">Demo thanh toán (tự động thành công)</div> */}
               <h3 className="mock-checkout__panelTitle">Chọn phương thức thanh toán</h3>
               <p className="mock-checkout__panelDesc">
                 Trải nghiệm luồng thanh toán như môi trường thật. Giao dịch demo sẽ tự động thành công.

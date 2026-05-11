@@ -452,7 +452,7 @@ export default function AdminDashboard() {
       showNotice("Bạn phải nhập lý do xóa mềm.", "Lỗi", "error");
       return;
     }
-    if (!window.confirm(`Soft delete ${target.email} (ID: ${target.id})?`)) return;
+    if (!window.confirm(`Xóa tài khoản ${target.email} (ID: ${target.id})? Thao tác sẽ đưa tài khoản vào thùng rác.`)) return;
     try {
       await apiSoftDeleteUser({ userId: target.id, reason: reason.trim(), accessToken: accessToken || "" });
       await usersQuery.refetch();

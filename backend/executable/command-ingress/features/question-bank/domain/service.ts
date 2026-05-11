@@ -101,6 +101,7 @@ export class QuestionBankServiceImpl implements QuestionBankService {
                 throw new Error('Câu hỏi trắc nghiệm phải có ít nhất 1 đáp án đúng.');
             }
         }
+        // short_answer, essay, fill_blank không cần options validation
     }
 
     private getOpenRouterEncryptionKey(): Buffer {
@@ -167,7 +168,9 @@ export class QuestionBankServiceImpl implements QuestionBankService {
             points: req.points || 1.0,
             created_by: req.user_id,
             is_ai_generated: false,
-            options: mappedOptions
+            options: mappedOptions,
+            max_length: req.max_length ?? null,
+            grading_notes: req.grading_notes ?? null
         });
 
         const savedQuestion = await questionRepo.save(newQuestion);
@@ -304,6 +307,8 @@ export class QuestionBankServiceImpl implements QuestionBankService {
         points?: number;
         options?: Array<{ option_text: string; is_correct: boolean; explanation?: string }>;
         explanation?: string;
+        max_length?: number | null;
+        grading_notes?: string | null;
       }
     ): Promise<any> {
         await this.assertCourseManagerOrAdmin(userId);
@@ -329,6 +334,8 @@ export class QuestionBankServiceImpl implements QuestionBankService {
         if (payload.tags !== undefined) question.tags = payload.tags;
         if (payload.points !== undefined) question.points = payload.points;
         if (payload.explanation !== undefined) question.explanation = payload.explanation;
+        if (payload.max_length !== undefined) question.max_length = payload.max_length;
+        if (payload.grading_notes !== undefined) question.grading_notes = payload.grading_notes;
 
         if (payload.options !== undefined) {
             question.options = payload.options.map((opt, index) => {
@@ -362,18 +369,18 @@ export class QuestionBankServiceImpl implements QuestionBankService {
         topic: string;
         question_count?: number;
         difficulty?: 'easy' | 'medium' | 'hard';
-        question_type?: 'multiple_choice' | 'true_false' | 'mixed';
+        question_type?: 'multiple_choice' | 'true_false' | 'short_answer' | 'mixed';
         extra_instructions?: string;
         attachment_name?: string;
         attachment_text?: string;
       }
     ): Promise<Array<{
-      question_type: 'multiple_choice' | 'true_false';
+      question_type: 'multiple_choice' | 'true_false' | 'short_answer';
       question_text: string;
       difficulty: 'easy' | 'medium' | 'hard';
       points: number;
       explanation?: string;
-      options: Array<{ option_text: string; is_correct: boolean }>;
+      options?: Array<{ option_text: string; is_correct: boolean }>;
     }>> {
         await this.assertCourseManagerOrAdmin(userId);
         await this.getOwnedBankOrThrow(bankId, userId);
@@ -383,10 +390,8 @@ export class QuestionBankServiceImpl implements QuestionBankService {
 
         const questionCount = Math.max(1, Math.min(20, Number(payload.question_count) || 5));
         const difficulty = payload.difficulty === 'easy' || payload.difficulty === 'hard' ? payload.difficulty : 'medium';
-        const questionType =
-          payload.question_type === 'true_false' || payload.question_type === 'mixed'
-            ? payload.question_type
-            : 'multiple_choice';
+        const questionType = payload.question_type || 'multiple_choice';
+        console.log(`[AI Question Gen] 🔍 questionType nhận được: "${questionType}"`);
 
         const settingRepo = this.dataSource.getRepository(OpenRouterSetting);
         const keyRepo = this.dataSource.getRepository(OpenRouterKey);
@@ -410,17 +415,40 @@ export class QuestionBankServiceImpl implements QuestionBankService {
         if (!apiKey) throw new Error('Không thể giải mã OpenRouter key.');
 
         const systemPrompt =
-          'Bạn là trợ lý tạo câu hỏi trắc nghiệm cho LMS. Trả về DUY NHẤT 1 JSON object hợp lệ. Không markdown, không code block, không giải thích, không chữ nào khác ngoài JSON. Bắt buộc dùng cú pháp JSON chuẩn: `"key": value` (không được viết `"key:"value"`).';
+          'Bạn là trợ lý tạo câu hỏi cho LMS. Trả về DUY NHẤT 1 JSON object hợp lệ. Không markdown, không code block, không giải thích, không chữ nào khác ngoài JSON. Bắt buộc dùng cú pháp JSON chuẩn: `"key": value` (không được viết `"key:"value"`).';
+
+        const getPromptForType = (type: string): string => {
+          if (type === 'short_answer') {
+            return [
+              '{ "questions": [{ "question_type":"short_answer", "question_text": string, "difficulty":"easy|medium|hard", "points": number, "explanation": string, "max_length": number|null, "grading_notes": string|null }] }',
+              '- Câu hỏi ngắn yêu cầu học viên trả lời ngắn gọn (1-2 câu).',
+              '- explanation là đáp án mẫu hoặc từ khóa cần có trong câu trả lời.',
+              '- max_length là giới hạn ký tự (VD: 200), null nếu không giới hạn.',
+              '- grading_notes là hướng dẫn chấm điểm cho giáo viên.',
+              '- KHÔNG cần options cho short_answer.',
+            ].join('\n');
+          }
+          if (type === 'true_false') {
+            return [
+              '{ "questions": [{ "question_type":"true_false", "question_text": string, "difficulty":"easy|medium|hard", "points": number, "explanation": string|null, "options":[{"option_text":"Đúng","is_correct":boolean},{"option_text":"Sai","is_correct":boolean}] }] }',
+              '- Câu hỏi đúng/sai với 2 lựa chọn cố định: "Đúng" và "Sai".',
+            ].join('\n');
+          }
+          // multiple_choice or mixed -> generate multiple choice
+          return [
+            '{ "questions": [{ "question_type":"multiple_choice", "question_text": string, "difficulty":"easy|medium|hard", "points": number, "explanation": string|null, "options":[{"option_text":string,"is_correct":boolean}] }] }',
+            '- Mỗi câu phải có ít nhất 2 lựa chọn.',
+            '- Mỗi câu phải có ít nhất 1 đáp án đúng.',
+          ].join('\n');
+        };
+
         const userPrompt = [
           'Hãy tạo JSON object theo format:',
-          '{ "questions": [{ "question_type":"multiple_choice|true_false", "question_text": string, "difficulty":"easy|medium|hard", "points": number, "explanation": string|null, "options":[{"option_text":string,"is_correct":boolean}] }] }',
+          getPromptForType(questionType),
           `Số câu: ${questionCount}`,
           `Chủ đề: ${topic}`,
           `Độ khó ưu tiên: ${difficulty}`,
           `Loại câu: ${questionType}`,
-          '- Mỗi câu phải có ít nhất 2 lựa chọn.',
-          '- Mỗi câu phải có ít nhất 1 đáp án đúng.',
-          '- Nếu câu true_false, options phải là "Đúng" và "Sai".',
           '- Trả nội dung tiếng Việt.',
           payload.extra_instructions ? `Yêu cầu bổ sung: ${payload.extra_instructions}` : '',
           payload.attachment_text
@@ -428,7 +456,15 @@ export class QuestionBankServiceImpl implements QuestionBankService {
             : '',
         ].filter(Boolean).join('\n');
 
+        console.log(`[AI Question Gen] 📋 User prompt:\n${userPrompt}`);
+
+        console.log(`[OpenRouter] 📋 Chọn key: KeyID=${picked.id}, KeyHash=${String((picked as any).key_encrypted || '').slice(-8)}...`);
+        console.log(`[OpenRouter] 🤖 Model: ${model}, Temperature: 0.6`);
+        console.log(`[OpenRouter] 📝 Prompt length: ${userPrompt.length} chars`);
+
         try {
+          console.log(`[OpenRouter] 🚀 Gọi API OpenRouter...`);
+          const startTime = Date.now();
           const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -445,15 +481,19 @@ export class QuestionBankServiceImpl implements QuestionBankService {
               temperature: 0.6,
             }),
           });
+          const elapsedMs = Date.now() - startTime;
+          console.log(`[OpenRouter] ⏱️  Response time: ${elapsedMs}ms, Status: ${response.status}`);
 
           if (!response.ok) {
             const raw = await response.text();
+            console.error(`[OpenRouter] ❌ HTTP Error ${response.status}: ${raw?.slice(0, 200)}`);
             throw new Error(`OpenRouter lỗi HTTP ${response.status}: ${raw?.slice(0, 180) || 'Unknown error'}`);
           }
 
           const data: any = await response.json();
           const content = data?.choices?.[0]?.message?.content;
           if (!content) throw new Error('OpenRouter không trả về nội dung.');
+          console.log(`[OpenRouter] ✅ Nhận được response từ model: ${data?.model || model}`);
 
           const repairJsonLikeText = (input: string): string => {
             let t = String(input || '');
@@ -496,15 +536,36 @@ export class QuestionBankServiceImpl implements QuestionBankService {
           if (!rawQuestions.length) throw new Error('AI không tạo được câu hỏi hợp lệ.');
 
           const normalized = rawQuestions.slice(0, questionCount).map((item: any, index: number) => {
-            const type =
-              String(item?.question_type || '').toLowerCase() === 'true_false'
-                ? 'true_false'
-                : 'multiple_choice';
+            // Use questionType from user selection - AI must follow prompt
+            const type: 'multiple_choice' | 'true_false' | 'short_answer' = 
+              questionType === 'true_false' ? 'true_false' :
+              questionType === 'short_answer' ? 'short_answer' :
+              'multiple_choice';
             const text = String(item?.question_text || '').trim();
             if (!text) throw new Error(`AI trả câu ${index + 1} bị trống nội dung.`);
             const diffRaw = String(item?.difficulty || '').toLowerCase();
             const diff = diffRaw === 'easy' || diffRaw === 'hard' ? diffRaw : 'medium';
             const points = Number(item?.points);
+            const explanation = item?.explanation != null ? String(item.explanation) : undefined;
+            const maxLength = item?.max_length != null ? Number(item.max_length) : undefined;
+            const gradingNotes = item?.grading_notes != null ? String(item.grading_notes) : undefined;
+
+            // short_answer không cần options
+            if (type === 'short_answer') {
+              this.validateQuestionBusinessRule(type, undefined);
+              return {
+                question_type: type,
+                question_text: text,
+                difficulty: diff as 'easy' | 'medium' | 'hard',
+                points: Number.isFinite(points) && points > 0 ? points : 1,
+                explanation,
+                options: undefined,
+                max_length: maxLength,
+                grading_notes: gradingNotes,
+              };
+            }
+
+            // multiple_choice và true_false cần options
             let options = Array.isArray(item?.options) ? item.options : [];
             options = options
               .map((opt: any) => ({
@@ -524,7 +585,7 @@ export class QuestionBankServiceImpl implements QuestionBankService {
               question_text: text,
               difficulty: diff as 'easy' | 'medium' | 'hard',
               points: Number.isFinite(points) && points > 0 ? points : 1,
-              explanation: item?.explanation != null ? String(item.explanation) : undefined,
+              explanation,
               options,
             };
           });

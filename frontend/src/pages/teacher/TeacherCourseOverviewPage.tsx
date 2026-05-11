@@ -90,6 +90,31 @@ type PendingResourceItem = {
   last_reviewed_at?: string | null;
 };
 
+type ReviewTimelineItem = {
+  id: number;
+  course_id: number;
+  actor_user_id: number;
+  from_status: string | null;
+  to_status: string;
+  decision: "submit" | "approve" | "reject" | "archive" | "revert_draft";
+  note: string | null;
+  created_at: string;
+};
+
+type ApprovedResourceItem = {
+  id: number;
+  module_id: number;
+  module_title: string;
+  lesson_id: number;
+  lesson_title: string;
+  lesson_type: "video" | "text" | "quiz" | "assignment";
+  resource_kind: "pdf" | "word" | "video" | "youtube" | "other";
+  filename: string | null;
+  reviewed_at: string | null;
+};
+
+type ReviewStatus = "pending" | "approved" | "rejected" | "timeline";
+
 function BarChartMini({ data }: { data: { label: string; value: number; color: string }[] }) {
   const w = 500;
   const h = 200;
@@ -262,6 +287,13 @@ export default function TeacherCourseOverviewPage() {
   const [learnerPageSize] = useState(20);
   const [learnerResult, setLearnerResult] = useState<LearnerProgressResult | null>(null);
 
+  // Review status modal
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewTab, setReviewTab] = useState<ReviewStatus>("pending");
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [approvedResources, setApprovedResources] = useState<ApprovedResourceItem[]>([]);
+  const [reviewTimeline, setReviewTimeline] = useState<ReviewTimelineItem[]>([]);
+
   const loadPrerequisiteGraph = useCallback(async () => {
     if (!courseId || Number.isNaN(courseId)) return;
     setGraphLoading(true);
@@ -426,6 +458,48 @@ export default function TeacherCourseOverviewPage() {
       setWithdrawingReview(false);
     }
   }, [courseId, load, token]);
+
+  const fetchApprovedResources = useCallback(async () => {
+    if (!courseId || Number.isNaN(courseId)) return;
+    try {
+      const res = await fetch(`${url}${COURSES_API.myApprovedResources(courseId)}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const json = (await res.json().catch(() => ({}))) as { items?: ApprovedResourceItem[]; message?: string };
+      if (!res.ok) throw new Error(json?.message || "Không thể tải danh sách tài nguyên đã duyệt.");
+      setApprovedResources(Array.isArray(json.items) ? json.items : []);
+    } catch {
+      setApprovedResources([]);
+    }
+  }, [courseId, token]);
+
+  const fetchReviewTimeline = useCallback(async () => {
+    if (!courseId || Number.isNaN(courseId)) return;
+    try {
+      const res = await fetch(`${url}${COURSES_API.myReviewTimeline(courseId)}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const json = (await res.json().catch(() => ({}))) as { items?: ReviewTimelineItem[]; message?: string };
+      if (!res.ok) throw new Error(json?.message || "Không thể tải lịch sử duyệt.");
+      setReviewTimeline(Array.isArray(json.items) ? json.items : []);
+    } catch {
+      setReviewTimeline([]);
+    }
+  }, [courseId, token]);
+
+  const openReviewModal = useCallback(async () => {
+    setReviewModalOpen(true);
+    setReviewTab("pending");
+    setReviewLoading(true);
+    await Promise.all([fetchApprovedResources(), fetchReviewTimeline()]);
+    setReviewLoading(false);
+  }, [fetchApprovedResources, fetchReviewTimeline]);
 
   const c = data?.course;
   const statusLabel =
@@ -638,15 +712,54 @@ export default function TeacherCourseOverviewPage() {
                       {withdrawingReview ? "Đang thu hồi..." : "Thu hồi yêu cầu duyệt"}
                     </button>
                   </div>
+                ) : c.status === "draft" ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <button
+                      className="btn-primary"
+                      onClick={() => void submitForReview()}
+                      disabled={loading || submittingReview}
+                      title="Gửi khóa học để quản trị viên duyệt"
+                    >
+                      <span className="material-symbols-outlined">send</span>
+                      {submittingReview ? "Đang gửi..." : "Gửi duyệt"}
+                    </button>
+                    <button
+                      className="btn-secondary review-status-btn"
+                      onClick={() => void openReviewModal()}
+                      title="Xem trạng thái duyệt khóa học"
+                    >
+                      <span className="material-symbols-outlined">fact_check</span>
+                      Trạng thái duyệt
+                      {(pendingResources.length > 0 || rejectedResources.length > 0) && (
+                        <span className="review-badge-container">
+                          {pendingResources.length > 0 && (
+                            <span className="review-badge review-badge--pending">{pendingResources.length}</span>
+                          )}
+                          {rejectedResources.length > 0 && (
+                            <span className="review-badge review-badge--rejected">{rejectedResources.length}</span>
+                          )}
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 ) : (
                   <button
-                    className="btn-primary"
-                    onClick={() => void submitForReview()}
-                    disabled={loading || submittingReview}
-                    title="Gửi khóa học để quản trị viên duyệt"
+                    className="btn-secondary review-status-btn"
+                    onClick={() => void openReviewModal()}
+                    title="Xem trạng thái duyệt khóa học"
                   >
-                    <span className="material-symbols-outlined">send</span>
-                    {submittingReview ? "Đang gửi..." : "Gửi duyệt"}
+                    <span className="material-symbols-outlined">fact_check</span>
+                    Trạng thái duyệt
+                    {(pendingResources.length > 0 || rejectedResources.length > 0) && (
+                      <span className="review-badge-container">
+                        {pendingResources.length > 0 && (
+                          <span className="review-badge review-badge--pending">{pendingResources.length}</span>
+                        )}
+                        {rejectedResources.length > 0 && (
+                          <span className="review-badge review-badge--rejected">{rejectedResources.length}</span>
+                        )}
+                      </span>
+                    )}
                   </button>
                 )}
               </div>
@@ -696,6 +809,10 @@ export default function TeacherCourseOverviewPage() {
                 <button className="btn-secondary" onClick={() => navigate(`/teacher/courses/${courseId}/question-banks`)}>
                   <span className="material-symbols-outlined">question_answer</span>
                   Ngân hàng câu hỏi
+                </button>
+                <button className="btn-secondary" onClick={() => navigate(`/teacher/live-sessions/${courseId}`)}>
+                  <span className="material-symbols-outlined">live_tv</span>
+                  Buổi Live
                 </button>
                 {/* <button className="btn-secondary" onClick={() => void load()} disabled={loading}>
                   <span className="material-symbols-outlined">refresh</span>
@@ -945,6 +1062,287 @@ export default function TeacherCourseOverviewPage() {
                   </div>
                   <div className="modal-footer">
                     <button className="btn-primary" onClick={() => setGraphModalOpen(false)}>
+                      Đóng
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Review Status Modal */}
+            {reviewModalOpen && (
+              <div className="modal-overlay" onClick={() => setReviewModalOpen(false)}>
+                <div className="modal-content modal-content--large" onClick={(e) => e.stopPropagation()}>
+                  <div className="modal-header">
+                    <h3 className="modal-title">
+                      <span className="material-symbols-outlined">fact_check</span>
+                      Trạng thái duyệt khóa học
+                    </h3>
+                    <button className="modal-close" onClick={() => setReviewModalOpen(false)}>
+                      <span className="material-symbols-outlined">close</span>
+                    </button>
+                  </div>
+
+                  {/* Tabs */}
+                  <div className="review-tabs">
+                    <button
+                      className={`review-tab ${reviewTab === "pending" ? "active" : ""}`}
+                      onClick={() => setReviewTab("pending")}
+                    >
+                      <span className="material-symbols-outlined">pending_actions</span>
+                      Chờ duyệt
+                      {pendingResources.length > 0 && (
+                        <span className="tab-badge">{pendingResources.length}</span>
+                      )}
+                    </button>
+                    <button
+                      className={`review-tab ${reviewTab === "approved" ? "active" : ""}`}
+                      onClick={() => setReviewTab("approved")}
+                    >
+                      <span className="material-symbols-outlined">check_circle</span>
+                      Đã duyệt
+                      {approvedResources.length > 0 && (
+                        <span className="tab-badge tab-badge--success">{approvedResources.length}</span>
+                      )}
+                    </button>
+                    <button
+                      className={`review-tab ${reviewTab === "rejected" ? "active" : ""}`}
+                      onClick={() => setReviewTab("rejected")}
+                    >
+                      <span className="material-symbols-outlined">cancel</span>
+                      Bị từ chối
+                      {rejectedResources.length > 0 && (
+                        <span className="tab-badge tab-badge--danger">{rejectedResources.length}</span>
+                      )}
+                    </button>
+                    <button
+                      className={`review-tab ${reviewTab === "timeline" ? "active" : ""}`}
+                      onClick={() => setReviewTab("timeline")}
+                    >
+                      <span className="material-symbols-outlined">history</span>
+                      Lịch sử
+                    </button>
+                  </div>
+
+                  <div className="modal-body">
+                    {reviewLoading ? (
+                      <div className="loading-state small">
+                        <span className="material-symbols-outlined loading-icon">sync</span>
+                        <p>Đang tải dữ liệu...</p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Pending Tab */}
+                        {reviewTab === "pending" && (
+                          <div className="review-content">
+                            {pendingResources.length === 0 ? (
+                              <div className="empty-state">
+                                <span className="material-symbols-outlined">inbox</span>
+                                <p>Không có tài nguyên nào đang chờ duyệt</p>
+                              </div>
+                            ) : (
+                              <div className="review-list">
+                                {pendingResources.map((item) => (
+                                  <div key={item.id} className="review-item review-item--pending">
+                                    <div className="review-item-icon">
+                                      <span className="material-symbols-outlined">schedule</span>
+                                    </div>
+                                    <div className="review-item-content">
+                                      <div className="review-item-title">
+                                        {item.filename || `${item.lesson_title} - ${item.resource_kind}`}
+                                      </div>
+                                      <div className="review-item-meta">
+                                        {item.module_title} / {item.lesson_title}
+                                      </div>
+                                      <div className="review-item-time">
+                                        Gửi: {new Date(item.created_at).toLocaleDateString("vi-VN", {
+                                          day: "2-digit",
+                                          month: "2-digit",
+                                          year: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </div>
+                                    </div>
+                                    <div className="review-item-status">
+                                      <span className={`status-badge ${item.is_resubmitted ? "status-badge--draft" : "status-badge--pending_review"}`}>
+                                        {item.is_resubmitted ? "Gửi lại" : "Mới gửi"}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Approved Tab */}
+                        {reviewTab === "approved" && (
+                          <div className="review-content">
+                            {approvedResources.length === 0 ? (
+                              <div className="empty-state">
+                                <span className="material-symbols-outlined">inbox</span>
+                                <p>Chưa có tài nguyên nào được duyệt</p>
+                              </div>
+                            ) : (
+                              <div className="review-list">
+                                {approvedResources.map((item) => (
+                                  <div key={item.id} className="review-item review-item--approved">
+                                    <div className="review-item-icon">
+                                      <span className="material-symbols-outlined">check_circle</span>
+                                    </div>
+                                    <div className="review-item-content">
+                                      <div className="review-item-title">
+                                        {item.filename || `${item.lesson_title} - ${item.resource_kind}`}
+                                      </div>
+                                      <div className="review-item-meta">
+                                        {item.module_title} / {item.lesson_title}
+                                      </div>
+                                      {item.reviewed_at && (
+                                        <div className="review-item-time">
+                                          Duyệt: {new Date(item.reviewed_at).toLocaleDateString("vi-VN", {
+                                            day: "2-digit",
+                                            month: "2-digit",
+                                            year: "numeric",
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="review-item-status">
+                                      <span className="status-badge status-badge--published">
+                                        Đã duyệt
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Rejected Tab */}
+                        {reviewTab === "rejected" && (
+                          <div className="review-content">
+                            {rejectedResources.length === 0 ? (
+                              <div className="empty-state">
+                                <span className="material-symbols-outlined">inbox</span>
+                                <p>Không có tài nguyên nào bị từ chối</p>
+                              </div>
+                            ) : (
+                              <div className="review-list">
+                                {rejectedResources.map((item) => (
+                                  <div key={item.id} className="review-item review-item--rejected">
+                                    <div className="review-item-icon">
+                                      <span className="material-symbols-outlined">cancel</span>
+                                    </div>
+                                    <div className="review-item-content">
+                                      <div className="review-item-title">
+                                        {item.filename || `${item.lesson_title} - ${item.resource_kind}`}
+                                      </div>
+                                      <div className="review-item-meta">
+                                        {item.module_title} / {item.lesson_title}
+                                      </div>
+                                      {item.review_reason && (
+                                        <div className="review-item-reason">
+                                          <strong>Lý do:</strong> {item.review_reason}
+                                        </div>
+                                      )}
+                                      {item.review_event_at && (
+                                        <div className="review-item-time">
+                                          Từ chối: {new Date(item.review_event_at).toLocaleDateString("vi-VN", {
+                                            day: "2-digit",
+                                            month: "2-digit",
+                                            year: "numeric",
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="review-item-actions">
+                                      <button
+                                        className="btn-secondary btn-sm"
+                                        onClick={() => navigate(`/teacher/courses/${courseId}/content?tab=content`)}
+                                      >
+                                        <span className="material-symbols-outlined">build</span>
+                                        Sửa lại
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Timeline Tab */}
+                        {reviewTab === "timeline" && (
+                          <div className="review-content">
+                            {reviewTimeline.length === 0 ? (
+                              <div className="empty-state">
+                                <span className="material-symbols-outlined">inbox</span>
+                                <p>Chưa có lịch sử duyệt</p>
+                              </div>
+                            ) : (
+                              <div className="timeline-list">
+                                {reviewTimeline.map((event, index) => (
+                                  <div key={event.id} className="timeline-item">
+                                    <div className="timeline-marker">
+                                      <div className={`timeline-dot timeline-dot--${event.decision}`} />
+                                      {index < reviewTimeline.length - 1 && <div className="timeline-line" />}
+                                    </div>
+                                    <div className="timeline-content">
+                                      <div className="timeline-header">
+                                        <span className={`timeline-badge timeline-badge--${event.decision}`}>
+                                          {event.decision === "submit" && "Gửi duyệt"}
+                                          {event.decision === "approve" && "Duyệt"}
+                                          {event.decision === "reject" && "Từ chối"}
+                                          {event.decision === "archive" && "Lưu trữ"}
+                                          {event.decision === "revert_draft" && "Thu hồi"}
+                                        </span>
+                                        <span className="timeline-date">
+                                          {new Date(event.created_at).toLocaleDateString("vi-VN", {
+                                            day: "2-digit",
+                                            month: "2-digit",
+                                            year: "numeric",
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}
+                                        </span>
+                                      </div>
+                                      {event.from_status && (
+                                        <div className="timeline-status-change">
+                                          {event.from_status === "draft" && "Bản nháp"}
+                                          {event.from_status === "pending_review" && "Chờ duyệt"}
+                                          {event.from_status === "published" && "Đã xuất bản"}
+                                          {event.from_status === "archived" && "Đã lưu trữ"}
+                                          {" → "}
+                                          {event.to_status === "draft" && "Bản nháp"}
+                                          {event.to_status === "pending_review" && "Chờ duyệt"}
+                                          {event.to_status === "published" && "Đã xuất bản"}
+                                          {event.to_status === "archived" && "Đã lưu trữ"}
+                                        </div>
+                                      )}
+                                      {event.note && (
+                                        <div className="timeline-note">
+                                          <strong>Ghi chú:</strong> {event.note}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  <div className="modal-footer">
+                    <button className="btn-primary" onClick={() => setReviewModalOpen(false)}>
                       Đóng
                     </button>
                   </div>

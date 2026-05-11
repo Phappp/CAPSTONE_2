@@ -1,11 +1,28 @@
+// CoursesCatalogPage.tsx
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { PAYMENTS_API } from "../../api/payments";
 import { useAuth } from "../../contexts/Auth";
-import { Search, BookOpen, Users, Clock, BookMarked, Filter, X, GraduationCap, Sparkles, Layers, LayoutDashboard, Compass } from "lucide-react";
+import {
+  Search,
+  BookOpen,
+  Users,
+  Clock,
+  Video,
+  BookMarked,
+  Filter,
+  X,
+  GraduationCap,
+  Sparkles,
+  Layers,
+  LayoutDashboard,
+  Compass,
+  Menu,
+  Loader2,
+} from "lucide-react";
 import "./CoursesCatalogPage.css";
 
 type PublishedCourse = {
@@ -52,6 +69,12 @@ const CATEGORY_GROUPS = [
   "Khác",
 ];
 
+const NAV_ITEMS = [
+  { path: "/student/dashboard", label: "Bảng điều khiển", icon: LayoutDashboard },
+  { path: "/courses", label: "Khám phá", icon: Compass },
+  { path: "/live-sessions", label: "Buổi Live", icon: Video }, // Thêm dòng này
+];
+
 function levelBadge(level: string) {
   if (level === "beginner") return { label: "Cơ bản", className: "badge badge--green" };
   if (level === "intermediate") return { label: "Trung cấp", className: "badge badge--blue" };
@@ -68,41 +91,35 @@ function getCategoryGroup(category: string): string {
 
 function formatVnd(amount: number): string {
   try {
-    return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(
-      amount
-    );
+    return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(amount);
   } catch {
     return `${amount} VND`;
   }
 }
 
-function formatDuration(minutes: number | null | undefined): string {
-  if (!minutes) return "";
-  if (minutes < 60) return `${minutes}p`;
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return mins > 0 ? `${hours}g ${mins}p` : `${hours}g`;
-}
-
 export default function CoursesCatalogPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { accessToken: token } = useAuth();
 
+  // State
   const [qInput, setQInput] = useState("");
   const [q, setQ] = useState("");
   const [selectedLevels, setSelectedLevels] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(12);
+  const [pageSize] = useState(9);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<CatalogResponse | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const closeMobileMenu = () => setMobileMenuOpen(false);
 
   const fetchCatalog = async (opts?: { nextQ?: string }) => {
     const nextQ = opts?.nextQ ?? q;
-
     const params = new URLSearchParams();
     if (nextQ.trim()) params.set("q", nextQ.trim());
     params.set("page", "1");
@@ -142,7 +159,7 @@ export default function CoursesCatalogPage() {
       if (!res.ok) throw new Error((json as any)?.message || "Không thể đăng ký khóa học.");
       await fetchCatalog();
       setPage(1);
-      window.alert("Đăng ký thành công. Khóa học sẽ hiển thị trong Dashboard học viên.");
+      window.alert("Đăng ký thành công! Khóa học sẽ hiển thị trong Bảng điều khiển học viên.");
     } catch (e: any) {
       setError(e?.message || "Đã xảy ra lỗi.");
     } finally {
@@ -163,9 +180,9 @@ export default function CoursesCatalogPage() {
         body: JSON.stringify({ course_id: courseId }),
       });
       const json = (await res.json().catch(() => ({}))) as { payment_url?: string; message?: string; status?: string };
-      if (!res.ok) throw new Error(json?.message || "Không thể tạo đơn thanh toán.");
+      if (!res.ok) throw new Error(json?.message || "Không thể tạo yêu cầu thanh toán. Vui lòng thử lại sau.");
       if (json?.status === "paid") {
-        window.alert("Bạn đã thanh toán khóa học này trước đó. Vào Dashboard để tiếp tục học.");
+        window.alert("Bạn đã thanh toán khóa học này trước đó. Vui lòng truy cập Bảng điều khiển để tiếp tục học.");
         navigate("/student/dashboard");
         return;
       }
@@ -190,9 +207,7 @@ export default function CoursesCatalogPage() {
     fetchCatalog()
       .catch((e: any) => setError(e?.message || "Đã xảy ra lỗi."))
       .finally(() => setLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
-
 
   const filteredItems = useMemo(() => {
     const items = data?.items || [];
@@ -225,359 +240,384 @@ export default function CoursesCatalogPage() {
     setQ("");
   };
 
-  const location = useLocation();
-
   const hasActiveFilters = selectedCategories.length > 0 || selectedLevels.length > 0 || selectedLanguages.length > 0 || q.trim() !== "";
 
-  const navItems = [
-    { path: "/student/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { path: "/courses", label: "Khám phá", icon: Compass },
-  ];
+  const totalLearners = data?.items.reduce((acc, c) => acc + c.learners_count, 0) || 0;
 
   return (
     <div className="catalog">
-      {/* Decorative background */}
       <div className="catalog__decoration catalog__decoration--1" />
       <div className="catalog__decoration catalog__decoration--2" />
 
       <div className="catalog__wrapper">
+        {/* Mobile Menu Overlay */}
+        {mobileMenuOpen && <div className="mobile-sidebar-overlay" onClick={closeMobileMenu} />}
+
         {/* Navigation Sidebar */}
         <nav className="catalog__nav">
           <div className="catalog__navBrand">
-            <span className="catalog__navLogo">M</span>
+            <Link to="/student/dashboard" className="catalog__navLogo">M</Link>
           </div>
           <div className="catalog__navItems">
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.path || (item.path === "/courses" && location.pathname === "/courses");
+            {NAV_ITEMS.map((item) => {
+              const isActive = location.pathname === item.path;
               return (
-                <a
+                <Link
                   key={item.path}
-                  href={item.path}
+                  to={item.path}
                   className={`catalog__navItem ${isActive ? "catalog__navItem--active" : ""}`}
                   title={item.label}
                 >
                   <item.icon size={22} />
                   <span className="catalog__navLabel">{item.label}</span>
-                </a>
+                </Link>
               );
             })}
           </div>
         </nav>
 
         <div className="catalog__main">
-          {/* Header */}
-          <div className="catalog__headerRow">
-            <div style={{ minWidth: 0 }}>
-              <h1 className="catalog__title">Khám phá khóa học</h1>
-            </div>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <AvatarMenu />
-            </div>
-          </div>
-
-        {/* Stats Bar */}
-        {data && data.total > 0 && (
-          <div className="catalog__stats">
-            <div className="catalog__stat">
-              <BookOpen size={18} />
-              <span className="catalog__statValue">{data.total}</span> khóa học
-            </div>
-            <div className="catalog__stat">
-              <Users size={18} />
-              <span className="catalog__statValue">{data.items.reduce((acc, c) => acc + c.learners_count, 0).toLocaleString()}</span> học viên
-            </div>
-          </div>
-        )}
-
-        {error ? (
-          <div className="errorBox">
-            <Sparkles size={20} />
-            {error}
-          </div>
-        ) : null}
-
-        <div className="catalog__layout">
-          {/* Mobile Filter Toggle */}
-          <div className="catalog__mobileFilter">
+          <div className="catalog__container">
+            {/* Mobile Menu Button */}
             <button
-              type="button"
-              className="btn btn--secondary"
-              onClick={() => setShowMobileFilters(!showMobileFilters)}
+              className="mobile-menu-btn"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                left: '16px',
+                zIndex: 50,
+                display: window.innerWidth <= 768 ? 'flex' : 'none'
+              }}
             >
-              <Filter size={18} />
-              Bộ lọc {hasActiveFilters && `(${selectedCategories.length + selectedLevels.length + selectedLanguages.length})`}
+              {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
-          </div>
 
-          {/* Main Content */}
-          <main className="catalog__content">
-            {/* Course Grid */}
-            <div className="catalog__grid">
-              {pagedItems.map((c) => {
-                const lb = levelBadge(c.level);
-                return (
-                  <div key={c.id} className="card">
-                    <div className="card__thumb">
-                      {c.thumbnail_url ? (
-                        <img src={c.thumbnail_url} alt={c.title} />
-                      ) : (
-                        <div style={{ 
-                          width: '100%', 
-                          height: '100%', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          color: 'var(--cat-text-muted)'
-                        }}>
-                          <GraduationCap size={48} />
-                        </div>
-                      )}
-                    </div>
-                    <div className="card__body">
-                      <span className={lb.className}>{lb.label}</span>
-                      
-                      <h3 className="card__title">{c.title}</h3>
-                      <p className="card__desc">{c.short_description || "Chưa có mô tả"}</p>
+            {/* Header */}
+            <div className="catalog__headerRow">
+              <div>
+                <h1 className="catalog__title">Khám phá khóa học</h1>
+              </div>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <AvatarMenu />
+              </div>
+            </div>
 
-                      {/* Course Meta */}
-                      <div style={{ 
-                        display: 'flex', 
-                        gap: 16, 
-                        marginBottom: 12,
-                        fontSize: '0.8rem',
-                        color: 'var(--cat-text-muted)'
-                      }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Users size={14} /> {c.learners_count.toLocaleString()}
-                        </span>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <BookMarked size={14} /> {c.modules_count} module
-                        </span>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Clock size={14} /> {c.lessons_count} bài
-                        </span>
-                      </div>
+            {/* Stats Bar */}
+            {data && data.total > 0 && (
+              <div className="catalog__stats">
+                <div className="catalog__stat">
+                  <BookOpen size={18} />
+                  <span className="catalog__statValue">{data.total}</span> khóa học
+                </div>
+                <div className="catalog__stat">
+                  <Users size={18} />
+                  <span className="catalog__statValue">{totalLearners.toLocaleString()}</span> học viên
+                </div>
+              </div>
+            )}
 
-                      {/* Price */}
-                      <div className="card__price">
-                        {Number(c.price ?? 0) > 0 ? (
-                          formatVnd(Number(c.price))
-                        ) : (
-                          <span className="card__price--free">Miễn phí</span>
-                        )}
-                      </div>
+            {/* Error State */}
+            {error && (
+              <div className="errorBox">
+                <Sparkles size={20} />
+                {error}
+              </div>
+            )}
 
-                      {/* Actions */}
-                      <div className="card__actions">
-                        <button
-                          type="button"
-                          className="btn btn--secondary"
-                          onClick={() => navigate(`/courses/${c.slug}`)}
-                          disabled={loading}
-                        >
-                          Chi tiết
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn--primary"
-                          onClick={() => {
-                            if (Number(c.price ?? 0) > 0) {
-                              void checkoutPaidCourse(c.id);
-                              return;
-                            }
-                            void enroll(c.id);
-                          }}
-                          disabled={loading || c.can_enroll === false}
-                        >
-                          {c.can_enroll === false 
-                            ? "Chưa đủ điều kiện" 
-                            : Number(c.price ?? 0) > 0 
-                              ? "Mua ngay" 
-                              : "Đăng ký"}
-                        </button>
-                      </div>
+            <div className="catalog__layout">
+              {/* Mobile Filter Toggle */}
+              <div className="catalog__mobileFilter">
+                <button
+                  type="button"
+                  className="btn btn--secondary"
+                  onClick={() => setShowMobileFilters(!showMobileFilters)}
+                >
+                  <Filter size={18} />
+                  Bộ lọc {hasActiveFilters && `(${selectedCategories.length + selectedLevels.length + selectedLanguages.length})`}
+                </button>
+              </div>
 
-                      {c.can_enroll === false && (
-                        <div className="errorBox errorBox--info" style={{ marginTop: 10, padding: '8px 12px', fontSize: '0.8rem' }}>
-                          Cần hoàn tất khóa tiên quyết trước khi đăng ký.
-                        </div>
-                      )}
-                    </div>
+              {/* Main Content - Course Grid */}
+              <main className="catalog__content">
+                {loading ? (
+                  <div className="loading-center">
+                    <Loader2 className="spinner" />
                   </div>
-                );
-              })}
-            </div>
+                ) : (
+                  <>
+                    <div className="catalog__grid">
+                      {pagedItems.map((c) => {
+                        const lb = levelBadge(c.level);
+                        return (
+                          <div key={c.id} className="card">
+                            <div className="card__thumb">
+                              {c.thumbnail_url ? (
+                                <img src={c.thumbnail_url} alt={c.title} />
+                              ) : (
+                                <div style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  color: 'var(--cat-text-muted)'
+                                }}>
+                                  <GraduationCap size={48} />
+                                </div>
+                              )}
+                            </div>
+                            <div className="card__body">
+                              <span className={lb.className}>{lb.label}</span>
 
-            {/* Empty State */}
-            {!loading && !error && filteredItems.length === 0 && (
-              <div className="catalog__empty">
-                <div className="catalog__empty-icon">
-                  <BookOpen size={40} />
+                              <h3 className="card__title">{c.title}</h3>
+                              <p className="card__desc">{c.short_description || "Chưa có mô tả"}</p>
+
+                              {/* Course Meta */}
+                              <div style={{
+                                display: 'flex',
+                                gap: 16,
+                                marginBottom: 12,
+                                fontSize: '12px',
+                                color: 'var(--text-secondary)'
+                              }}>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <Users size={14} /> {c.learners_count.toLocaleString()}
+                                </span>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <BookMarked size={14} /> {c.modules_count} module
+                                </span>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <Clock size={14} /> {c.lessons_count} bài
+                                </span>
+                              </div>
+
+                              {/* Price */}
+                              <div className="card__price">
+                                {Number(c.price ?? 0) > 0 ? (
+                                  formatVnd(Number(c.price))
+                                ) : (
+                                  <span className="card__price--free">Miễn phí</span>
+                                )}
+                              </div>
+
+                              {/* Actions */}
+                              <div className="card__actions">
+                                <button
+                                  type="button"
+                                  className="btn btn--secondary"
+                                  onClick={() => navigate(`/courses/${c.slug}`)}
+                                  disabled={loading}
+                                >
+                                  Chi tiết
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn--primary"
+                                  onClick={() => {
+                                    if (Number(c.price ?? 0) > 0) {
+                                      void checkoutPaidCourse(c.id);
+                                      return;
+                                    }
+                                    void enroll(c.id);
+                                  }}
+                                  disabled={loading || c.can_enroll === false}
+                                >
+                                  {c.can_enroll === false
+                                    ? "Chưa đủ điều kiện"
+                                    : Number(c.price ?? 0) > 0
+                                      ? "Mua ngay"
+                                      : "Đăng ký"}
+                                </button>
+                              </div>
+
+                              {c.can_enroll === false && (
+                                <div className="errorBox errorBox--info" style={{ marginTop: 10, padding: '8px 12px', fontSize: '12px' }}>
+                                  Cần hoàn tất khóa tiên quyết trước khi đăng ký.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Empty State */}
+                    {!loading && !error && filteredItems.length === 0 && (
+                      <div className="catalog__empty">
+                        <div className="catalog__empty-icon">
+                          <BookOpen size={40} />
+                        </div>
+                        <h3 className="catalog__empty-title">Không tìm thấy khóa học</h3>
+                        <p className="catalog__empty-text">Hãy thử điều chỉnh bộ lọc hoặc từ khóa tìm kiếm</p>
+                      </div>
+                    )}
+
+                    {/* Pagination */}
+                    {filteredItems.length > 0 && (
+                      <div className="catalog__footerRow">
+                        <div className="muted">
+                          Hiển thị {pagedItems.length} / {filteredItems.length} khóa học
+                        </div>
+                        <div className="pagination">
+                          <button
+                            type="button"
+                            className="btn btn--secondary"
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                            disabled={loading || page <= 1}
+                          >
+                            Trước
+                          </button>
+                          <span className="pagination__info">
+                            Trang {page} / {totalPages}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn--secondary"
+                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                            disabled={loading || page >= totalPages}
+                          >
+                            Sau
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </main>
+
+              {/* Sidebar Filters - Right Side */}
+              <aside className={`catalog__sidebar ${showMobileFilters ? 'catalog__sidebar--open' : ''}`}>
+                <div className="catalog__sidebar-header">
+                  <div className="catalog__sidebar-icon">
+                    <Filter size={20} />
+                  </div>
+                  <h3 className="catalog__sidebar-title">Bộ lọc</h3>
+                  {showMobileFilters && (
+                    <button
+                      type="button"
+                      onClick={() => setShowMobileFilters(false)}
+                      style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
+                    >
+                      <X size={20} />
+                    </button>
+                  )}
                 </div>
-                <h3 className="catalog__empty-title">Không tìm thấy khóa học</h3>
-                <p className="catalog__empty-text">Hãy thử điều chỉnh bộ lọc hoặc từ khóa tìm kiếm</p>
-              </div>
-            )}
 
-            {/* Pagination */}
-            {filteredItems.length > 0 && (
-              <div className="catalog__footerRow">
-                <div className="muted">
-                  {loading ? "Đang tải..." : `Hiển thị ${pagedItems.length} / ${filteredItems.length} khóa học`}
+                {/* Search */}
+                <div className="catalog__filterBlock">
+                  <div className="catalog__filterTitle">
+                    <Search size={14} />
+                    Tìm kiếm
+                  </div>
+                  <div className="catalog__search">
+                    <Search className="catalog__searchIcon" size={18} />
+                    <input
+                      className="input"
+                      placeholder="Tìm theo tên khóa học..."
+                      value={qInput}
+                      onChange={(e) => setQInput(e.target.value)}
+                      disabled={loading}
+                    />
+                  </div>
                 </div>
-                <div className="pagination">
-                  <button
-                    type="button"
-                    className="btn btn--secondary"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={loading || page <= 1}
-                  >
-                    Trước
-                  </button>
-                  <span className="pagination__info">
-                    Trang {page} / {totalPages}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn--secondary"
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={loading || page >= totalPages}
-                  >
-                    Sau
-                  </button>
+
+                {/* Categories */}
+                <div className="catalog__filterBlock">
+                  <div className="catalog__filterTitle">
+                    <Layers size={14} />
+                    Danh mục
+                  </div>
+                  <div className="catalog__filterList">
+                    {CATEGORY_GROUPS.map((cat) => (
+                      <label key={cat} className="catalog__filterItem">
+                        <input
+                          type="checkbox"
+                          checked={selectedCategories.includes(cat)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedCategories((prev) => [...prev, cat]);
+                            } else {
+                              setSelectedCategories((prev) => prev.filter((x) => x !== cat));
+                            }
+                          }}
+                        />
+                        <span>{cat}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </main>
 
-          {/* Sidebar Filters */}
-          <aside className={`catalog__sidebar ${showMobileFilters ? 'catalog__sidebar--open' : ''}`}>
-            <div className="catalog__sidebar-header">
-              <div className="catalog__sidebar-icon">
-                <Filter size={20} />
-              </div>
-              <h3 className="catalog__sidebar-title">Bộ lọc</h3>
-              {showMobileFilters && (
-                <button
-                  type="button"
-                  onClick={() => setShowMobileFilters(false)}
-                  style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--cat-text-muted)' }}
-                >
-                  <X size={20} />
-                </button>
-              )}
+                {/* Languages */}
+                <div className="catalog__filterBlock">
+                  <div className="catalog__filterTitle">Ngôn ngữ</div>
+                  <div className="catalog__filterList">
+                    {[
+                      { value: "vi", label: "Tiếng Việt" },
+                      { value: "en", label: "English" },
+                    ].map((lang) => (
+                      <label key={lang.value} className="catalog__filterItem">
+                        <input
+                          type="checkbox"
+                          checked={selectedLanguages.includes(lang.value)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedLanguages((prev) => [...prev, lang.value]);
+                            } else {
+                              setSelectedLanguages((prev) => prev.filter((x) => x !== lang.value));
+                            }
+                          }}
+                        />
+                        <span>{lang.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Levels */}
+                <div className="catalog__filterBlock">
+                  <div className="catalog__filterTitle">Cấp độ</div>
+                  <div className="catalog__filterList">
+                    {[
+                      { value: "beginner", label: "Cơ bản" },
+                      { value: "intermediate", label: "Trung cấp" },
+                      { value: "advanced", label: "Nâng cao" },
+                    ].map((lv) => (
+                      <label key={lv.value} className="catalog__filterItem">
+                        <input
+                          type="checkbox"
+                          checked={selectedLevels.includes(lv.value)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedLevels((prev) => [...prev, lv.value]);
+                            } else {
+                              setSelectedLevels((prev) => prev.filter((x) => x !== lv.value));
+                            }
+                          }}
+                        />
+                        <span>{lv.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Clear Filters */}
+                {hasActiveFilters && (
+                  <div className="catalog__filterActions">
+                    <button
+                      type="button"
+                      className="btn btn--danger"
+                      onClick={clearFilters}
+                      disabled={loading}
+                    >
+                      <X size={16} />
+                      Xóa bộ lọc
+                    </button>
+                  </div>
+                )}
+              </aside>
             </div>
-
-            {/* Search */}
-            <div className="catalog__filterBlock">
-              <div className="catalog__filterTitle">Tìm kiếm</div>
-              <div className="catalog__search">
-                <Search className="catalog__searchIcon" size={18} />
-                <input
-                  className="input"
-                  placeholder="Tìm theo tên..."
-                  value={qInput}
-                  onChange={(e) => setQInput(e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-            </div>
-
-            {/* Categories */}
-            <div className="catalog__filterBlock">
-              <div className="catalog__filterTitle">
-                <Layers size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
-                Danh mục
-              </div>
-              <div className="catalog__filterList">
-                {CATEGORY_GROUPS.map((cat) => (
-                  <label key={cat} className="catalog__filterItem">
-                    <input
-                      type="checkbox"
-                      checked={selectedCategories.includes(cat)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedCategories((prev) => [...prev, cat]);
-                        } else {
-                          setSelectedCategories((prev) => prev.filter((x) => x !== cat));
-                        }
-                      }}
-                    />
-                    <span>{cat}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Languages */}
-            <div className="catalog__filterBlock">
-              <div className="catalog__filterTitle">Ngôn ngữ</div>
-              <div className="catalog__filterList">
-                {[
-                  { value: "vi", label: "Tiếng Việt" },
-                  { value: "en", label: "English" },
-                ].map((lang) => (
-                  <label key={lang.value} className="catalog__filterItem">
-                    <input
-                      type="checkbox"
-                      checked={selectedLanguages.includes(lang.value)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedLanguages((prev) => [...prev, lang.value]);
-                        } else {
-                          setSelectedLanguages((prev) => prev.filter((x) => x !== lang.value));
-                        }
-                      }}
-                    />
-                    <span>{lang.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Levels */}
-            <div className="catalog__filterBlock">
-              <div className="catalog__filterTitle">Cấp độ</div>
-              <div className="catalog__filterList">
-                {[
-                  { value: "beginner", label: "Cơ bản" },
-                  { value: "intermediate", label: "Trung cấp" },
-                  { value: "advanced", label: "Nâng cao" },
-                ].map((lv) => (
-                  <label key={lv.value} className="catalog__filterItem">
-                    <input
-                      type="checkbox"
-                      checked={selectedLevels.includes(lv.value)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedLevels((prev) => [...prev, lv.value]);
-                        } else {
-                          setSelectedLevels((prev) => prev.filter((x) => x !== lv.value));
-                        }
-                      }}
-                    />
-                    <span>{lv.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Clear Filters */}
-            {hasActiveFilters && (
-              <div className="catalog__filterActions">
-                <button
-                  type="button"
-                  className="btn btn--danger"
-                  onClick={clearFilters}
-                  disabled={loading}
-                >
-                  <X size={16} />
-                  Xóa bộ lọc
-                </button>
-              </div>
-            )}
-          </aside>
-        </div>
+          </div>
         </div>
       </div>
     </div>

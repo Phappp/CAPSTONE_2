@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import User from './user';
 
 @Entity('openrouter_settings')
 export default class OpenRouterSetting {
@@ -22,6 +25,10 @@ export default class OpenRouterSetting {
 
   @Column({ type: 'int', nullable: true })
   updated_by: number | null;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'updated_by' })
+  updater: User | null;
 
   @CreateDateColumn({ type: 'timestamp' })
   created_at: Date;

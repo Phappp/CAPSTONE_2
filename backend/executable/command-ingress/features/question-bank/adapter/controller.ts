@@ -221,6 +221,8 @@ export class QuestionBankController extends BaseController {
               points: body.points,
               options: body.options,
               explanation: body.explanation,
+              max_length: body.max_length,
+              grading_notes: body.grading_notes,
             });
             res.status(200).json({ success: true, message: 'Cập nhật câu hỏi thành công!', data });
         });

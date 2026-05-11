@@ -44,6 +44,8 @@ type BankQuestion = {
   points?: number;
   explanation?: string;
   options?: QuestionOption[];
+  max_length?: number;
+  grading_notes?: string;
 };
 
 const QUESTION_TYPES: Array<BankQuestion["question_type"]> = [
@@ -135,6 +137,8 @@ export default function TeacherQuestionBankPage() {
   const [tagsInput, setTagsInput] = useState("");
   const [points, setPoints] = useState("1");
   const [explanation, setExplanation] = useState("");
+  const [maxLength, setMaxLength] = useState("");
+  const [gradingNotes, setGradingNotes] = useState("");
   const [options, setOptions] = useState<QuestionOption[]>([
     { option_text: "", is_correct: false },
     { option_text: "", is_correct: false },
@@ -147,17 +151,26 @@ export default function TeacherQuestionBankPage() {
   // Bulk import state - CSV
   const [csvFileName, setCsvFileName] = useState("");
   const [csvImportErrors, setCsvImportErrors] = useState<string[]>([]);
+  const [bulkQuestionType, setBulkQuestionType] = useState<"multiple_choice" | "short_answer">("multiple_choice");
 
   // Bulk import state - AI
   const [aiTopic, setAiTopic] = useState("");
   const [aiQuestionCount, setAiQuestionCount] = useState(5);
   const [aiDifficulty, setAiDifficulty] = useState<"easy" | "medium" | "hard">("medium");
-  const [aiQuestionType, setAiQuestionType] = useState<"multiple_choice" | "true_false" | "mixed">("mixed");
+  const [aiQuestionType, setAiQuestionType] = useState<"multiple_choice" | "true_false" | "short_answer" | "mixed">("mixed");
   const [aiExtraInstructions, setAiExtraInstructions] = useState("");
   const [aiAttachments, setAiAttachments] = useState<Array<{ name: string; text: string }>>([]);
   const [aiPendingQuestions, setAiPendingQuestions] = useState<BankQuestion[]>([]);
+  const questionTypeFilterFromUrl = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const raw = String(params.get("question_type") || "").trim().toLowerCase();
+    return raw || "all";
+  }, [location.search]);
   const [questionSearch, setQuestionSearch] = useState("");
-  const [questionTypeFilter, setQuestionTypeFilter] = useState<BankQuestion["question_type"] | "all">("all");
+  const [questionTypeFilter, setQuestionTypeFilter] = useState<BankQuestion["question_type"] | "all">(() => {
+    if (questionTypeFilterFromUrl !== "all") return questionTypeFilterFromUrl as BankQuestion["question_type"];
+    return "all";
+  });
   const [questionDifficultyFilter, setQuestionDifficultyFilter] = useState<BankQuestion["difficulty"] | "all">("all");
   const [deleteBlockedUsage, setDeleteBlockedUsage] = useState<{ bankId: number; quizCount: number; usages: BankUsageItem[] } | null>(null);
   const [showArchivedBanks, setShowArchivedBanks] = useState(false);
@@ -318,6 +331,8 @@ export default function TeacherQuestionBankPage() {
     setTagsInput("");
     setPoints("1");
     setExplanation("");
+    setMaxLength("");
+    setGradingNotes("");
     setOptions([
       { option_text: "", is_correct: false },
       { option_text: "", is_correct: false },
@@ -329,6 +344,7 @@ export default function TeacherQuestionBankPage() {
     setBulkText("");
     setCsvFileName("");
     setCsvImportErrors([]);
+    setBulkQuestionType("multiple_choice");
     setAiTopic("");
     setAiQuestionCount(5);
     setAiDifficulty("medium");
@@ -358,6 +374,8 @@ export default function TeacherQuestionBankPage() {
     setTagsInput((question.tags ?? []).join(", "));
     setPoints(String(question.points ?? 1));
     setExplanation(question.explanation ?? "");
+    setMaxLength(question.max_length ? String(question.max_length) : "");
+    setGradingNotes(question.grading_notes ?? "");
     setOptions(question.options?.length ? question.options.map((item) => ({ ...item })) : [
       { option_text: "", is_correct: false },
       { option_text: "", is_correct: false },
@@ -489,6 +507,8 @@ export default function TeacherQuestionBankPage() {
         tags: parsedTags.length ? parsedTags : undefined,
         points: Number(points),
         explanation: explanation.trim() || undefined,
+        max_length: maxLength ? Number(maxLength) : undefined,
+        grading_notes: gradingNotes.trim() || undefined,
       };
 
       if (!payload.question_text) throw new Error("Nội dung câu hỏi không được để trống.");
@@ -648,33 +668,61 @@ export default function TeacherQuestionBankPage() {
     setError(null);
     try {
       const payloads: any[] = [];
-      for (const line of lines) {
-        const parts = line
-          .split("|")
-          .map((item) => item.trim())
-          .filter(Boolean);
-        if (parts.length < 3) continue;
 
-        const questionText = parts[0];
-        const rawOptions = parts.slice(1);
-        const normalized = rawOptions.map((opt) => ({
-          text: opt.startsWith("*") ? opt.slice(1).trim() : opt,
-          correct: opt.startsWith("*"),
-        }));
-        if (!normalized.some((item) => item.correct) && normalized.length > 0) {
-          normalized[0].correct = true;
+      if (bulkQuestionType === "short_answer") {
+        // Format: Câu hỏi | Đáp án mẫu | Điểm (tùy) | Độ khó (tùy)
+        for (const line of lines) {
+          const parts = line
+            .split("|")
+            .map((item) => item.trim())
+            .filter(Boolean);
+          if (parts.length < 2) continue;
+
+          const questionText = parts[0];
+          const explanation = parts[1];
+          const points = parts[2] ? Number(parts[2]) : 1;
+          const difficulty = parts[3] || "medium";
+
+          if (!questionText || !explanation) continue;
+
+          payloads.push({
+            question_type: "short_answer",
+            question_text: questionText,
+            difficulty: ["easy", "medium", "hard"].includes(difficulty) ? difficulty : "medium",
+            points: Number.isFinite(points) && points > 0 ? points : 1,
+            explanation,
+          });
         }
-        const correct = normalized.find((item) => item.correct)?.text ?? "";
-        const wrong = normalized.filter((item) => !item.correct).map((item) => item.text).filter(Boolean);
-        if (!questionText || !correct || wrong.length < 1) continue;
+      } else {
+        // multiple_choice - existing logic
+        for (const line of lines) {
+          const parts = line
+            .split("|")
+            .map((item) => item.trim())
+            .filter(Boolean);
+          if (parts.length < 3) continue;
 
-        payloads.push(
-          createQuestionPayloadFromRow({
-            questionText,
-            correctOption: correct,
-            wrongOptions: wrong,
-          })
-        );
+          const questionText = parts[0];
+          const rawOptions = parts.slice(1);
+          const normalized = rawOptions.map((opt) => ({
+            text: opt.startsWith("*") ? opt.slice(1).trim() : opt,
+            correct: opt.startsWith("*"),
+          }));
+          if (!normalized.some((item) => item.correct) && normalized.length > 0) {
+            normalized[0].correct = true;
+          }
+          const correct = normalized.find((item) => item.correct)?.text ?? "";
+          const wrong = normalized.filter((item) => !item.correct).map((item) => item.text).filter(Boolean);
+          if (!questionText || !correct || wrong.length < 1) continue;
+
+          payloads.push(
+            createQuestionPayloadFromRow({
+              questionText,
+              correctOption: correct,
+              wrongOptions: wrong,
+            })
+          );
+        }
       }
 
       if (!payloads.length) throw new Error("Không parse được dữ liệu bulk text.");
@@ -691,7 +739,7 @@ export default function TeacherQuestionBankPage() {
   };
 
   // CSV import
-  const importQuestionsFromCsv = async (file: File) => {
+  const importQuestionsFromCsv = async (file: File, questionType: "multiple_choice" | "short_answer" = bulkQuestionType) => {
     if (!selectedBankId) throw new Error("Vui lòng chọn ngân hàng câu hỏi.");
     const raw = await file.text();
     const lines = raw
@@ -704,49 +752,93 @@ export default function TeacherQuestionBankPage() {
     const payloads: any[] = [];
     const errors: string[] = [];
 
-    for (let i = startIndex; i < lines.length; i += 1) {
-      const cols = parseCsvLine(lines[i]);
-      const lineNo = i + 1;
-      if (cols.length < 3) {
-        errors.push(`Dòng ${lineNo}: thiếu cột dữ liệu.`);
-        continue;
-      }
+    if (questionType === "short_answer") {
+      // CSV format: question_text,answer_model,max_length,grading_notes,difficulty,points,explanation
+      for (let i = startIndex; i < lines.length; i += 1) {
+        const cols = parseCsvLine(lines[i]);
+        const lineNo = i + 1;
+        if (cols.length < 2) {
+          errors.push(`Dòng ${lineNo}: thiếu cột dữ liệu (cần ít nhất question_text, answer_model).`);
+          continue;
+        }
 
-      const questionText = cols[0]?.trim();
-      const correctOption = cols[1]?.trim();
-      const wrongOptions = cols.slice(2, 5).map((item) => item.trim()).filter(Boolean);
-      const difficultyRaw = cols[5]?.trim().toLowerCase();
-      const pointsRaw = cols[6]?.trim();
-      const explanation = cols[7]?.trim();
+        const questionText = cols[0]?.trim();
+        const answerModel = cols[1]?.trim();
+        const maxLength = cols[2]?.trim();
+        const gradingNotes = cols[3]?.trim();
+        const difficultyRaw = cols[4]?.trim().toLowerCase();
+        const pointsRaw = cols[5]?.trim();
+        const explanation = cols[6]?.trim();
 
-      if (!questionText) {
-        errors.push(`Dòng ${lineNo}: thiếu question_text.`);
-        continue;
-      }
-      if (!correctOption) {
-        errors.push(`Dòng ${lineNo}: thiếu correct_option.`);
-        continue;
-      }
-      if (wrongOptions.length < 1) {
-        errors.push(`Dòng ${lineNo}: cần ít nhất 1 đáp án sai.`);
-        continue;
-      }
+        if (!questionText) {
+          errors.push(`Dòng ${lineNo}: thiếu question_text.`);
+          continue;
+        }
+        if (!answerModel) {
+          errors.push(`Dòng ${lineNo}: thiếu answer_model.`);
+          continue;
+        }
 
-      payloads.push(
-        createQuestionPayloadFromRow({
-          questionText,
-          correctOption,
-          wrongOptions,
-          difficultyRaw,
-          pointsRaw,
-          explanation,
-        })
-      );
+        const difficulty = ["easy", "medium", "hard"].includes(difficultyRaw) ? difficultyRaw : "medium";
+        const points = Number(pointsRaw);
+        const maxLen = maxLength ? Number(maxLength) : undefined;
+
+        payloads.push({
+          question_type: "short_answer",
+          question_text: questionText,
+          difficulty,
+          points: Number.isFinite(points) && points > 0 ? points : 1,
+          explanation: explanation || undefined,
+          max_length: maxLen,
+          grading_notes: gradingNotes || undefined,
+        });
+      }
+    } else {
+      // multiple_choice - existing logic
+      for (let i = startIndex; i < lines.length; i += 1) {
+        const cols = parseCsvLine(lines[i]);
+        const lineNo = i + 1;
+        if (cols.length < 3) {
+          errors.push(`Dòng ${lineNo}: thiếu cột dữ liệu.`);
+          continue;
+        }
+
+        const questionText = cols[0]?.trim();
+        const correctOption = cols[1]?.trim();
+        const wrongOptions = cols.slice(2, 5).map((item) => item.trim()).filter(Boolean);
+        const difficultyRaw = cols[5]?.trim().toLowerCase();
+        const pointsRaw = cols[6]?.trim();
+        const explanation = cols[7]?.trim();
+
+        if (!questionText) {
+          errors.push(`Dòng ${lineNo}: thiếu question_text.`);
+          continue;
+        }
+        if (!correctOption) {
+          errors.push(`Dòng ${lineNo}: thiếu correct_option.`);
+          continue;
+        }
+        if (wrongOptions.length < 1) {
+          errors.push(`Dòng ${lineNo}: cần ít nhất 1 đáp án sai.`);
+          continue;
+        }
+
+        payloads.push(
+          createQuestionPayloadFromRow({
+            questionText,
+            correctOption,
+            wrongOptions,
+            difficultyRaw,
+            pointsRaw,
+            explanation,
+          })
+        );
+      }
     }
 
     setCsvImportErrors(errors);
     if (!payloads.length) {
-      throw new Error("Không parse được dòng hợp lệ từ CSV.");
+      throw new Error("Không parse được dòng hợp lệ từ CSV. " + (errors[0] || ""));
     }
 
     await bulkCreateQuestions(payloads);
@@ -824,16 +916,25 @@ export default function TeacherQuestionBankPage() {
   };
 
   const downloadCsvTemplate = () => {
-    const rows = [
-      "question_text,correct_option,option_2,option_3,option_4,difficulty,points,explanation",
-      '"2 + 2 bằng mấy?","4","3","5","6","easy","1","Câu hỏi cộng cơ bản"',
-      '"Thủ đô của Việt Nam là?","Hà Nội","Đà Nẵng","Huế","Cần Thơ","medium","1","Kiến thức địa lý cơ bản"',
-    ];
+    let rows: string[];
+    if (bulkQuestionType === "short_answer") {
+      rows = [
+        "question_text,answer_model,max_length,grading_notes,difficulty,points,explanation",
+        '"Hãy kể tên 3 loại cây ăn quả phổ biến ở Việt Nam","Cây ăn quả phổ biến: xoài, cam, nhãn","200","Đúng 1 loại: 0.5đ, đúng 2 loại: 1đ, đúng 3 loại: 2đ","medium","2","Câu hỏi về cây ăn quả Việt Nam"',
+        '"Nêu công thức tính diện tích hình tròn","S = π × r²","100","Có π và r² là 1đ","easy","1","Câu hỏi toán hình cơ bản"',
+      ];
+    } else {
+      rows = [
+        "question_text,correct_option,option_2,option_3,option_4,difficulty,points,explanation",
+        '"2 + 2 bằng mấy?","4","3","5","6","easy","1","Câu hỏi cộng cơ bản"',
+        '"Thủ đô của Việt Nam là?","Hà Nội","Đà Nẵng","Huế","Cần Thơ","medium","1","Kiến thức địa lý cơ bản"',
+      ];
+    }
     const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
     const fileUrl = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = fileUrl;
-    link.setAttribute("download", "question-bank-import-template.csv");
+    link.setAttribute("download", `question-bank-${bulkQuestionType}-template.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -850,20 +951,27 @@ export default function TeacherQuestionBankPage() {
   if (!courseId || Number.isNaN(courseId)) return null;
 
   if (isPickMode) {
-    const pickableQuestions = filteredQuestions.filter(
-      (q) =>
+    const isShortAnswerPick = questionTypeFilterFromUrl === "short_answer";
+    const pickableQuestions = filteredQuestions.filter((q) => {
+      if (isShortAnswerPick) {
+        return q.question_type === "short_answer";
+      }
+      return (
         (q.question_type === "multiple_choice" || q.question_type === "true_false") &&
         Array.isArray(q.options) &&
         (q.options || []).length >= 2
-    );
+      );
+    });
     const selectedQuestions = pickableQuestions.filter((q) => pickedQuestionIds.includes(Number(q.id)));
     return (
       <div className="teacher-dashboard question-bank-page">
         <div className="dashboard-container">
           <div className="dashboard-header">
             <div className="header-title-section">
-              <h1 className="dashboard-title">Chọn câu hỏi từ Question Bank</h1>
-              <p className="dashboard-subtitle">Chế độ chọn nhanh để import vào Lesson Studio</p>
+              <h1 className="dashboard-title">
+                {isShortAnswerPick ? "Chọn câu hỏi trả lời ngắn" : "Chọn câu hỏi từ Question Bank"}
+              </h1>
+              <p className="dashboard-subtitle">Chế độ chọn nhanh để import vào Assignment</p>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <button
@@ -886,14 +994,18 @@ export default function TeacherQuestionBankPage() {
                 disabled={!selectedBankId || !selectedQuestions.length}
                 onClick={() => {
                   if (!selectedBankId || !selectedQuestions.length) return;
-                  const payload: PickImportPayload = {
-                    source: "question-bank-pick",
-                    courseId,
-                    bankId: selectedBankId,
-                    questions: selectedQuestions.map((q) => ({
+                  const questionsForPayload = selectedQuestions.map((q) => {
+                    if (isShortAnswerPick) {
+                      return {
+                        id: Number(q.id),
+                        question_text: String(q.question_text || ""),
+                        question_type: "short_answer" as const,
+                      };
+                    }
+                    return {
                       id: Number(q.id),
                       question_text: String(q.question_text || ""),
-                      question_type: q.question_type === "true_false" ? "true_false" : "multiple_choice",
+                      question_type: q.question_type === "true_false" ? "true_false" as const : "multiple_choice" as const,
                       explanation: q.explanation || "",
                       points: Number(q.points || 1),
                       difficulty: q.difficulty || "medium",
@@ -901,7 +1013,13 @@ export default function TeacherQuestionBankPage() {
                         option_text: String(o.option_text || ""),
                         is_correct: Boolean(o.is_correct),
                       })),
-                    })),
+                    };
+                  });
+                  const payload: PickImportPayload = {
+                    source: "question-bank-pick",
+                    courseId,
+                    bankId: selectedBankId,
+                    questions: questionsForPayload,
                   };
                   if (window.opener && !window.opener.closed) {
                     window.opener.postMessage(payload, window.location.origin);
@@ -1402,6 +1520,34 @@ export default function TeacherQuestionBankPage() {
                         </div>
                       )}
 
+                      {(questionType === "short_answer" || questionType === "essay") && (
+                        <div className="short-answer-section">
+                          <div className="form-row-2">
+                            <div className="form-group">
+                              <label>Giới hạn ký tự (để trống = không giới hạn)</label>
+                              <input
+                                className="form-input"
+                                type="number"
+                                min="1"
+                                placeholder="VD: 500"
+                                value={maxLength}
+                                onChange={(e) => setMaxLength(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          <div className="form-group">
+                            <label>Hướng dẫn chấm điểm</label>
+                            <textarea
+                              className="form-input"
+                              rows={3}
+                              placeholder="Ví dụ: Trả lời đúng ý chính +2đ, có ví dụ minh họa +1đ, trình bày rõ ràng +1đ..."
+                              value={gradingNotes}
+                              onChange={(e) => setGradingNotes(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      )}
+
                       <div className="form-actions">
                         <button className="btn-primary" type="submit" disabled={loading}>
                           <span className="material-symbols-outlined">{editingQuestion ? "save" : "add"}</span>
@@ -1453,15 +1599,29 @@ export default function TeacherQuestionBankPage() {
                       {/* Text Import */}
                       {activeBulkSubTab === "text" && (
                         <div className="import-card">
+                          <div className="form-group">
+                            <label>Loại câu hỏi</label>
+                            <select className="form-input" value={bulkQuestionType} onChange={(e) => setBulkQuestionType(e.target.value as "multiple_choice" | "short_answer")}>
+                              <option value="multiple_choice">Trắc nghiệm</option>
+                              <option value="short_answer">Trả lời ngắn</option>
+                            </select>
+                          </div>
                           <p className="import-hint">
-                            Mỗi dòng một câu theo mẫu: <code>Câu hỏi | *Đáp án đúng | Đáp án sai | Đáp án sai</code>
+                            {bulkQuestionType === "multiple_choice"
+                              ? <>Mỗi dòng một câu theo mẫu: <code>Câu hỏi | *Đáp án đúng | Đáp án sai | Đáp án sai</code></>
+                              : <>Mỗi dòng một câu theo mẫu: <code>Câu hỏi | Đáp án mẫu | Điểm | Độ khó</code></>
+                            }
                           </p>
                           <textarea
                             className="form-input"
                             rows={8}
                             value={bulkText}
                             onChange={(e) => setBulkText(e.target.value)}
-                            placeholder="2+2=? | *4 | 3 | 5&#10;Thủ đô Việt Nam? | *Hà Nội | Đà Nẵng | Cần Thơ&#10;Mặt trời mọc hướng nào? | *Đông | Tây | Nam | Bắc"
+                            placeholder={
+                              bulkQuestionType === "multiple_choice"
+                                ? "2+2=? | *4 | 3 | 5\nThủ đô Việt Nam? | *Hà Nội | Đà Nẵng | Cần Thơ"
+                                : "Hãy kể tên 3 loại cây ăn quả phổ biến ở Việt Nam? | Cây ăn quả phổ biến: xoài, cam, nhãn | 2 | medium\nNêu công thức tính diện tích hình tròn | S = π × r² (π nhân r bình phương) | 1 | easy"
+                            }
                           />
                           <button className="btn-primary" type="button" onClick={() => void importQuestionsFromBulkText()} disabled={loading}>
                             <span className="material-symbols-outlined">play_arrow</span>
@@ -1473,8 +1633,18 @@ export default function TeacherQuestionBankPage() {
                       {/* CSV Import */}
                       {activeBulkSubTab === "csv" && (
                         <div className="import-card">
+                          <div className="form-group">
+                            <label>Loại câu hỏi</label>
+                            <select className="form-input" value={bulkQuestionType} onChange={(e) => setBulkQuestionType(e.target.value as "multiple_choice" | "short_answer")}>
+                              <option value="multiple_choice">Trắc nghiệm</option>
+                              <option value="short_answer">Trả lời ngắn</option>
+                            </select>
+                          </div>
                           <p className="import-hint">
-                            Header mẫu: <code>question_text,correct_option,option_2,option_3,option_4,difficulty,points,explanation</code>
+                            {bulkQuestionType === "multiple_choice"
+                              ? <>Header mẫu: <code>question_text,correct_option,option_2,option_3,option_4,difficulty,points,explanation</code></>
+                              : <>Header mẫu: <code>question_text,answer_model,max_length,grading_notes,difficulty,points,explanation</code></>
+                            }
                           </p>
                           <button className="btn-secondary btn-sm" type="button" onClick={downloadCsvTemplate}>
                             <span className="material-symbols-outlined">download</span>
@@ -1551,9 +1721,10 @@ export default function TeacherQuestionBankPage() {
                               <option value="hard">Khó</option>
                             </select>
                             <select className="form-input" value={aiQuestionType} onChange={(e) => setAiQuestionType(e.target.value as any)}>
-                              <option value="mixed">Hỗn hợp</option>
+                              <option value="mixed">Hỗn hợp (MC + T/F)</option>
                               <option value="multiple_choice">Trắc nghiệm</option>
                               <option value="true_false">Đúng/Sai</option>
+                              <option value="short_answer">Trả lời ngắn</option>
                             </select>
                           </div>
                           <textarea

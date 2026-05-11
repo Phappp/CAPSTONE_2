@@ -235,6 +235,11 @@ export function ContentEditorSection({
   readOnly = false,
 }: ContentEditorSectionProps) {
   if (activeSection !== "content" || isAssessmentLesson) return null;
+
+  const videoReviewBadge = currentVideoResource
+    ? getReviewStatusLabel(currentVideoResource.review_status, currentVideoResource.review_decision)
+    : null;
+
   return (
     <>
       <div className="studio-card">
@@ -242,6 +247,20 @@ export function ContentEditorSection({
           <div className="studio-card-title">
             <Video size={18} />
             <h2>Video / Tài nguyên</h2>
+            {videoReviewBadge && (
+              <span className={`resource-review-badge ${videoReviewBadge.className}`}>
+                {videoReviewBadge.text}
+              </span>
+            )}
+            {currentVideoResource?.review_status === "rejected" && (
+              <RejectReasonButton reason={currentVideoResource.review_reason} />
+            )}
+            {currentVideoResource?.review_status === "pending" && currentVideoResource.review_decision === "delete" && (
+              <span className="resource-review-badge review-delete-pending">Đang chờ xóa</span>
+            )}
+            {currentVideoResource?.review_status === "pending" && currentVideoResource.is_resubmitted && (
+              <span className="resource-review-badge review-pending">Đã gửi lại chờ duyệt</span>
+            )}
           </div>
         </div>
         <div className="studio-card-content">
@@ -326,9 +345,10 @@ export function ContentEditorSection({
               <div className="current-video-item">
                 <div className="video-info">
                   {currentYoutubeId ? <Youtube size={16} /> : <Video size={16} />}
-                  <span className="video-name">{currentVideoResource.filename || currentVideoResource.url || "Video"}</span>
-                  <span className={`resource-review-badge ${getReviewStatusLabel(currentVideoResource.review_status, currentVideoResource.review_decision).className}`}>
-                    {getReviewStatusLabel(currentVideoResource.review_status, currentVideoResource.review_decision).text}
+                  <span className="video-name" title={currentVideoResource.filename || currentVideoResource.url || "Video"}>
+                    {(currentVideoResource.filename || currentVideoResource.url || "Video").length > 40
+                      ? (currentVideoResource.filename || currentVideoResource.url || "Video").slice(0, 40) + "..."
+                      : currentVideoResource.filename || currentVideoResource.url || "Video"}
                   </span>
                   {currentVideoResource.review_status === "rejected" ? (
                     <RejectReasonButton reason={currentVideoResource.review_reason} />
@@ -371,7 +391,9 @@ export function ContentEditorSection({
                 <div key={r.id} className="resource-item">
                   <div className="resource-info">
                     <FileText size={16} />
-                    <span className="resource-name">{r.filename || "Tài nguyên"}</span>
+                    <span className="resource-name" title={r.filename || "Tài nguyên"}>
+                    {(r.filename || "Tài nguyên").length > 40 ? (r.filename || "Tài nguyên").slice(0, 40) + "..." : r.filename || "Tài nguyên"}
+                  </span>
                     <span className={`resource-review-badge ${getReviewStatusLabel(r.review_status, r.review_decision).className}`}>
                       {getReviewStatusLabel(r.review_status, r.review_decision).text}
                     </span>
