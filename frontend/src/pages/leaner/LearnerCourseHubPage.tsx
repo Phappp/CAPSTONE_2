@@ -178,7 +178,7 @@ export default function LearnerCourseHubPage() {
     <div className="learnerHub">
       <div className="learnerHub__topbar">
         <button type="button" className="learnerHub__back" onClick={() => navigate("/student/dashboard")}>
-          ← Dashboard
+          ← Về Dashboard
         </button>
         <div className="learnerHub__topbarTitle">Tổng quan khóa học</div>
         <AvatarMenu />
@@ -203,7 +203,7 @@ export default function LearnerCourseHubPage() {
               {course.thumbnail_url ? (
                 <img src={course.thumbnail_url} alt={course.title} />
               ) : (
-                <div className="learnerHub__thumbPlaceholder">No image</div>
+                <div className="learnerHub__thumbPlaceholder">Không có hình ảnh</div>
               )}
             </div>
 

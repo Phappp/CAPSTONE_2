@@ -37,6 +37,8 @@ export interface QuestionBankService {
         points?: number;
         options?: Array<{ option_text: string; is_correct: boolean; explanation?: string }>;
         explanation?: string;
+        max_length?: number | null;
+        grading_notes?: string | null;
       }
     ): Promise<any>;
     deleteQuestion(bankId: number, questionId: number, userId: number): Promise<void>;
@@ -47,17 +49,17 @@ export interface QuestionBankService {
         topic: string;
         question_count?: number;
         difficulty?: 'easy' | 'medium' | 'hard';
-        question_type?: 'multiple_choice' | 'true_false' | 'mixed';
+        question_type?: 'multiple_choice' | 'true_false' | 'short_answer' | 'mixed';
         extra_instructions?: string;
         attachment_name?: string;
         attachment_text?: string;
       }
     ): Promise<Array<{
-      question_type: 'multiple_choice' | 'true_false';
+      question_type: 'multiple_choice' | 'true_false' | 'short_answer';
       question_text: string;
       difficulty: 'easy' | 'medium' | 'hard';
       points: number;
       explanation?: string;
-      options: Array<{ option_text: string; is_correct: boolean }>;
+      options?: Array<{ option_text: string; is_correct: boolean }>;
     }>>;
 }

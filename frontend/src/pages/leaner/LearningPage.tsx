@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+/* LearningPage.tsx */
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, type KeyboardEvent, type MouseEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import AvatarMenu from "../../components/AvatarMenu";
@@ -98,6 +99,46 @@ type LessonSummaryData = {
   }>;
 };
 
+// Storage keys for pane state
+const STORAGE_KEYS = {
+  TREE_WIDTH: "learningPage_treeWidth",
+  SUMMARY_WIDTH: "learningPage_summaryWidth",
+  TREE_COLLAPSED: "learningPage_treeCollapsed",
+  SUMMARY_COLLAPSED: "learningPage_summaryCollapsed",
+};
+
+// Helper to get/set localStorage values
+function getStoredNumber(key: string, defaultValue: number, min: number, max: number): number {
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      const val = parseInt(stored, 10);
+      if (!isNaN(val) && val >= min && val <= max) return val;
+    }
+  } catch (e) {}
+  return defaultValue;
+}
+
+function setStoredNumber(key: string, value: number) {
+  try {
+    localStorage.setItem(key, String(value));
+  } catch (e) {}
+}
+
+function getStoredBoolean(key: string, defaultValue: boolean): boolean {
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored !== null) return stored === "true";
+  } catch (e) {}
+  return defaultValue;
+}
+
+function setStoredBoolean(key: string, value: boolean) {
+  try {
+    localStorage.setItem(key, String(value));
+  } catch (e) {}
+}
+
 export default function LearningPage() {
   const navigate = useNavigate();
   const params = useParams();
@@ -106,17 +147,17 @@ export default function LearningPage() {
 
   const { accessToken: token } = useAuth();
 
+  // ============================================
+  // ALL useState declarations
+  // ============================================
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [progress, setProgress] = useState<CourseProgress | null>(null);
   const [animatedModules, setAnimatedModules] = useState<Set<number>>(new Set());
   const [assessmentSubmittedByLessonId, setAssessmentSubmittedByLessonId] = useState<
     Record<number, { quiz: boolean; assignment: boolean }>
   >({});
-  const roadmapRef = useRef<HTMLDivElement | null>(null);
-  const nodeRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const [assessmentQuickPick, setAssessmentQuickPick] = useState<{
     moduleId: number;
     lessonId: number;
@@ -146,18 +187,14 @@ export default function LearningPage() {
   }>>([]);
   const [lessonHtmlContent, setLessonHtmlContent] = useState<string | null>(null);
   const [lessonHtmlLoading, setLessonHtmlLoading] = useState(false);
-  const heartbeatTimerRef = useRef<number | null>(null);
-  const completedAttemptedRef = useRef<Set<number>>(new Set());
   const [heartbeat, setHeartbeat] = useState<LessonHeartbeatDto | null>(null);
   const [lessonSummary, setLessonSummary] = useState<LessonSummaryData | null>(null);
   const [lessonSummaryLoading, setLessonSummaryLoading] = useState(false);
   const [lessonSummaryMutating, setLessonSummaryMutating] = useState(false);
   const [lessonSummaryError, setLessonSummaryError] = useState<string | null>(null);
+  const [lessonSummaryErrorShownAt, setLessonSummaryErrorShownAt] = useState<number | null>(null);
+  const [lessonSummarySegmentsExpanded, setLessonSummarySegmentsExpanded] = useState(false);
   const [countdownRemainingPct, setCountdownRemainingPct] = useState<number>(100);
-  const countdownRequiredSecondsRef = useRef<number>(0);
-  const countdownBaselineTimeSpentRef = useRef<number>(0);
-  const countdownBaselineAtMsRef = useRef<number>(0);
-  const countdownAnimTimerRef = useRef<number | null>(null);
   const [linkGeoms, setLinkGeoms] = useState<
     {
       key: string;
@@ -177,7 +214,78 @@ export default function LearningPage() {
     }[]
   >([]);
 
-  const fetchLearning = async () => {
+  // Pane state for resizing and collapse
+  const [treeWidth, setTreeWidth] = useState(() =>
+    getStoredNumber(STORAGE_KEYS.TREE_WIDTH, 320, 240, 500)
+  );
+  const [summaryWidth, setSummaryWidth] = useState(() =>
+    getStoredNumber(STORAGE_KEYS.SUMMARY_WIDTH, 360, 260, 500)
+  );
+  const [isTreeCollapsed, setIsTreeCollapsed] = useState(() =>
+    getStoredBoolean(STORAGE_KEYS.TREE_COLLAPSED, false)
+  );
+  const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(() =>
+    getStoredBoolean(STORAGE_KEYS.SUMMARY_COLLAPSED, false)
+  );
+  const [isResizingTree, setIsResizingTree] = useState(false);
+  const [isResizingSummary, setIsResizingSummary] = useState(false);
+
+  // ============================================
+  // ALL useRef declarations
+  // ============================================
+  const roadmapRef = useRef<HTMLDivElement | null>(null);
+  const nodeRefs = useRef<Record<number, HTMLButtonElement | null>>({});
+  const heartbeatTimerRef = useRef<number | null>(null);
+  const completedAttemptedRef = useRef<Set<number>>(new Set());
+  const countdownRequiredSecondsRef = useRef<number>(0);
+  const countdownBaselineTimeSpentRef = useRef<number>(0);
+  const countdownBaselineAtMsRef = useRef<number>(0);
+  const countdownAnimTimerRef = useRef<number | null>(null);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(0);
+  const summaryMutatingAtRef = useRef<number>(0);
+
+  // ============================================
+  // ALL useMemo hooks (before conditional returns)
+  // ============================================
+  const treePaneStyle: React.CSSProperties = useMemo(() => {
+    if (isTreeCollapsed) {
+      return {
+        width: "48px",
+        minWidth: "48px",
+        maxWidth: "48px",
+        overflow: "hidden",
+        padding: "12px 8px",
+      };
+    }
+    return {
+      width: `${treeWidth}px`,
+      minWidth: `${treeWidth}px`,
+      maxWidth: `${treeWidth}px`,
+    };
+  }, [treeWidth, isTreeCollapsed]);
+
+  const summaryPaneStyle: React.CSSProperties = useMemo(() => {
+    if (isSummaryCollapsed) {
+      return {
+        width: "48px",
+        minWidth: "48px",
+        maxWidth: "48px",
+        overflow: "hidden",
+        padding: "12px 8px",
+      };
+    }
+    return {
+      width: `${summaryWidth}px`,
+      minWidth: `${summaryWidth}px`,
+      maxWidth: `${summaryWidth}px`,
+    };
+  }, [summaryWidth, isSummaryCollapsed]);
+
+  // ============================================
+  // ALL useCallback hooks
+  // ============================================
+  const fetchLearning = useCallback(async () => {
     if (!courseId || Number.isNaN(courseId)) return;
     setLoading(true);
     setError(null);
@@ -200,9 +308,9 @@ export default function LearningPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [courseId, token]);
 
-  const fetchProgress = async () => {
+  const fetchProgress = useCallback(async () => {
     if (!courseId || Number.isNaN(courseId)) return;
     try {
       const res = await fetch(`${url}${COURSES_API.progress(courseId)}`, {
@@ -217,13 +325,192 @@ export default function LearningPage() {
     } catch {
       setProgress(null);
     }
-  };
+  }, [courseId, token]);
 
+  const fetchLessonSummary = useCallback(async (lessonId: number) => {
+    setLessonSummaryLoading(true);
+    setLessonSummaryError(null);
+    try {
+      const res = await fetch(`${url}${COURSES_API.lessonSummary(courseId, lessonId)}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as any)?.message || "Không thể tải tóm tắt bài học.");
+      const data = json as LessonSummaryData;
+      setLessonSummary(data);
+      if (
+        data.status === "failed" &&
+        data.error_message &&
+        Date.now() - summaryMutatingAtRef.current < 30_000
+      ) {
+        setLessonSummaryErrorShownAt(Date.now());
+      }
+    } catch (e: any) {
+      setLessonSummary(null);
+      setLessonSummaryError(normalizeLearnerErrorMessage(e?.message || "Không thể tải tóm tắt."));
+    } finally {
+      setLessonSummaryLoading(false);
+    }
+  }, [courseId, token]);
+
+  const requestLessonSummary = useCallback(async (lessonId: number, regenerate = false) => {
+    setLessonSummaryMutating(true);
+    setLessonSummaryError(null);
+    setLessonSummaryErrorShownAt(null);
+    summaryMutatingAtRef.current = Date.now();
+    try {
+      const endpoint = regenerate
+        ? COURSES_API.regenerateLessonSummary(courseId, lessonId)
+        : COURSES_API.requestLessonSummary(courseId, lessonId);
+      const res = await fetch(`${url}${endpoint}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as any)?.message || "Không thể tạo tóm tắt.");
+      setLessonSummary(json as LessonSummaryData);
+    } catch (e: any) {
+      setLessonSummaryError(normalizeLearnerErrorMessage(e?.message || "Không thể tạo tóm tắt."));
+    } finally {
+      setLessonSummaryMutating(false);
+    }
+  }, [courseId, token]);
+
+  const syncCountdownBaseline = useCallback((data: LessonHeartbeatDto) => {
+    const req = Number(data?.required_seconds || 0);
+    const spent = Number(data?.time_spent_seconds || 0);
+    if (!Number.isFinite(req) || req <= 0) return;
+    countdownRequiredSecondsRef.current = req;
+    countdownBaselineTimeSpentRef.current = Math.max(0, spent);
+    countdownBaselineAtMsRef.current = Date.now();
+
+    const elapsedSeconds = (Date.now() - countdownBaselineAtMsRef.current) / 1000;
+    const predictedSpent = countdownBaselineTimeSpentRef.current + elapsedSeconds;
+    const remaining = Math.max(0, Math.min(100, (1 - predictedSpent / req) * 100));
+    setCountdownRemainingPct(Math.round(remaining * 10) / 10);
+  }, []);
+
+  const postHeartbeat = useCallback(async (lessonId: number, deltaSeconds: number) => {
+    const res = await fetch(`${url}${COURSES_API.lessonHeartbeat(courseId, lessonId)}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ delta_seconds: deltaSeconds }),
+    });
+    const json = (await res.json().catch(() => ({}))) as Partial<LessonHeartbeatDto> & { message?: string };
+    if (!res.ok) throw new Error(json?.message || "Không thể cập nhật tiến độ bài học.");
+    return json as LessonHeartbeatDto;
+  }, [courseId, token]);
+
+  const tryCompleteLesson = useCallback(async (lessonId: number) => {
+    if (completedAttemptedRef.current.has(lessonId)) return;
+    completedAttemptedRef.current.add(lessonId);
+    try {
+      const res = await fetch(`${url}${COURSES_API.completeLesson(courseId, lessonId)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const json = (await res.json().catch(() => ({}))) as Partial<{ message?: string }>;
+      if (!res.ok) throw new Error(json?.message || "Không thể hoàn thành bài học.");
+      await fetchProgress();
+    } catch {
+      completedAttemptedRef.current.delete(lessonId);
+    }
+  }, [courseId, token, fetchProgress]);
+
+  const startResizeTree = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingTree(true);
+    startXRef.current = e.clientX;
+    startWidthRef.current = treeWidth;
+    document.body.style.cursor = "ew-resize";
+    document.body.style.userSelect = "none";
+  }, [treeWidth]);
+
+  const startResizeSummary = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingSummary(true);
+    startXRef.current = e.clientX;
+    startWidthRef.current = summaryWidth;
+    document.body.style.cursor = "ew-resize";
+    document.body.style.userSelect = "none";
+  }, [summaryWidth]);
+
+  const handleMouseMove = useCallback((e: globalThis.MouseEvent) => {
+    if (isResizingTree) {
+      const delta = e.clientX - startXRef.current;
+      let newWidth = startWidthRef.current + delta;
+      newWidth = Math.min(500, Math.max(240, newWidth));
+      setTreeWidth(newWidth);
+    } else if (isResizingSummary) {
+      const delta = startXRef.current - e.clientX;
+      let newWidth = startWidthRef.current + delta;
+      newWidth = Math.min(500, Math.max(260, newWidth));
+      setSummaryWidth(newWidth);
+    }
+  }, [isResizingTree, isResizingSummary]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsResizingTree(false);
+    setIsResizingSummary(false);
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+  }, []);
+
+  const toggleTreeCollapse = useCallback(() => setIsTreeCollapsed(prev => !prev), []);
+  const toggleSummaryCollapse = useCallback(() => setIsSummaryCollapsed(prev => !prev), []);
+
+  // ============================================
+  // ALL useEffect hooks
+  // ============================================
+  
+  // localStorage save effects
+  useEffect(() => {
+    setStoredNumber(STORAGE_KEYS.TREE_WIDTH, treeWidth);
+  }, [treeWidth]);
+
+  useEffect(() => {
+    setStoredNumber(STORAGE_KEYS.SUMMARY_WIDTH, summaryWidth);
+  }, [summaryWidth]);
+
+  useEffect(() => {
+    setStoredBoolean(STORAGE_KEYS.TREE_COLLAPSED, isTreeCollapsed);
+  }, [isTreeCollapsed]);
+
+  useEffect(() => {
+    setStoredBoolean(STORAGE_KEYS.SUMMARY_COLLAPSED, isSummaryCollapsed);
+  }, [isSummaryCollapsed]);
+
+  // Resize event handlers
+  useEffect(() => {
+    if (isResizingTree || isResizingSummary) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+      return () => {
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
+    }
+  }, [isResizingTree, isResizingSummary, handleMouseMove, handleMouseUp]);
+
+  // Fetch initial data
   useEffect(() => {
     void fetchLearning();
     void fetchProgress();
-  }, [courseId]);
+  }, [fetchLearning, fetchProgress]);
 
+  // Assessment submitted status effect
   useEffect(() => {
     if (!course?.modules?.length || !courseId) {
       setAssessmentSubmittedByLessonId({});
@@ -308,6 +595,7 @@ export default function LearningPage() {
     };
   }, [course, courseId, token]);
 
+  // Lesson modal resource loading effect
   useEffect(() => {
     if (!lessonModal) {
       setLessonModalLoading(false);
@@ -342,7 +630,6 @@ export default function LearningPage() {
         if (!alive) return;
 
         if (Array.isArray(items) && items.length > 0) {
-          // Sort resources: Video → PDF/Word → HTML/Other
           const sortedItems = [...items].sort((a, b) => {
             const aMime = (a.mime_type || "").toLowerCase();
             const bMime = (b.mime_type || "").toLowerCase();
@@ -358,7 +645,6 @@ export default function LearningPage() {
             const aIsHtml = aMime.includes("text/html") || (a.filename || "").toLowerCase().endsWith(".html");
             const bIsHtml = bMime.includes("text/html") || (b.filename || "").toLowerCase().endsWith(".html");
 
-            // Video first, then PDF/Word, then HTML, then others
             if (aIsVideo && !bIsVideo) return -1;
             if (!aIsVideo && bIsVideo) return 1;
             if (aIsPdfOrWord && !bIsPdfOrWord && !bIsVideo) return -1;
@@ -378,7 +664,6 @@ export default function LearningPage() {
           }));
           setLessonModalResources(resources);
 
-          // Fetch HTML content if any HTML resource exists
           const htmlItem = sortedItems.find((item) => {
             const mime = (item.mime_type || "").toLowerCase();
             return mime.includes("text/html") || (item.filename || "").toLowerCase().endsWith(".html");
@@ -415,62 +700,20 @@ export default function LearningPage() {
     };
   }, [lessonModal, courseId, token, course]);
 
-  const fetchLessonSummary = async (lessonId: number) => {
-    setLessonSummaryLoading(true);
-    setLessonSummaryError(null);
-    try {
-      const res = await fetch(`${url}${COURSES_API.lessonSummary(courseId, lessonId)}`, {
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((json as any)?.message || "Không thể tải tóm tắt bài học.");
-      setLessonSummary(json as LessonSummaryData);
-    } catch (e: any) {
-      setLessonSummary(null);
-      setLessonSummaryError(normalizeLearnerErrorMessage(e?.message || "Không thể tải tóm tắt."));
-    } finally {
-      setLessonSummaryLoading(false);
-    }
-  };
-
-  const requestLessonSummary = async (lessonId: number, regenerate = false) => {
-    setLessonSummaryMutating(true);
-    setLessonSummaryError(null);
-    try {
-      const endpoint = regenerate
-        ? COURSES_API.regenerateLessonSummary(courseId, lessonId)
-        : COURSES_API.requestLessonSummary(courseId, lessonId);
-      const res = await fetch(`${url}${endpoint}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((json as any)?.message || "Không thể tạo tóm tắt.");
-      setLessonSummary(json as LessonSummaryData);
-    } catch (e: any) {
-      setLessonSummaryError(normalizeLearnerErrorMessage(e?.message || "Không thể tạo tóm tắt."));
-    } finally {
-      setLessonSummaryMutating(false);
-    }
-  };
-
+  // Lesson summary polling effect
   useEffect(() => {
     if (!lessonModal) {
       setLessonSummary(null);
       setLessonSummaryError(null);
+      setLessonSummaryErrorShownAt(null);
       setLessonSummaryLoading(false);
       setLessonSummaryMutating(false);
       return;
     }
     void fetchLessonSummary(lessonModal.lessonId);
-  }, [lessonModal, courseId, token]);
+  }, [lessonModal, fetchLessonSummary]);
 
+  // Lesson summary polling timer
   useEffect(() => {
     if (!lessonModal || !lessonSummary) return;
     if (lessonSummary.status !== "pending" && lessonSummary.status !== "processing") return;
@@ -478,55 +721,24 @@ export default function LearningPage() {
       void fetchLessonSummary(lessonModal.lessonId);
     }, 4000);
     return () => window.clearTimeout(timer);
-  }, [lessonSummary, lessonModal]);
+  }, [lessonSummary, lessonModal, fetchLessonSummary]);
 
-  const syncCountdownBaseline = (data: LessonHeartbeatDto) => {
-    const req = Number(data?.required_seconds || 0);
-    const spent = Number(data?.time_spent_seconds || 0);
-    if (!Number.isFinite(req) || req <= 0) return;
-    countdownRequiredSecondsRef.current = req;
-    countdownBaselineTimeSpentRef.current = Math.max(0, spent);
-    countdownBaselineAtMsRef.current = Date.now();
-
-    const elapsedSeconds = (Date.now() - countdownBaselineAtMsRef.current) / 1000;
-    const predictedSpent = countdownBaselineTimeSpentRef.current + elapsedSeconds;
-    const remaining = Math.max(0, Math.min(100, (1 - predictedSpent / req) * 100));
-    setCountdownRemainingPct(Math.round(remaining * 10) / 10);
-  };
-
-  const postHeartbeat = async (lessonId: number, deltaSeconds: number) => {
-    const res = await fetch(`${url}${COURSES_API.lessonHeartbeat(courseId, lessonId)}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ delta_seconds: deltaSeconds }),
-    });
-    const json = (await res.json().catch(() => ({}))) as Partial<LessonHeartbeatDto> & { message?: string };
-    if (!res.ok) throw new Error(json?.message || "Không thể cập nhật tiến độ bài học.");
-    return json as LessonHeartbeatDto;
-  };
-
-  const tryCompleteLesson = async (lessonId: number) => {
-    if (completedAttemptedRef.current.has(lessonId)) return;
-    completedAttemptedRef.current.add(lessonId);
-    try {
-      const res = await fetch(`${url}${COURSES_API.completeLesson(courseId, lessonId)}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-      const json = (await res.json().catch(() => ({}))) as Partial<{ message?: string }>;
-      if (!res.ok) throw new Error(json?.message || "Không thể hoàn thành bài học.");
-      await fetchProgress();
-    } catch {
-      completedAttemptedRef.current.delete(lessonId);
+  // Auto-dismiss error banner after 5 seconds
+  useEffect(() => {
+    if (!lessonSummaryErrorShownAt) return;
+    const DISMISS_AFTER_MS = 5000;
+    if (Date.now() - lessonSummaryErrorShownAt < DISMISS_AFTER_MS) {
+      const remaining = DISMISS_AFTER_MS - (Date.now() - lessonSummaryErrorShownAt);
+      const timer = window.setTimeout(() => {
+        setLessonSummaryErrorShownAt(null);
+      }, remaining);
+      return () => window.clearTimeout(timer);
+    } else {
+      setLessonSummaryErrorShownAt(null);
     }
-  };
+  }, [lessonSummaryErrorShownAt]);
 
+  // Heartbeat effect for video/text lessons
   useEffect(() => {
     if (!lessonModal) {
       setHeartbeat(null);
@@ -573,9 +785,9 @@ export default function LearningPage() {
       }
       void tick(1);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lessonModal, courseId, token, progress, course]);
+  }, [lessonModal, courseId, token, progress, course, postHeartbeat, syncCountdownBaseline, tryCompleteLesson]);
 
+  // Countdown animation effect
   useEffect(() => {
     if (!lessonModal) return;
     const req = countdownRequiredSecondsRef.current;
@@ -601,9 +813,9 @@ export default function LearningPage() {
         countdownAnimTimerRef.current = null;
       }
     };
-  }, [lessonModal, heartbeat]);
+  }, [lessonModal]);
 
-  // Trigger unlock animations when progress data arrives
+  // Animated modules effect
   useEffect(() => {
     if (progress && course) {
       const unlockedIds = new Set(progress.unlocked_lesson_ids);
@@ -618,7 +830,6 @@ export default function LearningPage() {
         }
       });
       setAnimatedModules(newlyUnlocked);
-      // Remove animation class after animation ends
       const timers = Array.from(newlyUnlocked).map(id => 
         setTimeout(() => setAnimatedModules(prev => {
           const next = new Set(prev);
@@ -630,6 +841,7 @@ export default function LearningPage() {
     }
   }, [progress, course]);
 
+  // Link geometries effect
   useLayoutEffect(() => {
     if (!course?.modules?.length || !roadmapRef.current) {
       setLinkGeoms([]);
@@ -640,7 +852,6 @@ export default function LearningPage() {
       const host = roadmapRef.current;
       if (!host) return;
       const dirFromClockwiseDeg = (deg: number) => {
-        // Quy ước góc theo chiều kim đồng hồ, mốc 0° ở hướng 12h.
         const rad = ((90 - deg) * Math.PI) / 180;
         return { dx: Math.cos(rad), dy: -Math.sin(rad) };
       };
@@ -677,7 +888,7 @@ export default function LearningPage() {
         const c1y = r1.top - hostRect.top + r1.height / 2;
         const c2x = r2.left - hostRect.left + r2.width / 2;
         const c2y = r2.top - hostRect.top + r2.height / 2;
-        const isOddToEvenPair = i % 2 === 0; // 1-based: 1->2, 3->4...
+        const isOddToEvenPair = i % 2 === 0;
         const fromDeg = isOddToEvenPair ? 135 : 225;
         const toDeg = isOddToEvenPair ? 315 : 45;
         const fromDir = dirFromClockwiseDeg(fromDeg);
@@ -716,7 +927,6 @@ export default function LearningPage() {
     };
 
     const mods = course.modules || [];
-    // Khớp với CSS: .learningPage__node { animation-delay: calc(0.1s * var(--idx)); animation-duration: 0.5s; }
     const nodeStaggerMs = 100;
     const nodeAppearMs = 500;
     const settleMs = Math.max(0, mods.length - 1) * nodeStaggerMs + nodeAppearMs + 120;
@@ -763,6 +973,7 @@ export default function LearningPage() {
     };
   }, [course, progress]);
 
+  // Quiz preview effect
   useEffect(() => {
     if (!quizStartConfirm) {
       setQuizInfoPreview(null);
@@ -808,6 +1019,9 @@ export default function LearningPage() {
     };
   }, [quizStartConfirm, courseId, token]);
 
+  // ============================================
+  // CONDITIONAL RETURNS (after all hooks)
+  // ============================================
   if (loading && !course) {
     return (
       <div className="learningPage">
@@ -838,6 +1052,9 @@ export default function LearningPage() {
 
   if (!course) return null;
 
+  // ============================================
+  // COMPUTED VALUES (after conditional returns)
+  // ============================================
   const completedSet = new Set<number>((progress?.completed_lesson_ids || []).map(x => Number(x)));
   const unlockedSet = new Set<number>((progress?.unlocked_lesson_ids || []).map(x => Number(x)));
   const progressPercent = typeof progress?.progress_percent === "number"
@@ -855,6 +1072,7 @@ export default function LearningPage() {
   const moduleIndexById = new Map<number, number>();
   const firstLessonIdByModuleId = new Map<number, number | null>();
   const orderedLessonIds: number[] = [];
+  
   for (let moduleIdx = 0; moduleIdx < modules.length; moduleIdx++) {
     const mod = modules[moduleIdx];
     moduleIndexById.set(mod.id, moduleIdx);
@@ -913,6 +1131,7 @@ export default function LearningPage() {
     const ids = (m.lessons || []).map((l) => l.id);
     return ids.length > 0 && ids.every((id) => completedSet.has(id));
   }).length;
+  
   const isWarningLesson = (lessonId: number) => {
     if (!completedSet.has(lessonId)) return false;
     if (!lessonNeedsAssessmentsById.get(lessonId)) return false;
@@ -921,7 +1140,6 @@ export default function LearningPage() {
     const anySubmitted = kinds.some((k) => (k === "quiz" ? submitted?.quiz : submitted?.assignment));
     if (anySubmitted) return false;
 
-    // Nếu đã mở được bài kế tiếp thì coi như cụm Q/A đã xử lý xong => không tô vàng nữa.
     const nextInModule = nextLessonIdById.get(lessonId) ?? null;
     if (nextInModule && unlockedSet.has(nextInModule)) return false;
 
@@ -938,6 +1156,7 @@ export default function LearningPage() {
     }
     return true;
   };
+  
   const needsAction = (lessonId: number) =>
     !completedSet.has(lessonId) || isWarningLesson(lessonId);
   const actionableOrdered = orderedLessonIds.filter((id) => {
@@ -945,7 +1164,7 @@ export default function LearningPage() {
     return moduleId != null && canOpenLesson(moduleId, id) && needsAction(id);
   });
   const processingLessonId = actionableOrdered[0] ?? null;
-  const nextLessonId = actionableOrdered[1] ?? null;
+  const nextLessonIdVal = actionableOrdered[1] ?? null;
   const modalLessonIndex = lessonModal ? orderedLessonIds.indexOf(lessonModal.lessonId) : -1;
   const modalPrevLessonId = modalLessonIndex > 0 ? orderedLessonIds[modalLessonIndex - 1] : null;
   const modalNextLessonId = modalLessonIndex >= 0 && modalLessonIndex < orderedLessonIds.length - 1 ? orderedLessonIds[modalLessonIndex + 1] : null;
@@ -990,7 +1209,6 @@ export default function LearningPage() {
     }
   }
 
-  /** Mở quiz/bài tập trong tab mới; giữ người dùng trên trang Learning (không điều hướng sang trang module lessons). */
   const openLearnerAssessmentInNewTab = (kind: "quiz" | "assignment", lessonId: number, lessonTitle: string) => {
     const params = new URLSearchParams({ title: lessonTitle || "" });
     if (slug) params.set("slug", slug);
@@ -1041,6 +1259,220 @@ export default function LearningPage() {
     });
   };
 
+  // Render AI Summary content component
+  const renderAISummary = () => {
+    if (isSummaryCollapsed) return null;
+    
+    if (!modalLesson || modalLesson.lesson_type === "quiz" || modalLesson.lesson_type === "assignment") {
+      return (
+        <div className="learningPage__empty">
+          Tóm tắt AI chỉ khả dụng cho bài học video hoặc văn bản
+        </div>
+      );
+    }
+
+    return (
+      <div className="learningPage__aiSummary">
+        <div className="learningPage__aiSummaryHeader">
+          <div className="learningPage__aiSummaryTitle">
+            Tóm tắt AI
+            <span
+              className={`learningPage__aiSummaryDot ${
+                lessonSummaryErrorShownAt
+                  ? "is-error"
+                  : lessonSummary?.status === "pending" || lessonSummary?.status === "processing"
+                  ? "is-processing"
+                  : lessonSummary?.source_ready
+                  ? "is-ready"
+                  : "is-not-ready"
+              }`}
+              title={
+                lessonSummaryErrorShownAt
+                  ? `Lỗi: ${lessonSummary?.error_message || "Không rõ"}`
+                  : lessonSummary?.status === "pending" || lessonSummary?.status === "processing"
+                  ? "Hệ thống đang trích xuất nguồn text"
+                  : lessonSummary?.source_ready
+                  ? "Nguồn text đã sẵn sàng cho LLM"
+                  : "Nguồn text chưa sẵn sàng cho LLM"
+              }
+              aria-label={
+                lessonSummaryErrorShownAt
+                  ? `Lỗi: ${lessonSummary?.error_message || "Không rõ"}`
+                  : lessonSummary?.status === "pending" || lessonSummary?.status === "processing"
+                  ? "Hệ thống đang trích xuất nguồn text"
+                  : lessonSummary?.source_ready
+                  ? "Nguồn text đã sẵn sàng cho LLM"
+                  : "Nguồn text chưa sẵn sàng cho LLM"
+              }
+            />
+          </div>
+          <div className="learningPage__aiSummaryActions">
+            <button
+              type="button"
+              className="learningPage__lessonModalActBtn"
+              disabled={
+                !lessonModal ||
+                lessonSummaryMutating ||
+                lessonSummary?.status === "processing" ||
+                lessonSummary?.status === "pending"
+              }
+              onClick={() => {
+                if (!lessonModal) return;
+                const hasExisting =
+                  (lessonSummary?.status === "succeeded" || lessonSummary?.status === "failed") &&
+                  Boolean(lessonSummary?.overall_summary);
+                void requestLessonSummary(lessonModal.lessonId, hasExisting);
+              }}
+            >
+              {lessonSummaryMutating ? (
+                <span className="learningPage__aiSummaryLoading">
+                  <Loader2 size={14} className="learningPage__aiSummarySpinner" />
+                  Đang tạo...
+                </span>
+              ) : lessonSummary?.status === "succeeded" && lessonSummary?.overall_summary ? (
+                "Tạo lại"
+              ) : (
+                "Tạo tóm tắt"
+              )}
+            </button>
+          </div>
+        </div>
+
+        {lessonSummary?.status === "pending" || lessonSummary?.status === "processing" ? (
+          <div className="learningPage__aiSummaryStatus">
+            <Loader2 size={16} className="learningPage__aiSummarySpinner" />
+            <span>
+              {lessonSummary?.status === "pending" && !lessonSummary?.source_ready
+                ? "Đang transcript video, vui lòng đợi..."
+                : lessonSummary?.status === "pending" && lessonSummary?.source_ready
+                ? "Đang chờ tạo tóm tắt..."
+                : "Đang tạo tóm tắt bằng AI..."}
+            </span>
+          </div>
+        ) : null}
+
+        {lessonSummary?.status !== "pending" &&
+        lessonSummary?.status !== "processing" &&
+        !lessonSummary?.overall_summary &&
+        lessonSummary?.source_ready &&
+        !lessonSummaryErrorShownAt ? (
+          <div className="learningPage__aiSummaryStatus learningPage__aiSummaryStatus--ready">
+            <span className="material-symbols-outlined">check_circle</span>
+            <span>Transcript đã sẵn sàng. Nhấn "Tạo tóm tắt" để bắt đầu.</span>
+          </div>
+        ) : null}
+
+        {lessonSummary?.status === "failed" && lessonSummaryErrorShownAt ? (
+          <div className="learningPage__aiSummaryError">
+            <span className="material-symbols-outlined">error</span>
+            <span>
+              {lessonSummary.error_message?.toLowerCase().includes("fetch failed") ||
+              lessonSummary.error_message?.toLowerCase().includes("all model") ||
+              lessonSummary.error_message?.toLowerCase().includes("key đều thất bại") ||
+              lessonSummary.error_message?.toLowerCase().includes("model/key")
+                ? "Hệ thống lỗi, vui lòng thử lại sau ít phút nữa."
+                : lessonSummary.error_message || "Đã xảy ra lỗi. Vui lòng thử lại."}
+            </span>
+          </div>
+        ) : null}
+
+        {lessonSummary?.status === "succeeded" && lessonSummary.overall_summary ? (
+          <div className="learningPage__aiSummaryResult">
+            {lessonSummary.overall_summary && (
+              <div className="learningPage__aiSummarySection">
+                <div className="learningPage__aiSummarySectionTitle">
+                  <span className="material-symbols-outlined">article</span>
+                  Tóm tắt tổng quát
+                </div>
+                <p className="learningPage__aiSummaryText">{lessonSummary.overall_summary}</p>
+              </div>
+            )}
+
+            {lessonSummary.key_points && lessonSummary.key_points.length > 0 && (
+              <div className="learningPage__aiSummarySection">
+                <div className="learningPage__aiSummarySectionTitle">
+                  <span className="material-symbols-outlined">lightbulb</span>
+                  Điểm chính
+                </div>
+                <ul className="learningPage__aiSummaryList">
+                  {lessonSummary.key_points.map((point, index) => (
+                    <li key={index}>{point}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {lessonSummary.segments && lessonSummary.segments.length > 0 && (
+              <div className="learningPage__aiSummarySection">
+                <button
+                  className="learningPage__segmentsToggle"
+                  onClick={() => setLessonSummarySegmentsExpanded((v) => !v)}
+                  aria-expanded={lessonSummarySegmentsExpanded}
+                  type="button"
+                >
+                  <div className="learningPage__aiSummarySectionTitle">
+                    <span className="material-symbols-outlined">format_list_numbered</span>
+                    Chi tiết theo phần
+                  </div>
+                  <span className={`learningPage__segmentsChevron ${lessonSummarySegmentsExpanded ? "learningPage__segmentsChevron--open" : ""}`}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </span>
+                </button>
+                <div className={`learningPage__aiSummarySegments ${lessonSummarySegmentsExpanded ? "learningPage__aiSummarySegments--expanded" : ""}`}>
+                  {lessonSummary.segments.map((segment) => (
+                    <div key={segment.segment_index} className="learningPage__aiSummarySegment">
+                      <div className="learningPage__aiSummarySegmentHeader">
+                        <span className="learningPage__aiSummarySegmentIndex">
+                          Phần {segment.segment_index}
+                        </span>
+                        {segment.start_sec !== null && segment.end_sec !== null && (
+                          <span className="learningPage__aiSummarySegmentTime">
+                            {Math.floor(segment.start_sec / 60)}:
+                            {String(segment.start_sec % 60).padStart(2, "0")} -{" "}
+                            {Math.floor(segment.end_sec / 60)}:
+                            {String(segment.end_sec % 60).padStart(2, "0")}
+                          </span>
+                        )}
+                      </div>
+                      {segment.summary_text && (
+                        <p className="learningPage__aiSummarySegmentText">
+                          {segment.summary_text}
+                        </p>
+                      )}
+                      {segment.keywords && segment.keywords.length > 0 && (
+                        <div className="learningPage__aiSummaryKeywords">
+                          {segment.keywords.map((kw, i) => (
+                            <span key={i} className="learningPage__aiSummaryKeyword">
+                              {kw}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          lessonSummary?.status !== "pending" &&
+          lessonSummary?.status !== "processing" &&
+          !lessonSummary?.error_message &&
+          !lessonSummary?.source_ready && (
+            <div className="learningPage__aiSummaryMuted">
+              Transcript chưa sẵn sàng. Vui lòng chờ video được xử lý.
+            </div>
+          )
+        )}
+      </div>
+    );
+  };
+
+  // ============================================
+  // MAIN RETURN with JSX
+  // ============================================
   return (
     <div className="learningPage">
       <div className="learningPage__topbar">
@@ -1076,6 +1508,105 @@ export default function LearningPage() {
         </section>
 
         <section className="learningPage__split">
+          {/* Left Pane - Tree */}
+          <aside className="learningPage__treePane" style={treePaneStyle}>
+            <div className="learningPage__treeHeader">
+              {!isTreeCollapsed && <div className="learningPage__treeTitle">Cây nội dung</div>}
+              <button
+                className="learningPage__toggleBtn"
+                onClick={toggleTreeCollapse}
+                title={isTreeCollapsed ? "Mở rộng" : "Thu gọn"}
+              >
+                <span className="material-symbols-outlined">
+                  {isTreeCollapsed ? "chevron_right" : "chevron_left"}
+                </span>
+              </button>
+            </div>
+            <div className={`learningPage__treeContent ${isTreeCollapsed ? "learningPage__treeContent--collapsed" : ""}`}>
+              <div className="content-simple-tree learningPage__treeLike">
+                <ul className="tree-root">
+                  {modules.map((m, moduleIdx) => {
+                    const sortedLessons = [...(m.lessons || [])].sort((a, b) => {
+                      const oa = Number(a.order_index ?? 0);
+                      const ob = Number(b.order_index ?? 0);
+                      if (oa !== ob) return oa - ob;
+                      return Number(a.id) - Number(b.id);
+                    });
+                    return (
+                      <li key={m.id} className="tree-node module-node">
+                        <div className="tree-title-row">
+                          <span className="tree-review-status-wrap">
+                            <span className="material-symbols-outlined review-status-icon empty" title="Chương">folder</span>
+                          </span>
+                          <div className="tree-title">Chương {moduleIdx + 1}: {m.title}</div>
+                        </div>
+                        <ul className="tree-children">
+                          {sortedLessons.map((le) => {
+                            const canClick = canOpenLesson(m.id, le.id);
+                            const isActive = lessonModal?.lessonId === le.id;
+                            const lessonTypeBadge =
+                              le.lesson_type === "quiz"
+                                ? { icon: "quiz", className: "is-quiz", title: "Quizz" }
+                                : le.lesson_type === "assignment"
+                                  ? { icon: "assignment", className: "is-assignment", title: "Bài tập" }
+                                  : { icon: "menu_book", className: "is-content", title: "Bài học" };
+                            return (
+                              <li key={le.id} className="tree-node lesson-node">
+                                <div className="tree-title-row">
+                                  <span className="tree-review-status-wrap">
+                                    <span
+                                      className={`tree-lesson-type-icon ${lessonTypeBadge.className}`}
+                                      title={lessonTypeBadge.title}
+                                    >
+                                      <span className="material-symbols-outlined">{lessonTypeBadge.icon}</span>
+                                    </span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className={`tree-title lesson-link learningPage__treeLessonBtn ${isActive ? "learningPage__treeLessonBtn--active" : ""}`}
+                                    disabled={!canClick}
+                                    onClick={() => {
+                                      setLessonModalNavPick(null);
+                                      if (le.lesson_type === "quiz") {
+                                        requestStartQuiz(le.id, le.title || "");
+                                        setLessonModal(null);
+                                        return;
+                                      }
+                                      if (le.lesson_type === "assignment") {
+                                        openLearnerAssessmentInNewTab("assignment", le.id, le.title || "");
+                                        setLessonModal(null);
+                                        void fetchProgress();
+                                        return;
+                                      }
+                                      openLessonDetail(m.id, le.id);
+                                    }}
+                                    title={canClick ? le.title : "Bài học chưa mở"}
+                                  >
+                                    {le.title}
+                                  </button>
+                                  {!canClick ? (
+                                    <span className="tree-schedule-chip">Bị khóa</span>
+                                  ) : null}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+          </aside>
+
+          {/* Resizer between Tree and Content */}
+          <div
+            className={`learningPage__resizer ${isResizingTree ? "learningPage__resizer--active" : ""}`}
+            onMouseDown={startResizeTree}
+          />
+
+          {/* Center Pane - Content */}
           <article className="learningPage__contentPane">
             <div className="learningPage__lessonModalHeader">
               <div className="learningPage__lessonModalTitle">{modalLesson?.title || "Chọn một mục từ cây nội dung"}</div>
@@ -1149,75 +1680,70 @@ export default function LearningPage() {
                   ) : null}
                 </div>
               ) : !lessonModal ? (
-                <div className="learningPage__lessonModalEmpty">Chọn bài học ở cây bên phải để bắt đầu.</div>
+                <div className="learningPage__lessonModalEmpty">Chọn bài học ở cây bên trái để bắt đầu.</div>
               ) : lessonModalLoading ? (
                 <div className="learningPage__lessonModalEmpty">Đang tải tài nguyên...</div>
               ) : lessonModalError ? (
                 <div className="learningPage__lessonModalEmpty">{lessonModalError}</div>
               ) : lessonModalResources.length > 0 ? (
                 <div className="learningPage__lessonModalResources">
-                  {lessonModalResources.map((resource, index) => {
-                    const ytId = parseYoutubeVideoId(resource.url);
-                    const mime = (resource.mime || "").toLowerCase();
-                    const isVideo = mime.startsWith("video/") || resource.resourceKind === "video" || resource.resourceKind === "youtube" || resource.resourceType === "video";
-                    const isPdfOrWord = mime.includes("pdf") || mime.includes("word") || mime.includes("document") || resource.resourceKind === "pdf" || resource.resourceKind === "word";
+  {lessonModalResources.map((resource, index) => {
+    const ytId = parseYoutubeVideoId(resource.url);
+    const mime = (resource.mime || "").toLowerCase();
+    const isVideo = mime.startsWith("video/") || resource.resourceKind === "video" || resource.resourceKind === "youtube" || resource.resourceType === "video";
+    const isPdfOrWord = mime.includes("pdf") || mime.includes("word") || mime.includes("document") || resource.resourceKind === "pdf" || resource.resourceKind === "word";
 
-                    // YouTube video
-                    if (ytId) {
-                      return (
-                        <div key={resource.resourceId || index} className="learningPage__lessonModalResourceItem">
-                          <iframe
-                            className="learningPage__lessonModalFrame learningPage__lessonModalFrame--youtube"
-                            src={`https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0`}
-                            title={resource.filename}
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                          />
-                        </div>
-                      );
-                    }
+    if (ytId) {
+      return (
+        <div key={resource.resourceId || index} className="learningPage__lessonModalResourceItem">
+          <iframe
+            className="learningPage__lessonModalFrame learningPage__lessonModalFrame--youtube"
+            src={`https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0`}
+            title={resource.filename}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      );
+    }
 
-                    // Uploaded video
-                    if (isVideo) {
-                      return (
-                        <div key={resource.resourceId || index} className="learningPage__lessonModalResourceItem">
-                          <video className="learningPage__lessonModalVideo" src={resource.url} controls autoPlay />
-                        </div>
-                      );
-                    }
+    if (isVideo) {
+      return (
+        <div key={resource.resourceId || index} className="learningPage__lessonModalResourceItem">
+          <video className="learningPage__lessonModalVideo" src={resource.url} controls autoPlay />
+        </div>
+      );
+    }
 
-                    // PDF/Word files - show download link
-                    if (isPdfOrWord) {
-                      return (
-                        <div key={resource.resourceId || index} className="learningPage__lessonModalResourceItem learningPage__lessonModalResourceItem--download">
-                          <span className="material-symbols-outlined">description</span>
-                          <span className="learningPage__lessonModalFileName">{resource.filename}</span>
-                          <a href={resource.url} target="_blank" rel="noreferrer" className="learningPage__lessonModalDownloadBtn">
-                            Tải xuống
-                          </a>
-                        </div>
-                      );
-                    }
+    if (isPdfOrWord) {
+      return (
+        <div key={resource.resourceId || index} className="learningPage__lessonModalResourceItem learningPage__lessonModalResourceItem--download">
+          <span className="material-symbols-outlined">description</span>
+          <span className="learningPage__lessonModalFileName">{resource.filename}</span>
+          <a href={resource.url} target="_blank" rel="noreferrer" className="learningPage__lessonModalDownloadBtn">
+            <span className="material-symbols-outlined">download</span>
+          </a>
+        </div>
+      );
+    }
 
-                    // Other files - show download link
-                    return (
-                      <div key={resource.resourceId || index} className="learningPage__lessonModalResourceItem learningPage__lessonModalResourceItem--download">
-                        <span className="material-symbols-outlined">attach_file</span>
-                        <span className="learningPage__lessonModalFileName">{resource.filename}</span>
-                        <a href={resource.url} target="_blank" rel="noreferrer" className="learningPage__lessonModalDownloadBtn">
-                          Tải xuống
-                        </a>
-                      </div>
-                    );
-                  })}
-                </div>
+    return (
+      <div key={resource.resourceId || index} className="learningPage__lessonModalResourceItem learningPage__lessonModalResourceItem--download">
+        <span className="material-symbols-outlined">attach_file</span>
+        <span className="learningPage__lessonModalFileName">{resource.filename}</span>
+        <a href={resource.url} target="_blank" rel="noreferrer" className="learningPage__lessonModalDownloadBtn">
+          <span className="material-symbols-outlined">download</span>
+        </a>
+      </div>
+    );
+  })}
+</div>
               ) : modalLesson?.description ? (
                 <div className="learningPage__lessonModalText">{modalLesson.description}</div>
               ) : (
                 <div className="learningPage__lessonModalEmpty">Bài học chưa có tài nguyên.</div>
               )}
 
-              {/* HTML Content - displayed inline below */}
               {lessonHtmlContent ? (
                 lessonHtmlLoading ? (
                   <div className="learningPage__lessonModalEmpty">Đang tải nội dung...</div>
@@ -1231,168 +1757,6 @@ export default function LearningPage() {
                 ) : (
                   <div className="learningPage__lessonModalEmpty">Không có nội dung HTML.</div>
                 )
-              ) : null}
-
-              {modalLesson && modalLesson.lesson_type !== "quiz" && modalLesson.lesson_type !== "assignment" ? (
-              <div className="learningPage__aiSummary">
-                <div className="learningPage__aiSummaryHeader">
-                  <div className="learningPage__aiSummaryTitle">
-                    Tóm tắt AI
-                    <span
-                      className={`learningPage__aiSummaryDot ${
-                        lessonSummary?.status === "pending" || lessonSummary?.status === "processing"
-                          ? "is-processing"
-                          : lessonSummary?.source_ready
-                            ? "is-ready"
-                            : "is-not-ready"
-                      }`}
-                      title={
-                        lessonSummary?.status === "pending" || lessonSummary?.status === "processing"
-                          ? "Hệ thống đang trích xuất nguồn text"
-                          : lessonSummary?.source_ready
-                            ? "Nguồn text đã sẵn sàng cho LLM"
-                            : "Nguồn text chưa sẵn sàng cho LLM"
-                      }
-                      aria-label={
-                        lessonSummary?.status === "pending" || lessonSummary?.status === "processing"
-                          ? "Hệ thống đang trích xuất nguồn text"
-                          : lessonSummary?.source_ready
-                            ? "Nguồn text đã sẵn sàng cho LLM"
-                            : "Nguồn text chưa sẵn sàng cho LLM"
-                      }
-                    />
-                  </div>
-                  <div className="learningPage__aiSummaryActions">
-                    <button
-                      type="button"
-                      className="learningPage__lessonModalActBtn"
-                      disabled={!lessonModal || lessonSummaryMutating || lessonSummary?.status === "processing" || lessonSummary?.status === "pending"}
-                      onClick={() => {
-                        if (!lessonModal) return;
-                        void requestLessonSummary(lessonModal.lessonId, false);
-                      }}
-                    >
-                      {lessonSummaryMutating ? (
-                        <span className="learningPage__aiSummaryLoading">
-                          <Loader2 size={14} className="learningPage__aiSummarySpinner" />
-                          Đang tạo...
-                        </span>
-                      ) : (
-                        "Tạo tóm tắt"
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      className="learningPage__lessonModalActBtn"
-                      disabled={!lessonModal || lessonSummaryMutating || lessonSummary?.status === "processing" || lessonSummary?.status === "pending"}
-                      onClick={() => {
-                        if (!lessonModal) return;
-                        void requestLessonSummary(lessonModal.lessonId, true);
-                      }}
-                    >
-                      Tạo lại
-                    </button>
-                  </div>
-                </div>
-
-                {/* Status message when transcripting/processing */}
-                {lessonSummary?.status === "pending" || lessonSummary?.status === "processing" ? (
-                  <div className="learningPage__aiSummaryStatus">
-                    <Loader2 size={16} className="learningPage__aiSummarySpinner" />
-                    <span>
-                      {lessonSummary?.status === "pending"
-                        ? "Đang chờ xử lý video..."
-                        : "Đang transcript nội dung video, vui lòng đợi..."}
-                    </span>
-                  </div>
-                ) : null}
-
-                {lessonSummary?.error_message ? (
-                  <div className="learningPage__aiSummaryError">
-                    <span className="material-symbols-outlined">error</span>
-                    <span>{lessonSummary.error_message}</span>
-                  </div>
-                ) : null}
-
-                {/* Summary Result - only show when succeeded */}
-                {lessonSummary?.status === "succeeded" && lessonSummary.overall_summary ? (
-                  <div className="learningPage__aiSummaryResult">
-                    {lessonSummary.overall_summary && (
-                      <div className="learningPage__aiSummarySection">
-                        <div className="learningPage__aiSummarySectionTitle">
-                          <span className="material-symbols-outlined">article</span>
-                          Tóm tắt tổng quát
-                        </div>
-                        <p className="learningPage__aiSummaryText">{lessonSummary.overall_summary}</p>
-                      </div>
-                    )}
-
-                    {lessonSummary.key_points && lessonSummary.key_points.length > 0 && (
-                      <div className="learningPage__aiSummarySection">
-                        <div className="learningPage__aiSummarySectionTitle">
-                          <span className="material-symbols-outlined">lightbulb</span>
-                          Điểm chính
-                        </div>
-                        <ul className="learningPage__aiSummaryList">
-                          {lessonSummary.key_points.map((point, index) => (
-                            <li key={index}>{point}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {lessonSummary.segments && lessonSummary.segments.length > 0 && (
-                      <div className="learningPage__aiSummarySection">
-                        <div className="learningPage__aiSummarySectionTitle">
-                          <span className="material-symbols-outlined">format_list_numbered</span>
-                          Chi tiết theo phần
-                        </div>
-                        <div className="learningPage__aiSummarySegments">
-                          {lessonSummary.segments.map((segment) => (
-                            <div key={segment.segment_index} className="learningPage__aiSummarySegment">
-                              <div className="learningPage__aiSummarySegmentHeader">
-                                <span className="learningPage__aiSummarySegmentIndex">
-                                  Phần {segment.segment_index}
-                                </span>
-                                {segment.start_sec !== null && segment.end_sec !== null && (
-                                  <span className="learningPage__aiSummarySegmentTime">
-                                    {Math.floor(segment.start_sec / 60)}:
-                                    {String(segment.start_sec % 60).padStart(2, "0")} -{" "}
-                                    {Math.floor(segment.end_sec / 60)}:
-                                    {String(segment.end_sec % 60).padStart(2, "0")}
-                                  </span>
-                                )}
-                              </div>
-                              {segment.summary_text && (
-                                <p className="learningPage__aiSummarySegmentText">
-                                  {segment.summary_text}
-                                </p>
-                              )}
-                              {segment.keywords && segment.keywords.length > 0 && (
-                                <div className="learningPage__aiSummaryKeywords">
-                                  {segment.keywords.map((kw, i) => (
-                                    <span key={i} className="learningPage__aiSummaryKeyword">
-                                      {kw}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  lessonSummary?.status !== "pending" &&
-                  lessonSummary?.status !== "processing" &&
-                  !lessonSummary?.error_message && (
-                    <div className="learningPage__aiSummaryMuted">
-                      Chưa có tóm tắt. Nhấn "Tạo tóm tắt" để bắt đầu.
-                    </div>
-                  )
-                )}
-              </div>
               ) : null}
             </div>
 
@@ -1450,85 +1814,38 @@ export default function LearningPage() {
             </div>
           </article>
 
-          <aside className="learningPage__treePane">
-            <div className="learningPage__treeTitle">Cây nội dung</div>
-            <div className="content-simple-tree learningPage__treeLike">
-              <ul className="tree-root">
-                {modules.map((m, moduleIdx) => {
-                  const sortedLessons = [...(m.lessons || [])].sort((a, b) => {
-                    const oa = Number(a.order_index ?? 0);
-                    const ob = Number(b.order_index ?? 0);
-                    if (oa !== ob) return oa - ob;
-                    return Number(a.id) - Number(b.id);
-                  });
-                  return (
-                    <li key={m.id} className="tree-node module-node">
-                      <div className="tree-title-row">
-                        <span className="tree-review-status-wrap">
-                          <span className="material-symbols-outlined review-status-icon empty" title="Chương">folder</span>
-                        </span>
-                        <div className="tree-title">Chương {moduleIdx + 1}: {m.title}</div>
-                      </div>
-                      <ul className="tree-children">
-                        {sortedLessons.map((le) => {
-                          const canClick = canOpenLesson(m.id, le.id);
-                          const isActive = lessonModal?.lessonId === le.id;
-                          const lessonTypeBadge =
-                            le.lesson_type === "quiz"
-                              ? { icon: "quiz", className: "is-quiz", title: "Quizz" }
-                              : le.lesson_type === "assignment"
-                                ? { icon: "assignment", className: "is-assignment", title: "Bài tập" }
-                                : { icon: "menu_book", className: "is-content", title: "Bài học" };
-                          return (
-                            <li key={le.id} className="tree-node lesson-node">
-                              <div className="tree-title-row">
-                                <span className="tree-review-status-wrap">
-                                  <span
-                                    className={`tree-lesson-type-icon ${lessonTypeBadge.className}`}
-                                    title={lessonTypeBadge.title}
-                                  >
-                                    <span className="material-symbols-outlined">{lessonTypeBadge.icon}</span>
-                                  </span>
-                                </span>
-                                <button
-                                  type="button"
-                                  className={`tree-title lesson-link learningPage__treeLessonBtn ${isActive ? "learningPage__treeLessonBtn--active" : ""}`}
-                                  disabled={!canClick}
-                                  onClick={() => {
-                                    setLessonModalNavPick(null);
-                                    if (le.lesson_type === "quiz") {
-                                      requestStartQuiz(le.id, le.title || "");
-                                      setLessonModal(null);
-                                      return;
-                                    }
-                                    if (le.lesson_type === "assignment") {
-                                      openLearnerAssessmentInNewTab("assignment", le.id, le.title || "");
-                                      setLessonModal(null);
-                                      void fetchProgress();
-                                      return;
-                                    }
-                                    openLessonDetail(m.id, le.id);
-                                  }}
-                                  title={canClick ? le.title : "Bài học chưa mở"}
-                                >
-                                  {le.title}
-                                </button>
-                                {!canClick ? (
-                                  <span className="tree-schedule-chip">Bị khóa</span>
-                                ) : null}
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </li>
-                  );
-                })}
-              </ul>
+          {/* Resizer between Content and Summary */}
+          <div
+            className={`learningPage__resizer ${isResizingSummary ? "learningPage__resizer--active" : ""}`}
+            onMouseDown={startResizeSummary}
+          />
+
+          {/* Right Pane - AI Summary */}
+          <aside className="learningPage__aiSummaryPane" style={summaryPaneStyle}>
+            <div className="learningPage__aiSummaryPaneTitle">
+              {!isSummaryCollapsed && (
+                <>
+                  <span className="material-symbols-outlined">auto_awesome</span>
+                  Tóm tắt thông minh
+                </>
+              )}
+              <button
+                className="learningPage__toggleBtn"
+                onClick={toggleSummaryCollapse}
+                title={isSummaryCollapsed ? "Mở rộng" : "Thu gọn"}
+              >
+                <span className="material-symbols-outlined">
+                  {isSummaryCollapsed ? "chevron_left" : "chevron_right"}
+                </span>
+              </button>
+            </div>
+            <div className={`learningPage__aiSummaryContent ${isSummaryCollapsed ? "learningPage__aiSummaryContent--collapsed" : ""}`}>
+              {renderAISummary()}
             </div>
           </aside>
         </section>
       </div>
+
       {lessonModal && heartbeat && heartbeat.required_seconds > 0 ? (
         <div
           className={`learningPage__countdown ${heartbeat.can_complete ? "learningPage__countdown--ready" : ""}`}

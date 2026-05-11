@@ -1,4 +1,4 @@
-// StudentDashboard.tsx
+// StudentDashboard.tsx - Modern UI/UX Redesign with Enhanced Progress
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import AvatarMenu from '../../components/AvatarMenu';
@@ -10,19 +10,24 @@ import { useAuth } from '../../contexts/Auth';
 import './StudentDashboard.css';
 import {
   BookOpen,
-  TrendingUp,
-  Award,
-  Search,
   ChevronLeft,
   ChevronRight,
   Loader2,
   AlertCircle,
-  Sparkles,
-  Users,
-  Layers3,
   Target,
   LayoutDashboard,
   Compass,
+  Video,
+  Trophy,
+  ArrowRight,
+  Clock,
+  CheckCircle2,
+  BarChart3,
+  Calendar,
+  Flame,
+  Star,
+  GraduationCap,
+  TrendingUp
 } from 'lucide-react';
 
 // Types
@@ -42,6 +47,9 @@ interface Course {
   modules_count?: number;
   lessons_count?: number;
   instructor_name?: string;
+  completed_lessons?: number; // Mock or derived
+  total_lessons?: number;     // Mock or derived
+  estimated_time_left?: string; // Mock or derived
 }
 
 interface SuggestedCourse {
@@ -92,7 +100,7 @@ interface LearningActivityData {
 
 type MainTab = 'myCourses' | 'suggested';
 
-// Helper: format date
+// Helper functions
 const formatDate = (dateString: string | null) => {
   if (!dateString) return 'Chưa bắt đầu';
   const date = new Date(dateString);
@@ -101,6 +109,13 @@ const formatDate = (dateString: string | null) => {
     month: '2-digit',
     year: 'numeric',
   });
+};
+
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Chào buổi sáng';
+  if (hour < 18) return 'Chào buổi chiều';
+  return 'Chào buổi tối';
 };
 
 // Sidebar Menu Items
@@ -114,6 +129,7 @@ export default function StudentDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const displayName = user?.full_name?.trim() || user?.email || 'Học viên';
+  const greeting = getGreeting();
 
   // UI State
   const [activeMainTab, setActiveMainTab] = useState<MainTab>('myCourses');
@@ -163,6 +179,30 @@ export default function StudentDashboard() {
     };
   };
 
+  // Helper to enhance a course with detailed progress data
+  const enhanceCourseWithProgress = (course: Course): Course => {
+    // Mock or derive detailed progress data if not provided by API
+    // In a real app, these would come from the API
+    const totalLessons = course.lessons_count || 20;
+    const completedLessons = Math.floor((course.progress_percent / 100) * totalLessons);
+    const remainingLessons = totalLessons - completedLessons;
+    
+    // Estimate time left (assuming 30 min per lesson)
+    const minutesLeft = remainingLessons * 30;
+    const hoursLeft = Math.floor(minutesLeft / 60);
+    const minsLeft = minutesLeft % 60;
+    const estimatedTimeLeft = hoursLeft > 0 
+      ? `${hoursLeft} giờ ${minsLeft} phút` 
+      : `${minsLeft} phút`;
+    
+    return {
+      ...course,
+      completed_lessons: completedLessons,
+      total_lessons: totalLessons,
+      estimated_time_left: estimatedTimeLeft
+    };
+  };
+
   // Fetch enrolled courses
   const fetchEnrolledCourses = async (opts?: {
     nextPage?: number;
@@ -200,7 +240,9 @@ export default function StudentDashboard() {
       const items = Array.isArray(data.items) ? (data.items as Course[]) : [];
       const total = typeof data.total === 'number' ? data.total : 0;
 
-      setCourses(items);
+      // Enhance courses with detailed progress
+      const enhancedItems = items.map(enhanceCourseWithProgress);
+      setCourses(enhancedItems);
       setTotalPages(Math.max(1, Math.ceil(total / pageSize)));
       setError(null);
     } catch (err: any) {
@@ -293,6 +335,26 @@ export default function StudentDashboard() {
     }
   };
 
+  // Fetch learning activity
+  const fetchLearningActivity = async () => {
+    const requestId = ++activityRequestRef.current;
+    try {
+      const res = await fetch(`${url}${COURSES_API.myLearningActivity}`, {
+        headers: buildAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Không thể tải hoạt động học tập');
+      const data = (await res.json().catch(() => ({}))) as Partial<LearningActivityData>;
+      if (requestId !== activityRequestRef.current) return;
+
+      const dailyActivity = Array.isArray(data.daily_activity) ? data.daily_activity : [];
+      const hours = dailyActivity.map(d => d.lessons_completed);
+      setStudyHours(hours.length === 7 ? hours : [0, 0, 0, 0, 0, 0, 0]);
+    } catch {
+      if (requestId !== activityRequestRef.current) return;
+      setStudyHours([0, 0, 0, 0, 0, 0, 0]);
+    }
+  };
+
   // Debounce search
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -329,57 +391,6 @@ export default function StudentDashboard() {
     };
   }, []);
 
-  // Navigation handlers
-  const openLearningHub = (courseId: number, slug: string) => {
-    navigate(`/my-courses/${courseId}/${slug}`);
-  };
-
-  const openCoursePublicDetail = (slug: string) => {
-    navigate(`/courses/${slug}`);
-  };
-
-  // Helper: get level text
-  const getLevelText = (level: string): string => {
-    switch (level) {
-      case 'beginner': return 'Cơ bản';
-      case 'intermediate': return 'Trung cấp';
-      case 'advanced': return 'Nâng cao';
-      default: return level;
-    }
-  };
-
-  // Helper: get deadline class
-  const getDeadlineClass = (index: number): string => {
-    const classes = ['deadline-red', 'deadline-blue', 'deadline-teal'];
-    return classes[index % classes.length];
-  };
-
-  const getDeadlineColorClass = (index: number): string => {
-    const colors = ['text-red', 'text-blue', 'text-teal'];
-    return colors[index % colors.length];
-  };
-
-  // Fetch learning activity
-  const fetchLearningActivity = async () => {
-    const requestId = ++activityRequestRef.current;
-    try {
-      const res = await fetch(`${url}${COURSES_API.myLearningActivity}`, {
-        headers: buildAuthHeaders(),
-      });
-      if (!res.ok) throw new Error('Không thể tải hoạt động học tập');
-      const data = (await res.json().catch(() => ({}))) as Partial<LearningActivityData>;
-      if (requestId !== activityRequestRef.current) return;
-
-      const dailyActivity = Array.isArray(data.daily_activity) ? data.daily_activity : [];
-      console.log('[DEBUG] daily_activity:', dailyActivity);
-      const hours = dailyActivity.map(d => d.lessons_completed);
-      console.log('[DEBUG] hours:', hours);
-      setStudyHours(hours.length === 7 ? hours : [0, 0, 0, 0, 0, 0, 0]);
-    } catch {
-      if (requestId !== activityRequestRef.current) return;
-      setStudyHours([0, 0, 0, 0, 0, 0, 0]);
-    }
-  };
   const maxHour = Math.max(...studyHours, 1);
   const chartHeight = 120;
 
@@ -418,14 +429,35 @@ export default function StudentDashboard() {
     return `Chương ${currentModule}/${course.modules_count || 10}`;
   };
 
+  const openLearningHub = (courseId: number, slug: string) => {
+    navigate(`/my-courses/${courseId}/${slug}`);
+  };
+
+  const openCoursePublicDetail = (slug: string) => {
+    navigate(`/courses/${slug}`);
+  };
+
   const location = useLocation();
 
   const navItems = [
     { path: "/student/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { path: "/courses", label: "Khám phá", icon: Compass },
+    { path: "/live-sessions", label: "Buổi Live", icon: Video },
   ];
 
   const showNavSidebar = activeMainTab !== 'suggested';
+
+  // Get active courses for the "Continue Learning" section
+  const activeCourses = courses.filter(c => c.status === 'active' && c.progress_percent < 100);
+  const displayCourses = activeCourses.slice(0, 6);
+
+  // Helper to get progress color
+  const getProgressColor = (percent: number) => {
+    if (percent >= 80) return 'text-green-600';
+    if (percent >= 50) return 'text-primary';
+    if (percent >= 20) return 'text-yellow-600';
+    return 'text-gray-500';
+  };
 
   return (
     <div className="app-layout">
@@ -456,16 +488,22 @@ export default function StudentDashboard() {
       )}
       <main className="main-content">
         {activeMainTab === 'suggested' ? (
-          <>
-            <CoursesCatalogPage />
-          </>
+          <CoursesCatalogPage />
         ) : (
           <>
-            {/* Header Section */}
+            {/* Header Section with Welcome Message */}
             <section id="section-header">
               <div className="container header-container">
                 <div className="header-top">
                   <AvatarMenu />
+                </div>
+                <div className="welcome-section">
+                  <h1 className="welcome-title">
+                    {greeting}, {displayName.split(' ').slice(-1)[0]}!
+                  </h1>
+                  <p className="welcome-subtitle">
+                    Hôm nay bạn muốn học gì? Hãy tiếp tục hành trình chinh phục tri thức.
+                  </p>
                 </div>
               </div>
             </section>
@@ -473,236 +511,265 @@ export default function StudentDashboard() {
             {/* Overview Section */}
             <section id="section-overview">
               <div className="container overview-container">
-            <div className="metrics-column">
-              <div className="metrics-grid">
-                {/* Card 1: Overall Progress */}
-                <div className="metric-card">
-                  <div className="metric-header">
-                    <div className="metric-icon-wrapper">
-                      <Target size={24} strokeWidth={1.5} color="#006b5f" />
-                    </div>
-                    {stats.overallProgress > 70 && <span className="pro-badge">PRO</span>}
-                  </div>
-                  <div className="metric-content">
-                    <span className="metric-label">Tiến độ tổng quan</span>
-                    <span className="metric-value">{stats.overallProgress}%</span>
-                  </div>
-                </div>
-                {/* Card 2: Courses in Progress */}
-                <div className="metric-card">
-                  <div className="metric-header">
-                    <div className="metric-icon-wrapper">
-                      <BookOpen size={24} strokeWidth={1.5} color="#006b5f" />
-                    </div>
-                  </div>
-                  <div className="metric-content">
-                    <span className="metric-label">Khóa học đang học</span>
-                    <span className="metric-value">{stats.active}</span>
-                  </div>
-                </div>
-                {/* Card 3: Certificates Earned */}
-                <div className="metric-card">
-                  <div className="metric-header">
-                    <div className="metric-icon-wrapper">
-                      <Award size={24} strokeWidth={1.5} color="#006b5f" />
-                    </div>
-                  </div>
-                  <div className="metric-content">
-                    <span className="metric-label">Chứng chỉ đạt được</span>
-                    <span className="metric-value">{stats.certificatesEarned}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Chart Card */}
-              <div className="chart-card">
-                <div className="chart-header">
-                  <div className="chart-title-group">
-                    <h3 className="chart-title">Hoạt động học tập</h3>
-                    <p className="chart-subtitle">Số bài học hoàn thành trong 7 ngày gần nhất</p>
-                  </div>
-                  <div className="chart-legend">
-                    <span className="legend-dot"></span>
-                    <span className="legend-label">Bài</span>
-                  </div>
-                </div>
-                <div className="chart-body">
-                  <div className="x-axis">
-                    {studyHours.map((_, idx) => {
-                      const date = new Date();
-                      date.setDate(date.getDate() - (6 - idx));
-                      const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-                      const dayName = dayNames[date.getDay()];
-                      return (
-                        <div key={idx} className="day-col">
-                          <div 
-                            className={`bar ${studyHours[idx] === 0 ? 'empty' : ''}`} 
-                            style={{ 
-                              height: `${(studyHours[idx] / maxHour) * chartHeight}px`,
-                            }}
-                          ></div>
-                          <span>{dayName}</span>
+                <div className="metrics-column">
+                  <div className="metrics-grid">
+                    {/* Card 1: Overall Progress */}
+                    <div className="metric-card">
+                      <div className="metric-header">
+                        <div className="metric-icon-wrapper">
+                          <Target size={24} strokeWidth={1.5} />
                         </div>
-                      );
-                    })}
+                        {stats.overallProgress > 70 && <span className="pro-badge">🔥 Đang bùng nổ</span>}
+                      </div>
+                      <div className="metric-content">
+                        <span className="metric-label">Tiến độ tổng quan</span>
+                        <span className="metric-value">{stats.overallProgress}%</span>
+                      </div>
+                    </div>
+                    {/* Card 2: Courses in Progress */}
+                    <div className="metric-card">
+                      <div className="metric-header">
+                        <div className="metric-icon-wrapper">
+                          <BookOpen size={24} strokeWidth={1.5} />
+                        </div>
+                      </div>
+                      <div className="metric-content">
+                        <span className="metric-label">Khóa học đang học</span>
+                        <span className="metric-value">{stats.active}</span>
+                      </div>
+                    </div>
+                    {/* Card 3: Certificates Earned */}
+                    <div className="metric-card">
+                      <div className="metric-header">
+                        <div className="metric-icon-wrapper">
+                          <Trophy size={24} strokeWidth={1.5} />
+                        </div>
+                      </div>
+                      <div className="metric-content">
+                        <span className="metric-label">Chứng chỉ đạt được</span>
+                        <span className="metric-value">{stats.certificatesEarned}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Learning Activity Chart */}
+                  <div className="chart-card">
+                    <div className="chart-header">
+                      <div className="chart-title-group">
+                        <h3 className="chart-title">Hoạt động học tập</h3>
+                        <p className="chart-subtitle">Số bài học hoàn thành trong 7 ngày qua</p>
+                      </div>
+                      <div className="chart-legend">
+                        <span className="legend-dot"></span>
+                        <span className="legend-label">Bài học</span>
+                      </div>
+                    </div>
+                    <div className="chart-body">
+                      <div className="x-axis">
+                        {studyHours.map((value, idx) => {
+                          const date = new Date();
+                          date.setDate(date.getDate() - (6 - idx));
+                          const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+                          const dayName = dayNames[date.getDay()];
+                          return (
+                            <div key={idx} className="day-col">
+                              <div 
+                                className={`bar ${value === 0 ? 'empty' : ''}`} 
+                                style={{ 
+                                  height: `${(value / maxHour) * chartHeight}px`,
+                                }}
+                              />
+                              <span>{dayName}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Sidebar - Deadlines & Promo */}
+                <div className="sidebar-column">
+                  <div className="sidebar-card">
+                    <div className="sidebar-header">
+                      <h3 className="sidebar-title">Hạn nộp sắp tới</h3>
+                      <button type="button" className="view-all" onClick={() => navigate('/courses')}>
+                        Xem tất cả <ArrowRight size={14} />
+                      </button>
+                    </div>
+                    <div className="deadline-list">
+                      {courses.filter(c => c.status === 'active' && c.progress_percent < 100).slice(0, 3).map((course, idx) => (
+                        <div 
+                          key={course.id} 
+                          className={`deadline-item ${idx === 0 ? 'deadline-red' : idx === 1 ? 'deadline-blue' : 'deadline-teal'}`}
+                          onClick={() => openLearningHub(course.course_id, course.course_slug)}
+                          role="button"
+                          tabIndex={0}
+                        >
+                          <span className={`deadline-date ${idx === 0 ? 'text-red' : idx === 1 ? 'text-blue' : 'text-teal'}`}>
+                            {idx === 0 ? '⚠️ Sắp đến hạn' : `📅 ${formatDate(course.last_accessed_at) || 'Đang học'}`}
+                          </span>
+                          <h4 className="deadline-title">{course.course_title}</h4>
+                          <p className="deadline-course">Tiến độ: {course.progress_percent}%</p>
+                        </div>
+                      ))}
+                      {courses.filter(c => c.status === 'active').length === 0 && (
+                        <div className="deadline-item deadline-teal">
+                          <span className="deadline-date text-teal">✨ Không có hạn nộp</span>
+                          <h4 className="deadline-title">Bạn đang theo kịp tiến độ!</h4>
+                          <p className="deadline-course">Khám phá thêm khóa học để tiếp tục học</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="promo-box">
+                      <div className="promo-blur"></div>
+                      <div className="promo-content">
+                        <h4 className="promo-title">🚀 Nâng cấp gói Plus</h4>
+                        <p className="promo-desc">Mở khóa quyền truy cập không giới hạn vào tất cả chứng chỉ chuyên nghiệp.</p>
+                        <button className="promo-btn">Tìm hiểu thêm →</button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
+            </section>
 
-            </div>
-
-            {/* Sidebar Column - Deadlines & Promo */}
-            <div className="sidebar-column">
-              <div className="sidebar-card">
-                <div className="sidebar-header">
-                  <h3 className="sidebar-title">Hạn nộp sắp tới</h3>
-                  <button type="button" className="view-all" onClick={() => navigate('/courses')}>Xem tất cả</button>
-                </div>
-                <div className="deadline-list">
-                  {courses.filter(c => c.status === 'active' && c.progress_percent < 100).slice(0, 3).map((course, idx) => (
-                    <div key={course.id} className={`deadline-item ${getDeadlineClass(idx)}`}>
-                      <span className={`deadline-date ${getDeadlineColorClass(idx)}`}>
-                        {idx === 0 ? 'Sắp đến hạn' : formatDate(course.last_accessed_at) || 'Đang học'}
-                      </span>
-                      <h4 className="deadline-title">{course.course_title}</h4>
-                      <p className="deadline-course">Tiến độ: {course.progress_percent}%</p>
-                    </div>
-                  ))}
-                  {courses.filter(c => c.status === 'active').length === 0 && (
-                    <div className="deadline-item deadline-teal">
-                      <span className="deadline-date text-teal">Không có hạn nộp</span>
-                      <h4 className="deadline-title">Bạn đang theo kịp tiến độ!</h4>
-                      <p className="deadline-course">Khám phá thêm khóa học để tiếp tục học</p>
+            {/* Continue Learning Section - Enhanced with Detailed Progress */}
+            <section id="section-continue-learning">
+              <div className="container continue-learning-container">
+                <div className="section-header">
+                  <h2 className="section-title">
+                    <TrendingUp size={28} strokeWidth={1.5} />
+                    Tiếp tục học
+                  </h2>
+                  {activeCourses.length > 6 && (
+                    <div className="nav-buttons">
+                      <button 
+                        className="nav-btn" 
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        <ChevronLeft size={18} />
+                      </button>
+                      <button 
+                        className="nav-btn"
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        <ChevronRight size={18} />
+                      </button>
                     </div>
                   )}
                 </div>
 
-                <div className="promo-box">
-                  <div className="promo-blur"></div>
-                  <div className="promo-content">
-                    <h4 className="promo-title">Nâng cấp gói Plus</h4>
-                    <p className="promo-desc">Mở khóa quyền truy cập không giới hạn vào các chứng chỉ chuyên nghiệp.</p>
-                    <button className="promo-btn">Tìm hiểu thêm</button>
+                {/* Loading State */}
+                {loading && activeMainTab === 'myCourses' && (
+                  <div className="loading-center">
+                    <Loader2 className="spinner" />
                   </div>
-                </div>
-              </div>
-            </div>
-              </div>
-            </section>
+                )}
 
-            {/* Continue Learning Section */}
-            <section id="section-continue-learning">
-              <div className="container continue-learning-container">
-            <div className="section-header">
-              <h2 className="section-title">Tiếp tục học</h2>
-              <div className="nav-buttons">
-                <button 
-                  className="nav-btn" 
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <button 
-                  className="nav-btn"
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-
-            {/* Loading State */}
-            {loading && activeMainTab === 'myCourses' && (
-              <div className="loading-center">
-                <Loader2 className="spinner" />
-              </div>
-            )}
-
-            {/* Error State */}
-            {error && activeMainTab === 'myCourses' && !loading && (
-              <div className="error-card">
-                <AlertCircle size={20} />
-                <div>
-                  <p className="error-title">Đã xảy ra lỗi</p>
-                  <p className="error-msg">{error}</p>
-                  <button onClick={() => fetchEnrolledCourses()} className="retry-btn">Thử lại</button>
-                </div>
-              </div>
-            )}
-
-            {/* My Courses Grid */}
-            {activeMainTab === 'myCourses' && !loading && !error && courses.length > 0 && (
-              <div className="courses-grid">
-                {courses.slice(0, 6).map((course) => (
-                  <div 
-                    key={course.id} 
-                    className="course-card"
-                    onClick={() => openLearningHub(course.course_id, course.course_slug)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        openLearningHub(course.course_id, course.course_slug);
-                      }
-                    }}
-                    aria-label={`Mở khóa học ${course.course_title}`}
-                  >
-                    <div className="course-image-wrapper">
-                      {course.course_thumbnail ? (
-                        <img src={course.course_thumbnail} alt={course.course_title} className="course-image" />
-                      ) : (
-                        <div className="course-image-placeholder">
-                          <BookOpen size={40} strokeWidth={1} />
-                        </div>
-                      )}
-                      <span className="course-badge">{getModuleLabel(course)}</span>
+                {/* Error State */}
+                {error && activeMainTab === 'myCourses' && !loading && (
+                  <div className="error-card">
+                    <AlertCircle size={20} />
+                    <div>
+                      <p className="error-title">Đã xảy ra lỗi</p>
+                      <p className="error-msg">{error}</p>
+                      <button onClick={() => fetchEnrolledCourses()} className="retry-btn">Thử lại</button>
                     </div>
-                    <div className="course-info">
-                      <h4 className="course-title">{course.course_title}</h4>
-                      <p className="course-instructor">{course.instructor_name || 'Giảng viên khóa học'}</p>
-                      <div className="course-progress">
-                        <div className="progress-header">
-                          <span>Tiến độ</span>
-                          <span className="progress-percent">{course.progress_percent}%</span>
+                  </div>
+                )}
+
+                {/* Enhanced My Courses Grid with Detailed Progress */}
+                {activeMainTab === 'myCourses' && !loading && !error && displayCourses.length > 0 && (
+                  <div className="courses-grid">
+                    {displayCourses.map((course) => (
+                      <div 
+                        key={course.id} 
+                        className="course-card"
+                        onClick={() => openLearningHub(course.course_id, course.course_slug)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            openLearningHub(course.course_id, course.course_slug);
+                          }
+                        }}
+                      >
+                        <div className="course-image-wrapper">
+                          {course.course_thumbnail ? (
+                            <img src={course.course_thumbnail} alt={course.course_title} className="course-image" />
+                          ) : (
+                            <div className="course-image-placeholder">
+                              <BookOpen size={40} strokeWidth={1} />
+                            </div>
+                          )}
+                          <span className="course-badge">{getModuleLabel(course)}</span>
                         </div>
-                        <div className="progress-bar-bg">
-                          <div className="progress-bar-fill" style={{ width: `${course.progress_percent}%` }}></div>
+                        <div className="course-info">
+                          <h4 className="course-title">{course.course_title}</h4>
+                          
+                          {/* Detailed Progress Stats */}
+                          <div className="course-detail-stats">
+                            <span className="flex items-center gap-1">
+                              <CheckCircle2 size={14} />
+                              {course.completed_lessons || 0}/{course.total_lessons || 20} bài học
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock size={14} />
+                              {course.estimated_time_left || '~5 giờ'} còn lại
+                            </span>
+                          </div>
+
+                          {/* Main Progress Bar */}
+                          <div className="course-progress">
+                            <div className="progress-header">
+                              <span>Tiến độ học tập</span>
+                              <span className="progress-percent">{course.progress_percent}%</span>
+                            </div>
+                            <div className="progress-bar-bg">
+                              <div className="progress-bar-fill" style={{ width: `${course.progress_percent}%` }} />
+                            </div>
+                          </div>
+
+                          {/* Additional Motivation Stats */}
+                          <div className="course-additional-stats">
+                            <span className="flex items-center gap-1">
+                              <Flame size={12} />
+                              {course.progress_percent >= 80 ? 'Bùng nổ!' : course.progress_percent >= 50 ? 'Nửa chặng đường' : 'Mới bắt đầu'}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Star size={12} />
+                              {Math.floor(course.progress_percent / 20)}/5 sao
+                            </span>
+                          </div>
+
+                          <button className="resume-btn">
+                            {course.progress_percent === 0 ? 'Bắt đầu học' : 'Tiếp tục học'} 
+                            <ArrowRight size={16} />
+                          </button>
                         </div>
                       </div>
-                      <button className="resume-btn">Học tiếp</button>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                )}
 
-            {/* Empty State */}
-            {activeMainTab === 'myCourses' && !loading && !error && courses.length === 0 && (
-              <div className="empty-state">
-                <div className="empty-icon"><BookOpen size={48} strokeWidth={1} /></div>
-                <h3>Chưa có khóa học nào</h3>
-                <p>Bạn chưa đăng ký khóa học nào. Bắt đầu hành trình học ngay hôm nay!</p>
-                <button onClick={() => navigate('/courses')} className="btn-primary">Khám phá khóa học</button>
-              </div>
-            )}
-
-            {/* Pagination */}
-            {activeMainTab === 'myCourses' && totalPages > 1 && !loading && !error && courses.length > 0 && (
-              <div className="pagination">
-                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="page-btn">
-                  <ChevronLeft size={16} />
-                  Trước
-                </button>
-                <span className="page-info">Trang {currentPage} / {totalPages}</span>
-                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="page-btn">
-                  Sau
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            )}
+                {/* Empty State for My Courses */}
+                {activeMainTab === 'myCourses' && !loading && !error && displayCourses.length === 0 && (
+                  <div className="empty-state">
+                    <div className="empty-icon">
+                      <GraduationCap size={56} strokeWidth={1} />
+                    </div>
+                    <h3>🌟 Chưa có khóa học nào đang học</h3>
+                    <p>Bạn chưa bắt đầu khóa học nào. Hãy khám phá và bắt đầu hành trình học tập ngay hôm nay!</p>
+                    <button onClick={() => navigate('/courses')} className="btn-primary">
+                      Khám phá khóa học →
+                    </button>
+                  </div>
+                )}
               </div>
             </section>
           </>

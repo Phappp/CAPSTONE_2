@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import LessonResource from './lesson_resource';
+import User from './user';
 
 @Entity('lesson_resource_review_events')
 export default class LessonResourceReviewEvent {
@@ -8,8 +17,16 @@ export default class LessonResourceReviewEvent {
   @Column({ type: 'bigint' })
   resource_id: number;
 
+  @ManyToOne(() => LessonResource)
+  @JoinColumn({ name: 'resource_id' })
+  resource: LessonResource;
+
   @Column({ type: 'bigint' })
   actor_user_id: number;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'actor_user_id' })
+  actor_user: User;
 
   @Column({ type: 'enum', enum: ['pending', 'approved', 'rejected'], nullable: true })
   from_status: string | null;

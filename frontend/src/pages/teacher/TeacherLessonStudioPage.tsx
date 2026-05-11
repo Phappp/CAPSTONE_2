@@ -192,7 +192,8 @@ export default function TeacherLessonStudioPage() {
       const list = Array.isArray(resourcesJson.items) ? resourcesJson.items : [];
       setResources(list);
       const htmlRes = list.find((r) => (r.mime_type || "").includes("text/html")) ||
-        list.find((r) => (r.filename || "").toLowerCase().endsWith(".html"));
+        list.find((r) => (r.filename || "").toLowerCase().endsWith(".html")) ||
+        list.find((r) => (r.url || "").toLowerCase().endsWith(".html"));
       if (isQuickNewMode) {
         setRichHtml("");
         setInitialRichHtml("");
@@ -203,11 +204,27 @@ export default function TeacherLessonStudioPage() {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (viewRes.ok) {
-          const htmlText = await viewRes.text().catch(() => "");
-          setRichHtml(htmlText || "");
-          setInitialRichHtml(htmlText || "");
+          const contentType = viewRes.headers.get("content-type") || "";
+          let htmlText = "";
+          if (contentType.includes("application/json") || contentType.includes("text/json")) {
+            const json = await viewRes.json().catch(() => null);
+            if (json) {
+              htmlText = json.content || json.html || json.data || json.text || json.body || JSON.stringify(json);
+            }
+          } else {
+            htmlText = await viewRes.text().catch(() => "");
+          }
+          // Extract body content if it's a full HTML document (Tiềm potential stored as <html>...</html>)
+          let cleanHtml = htmlText;
+          const bodyMatch = htmlText.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+          if (bodyMatch && bodyMatch[1]) {
+            cleanHtml = bodyMatch[1].trim();
+          }
+          setRichHtml(cleanHtml || "");
+          setInitialRichHtml(cleanHtml || "");
         }
       } else {
+        setRichHtml("");
         setInitialRichHtml("");
       }
     } catch (e: any) {
@@ -619,7 +636,11 @@ export default function TeacherLessonStudioPage() {
 
   const currentVideoResource = resources.find((r) => isLikelyVideoResource(r)) || null;
   const currentYoutubeId = currentVideoResource ? parseYoutubeVideoId(currentVideoResource.url || "") : null;
-  const contentHtmlResource = resources.find((r) => (r.mime_type || "").includes("text/html")) || null;
+  const contentHtmlResource = resources.find((r) => 
+    (r.mime_type || "").includes("text/html") ||
+    (r.filename || "").toLowerCase().endsWith(".html") ||
+    (r.url || "").toLowerCase().endsWith(".html")
+  ) || null;
   const quizReviewResource =
     resources.find(
       (r) =>
@@ -641,7 +662,13 @@ export default function TeacherLessonStudioPage() {
   );
   const isQuizRejectedContext = quizReviewResource?.review_status === "rejected";
   const isAssignmentRejectedContext = assignmentReviewResources.some((r) => r.review_status === "rejected");
-  const otherResources = resources.filter((r) => !isLikelyVideoResource(r) && !(r.mime_type || "").includes("text/html"));
+  const otherResources = resources.filter((r) => {
+    const isVideo = isLikelyVideoResource(r);
+    const isHtml = (r.mime_type || "").includes("text/html") ||
+      (r.filename || "").toLowerCase().endsWith(".html") ||
+      (r.url || "").toLowerCase().endsWith(".html");
+    return !isVideo && !isHtml;
+  });
   const pendingAttachmentFile = pendingFile && !isLikelyVideoFile(pendingFile) ? pendingFile : null;
   const hasLessonDescription = Boolean(lessonDescription?.trim());
   const assignmentDescriptionHtml = assignmentPreview?.description?.trim() || "";
@@ -1554,6 +1581,11 @@ export default function TeacherLessonStudioPage() {
           font-size: 0.85rem;
           font-weight: 500;
           color: #0f172a;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          min-width: 0;
+          flex-shrink: 1;
         }
 
         .video-size,

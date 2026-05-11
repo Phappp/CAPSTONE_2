@@ -102,6 +102,7 @@ import {
   PendingLessonResourceListResult,
   TeacherRejectedResourceListResult,
   TeacherPendingResourceListResult,
+  TeacherApprovedResourceListResult,
   LessonResourceReviewDecision,
   LessonResourceReviewTimelineResult,
   LessonSummaryPayload,
@@ -118,6 +119,13 @@ function shuffleArray<T>(items: T[]): T[] {
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
+}
+
+function stripMarkdownJson(raw: string): string {
+  let text = String(raw || '').trim();
+  text = text.replace(/^```(?:json)?\s*/i, '');
+  text = text.replace(/\s*```$/i, '');
+  return text.trim();
 }
 
 function validateManualQuizQuestions(questions: ManualQuizQuestionInput[]): ManualQuizQuestionInput[] {
@@ -859,6 +867,42 @@ export class CourseServiceImpl implements CourseService {
   private summaryJobsInFlight = new Set<number>();
   private youtubeSttJobsInFlight = new Set<number>();
   private uploadedVideoSttJobsInFlight = new Set<number>();
+  private startupJobsScheduled = false;
+
+  async scanPendingTranscripts(): Promise<{ queued: number; skipped: number }> {
+    if (!env.YOUTUBE_STT_ENABLED) return { queued: 0, skipped: 0 };
+    if (this.startupJobsScheduled) return { queued: 0, skipped: 0 };
+    this.startupJobsScheduled = true;
+
+    const cacheRepo = AppDataSource.getRepository(LessonTranscriptCache);
+    const resourceRepo = AppDataSource.getRepository(LessonResource);
+
+    const pending = await cacheRepo
+      .createQueryBuilder('c')
+      .where('c.source_type = :type', { type: 'uploaded_video' })
+      .andWhere("c.error_message LIKE 'Đang trích%'")
+      .getMany();
+
+    let queued = 0, skipped = 0;
+    for (const entry of pending as any[]) {
+      const lessonId = Number(entry.lesson_id);
+      if (this.uploadedVideoSttJobsInFlight.has(lessonId)) {
+        skipped++;
+        continue;
+      }
+      const video = await resourceRepo.findOne({
+        where: { lesson_id: lessonId, resource_kind: 'video' } as any,
+      });
+      const videoUrl = String((video as any)?.url || '');
+      if (!videoUrl || !videoUrl.startsWith('https://')) {
+        skipped++;
+        continue;
+      }
+      this.scheduleUploadedVideoSttJob({ lessonId, videoUrl });
+      queued++;
+    }
+    return { queued, skipped };
+  }
 
   private toLessonSummaryPayload(summary: any, segments: any[], sourceReady: boolean): LessonSummaryPayload {
     return {
@@ -1222,7 +1266,7 @@ export class CourseServiceImpl implements CourseService {
     const systemPrompt =
       'Bạn là trợ lý tóm tắt bài học LMS. Trả về DUY NHẤT 1 JSON object có 2 key: summary_text (string) và keywords (string[]).';
     const userPrompt = [
-      'Hãy tóm tắt phân đoạn sau bằng tiếng Việt ngắn gọn, dễ hiểu.',
+      'Hãy tóm tắt phân đoạn sau bằng TIẾNG VIỆT ngắn gọn, dễ hiểu.',
       '- summary_text: 2-4 câu.',
       '- keywords: 3-6 từ khóa quan trọng.',
       '',
@@ -1230,9 +1274,13 @@ export class CourseServiceImpl implements CourseService {
     ].join('\n');
 
     let lastError: any = null;
+    console.log(`[OpenRouter] 📋 Summarize - Models: [${input.modelCandidates.join(', ')}], Keys count: ${input.openRouterKeys.length}`);
     for (const modelTry of input.modelCandidates) {
       for (const key of input.openRouterKeys) {
+        const keyHash = key.slice(-8);
+        console.log(`[OpenRouter] 🔄 Thử model: ${modelTry}, Key: ...${keyHash}`);
         try {
+          const startTime = Date.now();
           const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -1249,25 +1297,31 @@ export class CourseServiceImpl implements CourseService {
               temperature: 0.3,
             }),
           });
+          const elapsedMs = Date.now() - startTime;
+          console.log(`[OpenRouter] ⏱️  Response time: ${elapsedMs}ms, Status: ${response.status}`);
           if (!response.ok) {
             const raw = await response.text().catch(() => '');
+            console.error(`[OpenRouter] ❌ HTTP ${response.status} với model ${modelTry}: ${raw?.slice(0, 200)}`);
             lastError = new Error(`OpenRouter HTTP ${response.status}: ${raw?.slice(0, 150) || ''}`);
             continue;
           }
           const data: any = await response.json();
           const content = String(data?.choices?.[0]?.message?.content || '').trim();
-          const parsed = JSON.parse(content || '{}');
+          const parsed = JSON.parse(stripMarkdownJson(content));
           const summary_text = normalizeSummaryText(String(parsed?.summary_text || ''));
           const keywords = Array.isArray(parsed?.keywords)
             ? parsed.keywords.map((k: any) => normalizeSummaryText(String(k))).filter(Boolean).slice(0, 8)
             : [];
           if (!summary_text) throw new Error('AI không trả về summary_text hợp lệ.');
+          console.log(`[OpenRouter] ✅ Thành công - Model: ${modelTry}, Summary length: ${summary_text.length}`);
           return { summary_text, keywords, model: modelTry };
         } catch (error: any) {
+          console.error(`[OpenRouter] 💥 Exception: ${error.message}`);
           lastError = error;
         }
       }
     }
+    console.error(`[OpenRouter] ❌ Tất cả model/key đều thất bại`);
     throw new Error(String(lastError?.message || lastError || 'OpenRouter summarize failed.'));
   }
 
@@ -1287,9 +1341,13 @@ export class CourseServiceImpl implements CourseService {
     ].join('\n');
 
     let lastError: any = null;
+    console.log(`[OpenRouter] 📋 Overall Summary - Models: [${input.modelCandidates.join(', ')}], Keys count: ${input.openRouterKeys.length}`);
     for (const modelTry of input.modelCandidates) {
       for (const key of input.openRouterKeys) {
+        const keyHash = key.slice(-8);
+        console.log(`[OpenRouter] 🔄 Thử model: ${modelTry}, Key: ...${keyHash}`);
         try {
+          const startTime = Date.now();
           const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -1306,25 +1364,31 @@ export class CourseServiceImpl implements CourseService {
               temperature: 0.3,
             }),
           });
+          const elapsedMs = Date.now() - startTime;
+          console.log(`[OpenRouter] ⏱️  Response time: ${elapsedMs}ms, Status: ${response.status}`);
           if (!response.ok) {
             const raw = await response.text().catch(() => '');
+            console.error(`[OpenRouter] ❌ HTTP ${response.status} với model ${modelTry}: ${raw?.slice(0, 200)}`);
             lastError = new Error(`OpenRouter HTTP ${response.status}: ${raw?.slice(0, 150) || ''}`);
             continue;
           }
           const data: any = await response.json();
           const content = String(data?.choices?.[0]?.message?.content || '').trim();
-          const parsed = JSON.parse(content || '{}');
+          const parsed = JSON.parse(stripMarkdownJson(content));
           const overall_summary = normalizeSummaryText(String(parsed?.overall_summary || ''));
           const key_points = Array.isArray(parsed?.key_points)
             ? parsed.key_points.map((k: any) => normalizeSummaryText(String(k))).filter(Boolean).slice(0, 12)
             : [];
           if (!overall_summary) throw new Error('AI không trả về overall_summary hợp lệ.');
+          console.log(`[OpenRouter] ✅ Thành công - Model: ${modelTry}, Summary length: ${overall_summary.length}`);
           return { overall_summary, key_points, model: modelTry };
         } catch (error: any) {
+          console.error(`[OpenRouter] 💥 Exception: ${error.message}`);
           lastError = error;
         }
       }
     }
+    console.error(`[OpenRouter] ❌ Tất cả model/key đều thất bại`);
     throw new Error(String(lastError?.message || lastError || 'OpenRouter overall summarize failed.'));
   }
 
@@ -1671,7 +1735,7 @@ export class CourseServiceImpl implements CourseService {
         const kind = String((assignment as any).assignment_kind || 'file_prompt') === 'short_answer' ? 'short_answer' : 'file_prompt';
 
         if (!title) issues.push(`Bài tập "${lessonTitle}" thiếu tiêu đề.`);
-        if (!description) issues.push(`Bài tập "${lessonTitle}" thiếu mô tả yêu cầu.`);
+        if (!description && kind !== 'short_answer') issues.push(`Bài tập "${lessonTitle}" thiếu mô tả yêu cầu.`);
         if (!hasSubmissionCriteria) {
           issues.push(`Bài tập "${lessonTitle}" thiếu tiêu chí nộp bài (hướng dẫn hoặc định dạng nộp).`);
         }
@@ -4489,6 +4553,45 @@ export class CourseServiceImpl implements CourseService {
     };
   }
 
+  async listMyApprovedLessonResources(subjectUserId: number, courseId: number): Promise<TeacherApprovedResourceListResult> {
+    await ensureUserIsCourseManager(subjectUserId);
+    await this.ensureOwnCourse(subjectUserId, courseId);
+    await ensureCourseWorkflowSchema();
+
+    const rows = await AppDataSource.query(
+      `
+      SELECT
+        r.id, r.lesson_id, r.resource_kind, r.filename,
+        c.id AS course_id,
+        m.id AS module_id, m.title AS module_title,
+        l.id AS lesson_id, l.title AS lesson_title, l.lesson_type,
+        r.reviewed_at
+      FROM lesson_resources r
+      INNER JOIN lessons l ON l.id = r.lesson_id
+      INNER JOIN modules m ON m.id = l.module_id
+      INNER JOIN courses c ON c.id = m.course_id
+      WHERE c.id = ? AND c.created_by = ? AND c.deleted_at IS NULL AND r.review_status = 'approved'
+      ORDER BY r.reviewed_at DESC, r.id DESC
+      `,
+      [courseId, subjectUserId]
+    );
+
+    return {
+      course_id: courseId,
+      items: (rows || []).map((r: any) => ({
+        id: Number(r.id),
+        module_id: Number(r.module_id),
+        module_title: String(r.module_title || ''),
+        lesson_id: Number(r.lesson_id),
+        lesson_title: String(r.lesson_title || ''),
+        lesson_type: String(r.lesson_type || 'text') as any,
+        resource_kind: (r.resource_kind ?? 'other') as any,
+        filename: r.filename ?? null,
+        reviewed_at: r.reviewed_at ? new Date(r.reviewed_at).toISOString() : null,
+      })),
+    };
+  }
+
   async reviewLessonResourceByAdmin(
     subjectUserId: number,
     resourceId: number,
@@ -4830,7 +4933,7 @@ export class CourseServiceImpl implements CourseService {
           const hasSubmissionCriteria = instructions.length > 0 || (Array.isArray(formats) && formats.length > 0);
           const kind = String((assignment as any).assignment_kind || 'file_prompt') === 'short_answer' ? 'short_answer' : 'file_prompt';
           if (!title) qualityIssue = 'Bài tập thiếu tiêu đề.';
-          else if (!description) qualityIssue = 'Bài tập thiếu mô tả yêu cầu.';
+          else if (!description && kind !== 'short_answer') qualityIssue = 'Bài tập thiếu mô tả yêu cầu.';
           else if (!hasSubmissionCriteria) qualityIssue = 'Bài tập thiếu tiêu chí nộp bài.';
           else if (kind === 'short_answer') {
             const shortQuestions = safeJsonParse<any[]>((assignment as any).short_answer_questions, []);
@@ -5752,10 +5855,22 @@ export class CourseServiceImpl implements CourseService {
         }
       });
     } catch (error: any) {
+      const raw = String(error?.message || error || '');
+      const isLlmFailure =
+        raw.toLowerCase().includes('fetch failed') ||
+        raw.toLowerCase().includes('model/key') ||
+        raw.toLowerCase().includes('tất cả model') ||
+        raw.toLowerCase().includes('all model') ||
+        raw.toLowerCase().includes('http 4') ||
+        raw.toLowerCase().includes('http 5') ||
+        raw.toLowerCase().includes('openrouter');
+      const userMessage = isLlmFailure
+        ? 'Hệ thống lỗi, vui lòng thử lại sau ít phút nữa.'
+        : raw || 'Đã xảy ra lỗi khi tạo tóm tắt.';
       await summaryRepo.update({ lesson_id: lessonId } as any, {
         status: 'failed',
         finished_at: new Date(),
-        error_message: String(error?.message || error || 'Lesson summary failed'),
+        error_message: userMessage,
       } as any);
     }
   }
@@ -6185,8 +6300,13 @@ export class CourseServiceImpl implements CourseService {
       .join('\n');
 
     let lastError: any = null;
+    console.log(`[OpenRouter] 📋 Chọn key: KeyID=${(picked as any).id}, Model candidates: [${modelCandidates.join(', ')}]`);
+    console.log(`[OpenRouter] 🤖 Default model: ${defaultModel}`);
+
     for (const modelTry of modelCandidates) {
+      console.log(`[OpenRouter] 🔄 Thử model: ${modelTry}`);
       try {
+        const startTime = Date.now();
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -6203,6 +6323,8 @@ export class CourseServiceImpl implements CourseService {
             temperature: 0.6,
           }),
         });
+        const elapsedMs = Date.now() - startTime;
+        console.log(`[OpenRouter] ⏱️  Response time: ${elapsedMs}ms, Status: ${response.status}`);
 
         if (!response.ok) {
           const raw = await response.text().catch(() => '');
@@ -6217,10 +6339,12 @@ export class CourseServiceImpl implements CourseService {
             (picked as any).cooldown_until = new Date(Date.now() + cooldownMinutes * 60 * 1000);
             await keyRepo.save(picked as any);
 
+            console.error(`[OpenRouter] ⚠️  Rate limited (429) với model ${modelTry}. Key cooldown ${cooldownMinutes} phút.`);
             lastError = new Error(`OpenRouter 429 (model ${modelTry}): ${raw?.slice(0, 160) || 'rate limited'}`);
             continue;
           }
 
+          console.error(`[OpenRouter] ❌ HTTP ${response.status} với model ${modelTry}: ${raw?.slice(0, 200)}`);
           (picked as any).last_error_at = new Date();
           (picked as any).error_count = Number((picked as any).error_count || 0) + 1;
           (picked as any).last_test_status = 'unknown_error';
@@ -6232,6 +6356,7 @@ export class CourseServiceImpl implements CourseService {
         }
 
         const data: any = await response.json();
+        console.log(`[OpenRouter] ✅ Thành công với model: ${modelTry}, Actual model: ${data?.model || 'N/A'}`);
         const choice0 = data?.choices?.[0] ?? null;
         const contentRaw = choice0?.message?.content;
         const textRaw = choice0?.text;

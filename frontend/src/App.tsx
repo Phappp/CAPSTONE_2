@@ -37,6 +37,8 @@ import LandingPage from "./pages/LandingPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import ContactUsPage from "./pages/ContactUsPage";
 import SystemStatusOrb from "./components/SystemStatusOrb";
+import TeacherLiveSessionPage from "./pages/teacher/LiveSessionPage";
+import LiveSessionViewer from "./pages/leaner/LiveSessionViewer";
 
 export default function App() {
   return (
@@ -194,6 +196,38 @@ export default function App() {
         element={
           <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherCourseOverviewPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/live-sessions"
+        element={
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <TeacherLiveSessionPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/live-sessions/:courseId"
+        element={
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <TeacherLiveSessionPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/live-sessions"
+        element={
+          <Authentication allowedRoles={["learner", "student"]}>
+            <LiveSessionViewer />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/live-session/:sessionId"
+        element={
+          <Authentication allowedRoles={["learner", "student"]}>
+            <LiveSessionViewer />
           </Authentication>
         }
       />
