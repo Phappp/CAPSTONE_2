@@ -11,6 +11,7 @@ frontend/.env
 *.pyd
 *.pyi
 *.py
+!main.py
 *.1
 *.typed
 *.yaml
