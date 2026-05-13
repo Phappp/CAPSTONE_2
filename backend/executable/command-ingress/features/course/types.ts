@@ -297,6 +297,23 @@ export type TeacherPendingResourceListResult = {
   items: TeacherPendingResourceListItem[];
 };
 
+export type TeacherApprovedResourceListItem = {
+  id: number;
+  module_id: number;
+  module_title: string;
+  lesson_id: number;
+  lesson_title: string;
+  lesson_type: LessonType;
+  resource_kind: LessonResourceKind;
+  filename: string | null;
+  reviewed_at: string | null;
+};
+
+export type TeacherApprovedResourceListResult = {
+  course_id: number;
+  items: TeacherApprovedResourceListItem[];
+};
+
 export type LessonResourceReviewDecision = 'approve' | 'reject';
 
 export type LessonResourceReviewEventItem = {
@@ -671,6 +688,7 @@ export type LearnerQuizTakePayload = {
       question_text: string;
       selected_option_id: number | null;
       selected_option_text: string | null;
+      correct_option_ids: number[];
     }[];
   }[];
   questions: {
@@ -712,6 +730,34 @@ export type QuizLearnerScoresResult = {
   learners: QuizLearnerScoresRow[];
 };
 
+export type QuizAttemptDetailResult = {
+  attempt_id: number;
+  attempt_number: number;
+  user_id: number;
+  user_full_name: string;
+  user_email: string;
+  score: number | null;
+  is_passed: boolean | null;
+  submitted_at: string | null;
+  status: string;
+  show_correct_answers: boolean;
+  questions: {
+    quiz_question_id: number;
+    order_index: number;
+    question_text: string;
+    points: number;
+    selected_option_id: number | null;
+    selected_option_text: string | null;
+    is_correct: boolean | null;
+    options: {
+      id: number;
+      option_text: string;
+      is_correct: boolean;
+      is_selected: boolean;
+    }[];
+  }[];
+};
+
 export type LearnerQuizSubmitResult = {
   attempt_id: number;
   attempt_number: number;
@@ -727,6 +773,44 @@ export type LearnerQuizSubmitResult = {
     correct_option_ids: number[];
     selected_option_id: number | null;
   }[];
+};
+
+export type LessonSummaryStatus = 'pending' | 'processing' | 'succeeded' | 'failed';
+export type LessonSummarySourceType = 'text' | 'youtube' | 'uploaded_video';
+
+export type LearningActivityDayPoint = {
+  date: string;
+  lessons_completed: number;
+};
+
+export type LearningActivityResult = {
+  daily_activity: LearningActivityDayPoint[];
+};
+
+export type LessonSummarySegmentItem = {
+  segment_index: number;
+  start_sec: number | null;
+  end_sec: number | null;
+  raw_text: string;
+  summary_text: string;
+  keywords: string[];
+};
+
+export type LessonSummaryPayload = {
+  lesson_id: number;
+  status: LessonSummaryStatus;
+  source_type: LessonSummarySourceType;
+  source_ready: boolean;
+  model: string | null;
+  source_hash: string | null;
+  overall_summary: string | null;
+  key_points: string[];
+  error_message: string | null;
+  requested_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  updated_at: string | null;
+  segments: LessonSummarySegmentItem[];
 };
 
 export interface CourseService {
@@ -760,6 +844,7 @@ export interface CourseService {
   updateMyCourse(subjectUserId: number, courseId: number, request: UpdateCourseRequest): Promise<void>;
   setMyCourseStatus(subjectUserId: number, courseId: number, status: CourseStatus): Promise<void>;
   softDeleteMyCourse(subjectUserId: number, courseId: number): Promise<void>;
+  hardDeleteMyCourse(subjectUserId: number, courseId: number): Promise<void>;
   getMyCourseCompletionRules(subjectUserId: number, courseId: number): Promise<CourseCompletionRules>;
   updateMyCourseCompletionRules(subjectUserId: number, courseId: number, request: UpdateCourseCompletionRulesRequest): Promise<CourseCompletionRules>;
   listMyCourseLearnerProgress(subjectUserId: number, courseId: number, query: { page?: number; page_size?: number; q?: string }): Promise<CourseLearnerProgressResult>;
@@ -778,6 +863,7 @@ export interface CourseService {
   getLessonResourceReviewTimelineByAdmin(subjectUserId: number, resourceId: number): Promise<LessonResourceReviewTimelineResult>;
   listMyRejectedLessonResources(subjectUserId: number, courseId: number): Promise<TeacherRejectedResourceListResult>;
   listMyPendingLessonResources(subjectUserId: number, courseId: number): Promise<TeacherPendingResourceListResult>;
+  listMyApprovedLessonResources(subjectUserId: number, courseId: number): Promise<TeacherApprovedResourceListResult>;
 
   getMyCourseContentTree(subjectUserId: number, courseId: number): Promise<CourseContentTree>;
   createModule(subjectUserId: number, courseId: number, request: CreateModuleRequest): Promise<{ id: number }>;
@@ -850,4 +936,17 @@ export interface CourseService {
     courseId: number,
     lessonId: number
   ): Promise<QuizLearnerScoresResult>;
+  getQuizAttemptDetailForTeacher(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number,
+    attemptId: number
+  ): Promise<QuizAttemptDetailResult>;
+
+  requestLessonSummary(subjectUserId: number, courseId: number, lessonId: number): Promise<LessonSummaryPayload>;
+  getLessonSummary(subjectUserId: number, courseId: number, lessonId: number): Promise<LessonSummaryPayload>;
+  regenerateLessonSummary(subjectUserId: number, courseId: number, lessonId: number): Promise<LessonSummaryPayload>;
+
+  // Learning activity (dashboard)
+  getMyLearningActivity(subjectUserId: number): Promise<LearningActivityResult>;
 }

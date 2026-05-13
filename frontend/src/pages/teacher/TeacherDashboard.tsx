@@ -6,7 +6,9 @@ import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { useAuth } from "../../contexts/Auth";
 import CommonModal from "../../components/CommonModal";
+import TeacherLiveSessionPage from "./LiveSessionPage";
 import "./TeacherDashboard.css";
+import { Video } from "lucide-react";
 
 type CourseViewMode = "list" | "grid" | "compact";
 
@@ -152,10 +154,11 @@ export default function TeacherDashboard() {
     return false;
   };
 
-  type TeacherSection = "dashboard" | "course";
+  type TeacherSection = "dashboard" | "course" | "live";
 
   const parseTeacherSection = (raw: string | null): TeacherSection => {
     if (raw === "course") return "course";
+    if (raw === "live") return "live";
     if (raw === "activities" || raw === "quizz" || raw === "assignment") return "course";
     return "dashboard";
   };
@@ -423,6 +426,7 @@ export default function TeacherDashboard() {
   const sections: { key: TeacherSection; label: string }[] = [
     { key: "dashboard", label: "Tổng quan" },
     { key: "course", label: "Quản lý khóa học" },
+    { key: "live", label: "Buổi Live" },
   ];
 
   const filteredStatus = useMemo(() => {
@@ -1310,6 +1314,11 @@ export default function TeacherDashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Live Sessions Section */}
+        {section === "live" && (
+          <TeacherLiveSessionPage />
         )}
       </div>
       <CommonModal

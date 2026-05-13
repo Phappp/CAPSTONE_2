@@ -11,6 +11,7 @@ import AdminCourseContentReviewPage from "./pages/admin/AdminCourseContentReview
 import CreateCoursePage from "./pages/teacher/CreateCoursePage";
 import TeacherCourseDetailPage from "./pages/teacher/TeacherCourseDetailPage";
 import TeacherCourseOverviewPage from "./pages/teacher/TeacherCourseOverviewPage";
+import TeacherGradingCenterPage from "./pages/teacher/TeacherGradingCenterPage";
 import TeacherQuestionBankPage from "./pages/teacher/TeacherQuestionBankPage";
 import TeacherCourseAssessmentsPage from "./pages/teacher/TeacherCourseAssessmentsPage";
 import TeacherCourseContentBuilderPage from "./pages/teacher/TeacherCourseContentBuilderPage";
@@ -33,6 +34,8 @@ import LearnerSidebarLayout from "./layouts/LearnerSidebarLayout";
 import Authentication from "./router/Authentication";
 import LandingPage from "./pages/LandingPage";
 import SystemStatusOrb from "./components/SystemStatusOrb";
+import TeacherLiveSessionPage from "./pages/teacher/LiveSessionPage";
+import LiveSessionViewer from "./pages/leaner/LiveSessionViewer";
 
 export default function App() {
   return (
@@ -43,7 +46,7 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="/oauth/redirect" element={<OAuthRedirectPage />} /> {/* Thêm route mới */}
+        <Route path="/oauth/redirect" element={<OAuthRedirectPage />} />
 
       <Route
         path="/student/dashboard"
@@ -90,11 +93,18 @@ export default function App() {
         <Route path="/learning/:id/:slug" element={<LearningPage />} />
         <Route path="/learning/:id/:slug/modules/:moduleId" element={<LearningModuleLessonsPage />} />
         <Route path="/my-courses/:id/:slug" element={<LearnerCourseHubPage />} />
-        <Route path="/learner/quiz/:courseId/:lessonId" element={<LearnerQuizTakePage />} />
         <Route path="/learner/assignment/:lessonId" element={<LearnerAssignmentSubmitPage />} />
         <Route path="/mock-payment" element={<MockPaymentPage />} />
         <Route path="/payment-result" element={<PaymentResultPage />} />
       </Route>
+      <Route
+        path="/learner/quiz/:courseId/:lessonId"
+        element={
+          <Authentication allowedRoles={["learner", "student"]}>
+            <LearnerQuizTakePage />
+          </Authentication>
+        }
+      />
       <Route
         path="/teacher/courses/new"
         element={
@@ -152,6 +162,14 @@ export default function App() {
         }
       />
       <Route
+        path="/teacher/courses/:id/grading"
+        element={
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <TeacherGradingCenterPage />
+          </Authentication>
+        }
+      />
+      <Route
         path="/teacher/courses/:id/lessons/:lessonId/roster"
         element={
           <Authentication allowedRoles={["course_manager", "teacher"]}>
@@ -172,6 +190,38 @@ export default function App() {
         element={
           <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherCourseOverviewPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/live-sessions"
+        element={
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <TeacherLiveSessionPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/live-sessions/:courseId"
+        element={
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <TeacherLiveSessionPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/live-sessions"
+        element={
+          <Authentication allowedRoles={["learner", "student"]}>
+            <LiveSessionViewer />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/live-session/:sessionId"
+        element={
+          <Authentication allowedRoles={["learner", "student"]}>
+            <LiveSessionViewer />
           </Authentication>
         }
       />

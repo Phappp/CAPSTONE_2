@@ -35,6 +35,22 @@ export default function SystemStatusOrb() {
 
   useEffect(() => {
     const originalFetch = window.fetch.bind(window);
+    const isImportantRequest = (args: Parameters<typeof fetch>): boolean => {
+      const [input, init] = args;
+      const method = String(init?.method || "GET").toUpperCase();
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : "";
+      const normalizedUrl = String(url || "").toLowerCase();
+
+      // Ignore high-frequency background traffic.
+      if (normalizedUrl.includes("/api/v1/courses/") && normalizedUrl.includes("/lessons/") && normalizedUrl.endsWith("/progress")) {
+        return false;
+      }
+      if (normalizedUrl.includes("/api/v1/courses/") && normalizedUrl.includes("/lessons/") && normalizedUrl.endsWith("/summary") && method === "GET") {
+        return false;
+      }
+
+      return true;
+    };
     const updateNetworkStatus = () => {
       if (!navigator.onLine) {
         setStatus({
@@ -49,19 +65,24 @@ export default function SystemStatusOrb() {
     window.addEventListener("offline", updateNetworkStatus);
 
     window.fetch = async (...args: Parameters<typeof fetch>) => {
-      pendingRequestCount.current += 1;
-      setStatus({
-        tone: "processing",
-        label: "Processing...",
-        detail: "",
-        updatedAt: Date.now(),
-      });
-      setExpanded(true);
+      const important = isImportantRequest(args);
+      if (important) {
+        pendingRequestCount.current += 1;
+        setStatus({
+          tone: "processing",
+          label: "Processing...",
+          detail: "",
+          updatedAt: Date.now(),
+        });
+        setExpanded(true);
+      }
 
       try {
         const response = await originalFetch(...args);
-        pendingRequestCount.current = Math.max(0, pendingRequestCount.current - 1);
-        if (pendingRequestCount.current === 0) {
+        if (important) {
+          pendingRequestCount.current = Math.max(0, pendingRequestCount.current - 1);
+        }
+        if (important && pendingRequestCount.current === 0) {
           if (response.ok) {
             setStatus({
               tone: "success",
@@ -80,8 +101,10 @@ export default function SystemStatusOrb() {
         }
         return response;
       } catch (error) {
-        pendingRequestCount.current = Math.max(0, pendingRequestCount.current - 1);
-        if (pendingRequestCount.current === 0) {
+        if (important) {
+          pendingRequestCount.current = Math.max(0, pendingRequestCount.current - 1);
+        }
+        if (important && pendingRequestCount.current === 0) {
           setStatus({
             tone: "error",
             label: "Error",

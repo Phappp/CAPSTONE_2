@@ -64,9 +64,9 @@ type PrerequisiteCourseOption = {
 };
 
 function levelLabel(level: string) {
-  if (level === "beginner") return { label: "Beginner", color: "#16a34a", bg: "#dcfce7" };
-  if (level === "intermediate") return { label: "Intermediate", color: "#2563eb", bg: "#dbeafe" };
-  if (level === "advanced") return { label: "Advanced", color: "#7c3aed", bg: "#f3e8ff" };
+  if (level === "beginner") return { label: "Cơ bản", color: "#16a34a", bg: "#dcfce7" };
+  if (level === "intermediate") return { label: "Trung cấp", color: "#2563eb", bg: "#dbeafe" };
+  if (level === "advanced") return { label: "Nâng cao", color: "#7c3aed", bg: "#f3e8ff" };
   return { label: level || "—", color: "#6b7280", bg: "#f3f4f6" };
 }
 
@@ -88,8 +88,8 @@ function formatDuration(minutes: number | null | undefined): string {
   if (!minutes) return "—";
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  if (hours === 0) return `${mins} mins`;
-  if (mins === 0) return `${hours} hr${hours > 1 ? 's' : ''}`;
+  if (hours === 0) return `${mins} phút`;
+  if (mins === 0) return `${hours} giờ`;
   return `${hours}h ${mins}m`;
 }
 
@@ -231,7 +231,7 @@ export default function CoursePublicDetailPage() {
 
   const enroll = async () => {
     if (!course) return;
-    const ok = window.confirm("Enroll in this course?");
+    const ok = window.confirm("Bạn có muốn đăng ký khóa học này không?");
     if (!ok) return;
     setLoading(true);
     setError(null);
@@ -243,11 +243,11 @@ export default function CoursePublicDetailPage() {
         },
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((json as any)?.message || "Cannot enroll in course.");
+      if (!res.ok) throw new Error((json as any)?.message || "Không thể đăng ký khóa học. Vui lòng thử lại sau.");
       await fetchDetail();
-      window.alert("Successfully enrolled! Go to Student Dashboard to view your courses.");
+      window.alert("Đăng ký thành công! Vui lòng truy cập Bảng điều khiển để xem các khóa học của bạn.");
     } catch (e: any) {
-      setError(e?.message || "An error occurred.");
+      setError(e?.message || "Đã xảy ra lỗi. Vui lòng thử lại sau.");
     } finally {
       setLoading(false);
     }
@@ -267,16 +267,16 @@ export default function CoursePublicDetailPage() {
         body: JSON.stringify({ course_id: course.id }),
       });
       const json = (await res.json().catch(() => ({}))) as { payment_url?: string; message?: string; status?: string };
-      if (!res.ok) throw new Error(json?.message || "Cannot create payment order.");
+      if (!res.ok) throw new Error(json?.message || "Không thể tạo yêu cầu thanh toán. Vui lòng thử lại sau.");
       if (json?.status === "paid") {
-        window.alert("You have already paid for this course. Go to Dashboard to continue learning.");
+        window.alert("Bạn đã thanh toán khóa học này rồi. Vui lòng truy cập Bảng điều khiển để tiếp tục học.");
         navigate(`/my-courses/${course.id}/${course.slug}`);
         return;
       }
-      if (!json?.payment_url) throw new Error("No payment URL received from MoMo.");
+      if (!json?.payment_url) throw new Error("Không nhận được liên kết thanh toán từ MoMo. Vui lòng thử lại sau.");
       window.location.href = json.payment_url;
     } catch (e: any) {
-      setError(e?.message || "Cannot start payment process.");
+      setError(e?.message || "Không thể bắt đầu thanh toán. Vui lòng thử lại sau.");
     } finally {
       setLoading(false);
     }
@@ -294,7 +294,7 @@ export default function CoursePublicDetailPage() {
     setLoading(true);
     setError(null);
     fetchDetail()
-      .catch((e: any) => setError(e?.message || "An error occurred."))
+      .catch((e: any) => setError(e?.message || "Đã xảy ra lỗi khi tải thông tin khóa học. Vui lòng thử lại sau."))
       .finally(() => setLoading(false));
     void fetchPrerequisiteCatalog();
     void fetchMyEnrollmentStatus();
@@ -312,7 +312,7 @@ export default function CoursePublicDetailPage() {
           <div className="course-detail-header">
             <button type="button" onClick={() => navigate("/courses")} className="back-button" disabled={loading}>
               <ArrowLeft size={18} />
-              Back to Courses
+              Quay lại danh sách khóa học
             </button>
             <AvatarMenu />
           </div>
@@ -335,25 +335,25 @@ export default function CoursePublicDetailPage() {
                   {course.is_enrolled && (
                     <span className="badge-enrolled">
                       <CheckCircle size={14} />
-                      Enrolled
+                      Đã đăng ký
                     </span>
                   )}
                 </div>
                 <h1 className="course-hero-title">{course.title}</h1>
-                <p className="course-hero-description">{course.short_description || "No description provided."}</p>
+                <p className="course-hero-description">{course.short_description || "Không có mô tả ngắn."}</p>
                 
                 <div className="course-hero-stats">
                   <div className="hero-stat">
                     <Users size={16} />
-                    <span>{course.learners_count?.toLocaleString() || 0} learners</span>
+                    <span>{course.learners_count?.toLocaleString() || 0} người học</span>
                   </div>
                   <div className="hero-stat">
                     <Layers3 size={16} />
-                    <span>{course.modules_count || 0} modules</span>
+                    <span>{course.modules_count || 0} chương</span>
                   </div>
                   <div className="hero-stat">
                     <ListChecks size={16} />
-                    <span>{course.lessons_count || 0} lessons</span>
+                    <span>{course.lessons_count || 0} bài học</span>
                   </div>
                   <div className="hero-stat">
                     <Clock size={16} />
@@ -372,7 +372,7 @@ export default function CoursePublicDetailPage() {
                       onClick={() => navigate(`/my-courses/${course.id}/${course.slug}`)}
                     >
                       <Play size={18} />
-                      Continue Learning
+                      Tiếp tục học
                     </button>
                   ) : (
                     <button
@@ -390,7 +390,7 @@ export default function CoursePublicDetailPage() {
                       {hasUnfinishedPrerequisites ? (
                         <>
                           <Lock size={18} />
-                          Prerequisites Required
+                          Yêu cầu học phần tiên quyết
                         </>
                       ) : !isFree ? (
                         <>
@@ -400,13 +400,13 @@ export default function CoursePublicDetailPage() {
                       ) : (
                         <>
                           <GraduationCap size={18} />
-                          Enroll for Free
+                          Đăng ký miễn phí
                         </>
                       )}
                     </button>
                   )}
                   <button className="btn-dashboard" onClick={() => navigate("/student/dashboard")}>
-                    Go to Dashboard
+                    Đến Bảng điều khiển
                     <ChevronRight size={16} />
                   </button>
                 </div>
@@ -418,9 +418,9 @@ export default function CoursePublicDetailPage() {
 
       {/* Loading State */}
       {loading && (
-        <div className="loading-container">
+          <div className="loading-container">
           <div className="spinner-large"></div>
-          <p>Loading course details...</p>
+          <p>Đang tải thông tin khóa học...</p>
         </div>
       )}
 
@@ -430,9 +430,9 @@ export default function CoursePublicDetailPage() {
           <div className="error-card">
             <div className="error-icon">⚠️</div>
             <div className="error-content">
-              <h3>Unable to load course</h3>
+              <h3>Không thể tải khóa học</h3>
               <p>{error}</p>
-              <button onClick={() => window.location.reload()} className="btn-retry">Try Again</button>
+              <button onClick={() => window.location.reload()} className="btn-retry">Thử lại</button>
             </div>
           </div>
         </div>
@@ -449,7 +449,7 @@ export default function CoursePublicDetailPage() {
                 <div className="content-card">
                   <div className="card-header">
                     <Target size={22} className="card-icon" />
-                    <h2>What You'll Learn</h2>
+                    <h2>Bạn sẽ học được gì</h2>
                   </div>
                   <div className="objectives-grid">
                     {toStringList(course.learning_objectives).map((item, idx) => (
@@ -467,7 +467,7 @@ export default function CoursePublicDetailPage() {
                 <div className="content-card">
                   <div className="card-header">
                     <BookOpen size={22} className="card-icon" />
-                    <h2>Course Content</h2>
+                    <h2>Nội dung khóa học</h2>
                   </div>
                   <div className="modules-list">
                     {course.modules.map((module, idx) => (
@@ -478,7 +478,7 @@ export default function CoursePublicDetailPage() {
                             <span className="module-title">{module.title}</span>
                           </div>
                           <div className="module-right">
-                            <span className="module-lesson-count">{module.lessons?.length || 0} lessons</span>
+                            <span className="module-lesson-count">{module.lessons?.length || 0} bài học</span>
                             <ChevronRight size={18} className={`module-chevron ${expandedModules[module.id] ? 'expanded' : ''}`} />
                           </div>
                         </button>
@@ -495,7 +495,7 @@ export default function CoursePublicDetailPage() {
                                   </span>
                                 </div>
                                 {lesson.is_free_preview && (
-                                  <span className="preview-badge">Preview</span>
+                                  <span className="preview-badge">Xem trước</span>
                                 )}
                               </div>
                             ))}
@@ -512,7 +512,7 @@ export default function CoursePublicDetailPage() {
                 <div className="content-card">
                   <div className="card-header">
                     <Shield size={22} className="card-icon" />
-                    <h2>Prerequisites</h2>
+                    <h2>Yêu cầu tiên quyết</h2>
                   </div>
                   <div className="prerequisites-grid">
                     {prerequisiteItems.map((item, idx) => (
@@ -537,7 +537,7 @@ export default function CoursePublicDetailPage() {
                           {item.isLinkedCourse && (
                             <div className={`prereq-status ${item.isCompleted ? "completed" : "pending"}`}>
                               {item.isCompleted ? <CheckCircle size={14} /> : <XCircle size={14} />}
-                              <span>{item.isCompleted ? "Completed" : "Not Completed"}</span>
+                              <span>{item.isCompleted ? "Đã hoàn thành" : "Chưa hoàn thành"}</span>
                             </div>
                           )}
                         </div>
@@ -548,13 +548,13 @@ export default function CoursePublicDetailPage() {
                   {hasUnfinishedPrerequisites && (
                     <div className="prereq-warning">
                       <Lock size={16} />
-                      <span>Complete all prerequisite courses before enrolling in this course.</span>
+                      <span>Vui lòng hoàn thành tất cả các khóa học tiên quyết trước khi đăng ký khóa học này.</span>
                     </div>
                   )}
 
                   <button className="btn-view-graph" onClick={() => setGraphModalOpen(true)}>
                     <TrendingUp size={16} />
-                    View Prerequisite Graph
+                    Xem đồ thị tiên quyết
                   </button>
                 </div>
               )}
@@ -564,7 +564,7 @@ export default function CoursePublicDetailPage() {
                 <div className="content-card">
                   <div className="card-header">
                     <FileText size={22} className="card-icon" />
-                    <h2>Full Description</h2>
+                    <h2>Mô tả chi tiết</h2>
                   </div>
                   <div className="full-description" dangerouslySetInnerHTML={{ __html: course.full_description }} />
                 </div>
@@ -578,7 +578,7 @@ export default function CoursePublicDetailPage() {
                 <div className="sidebar-card">
                   <h3 className="sidebar-card-title">
                     <GraduationCap size={18} />
-                    Instructor{course.instructors.length > 1 ? 's' : ''}
+                    Giảng viên{course.instructors.length > 1 ? 'ên' : ''}
                   </h3>
                   <div className="instructors-list">
                     {course.instructors.map((instructor) => (
@@ -595,7 +595,7 @@ export default function CoursePublicDetailPage() {
                         <div className="instructor-info">
                           <div className="instructor-name">
                             {instructor.full_name}
-                            {instructor.is_primary && <span className="primary-badge">Primary</span>}
+                            {instructor.is_primary && <span className="primary-badge">Chính</span>}
                           </div>
                         </div>
                       </div>
@@ -608,24 +608,24 @@ export default function CoursePublicDetailPage() {
               <div className="sidebar-card">
                 <h3 className="sidebar-card-title">
                   <BarChart3 size={18} />
-                  Course Statistics
+                  Thống kê khóa học
                 </h3>
                 <div className="stats-list">
                   <div className="stat-item">
                     <Users size={16} />
-                    <span>{course.learners_count?.toLocaleString() || 0} total learners</span>
+                    <span>{course.learners_count?.toLocaleString() || 0} người học</span>
                   </div>
                   <div className="stat-item">
                     <Layers3 size={16} />
-                    <span>{course.modules_count || 0} modules</span>
+                    <span>{course.modules_count || 0} chương</span>
                   </div>
                   <div className="stat-item">
                     <ListChecks size={16} />
-                    <span>{course.lessons_count || 0} lessons</span>
+                    <span>{course.lessons_count || 0} bài học</span>
                   </div>
                   <div className="stat-item">
                     <Clock size={16} />
-                    <span>{formatDuration(course.total_duration_minutes)} total</span>
+                    <span>{formatDuration(course.total_duration_minutes)} tổng thời lượng</span>
                   </div>
                   <div className="stat-item">
                     <Globe size={16} />
@@ -641,15 +641,15 @@ export default function CoursePublicDetailPage() {
                   <div className="price-features">
                     <div className="price-feature">
                       <CheckCircle size={16} />
-                      <span>Full lifetime access</span>
+                      <span>Truy cập trọn đời</span>
                     </div>
                     <div className="price-feature">
                       <CheckCircle size={16} />
-                      <span>Certificate of completion</span>
+                      <span>Chứng chỉ hoàn thành</span>
                     </div>
                     <div className="price-feature">
                       <CheckCircle size={16} />
-                      <span>30-day money-back guarantee</span>
+                      <span>Hoàn tiền trong 30 ngày</span>
                     </div>
                   </div>
                   <button
@@ -660,7 +660,7 @@ export default function CoursePublicDetailPage() {
                     }}
                     disabled={hasUnfinishedPrerequisites}
                   >
-                    {hasUnfinishedPrerequisites ? "Complete Prerequisites First" : `Buy Now - ${formatVnd(course.price || 0)}`}
+                    {hasUnfinishedPrerequisites ? "Hoàn thành tiên quyết trước" : `Mua ngay - ${formatVnd(course.price || 0)}`}
                   </button>
                 </div>
               )}
@@ -669,14 +669,14 @@ export default function CoursePublicDetailPage() {
               {!course.is_enrolled && isFree && (
                 <div className="sidebar-card free-card">
                   <Sparkles size={32} />
-                  <h4>Free Course</h4>
-                  <p>Enroll now and start learning today at no cost!</p>
+                  <h4>Khóa học miễn phí</h4>
+                  <p>Đăng ký ngay và bắt đầu học hôm nay hoàn toàn miễn phí!</p>
                   <button
                     className="free-enroll-btn"
                     onClick={() => void enroll()}
                     disabled={hasUnfinishedPrerequisites}
                   >
-                    {hasUnfinishedPrerequisites ? "Complete Prerequisites First" : "Enroll for Free"}
+                    {hasUnfinishedPrerequisites ? "Hoàn thành tiên quyết trước" : "Đăng ký miễn phí"}
                   </button>
                 </div>
               )}
@@ -690,14 +690,14 @@ export default function CoursePublicDetailPage() {
         <div className="modal-overlay" onClick={() => setGraphModalOpen(false)}>
           <div className="modal-container" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Prerequisite Graph</h3>
+              <h3>Đồ thị tiên quyết</h3>
               <button className="modal-close" onClick={() => setGraphModalOpen(false)}>✕</button>
             </div>
             <div className="modal-body">
               <PrerequisiteGraph data={prerequisiteGraph} onOpenCourse={(s) => navigate(`/courses/${s}`)} />
             </div>
             <div className="modal-footer">
-              <button className="modal-btn-close" onClick={() => setGraphModalOpen(false)}>Close</button>
+              <button className="modal-btn-close" onClick={() => setGraphModalOpen(false)}>Đóng</button>
             </div>
           </div>
         </div>
