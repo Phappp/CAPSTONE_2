@@ -3,6 +3,8 @@ coverage
 package-lock.json
 frontend/.env
 frontend/.env
+__pycache__/
+*.py[cod]
 *.cfg
 *.exe
 *.bat
