@@ -36,6 +36,7 @@ import LandingPage from "./pages/LandingPage";
 import SystemStatusOrb from "./components/SystemStatusOrb";
 import TeacherLiveSessionPage from "./pages/teacher/LiveSessionPage";
 import LiveSessionViewer from "./pages/leaner/LiveSessionViewer";
+import Chatbot from "./components/Chatbot/Chatbot";
 
 export default function App() {
   return (
@@ -243,7 +244,7 @@ export default function App() {
       />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      <SystemStatusOrb />
+      <Chatbot />
     </>
   );
 }
