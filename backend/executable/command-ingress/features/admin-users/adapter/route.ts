@@ -1,0 +1,67 @@
+import express from 'express';
+import requireAuthorizedUser from '../../../middlewares/auth';
+import { AdminUserController } from './controller';
+
+const initAdminUserRoute: (controller: AdminUserController) => express.Router = (controller) => {
+  const router = express.Router();
+
+  router.use(requireAuthorizedUser);
+
+  router.route('/')
+    .get(controller.listUsers.bind(controller));
+
+  router.route('/bulk')
+    .post(controller.bulkAction.bind(controller));
+
+  router.route('/audit-logs')
+    .get(controller.listAuditLogs.bind(controller));
+
+  router.route('/openrouter-config')
+    .get(controller.getOpenRouterConfig.bind(controller))
+    .put(controller.updateOpenRouterConfig.bind(controller));
+
+  router.route('/openrouter-config/keys')
+    .post(controller.createOpenRouterKey.bind(controller));
+
+  router.route('/openrouter-config/keys/:keyId')
+    .patch(controller.updateOpenRouterKey.bind(controller))
+    .delete(controller.deleteOpenRouterKey.bind(controller));
+
+  router.route('/openrouter-config/keys/:keyId/test')
+    .post(controller.testOpenRouterKey.bind(controller));
+
+  router.route('/course-managers/verifications')
+    .get(controller.listCourseManagerVerifications.bind(controller));
+
+  router.route('/course-managers/:userId/verification')
+    .put(controller.reviewCourseManagerVerification.bind(controller));
+
+  router.route('/revenue/summary')
+    .get(controller.getRevenueSummary.bind(controller));
+
+  router.route('/revenue/by-teacher')
+    .get(controller.listRevenueByTeacher.bind(controller));
+
+  router.route('/:userId/status')
+    .put(controller.updateStatus.bind(controller));
+
+  router.route('/:userId/role')
+    .put(controller.updateRole.bind(controller));
+
+  router.route('/:userId/reset-password')
+    .post(controller.resetPassword.bind(controller));
+
+  router.route('/:userId/restore')
+    .post(controller.restoreUser.bind(controller));
+
+  router.route('/:userId')
+    .delete(controller.softDelete.bind(controller));
+
+  router.route('/:userId/hard-delete')
+    .delete(controller.hardDelete.bind(controller));
+
+  return router;
+};
+
+export default initAdminUserRoute;
+

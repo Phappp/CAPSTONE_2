@@ -1,5 +1,5 @@
 import { Length } from 'class-validator';
-import { CreateAssignmentRequest, AssignmentAttachment, AssignmentFormat } from '../types';
+import { CreateAssignmentRequest, AssignmentAttachment, AssignmentFormat, AssignmentKind } from '../types';
 import { RequestDto } from '../../../shared/request-dto';
 
 export class CreateAssignmentBody extends RequestDto implements CreateAssignmentRequest {
@@ -20,6 +20,11 @@ export class CreateAssignmentBody extends RequestDto implements CreateAssignment
     max_resubmissions?: number;
     allowed_formats: AssignmentFormat[];
 
+    assignment_kind: AssignmentKind;
+
+    short_answer_questions?: { id: string; question_text: string; order_index: number }[] | null;
+    time_limit_minutes?: number | null;
+
     constructor(body: any) {
         super();
         this.title = String(body?.title || '');
@@ -36,5 +41,8 @@ export class CreateAssignmentBody extends RequestDto implements CreateAssignment
         this.allowed_formats = Array.isArray(body?.allowed_formats)
         ? body.allowed_formats
         : ['pdf', 'docx', 'doc', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'zip', 'rar', '7z'];
+        this.assignment_kind = body?.assignment_kind === 'short_answer' ? 'short_answer' : 'file_prompt';
+        this.short_answer_questions = Array.isArray(body?.short_answer_questions) ? body.short_answer_questions : null;
+        this.time_limit_minutes = body?.time_limit_minutes != null ? Number(body.time_limit_minutes) : null;
         }
 }

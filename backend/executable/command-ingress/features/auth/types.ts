@@ -22,8 +22,7 @@ type RegisterRequest = {
   email: string;
   password: string;
   fullName: string;
-  // 'learner' hoặc 'course_manager'
-  role: string;
+  role: 'learner' | 'course_manager';
 };
 
 type LoginRequest = {
@@ -33,15 +32,34 @@ type LoginRequest = {
   userAgent: string;
 };
 
+type RequestPasswordResetRequest = {
+  email: string;
+};
+
+type ResetPasswordRequest = {
+  token: string;
+  newPassword: string;
+};
+
 type ExchangeTokenResult = {
-  sub: string;
-  refreshToken: string;
-  accessToken: string;
+  sub?: string;
+  refreshToken?: string;
+  accessToken?: string;
+  requiresRoleSelection?: boolean;
+  pendingToken?: string;
+  email?: string;
+  fullName?: string;
+  avatarUrl?: string | null;
 };
 
 type ExchangeTokenRequest = {
   code: string;
   idp: string;
+};
+
+type CompleteGoogleOAuthRequest = {
+  pendingToken: string;
+  role: 'learner' | 'course_manager';
 };
 
 interface AuthService {
@@ -52,18 +70,24 @@ interface AuthService {
 
   // Google OAuth (giữ lại để tương thích nếu cần)
   exchangeWithGoogleIDP(request: ExchangeTokenRequest): Promise<ExchangeTokenResult>;
+  completeGoogleOAuth(request: CompleteGoogleOAuthRequest): Promise<LoginResult>;
 
   logout(token: string): Promise<void>;
   refreshToken(token: string): Promise<ExchangeTokenResult>;
   verify2FA(email: string, code: string): Promise<LoginResult>;
+  requestPasswordReset(request: RequestPasswordResetRequest): Promise<void>;
+  resetPassword(request: ResetPasswordRequest): Promise<void>;
 }
 
 export {
   AuthService,
   ExchangeTokenRequest,
   ExchangeTokenResult,
+  CompleteGoogleOAuthRequest,
   RegisterRequest,
   LoginRequest,
+  RequestPasswordResetRequest,
+  ResetPasswordRequest,
   LoginResult,
   AuthUser,
   TokenPair,

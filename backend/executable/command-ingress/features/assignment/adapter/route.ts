@@ -33,6 +33,22 @@ const initAssignmentRoute: (controller: AssignmentController) => express.Router 
     controller.getAssignmentPreview.bind(controller)
   );
 
+  router.route('/lessons/:lessonId/assignment-for-learner').get(
+    requireAuthorizedUser,
+    controller.getLearnerAssignmentForLesson.bind(controller)
+  );
+
+  /** Giảng viên: toàn bộ học viên đã ghi danh + đã/chưa nộp (bài tập mới nhất của bài học) */
+  router.route('/lessons/:lessonId/assignment-learner-roster').get(
+    requireAuthorizedUser,
+    controller.getAssignmentLearnerRoster.bind(controller)
+  );
+
+  /** Giảng viên: danh sách bài nộp theo bài tập */
+  router
+    .route('/lessons/:lessonId/assignments/:assignmentId/submissions')
+    .get(requireAuthorizedUser, controller.listAssignmentSubmissions.bind(controller));
+
   // Edit assignment (K3)
   router.route('/lessons/:lessonId/assignments/:assignmentId').patch(
     requireAuthorizedUser,
@@ -41,10 +57,29 @@ const initAssignmentRoute: (controller: AssignmentController) => express.Router 
   // Khởi tạo SubmissionController và route cho submission
   const submissionController = new SubmissionController(new SubmissionServiceImpl());
 
-  // mount submission routes
+  // mount submission routes (multipart hoặc JSON)
   router.use('/assignments/:assignmentId/submissions', initSubmissionRoute(submissionController));
 
+  // Route cho xem điểm và phản hồi
+  router.route('/my/grades').get(
+    requireAuthorizedUser, 
+    controller.getMyGrades.bind(controller)
+  );
+
+  // Route gửi khiếu nại (Appeal)
+  router.route('/assignments/submissions/:submissionId/appeals').post(
+    requireAuthorizedUser,
+    controller.sendGradeAppeal.bind(controller)
+  );
+  router.route('/assignments/:assignmentId/my-grade').get(
+    requireAuthorizedUser, 
+    controller.getMyAssignmentGradeDetail.bind(controller)
+  );
+  // Route cho chấm điểm
+  router.route('/submissions/:submissionId/grade').post(requireAuthorizedUser, controller.gradeSubmission.bind(controller));
   return router;
+
+  
 };
 
 export default initAssignmentRoute;

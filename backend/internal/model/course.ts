@@ -77,11 +77,14 @@ export default class Course {
 
     @Column({
         type: 'enum',
-        enum: ['draft', 'published', 'archived'],
+        enum: ['draft', 'pending_review', 'published', 'archived'],
         default: 'draft'
     })
     /** Trạng thái phát hành. */
     status: string;
+
+    @Column({ type: 'varchar', length: 100, nullable: true })
+    category: string;
 
     @Column({ type: 'datetime', nullable: true })
     /** Thời điểm publish (nullable nếu chưa publish). */
@@ -90,6 +93,18 @@ export default class Course {
     @Column({ type: 'datetime', nullable: true })
     /** Thời điểm xuất bản tự động (nullable nếu không lên lịch). */
     publish_scheduled_at: Date;
+
+    @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+    price: number;
+
+    @Column({ type: 'boolean', default: false })
+    has_certificate: boolean;
+
+    @Column({ type: 'int', nullable: true })
+    estimated_hours: number;
+
+    @Column({ type: 'json', nullable: true })
+    tags: string[];
 
     @Column()
     /** FK -> `users.id`: người tạo course. */

@@ -1,6 +1,6 @@
 /**
  * Entity: `quizzes`
- * Mục đích: Quiz (bài kiểm tra) gắn với một lesson.
+ * Mục đích: Quizz gắn với một lesson.
  *
  * Cột chính:
  * - lesson_id: FK -> lessons

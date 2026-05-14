@@ -75,6 +75,15 @@ export class AssignmentController extends BaseController {
     });
   }
 
+  async getLearnerAssignmentForLesson(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const lessonId = Number(req.params.lessonId);
+      const data = await this.service.getLearnerAssignmentForLesson(uid, lessonId);
+      res.status(200).json(data);
+    });
+  }
+
   async updateAssignment(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
       const uid = Number(req.getSubject());
@@ -83,6 +92,86 @@ export class AssignmentController extends BaseController {
 
       await this.service.updateAssignment(uid, lessonId, assignmentId, req.body);
       res.sendStatus(204);
+    })
+  }
+  
+  async listAssignmentSubmissions(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const lessonId = Number(req.params.lessonId);
+      const assignmentId = Number(req.params.assignmentId);
+      const rows = await this.service.listAssignmentSubmissions(uid, lessonId, assignmentId);
+      res.status(200).json({ success: true, data: { submissions: rows } });
+    });
+  }
+
+  async getAssignmentLearnerRoster(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const lessonId = Number(req.params.lessonId);
+      const data = await this.service.getAssignmentLearnerRosterByLesson(uid, lessonId);
+      res.status(200).json({ success: true, data });
+    });
+  }
+
+  async gradeSubmission(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+        const graderId = Number(req.getSubject());
+        const submissionId = Number(req.body?.submissionId ?? req.params?.submissionId);
+        const score = Number(req.body?.score);
+        const feedbackText = req.body?.feedbackText != null ? String(req.body.feedbackText) : '';
+
+        await this.service.gradeSubmission({
+            submissionId,
+            score,
+            feedbackText,
+            graderId
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'Chấm điểm và gửi thông báo thành công!'
+        });
+    });
+  }
+  async getMyGrades(req: HttpRequest, res: Response, next: NextFunction) {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+        const studentId = Number(req.getSubject());
+        const data = await this.service.getMyGradesSummary(studentId);
+        
+        res.status(200).json({
+            success: true,
+            data: { grades_summary: data }
+        });
+    });
+  }
+
+  async getMyAssignmentGradeDetail(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const studentId = Number(req.getSubject());
+      const assignmentId = Number(req.params.assignmentId);
+
+      const detail = await this.service.getMyAssignmentGradeDetail(studentId, assignmentId);
+      res.status(200).json({
+        success: true,
+        data: detail
+      });
+    });
+  }
+
+  async sendGradeAppeal(req: HttpRequest, res: Response, next: NextFunction) {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+        const studentId = Number(req.getSubject());
+        const submissionId = Number(req.params.submissionId);
+        const { content } = req.body; // Nội dung khiếu nại
+
+        // Gọi service lưu vào DB
+        await this.service.createGradeAppeal(studentId, submissionId, content);
+
+        res.status(201).json({ 
+            success: true, 
+            message: 'Đã gửi khiếu nại thành công cho giảng viên!' 
+        });
     });
   }
 }

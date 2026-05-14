@@ -12,8 +12,10 @@ import path from 'path';
 import { AuthController } from './features/auth/adapter/controller';
 import { AuthServiceImpl } from './features/auth/domain/service';
 import { GoogleIdentityBroker } from './features/auth/identity-broker/google-idp.broker';
-
 import initAuthRoute from './features/auth/adapter/route';
+import { AdminUserController } from './features/admin-users/adapter/controller';
+import { AdminUserService } from './features/admin-users/domain/service';
+import initAdminUserRoute from './features/admin-users/adapter/route';
 import initCourseRoute from './features/course/adapter/route';
 import { CourseController } from './features/course/adapter/controller';
 import { CourseServiceImpl } from './features/course/domain/service';
@@ -26,6 +28,12 @@ import { ProfileService } from './features/profiles/domain/services';
 import { MysqlProfileRepository } from './features/profiles/domain/repository';
 import { createProfileRoutes } from './features/profiles/adapter/route';
 import { uploadBufferToCloudinary, isCloudinaryEnabled } from './lib/cloudinary';
+
+import initQuestionBankRoute from './features/question-bank/adapter/route';
+import initPaymentRoute from './features/payments/adapter/route';
+import { PaymentController } from './features/payments/adapter/controller';
+import { PaymentServiceImpl } from './features/payments/domain/service';
+
 
 const app = express();
 
@@ -54,12 +62,20 @@ const createHttpServer = (redisClient: any) => {
     env.JWT_SECRET,
     env.JWT_REFRESH_SECRET,
   );
+  const adminUserService = new AdminUserService();
 
   // Setup routes
   app.use('/api/auth', initAuthRoute(new AuthController(authService)));
+  app.use(
+    '/api/v1/admin/users',
+    initAdminUserRoute(new AdminUserController(adminUserService)),
+  );
+
+
   app.use('/api/v1/courses', initCourseRoute(new CourseController(new CourseServiceImpl())));
   app.use('/api/v1', initAssignmentRoute(new AssignmentController(new AssignmentServiceImpl())));
-
+  app.use('/api/v1/question-banks', initQuestionBankRoute());
+  app.use('/api/v1/payments', initPaymentRoute(new PaymentController(new PaymentServiceImpl())));
   app.use(recoverMiddleware);
 
   // app.use('/search', searchRouter);
@@ -74,9 +90,9 @@ const createHttpServer = (redisClient: any) => {
 
       const result = await uploadBufferToCloudinary({
         buffer: file,
-        folder: 'avatars',
+        folder: fileName.includes("manager-docs") ? "manager-docs" : "avatars",
         originalFilename: fileName,
-        resourceType: 'image',
+        resourceType: mimeType?.startsWith("image/") ? "image" : "raw",
       });
 
       return result.secure_url;
@@ -95,6 +111,11 @@ const createHttpServer = (redisClient: any) => {
   // FE uses /api/v1/profile...
   app.use('/api/v1', createProfileRoutes(profileController));
 
+  // chấm điểm đánh giá
+  const assignmentService = new AssignmentServiceImpl();
+  const assignmentController = new AssignmentController(assignmentService);
+
+  app.use('/api/assignments', initAssignmentRoute(assignmentController));
   return server;
 };
 

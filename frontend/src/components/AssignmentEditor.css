@@ -96,6 +96,79 @@
   resize: vertical;
 }
 
+.asg-datetime-editor {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.asg-datetime-input {
+  width: min(100%, 220px);
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.35rem 0.45rem;
+  font-size: 0.85rem;
+  background: #ffffff;
+}
+
+.asg-date-input {
+  width: 145px;
+}
+
+.asg-time-input {
+  width: 56px;
+}
+
+.asg-period-input {
+  width: 58px;
+}
+
+.asg-time-sep {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.assignment-kind-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  padding: 4px;
+}
+
+.assignment-kind-btn {
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  color: var(--gray-700);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.assignment-kind-btn.active {
+  background: #ffffff;
+  border-color: var(--gray-200);
+  color: var(--primary-color);
+}
+
+.assignment-kind-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.assignment-kind-help {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--gray-600);
+}
+
 .attachments-block {
   border-top: 1px dashed var(--gray-200);
   padding-top: 14px;

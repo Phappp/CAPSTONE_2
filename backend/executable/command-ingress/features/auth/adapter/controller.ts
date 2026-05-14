@@ -2,11 +2,14 @@ import { Response, Request, NextFunction } from 'express';
 import env from '../../../utils/env';
 import { AuthService } from '../types';
 import {
+  CompleteGoogleOAuthBody,
   ExchangeGoogleTokenBody,
   LogoutRequestBody,
   RefreshTokenRequestBody,
   LoginRequestBody,
+  RequestPasswordResetBody,
   RegisterRequestBody,
+  ResetPasswordBody,
   VerifyOtpRequestBody,
 } from './dto';
 import { BaseController } from '../../../shared/base-controller';
@@ -32,36 +35,56 @@ class AuthController extends BaseController {
       }
 
       try {
-        console.log('1. Starting Google exchange with code:', exchangeGoogleTokenBody.code);
-
         const exchangeResult = await this.authService.exchangeWithGoogleIDP({
           idp: 'google',
           code: exchangeGoogleTokenBody.code,
         });
 
-        console.log('2. Exchange result:', exchangeResult);
-
-        const params = new URLSearchParams({
-          uid: exchangeResult.sub,
-          access_token: exchangeResult.accessToken,
-          refresh_token: exchangeResult.refreshToken
-        });
+        const params = new URLSearchParams();
+        if (exchangeResult.requiresRoleSelection && exchangeResult.pendingToken) {
+          params.set('requires_role_selection', '1');
+          params.set('pending_token', exchangeResult.pendingToken);
+          if (exchangeResult.email) params.set('email', exchangeResult.email);
+          if (exchangeResult.fullName) params.set('full_name', exchangeResult.fullName);
+          if (exchangeResult.avatarUrl) params.set('avatar_url', exchangeResult.avatarUrl);
+        } else if (exchangeResult.sub && exchangeResult.accessToken && exchangeResult.refreshToken) {
+          params.set('uid', exchangeResult.sub);
+          params.set('access_token', exchangeResult.accessToken);
+          params.set('refresh_token', exchangeResult.refreshToken);
+        } else {
+          throw new Error('Google OAuth response is invalid.');
+        }
 
         const redirectURL = `${env.CLIENT_URL}/oauth/redirect?${params.toString()}`;
-        console.log('3. Redirecting to:', redirectURL);
         res.redirect(redirectURL);
       } catch (error: any) {
-        console.error('Google login error DETAILS:', {
-          message: error.message,
-          stack: error.stack,
-          response: error.response?.data
-        });
         const errorRedirectURL = `${env.CLIENT_URL}/login?error=${encodeURIComponent(error.message)}`;
-        console.log('4. Error redirect to:', errorRedirectURL);
         res.redirect(errorRedirectURL);
       }
 
       return;
+    });
+  }
+
+  async completeGoogleOAuth(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res, _next) => {
+      const body = new CompleteGoogleOAuthBody(req.body);
+      const validateResult = await body.validate();
+      if (!validateResult.ok) {
+        responseValidationError(res, validateResult.errors[0]);
+        return;
+      }
+
+      const result = await this.authService.completeGoogleOAuth({
+        pendingToken: body.pendingToken,
+        role: body.role,
+      });
+
+      res.status(200).json({
+        access_token: result.accessToken,
+        refresh_token: result.refreshToken,
+        user: result.user,
+      });
     });
   }
 
@@ -97,6 +120,45 @@ class AuthController extends BaseController {
         access_token: result.accessToken,
         refresh_token: result.refreshToken,
         user: result.user,
+      });
+    });
+  }
+
+  async requestPasswordReset(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res, _next) => {
+      const body = new RequestPasswordResetBody(req.body);
+      const validateResult = await body.validate();
+      if (!validateResult.ok) {
+        responseValidationError(res, validateResult.errors[0]);
+        return;
+      }
+
+      await this.authService.requestPasswordReset({
+        email: body.email,
+      });
+
+      res.status(200).json({
+        message: 'Liên kết đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra email.',
+      });
+    });
+  }
+
+  async resetPassword(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res, _next) => {
+      const body = new ResetPasswordBody(req.body);
+      const validateResult = await body.validate();
+      if (!validateResult.ok) {
+        responseValidationError(res, validateResult.errors[0]);
+        return;
+      }
+
+      await this.authService.resetPassword({
+        token: body.token,
+        newPassword: body.newPassword,
+      });
+
+      res.status(200).json({
+        message: 'Đặt lại mật khẩu thành công.',
       });
     });
   }

@@ -1,4 +1,4 @@
-import { IsEmail, Length, MinLength, ValidationError } from 'class-validator';
+import { IsEmail, IsIn, Length, MinLength, ValidationError } from 'class-validator';
 import { ValidationResult } from '../../../shared/validation';
 import { RequestDto } from '../../../shared/request-dto';
 
@@ -14,6 +14,22 @@ export class ExchangeGoogleTokenBody extends RequestDto {
   }
 }
 
+export class CompleteGoogleOAuthBody extends RequestDto {
+  @Length(1)
+  pendingToken: string;
+
+  @IsIn(['learner', 'course_manager'])
+  role: 'learner' | 'course_manager';
+
+  constructor(body: any) {
+    super();
+    if (body) {
+      this.pendingToken = String(body.pending_token || body.pendingToken || '');
+      this.role = body.role === 'course_manager' ? 'course_manager' : 'learner';
+    }
+  }
+}
+
 export class RegisterRequestBody extends RequestDto {
   @IsEmail()
   email: string;
@@ -24,9 +40,8 @@ export class RegisterRequestBody extends RequestDto {
   @MinLength(6)
   password: string;
 
-  // 'learner' hoặc 'course_manager'
-  @Length(1, 50)
-  role: string;
+  @IsIn(['learner', 'course_manager'])
+  role: 'learner' | 'course_manager';
 
   constructor(body: any) {
     super();
@@ -34,7 +49,10 @@ export class RegisterRequestBody extends RequestDto {
       this.email = String(body.email || '');
       this.fullName = String(body.full_name || body.fullName || '');
       this.password = String(body.password || '');
-      this.role = String(body.role || 'learner');
+      this.role =
+        body.role === 'course_manager'
+          ? 'course_manager'
+          : 'learner';
     }
   }
 }
@@ -67,6 +85,34 @@ export class VerifyOtpRequestBody extends RequestDto {
     if (body) {
       this.email = String(body.email || '');
       this.code = String(body.code || '');
+    }
+  }
+}
+
+export class RequestPasswordResetBody extends RequestDto {
+  @IsEmail()
+  email: string;
+
+  constructor(body: any) {
+    super();
+    if (body) {
+      this.email = String(body.email || '');
+    }
+  }
+}
+
+export class ResetPasswordBody extends RequestDto {
+  @Length(1, 255)
+  token: string;
+
+  @MinLength(6)
+  newPassword: string;
+
+  constructor(body: any) {
+    super();
+    if (body) {
+      this.token = String(body.token || '');
+      this.newPassword = String(body.new_password || body.newPassword || '');
     }
   }
 }

@@ -1,7 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import {
   AuthService,
+  CompleteGoogleOAuthRequest,
   ExchangeTokenResult,
   ExchangeTokenRequest,
   LoginRequest,
@@ -86,7 +88,7 @@ export class AuthServiceImpl implements AuthService {
     return jwt.verify(token, secret);
   }
 
-  async createUserIfNotExists(userProfile: any): Promise<User> {
+  async createUserIfNotExists(userProfile: any): Promise<{ user: User; isNew: boolean }> {
     const userRepository = AppDataSource.getRepository(User);
 
     if (!userProfile.email) {
@@ -95,6 +97,7 @@ export class AuthServiceImpl implements AuthService {
 
     let user = await userRepository.findOne({ where: { email: userProfile.email } });
 
+    let isNew = false;
     if (!user) {
       user = userRepository.create({
         email: userProfile.email,
@@ -106,6 +109,7 @@ export class AuthServiceImpl implements AuthService {
       });
 
       await userRepository.save(user);
+      isNew = true;
     } else {
       // Cập nhật avatar nếu user đã tồn tại nhưng chưa có avatar
       if (!user.avatar_url && userProfile.picture) {
@@ -114,7 +118,7 @@ export class AuthServiceImpl implements AuthService {
       }
     }
 
-    return user;
+    return { user, isNew };
   }
 
   private generateOtpCode(): string {
@@ -134,14 +138,7 @@ export class AuthServiceImpl implements AuthService {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(request.password, salt);
 
-    // Chuẩn hóa role: hệ thống hỗ trợ mặc định learner/course_manager/admin
-    // Nếu client gửi giá trị khác thì fallback về learner.
-    const normalizedRole =
-      request.role === 'course_manager'
-        ? 'course_manager'
-        : request.role === 'admin'
-          ? 'admin'
-          : 'learner';
+    const normalizedRole = request.role;
 
     // Tạo/ghi đè bản ghi đăng ký tạm với OTP
     const code = this.generateOtpCode();
@@ -225,9 +222,6 @@ export class AuthServiceImpl implements AuthService {
       } else if (pending.role_name === 'learner') {
         // role mới cho học viên; fallback về 'student' nếu DB đang dùng tên cũ
         targetNames = ['learner', 'student'];
-      } else if (pending.role_name === 'admin') {
-        // role admin: không cần fallback tên cũ (nếu có thể tự tạo)
-        targetNames = ['admin'];
       } else {
         targetNames = [pending.role_name];
       }
@@ -277,6 +271,54 @@ export class AuthServiceImpl implements AuthService {
       ...tokens,
       user: authUser,
     };
+  }
+
+  async requestPasswordReset(request: { email: string }): Promise<void> {
+    const userRepository = AppDataSource.getRepository(User);
+    const user = await userRepository.findOne({ where: { email: request.email } });
+
+    if (!user || !user.is_active) {
+      // Trả lỗi rõ ràng theo yêu cầu UI (để người dùng biết email chưa có tài khoản).
+      throw new Error("Email không tồn tại. Vui lòng đăng ký tài khoản.");
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    user.password_reset_token = token;
+    user.password_reset_expires_at = expiresAt;
+    await userRepository.save(user);
+
+    try {
+      const { sendPasswordResetEmail } = await import('../../../../../lib/email/service');
+      const clientBaseUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+      const resetLink = `${clientBaseUrl}/reset-password?token=${encodeURIComponent(token)}`;
+      await sendPasswordResetEmail(user.email, resetLink);
+    } catch (e) {
+      console.log('Send password reset email error:', e);
+    }
+  }
+
+  async resetPassword(request: { token: string; newPassword: string }): Promise<void> {
+    const userRepository = AppDataSource.getRepository(User);
+    const user = await userRepository.findOne({
+      where: { password_reset_token: request.token },
+    });
+
+    if (!user || !user.password_reset_expires_at || user.password_reset_expires_at < new Date()) {
+      throw new Error('Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(request.newPassword, salt);
+    user.password_hash = passwordHash;
+
+    // Xóa token dùng một lần sau khi đã đổi mật khẩu.
+    user.password_reset_token = null;
+    user.password_reset_expires_at = null;
+    user.failed_login_attempts = 0;
+    user.locked_until = null;
+    await userRepository.save(user);
   }
 
   // Đăng nhập bằng email/mật khẩu
@@ -399,7 +441,7 @@ export class AuthServiceImpl implements AuthService {
       throw new Error('Không thể lấy email từ Google. Vui lòng đảm bảo bạn đã cấp quyền email.');
     }
 
-    const user = await this.createUserIfNotExists(userProfile);
+    const { user } = await this.createUserIfNotExists(userProfile);
 
     // === THÊM: Gán role mặc định cho user đăng nhập Google ===
     const userRoleRepository = AppDataSource.getRepository(UserRole);
@@ -411,28 +453,26 @@ export class AuthServiceImpl implements AuthService {
     });
 
     if (existingRoles.length === 0) {
-      // Tìm role 'learner' hoặc 'student' mặc định
-      let defaultRole = await roleRepository.findOne({
-        where: [{ name: 'learner' }, { name: 'student' }]
-      });
+      const pendingToken = jwt.sign(
+        {
+          sub: String(user.id),
+          email: user.email,
+          full_name: user.full_name,
+          avatar_url: user.avatar_url ?? null,
+          typ: 'google-role-pending',
+        },
+        this.jwtSecret,
+        { expiresIn: '10m' },
+      );
 
-      if (!defaultRole) {
-        // Tạo role mới nếu chưa tồn tại
-        defaultRole = roleRepository.create({
-          name: 'learner',
-          description: 'Default role for Google login users'
-        });
-        await roleRepository.save(defaultRole);
-      }
-
-      // Gán role cho user
-      const userRole = userRoleRepository.create({
-        user_id: user.id,
-        role_id: defaultRole.id
-      });
-      await userRoleRepository.save(userRole);
+      return {
+        requiresRoleSelection: true,
+        pendingToken,
+        email: user.email,
+        fullName: user.full_name,
+        avatarUrl: user.avatar_url ?? null,
+      };
     }
-    // === KẾT THÚC THÊM ===
 
     const sessionRepository = AppDataSource.getRepository(Session);
     const sessionID = uuidv4();
@@ -448,6 +488,66 @@ export class AuthServiceImpl implements AuthService {
       refreshToken: tokens.refreshToken,
       accessToken: tokens.accessToken,
       sub: String(user.id),
+    };
+  }
+
+  async completeGoogleOAuth(request: CompleteGoogleOAuthRequest): Promise<LoginResult> {
+    const claims = this.verifyToken(request.pendingToken, this.jwtSecret);
+    if (claims?.typ !== 'google-role-pending' || !claims?.sub) {
+      throw new Error('Phiên chọn vai trò Google không hợp lệ hoặc đã hết hạn.');
+    }
+
+    const userRepository = AppDataSource.getRepository(User);
+    const roleRepository = AppDataSource.getRepository(Role);
+    const userRoleRepository = AppDataSource.getRepository(UserRole);
+    const sessionRepository = AppDataSource.getRepository(Session);
+
+    const user = await userRepository.findOne({ where: { id: Number(claims.sub) } });
+    if (!user) {
+      throw new Error('Không tìm thấy người dùng cho phiên Google OAuth.');
+    }
+
+    const roleCandidates =
+      request.role === 'course_manager'
+        ? ['course_manager', 'teacher']
+        : ['learner', 'student'];
+
+    let selectedRole = await roleRepository.findOne({
+      where: roleCandidates.map((name) => ({ name })),
+    });
+
+    if (!selectedRole) {
+      selectedRole = roleRepository.create({
+        name: request.role,
+        description: 'Auto-created role for Google OAuth completion',
+      });
+      await roleRepository.save(selectedRole);
+    }
+
+    const existingUserRole = await userRoleRepository.findOne({
+      where: { user_id: user.id, role_id: selectedRole.id },
+    });
+    if (!existingUserRole) {
+      const userRole = userRoleRepository.create({
+        user_id: user.id,
+        role_id: selectedRole.id,
+      });
+      await userRoleRepository.save(userRole);
+    }
+
+    const sessionID = uuidv4();
+    const session = sessionRepository.create({
+      sessionID,
+      userID: String(user.id),
+    });
+    await sessionRepository.save(session);
+
+    const tokens = await this.signTokensForUser(user, sessionID);
+    const authUser = await this.mapUserToAuthUser(user);
+
+    return {
+      ...tokens,
+      user: authUser,
     };
   }
 

@@ -4,10 +4,17 @@ export interface SubmittedFile {
     file_size: number;
 }
 
+export type ShortAnswerSubmissionItem = {
+  question_id: string;
+  answer_text: string;
+};
+
 export interface SubmitAssignmentRequest {
     assignment_id: number;
     user_id: number;
     text_submission?: string;
+    /** Dạng trả lời ngắn — mỗi câu một phần tử. */
+    short_answers?: ShortAnswerSubmissionItem[];
     files?: Express.Multer.File[];
 }
 

@@ -5,8 +5,22 @@ export const COURSES_API_BASE = "/api/v1/courses";
 export const COURSES_API = {
   createCourse: `${COURSES_API_BASE}`,
   myStats: `${COURSES_API_BASE}/my/stats`,
+  myRevenueSummary: `${COURSES_API_BASE}/my/revenue/summary`,
+  myRevenueTrend: `${COURSES_API_BASE}/my/revenue/trend`,
+  myRevenueTransactions: `${COURSES_API_BASE}/my/revenue/transactions`,
   myList: `${COURSES_API_BASE}/my`,
+  adminPendingReview: `${COURSES_API_BASE}/admin/pending-review`,
+  adminPendingLessonResources: `${COURSES_API_BASE}/admin/resources/pending-review`,
+  adminReview: (id: number | string) => `${COURSES_API_BASE}/${id}/admin-review`,
+  adminReviewTimeline: (id: number | string) => `${COURSES_API_BASE}/${id}/admin-review/timeline`,
+  adminReviewLessonResource: (resourceId: number | string) => `${COURSES_API_BASE}/resources/${resourceId}/admin-review`,
+  adminReviewLessonResourceTimeline: (resourceId: number | string) => `${COURSES_API_BASE}/resources/${resourceId}/admin-review/timeline`,
+  myReviewTimeline: (id: number | string) => `${COURSES_API_BASE}/${id}/review-timeline`,
+  myRejectedResources: (id: number | string) => `${COURSES_API_BASE}/${id}/rejected-resources`,
+  myPendingResources: (id: number | string) => `${COURSES_API_BASE}/${id}/pending-resources`,
   detail: (id: number | string) => `${COURSES_API_BASE}/${id}`,
+  /** GV: thống kê tổng quan một khóa học (biểu đồ, enrollment, …). */
+  managerOverview: (id: number | string) => `${COURSES_API_BASE}/${id}/manager-overview`,
   prerequisiteGraph: (id: number | string) => `${COURSES_API_BASE}/${id}/prerequisite-graph`,
   prerequisiteOptions: (id: number | string) => `${COURSES_API_BASE}/${id}/prerequisite-options`,
   update: (id: number | string) => `${COURSES_API_BASE}/${id}`,
@@ -48,6 +62,19 @@ export const COURSES_API = {
     `${COURSES_API_BASE}/${id}/resources/${resourceId}/preview`,
   lessonQuiz: (id: number | string, lessonId: number | string) =>
     `${COURSES_API_BASE}/${id}/lessons/${lessonId}/quiz`,
+  /** Quiz thủ công (GV): GET/PATCH body qua POST */
+  manualQuiz: (id: number | string, lessonId: number | string) =>
+    `${COURSES_API_BASE}/${id}/lessons/${lessonId}/quiz/manual`,
+  manualQuizAiGenerate: (id: number | string, lessonId: number | string) =>
+    `${COURSES_API_BASE}/${id}/lessons/${lessonId}/quiz/manual/ai-generate`,
+  /** Học viên: làm bài quiz */
+  learnerQuizTake: (id: number | string, lessonId: number | string) =>
+    `${COURSES_API_BASE}/${id}/lessons/${lessonId}/quiz/take`,
+  learnerQuizSubmit: (id: number | string, lessonId: number | string) =>
+    `${COURSES_API_BASE}/${id}/lessons/${lessonId}/quiz/submit`,
+  /** Giảng viên: điểm quiz theo học viên */
+  quizLearnerScores: (courseId: number | string, lessonId: number | string) =>
+    `${COURSES_API_BASE}/${courseId}/lessons/${lessonId}/quiz/learner-scores`,
   uploadCourseThumbnail: () => `${COURSES_API_BASE}/thumbnails/upload`,
    // NEW: Catalog & Enrollment endpoints
   catalog: `${COURSES_API_BASE}/catalog`,

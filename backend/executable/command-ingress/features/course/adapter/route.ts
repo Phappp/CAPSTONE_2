@@ -20,19 +20,38 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
   router.route('/:id/leaderboard').get(requireAuthorizedUser, controller.getCourseLeaderboard.bind(controller));
   router.route('/:id/lessons/:lessonId/progress').post(requireAuthorizedUser, controller.addLessonProgressHeartbeat.bind(controller));
   router.route('/:id/lessons/:lessonId/complete').post(requireAuthorizedUser, controller.completeLesson.bind(controller));
+  router.route('/:id/lessons/:lessonId/quiz/take').get(requireAuthorizedUser, controller.getLearnerQuizTake.bind(controller));
+  router.route('/:id/lessons/:lessonId/quiz/submit').post(requireAuthorizedUser, controller.submitLearnerQuizTake.bind(controller));
+  /** Giảng viên: điểm quiz theo từng học viên (ghi danh). */
+  router
+    .route('/:id/lessons/:lessonId/quiz/learner-scores')
+    .get(requireAuthorizedUser, controller.listQuizLearnerScoresForLesson.bind(controller));
 
   // Create course
   router.route('/').post(requireAuthorizedUser, controller.createCourse.bind(controller));
 
   // Instructor dashboard
   router.route('/my/stats').get(requireAuthorizedUser, controller.getMyCourseDashboardStats.bind(controller));
+  router.route('/my/revenue/summary').get(requireAuthorizedUser, controller.getMyRevenueSummary.bind(controller));
+  router.route('/my/revenue/trend').get(requireAuthorizedUser, controller.getMyRevenueTrend.bind(controller));
+  router.route('/my/revenue/transactions').get(requireAuthorizedUser, controller.listMyRevenueTransactions.bind(controller));
   router.route('/my').get(requireAuthorizedUser, controller.listMyCourses.bind(controller));
+  router.route('/admin/pending-review').get(requireAuthorizedUser, controller.listPendingReviewCourses.bind(controller));
+  router.route('/admin/resources/pending-review').get(requireAuthorizedUser, controller.listPendingLessonResourcesByAdmin.bind(controller));
+  router.route('/:id/admin-review').patch(requireAuthorizedUser, controller.reviewCourseByAdmin.bind(controller));
+  router.route('/:id/admin-review/timeline').get(requireAuthorizedUser, controller.getCourseReviewTimelineByAdmin.bind(controller));
+  router.route('/resources/:resourceId/admin-review').patch(requireAuthorizedUser, controller.reviewLessonResourceByAdmin.bind(controller));
+  router.route('/resources/:resourceId/admin-review/timeline').get(requireAuthorizedUser, controller.getLessonResourceReviewTimelineByAdmin.bind(controller));
+  router.route('/:id/review-timeline').get(requireAuthorizedUser, controller.getMyCourseReviewTimeline.bind(controller));
+  router.route('/:id/rejected-resources').get(requireAuthorizedUser, controller.listMyRejectedLessonResources.bind(controller));
+  router.route('/:id/pending-resources').get(requireAuthorizedUser, controller.listMyPendingLessonResources.bind(controller));
 
   // Content builder (modules & lessons)
   router.route('/:id/content').get(requireAuthorizedUser, controller.getMyCourseContentTree.bind(controller));
   router.route('/:id/completion-rules').get(requireAuthorizedUser, controller.getMyCourseCompletionRules.bind(controller));
   router.route('/:id/completion-rules').patch(requireAuthorizedUser, controller.updateMyCourseCompletionRules.bind(controller));
   router.route('/:id/learners/progress').get(requireAuthorizedUser, controller.listMyCourseLearnerProgress.bind(controller));
+  router.route('/:id/manager-overview').get(requireAuthorizedUser, controller.getMyCourseManagerOverview.bind(controller));
   router.route('/:id/content/reorder').patch(requireAuthorizedUser, controller.reorderContent.bind(controller));
   router.route('/:id/modules').post(requireAuthorizedUser, controller.createModule.bind(controller));
   router.route('/:id/modules/:moduleId').patch(requireAuthorizedUser, controller.updateModule.bind(controller));
@@ -40,6 +59,13 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
   router.route('/:id/modules/:moduleId/lessons').post(requireAuthorizedUser, controller.createLesson.bind(controller));
   router.route('/:id/lessons/:lessonId').patch(requireAuthorizedUser, controller.updateLesson.bind(controller));
   router.route('/:id/lessons/:lessonId').delete(requireAuthorizedUser, controller.deleteLesson.bind(controller));
+  router
+    .route('/:id/lessons/:lessonId/quiz/manual')
+    .get(requireAuthorizedUser, controller.getManualQuizForLesson.bind(controller))
+    .post(requireAuthorizedUser, controller.upsertManualQuizForLesson.bind(controller));
+  router
+    .route('/:id/lessons/:lessonId/quiz/manual/ai-generate')
+    .post(requireAuthorizedUser, controller.generateManualQuizByAi.bind(controller));
   router.route('/:id/lessons/:lessonId/resources').get(requireAuthorizedUser, controller.listLessonResources.bind(controller));
   router.route('/:id/lessons/:lessonId/resources/youtube').post(requireAuthorizedUser, controller.createLessonYoutubeResource.bind(controller));
   router.route('/:id/resources/:resourceId').delete(requireAuthorizedUser, controller.deleteLessonResource.bind(controller));

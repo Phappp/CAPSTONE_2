@@ -8,6 +8,11 @@ export interface Profile {
     created_at: string;
     roles: string[];
     primary_role?: string | null;
+    manager_verification?: {
+      status: "pending" | "verified" | "rejected" | "suspended";
+      review_note: string | null;
+      reviewed_at: string | null;
+    } | null;
     statistics?: {
       courses_enrolled: number;
       courses_completed: number;

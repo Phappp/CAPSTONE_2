@@ -17,6 +17,7 @@ import {
     PrimaryGeneratedColumn,
     Column,
     ManyToOne,
+    OneToMany,
     JoinColumn,
     CreateDateColumn,
     UpdateDateColumn
@@ -24,6 +25,7 @@ import {
 
 import QuestionBank from './question_banks';
 import User from './user';
+import BankQuestionOption from './bank_question_options';
 
 @Entity('bank_questions')
 export default class BankQuestion {
@@ -107,4 +109,7 @@ export default class BankQuestion {
     @UpdateDateColumn()
     /** Thời điểm cập nhật gần nhất. */
     updated_at: Date;
+
+    @OneToMany(() => BankQuestionOption, (option) => option.question, { cascade: true })
+    options: BankQuestionOption[];
 }

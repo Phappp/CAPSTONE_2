@@ -1,0 +1,193 @@
+/* Bổ sung giao diện soạn quiz (kết hợp với AssignmentEditor.css) */
+.manual-quiz-editor {
+  border: 1px solid var(--gray-100, #f3f4f6);
+  border-radius: var(--radius-lg, 12px);
+  padding: 20px;
+  background: linear-gradient(165deg, #fafbff 0%, #ffffff 45%, #f8fafc 100%);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.06));
+}
+
+.manual-quiz-editor .mq-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6366f1;
+  margin: 0 0 8px;
+}
+
+.manual-quiz-editor .mq-question-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.manual-quiz-editor .mq-question-card:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.08);
+}
+
+.manual-quiz-editor .mq-question-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed #e5e7eb;
+}
+
+.manual-quiz-editor .mq-question-head strong {
+  font-size: 1rem;
+  color: #1e293b;
+}
+
+.manual-quiz-editor .mq-option-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  margin-top: 6px;
+  background: #f8fafc;
+  border: 1px solid transparent;
+}
+
+.manual-quiz-editor .mq-option-row:focus-within {
+  border-color: #a5b4fc;
+  background: #eef2ff;
+}
+
+.manual-quiz-editor .mq-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.manual-quiz-editor .mq-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.manual-quiz-editor .mq-check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px 16px;
+  margin-top: 12px;
+}
+
+/* Đồng bộ style cho các control chưa có class riêng */
+.manual-quiz-editor .field select,
+.manual-quiz-editor .field input[type="file"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--gray-200, #e5e7eb);
+  border-radius: var(--radius-md, 10px);
+  background: #fff;
+  font-size: 14px;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.manual-quiz-editor .field input[type="file"] {
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.manual-quiz-editor .field select:focus,
+.manual-quiz-editor .field input[type="file"]:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+}
+
+.manual-quiz-editor table input,
+.manual-quiz-editor table select {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 13px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.manual-quiz-editor table input:focus,
+.manual-quiz-editor table select:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.16);
+}
+
+/* Select Loại / Độ khó trong thẻ câu hỏi (modal soạn Quizz) */
+.manual-quiz-editor .mq-field-select label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.manual-quiz-editor select.mq-question-meta-select {
+  width: 100%;
+  max-width: 100%;
+  min-height: 42px;
+  padding: 10px 36px 10px 14px;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  color: #0f172a;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.manual-quiz-editor select.mq-question-meta-select:hover:not(:disabled) {
+  border-color: #c7d2fe;
+  background-color: #fafbff;
+}
+
+.manual-quiz-editor select.mq-question-meta-select:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.manual-quiz-editor select.mq-question-meta-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background-color: #f1f5f9;
+}
+
+.manual-quiz-editor select.mq-question-meta-select--kind {
+  border-left: 3px solid #6366f1;
+}
+
+.manual-quiz-editor select.mq-question-meta-select--difficulty {
+  border-left: 3px solid #0ea5e9;
+}
+
+@media (max-width: 640px) {
+  .manual-quiz-editor {
+    padding: 14px;
+  }
+}
