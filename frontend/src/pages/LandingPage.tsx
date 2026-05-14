@@ -1,620 +1,339 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import transLogo from "../assets/trans-logo.png";
-import {
-  ArrowRight,
-  BookOpenText,
-  BrainCircuit,
-  ChartColumnBig,
-  CheckCircle2,
-  CirclePlay,
-  Clock3,
-  Compass,
-  Cpu,
-  GraduationCap,
-  Layers3,
-  ShieldCheck,
-  Sparkles,
-  Star,
-  Target,
-  UsersRound,
-  Zap,
-} from "lucide-react";
+import React from "react";
+import { Link, useNavigate } from "react-router-dom";
 import "./LandingPage.css";
+import transLogo from "../assets/trans-logo-2.png";
 
-type NavSection = {
-  id: string;
+type Certification = {
+  icon: string;
   label: string;
+  sub: string;
 };
 
-const NAV_SECTIONS: NavSection[] = [
-  { id: "section-hero", label: "Trang chủ" },
-  { id: "section-features", label: "Tính năng" },
-  { id: "section-journey", label: "Lộ trình" },
-  { id: "section-pricing", label: "Gói học" },
-  { id: "section-faq", label: "FAQ" },
+const CERTIFICATIONS: Certification[] = [
+  { icon: "workspace_premium", label: "Ivy League Partner", sub: "Accredited" },
+  { icon: "verified", label: "Global Tech Award", sub: "Innovation 2025" },
+  { icon: "military_tech", label: "Mastery Badge", sub: "Student Milestone" },
+  { icon: "school", label: "EU Certified", sub: "Education Standards" },
 ];
 
+const BENTO_PATTERN_URL =
+  "https://lh3.googleusercontent.com/aida-public/AB6AXuDQY1PapR9SfzAnBMHMcwuQhdKDYJOA4D-K554DWLWhK0ZCxi7Bm1VVPxaICrkuKs3QKrvJ9Gstx8hjc6YNwD9fyYndyXVPBaqQyM3NzEWWPjgwRUNjwKNgjBhS7BixQcSgu6sYfQznO03uI8qCpdKeXW_2wciUppIunGGACtmfyVRMInb5aMXbS3f4wOFg0ZdsApEj_yu8S1iYtnviHA2wDOIaGAtsUb9Qh1xvzbs7DdJgGWKRWl8EbZbxX72w3Qt8z98g0bHzZg";
+const VIDEO_POSTER_URL =
+  "https://lh3.googleusercontent.com/aida-public/AB6AXuBXvct5HrjMKAIS-xbkY1XVyYhvz9pMjBjTUDC9xuEo0uW2qEDRcNDciWQULXZxQ8l2M0QXrjsYNCjdxNMGvLqlbrCKRQNK_ZMJSbIFYFwWNJSOfCGld151oSrqbQDMCxB3Fz5NxxLPBF5dhnw5VqDodFo2NyXWrLmbJ6CoL8RjGcwvBwqXkgTpJhB-dnMq1bSpwO7383kl7O1g3z8WlHwaOpZQiIPnNcCm12DDDbNFlKdHpgplpRgwioR93qDWFshf5xPNebwzPg";
+const CTA_PATTERN_URL =
+  "https://lh3.googleusercontent.com/aida-public/AB6AXuCwxWdCPac3naoLW3IgZ9bsbc4QrThXKiQOjPD4cmGrGqU8DfSOcquva1RV7YZLDjTwcFZ238mzLqYSVmS94neUk5yJf_lbnERW72r8Iv3sywln-XtUxx5X4NtEAv5yXFapZiu9Pb0ywuRgpY9quiOdW37nSDcUISQPfOKEYKTuwFCR5KIW7itEBXH11OKk5UzcgCLuzezhW_T2XKk4daXNG0Fb8Ol_5cUWSxN46oIDBqu48s6Ul6rQ2XMFN_lHhK7hnNF3znvzyw";
+
+const MindBridgeNavbar: React.FC = () => {
+  const navigate = useNavigate();
+  return (
+    <nav className="mb-nav">
+      <div className="mb-nav__inner">
+        <Link to="/" className="mb-nav__brand">
+          <img alt="MindBridge Logo" className="mb-nav__logo" src={transLogo} />
+        </Link>
+        <div className="mb-nav__links">
+          <Link to="/" className="mb-nav__link">Courses</Link>
+          <Link to="/" className="mb-nav__link">Instructors</Link>
+          <Link to="/" className="mb-nav__link">Pricing</Link>
+          <Link to="/" className="mb-nav__link">Resources</Link>
+        </div>
+        <div className="mb-nav__cta">
+          <button type="button" className="mb-nav__login" onClick={() => navigate("/login")}>
+            Login
+          </button>
+          <button type="button" className="mb-nav__get-started" onClick={() => navigate("/register")}>
+            Get Started
+          </button>
+        </div>
+      </div>
+    </nav>
+  );
+};
+
+const MindBridgeFooter: React.FC = () => (
+  <footer className="mb-footer">
+    <div className="mb-footer__grid">
+      <div className="mb-footer__col">
+        <div className="mb-footer__brand">
+          <img alt="MindBridge Logo" className="mb-footer__logo" src={transLogo} />
+        </div>
+        <p className="mb-footer__copy">© 2026 MindBridge Co. The Intelligent Workspace.</p>
+      </div>
+      <div className="mb-footer__col">
+        <p className="mb-footer__heading">Product</p>
+        <Link className="mb-footer__link" to="/">Courses</Link>
+        <Link className="mb-footer__link" to="/">Instructors</Link>
+        <Link className="mb-footer__link" to="/">Pricing</Link>
+      </div>
+      <div className="mb-footer__col">
+        <p className="mb-footer__heading">Company</p>
+        <Link className="mb-footer__link" to="/privacy">Privacy Policy</Link>
+        <Link className="mb-footer__link" to="/privacy">Terms of Service</Link>
+        <Link className="mb-footer__link" to="/privacy">Cookie Policy</Link>
+        <Link className="mb-footer__link" to="/contact">Contact Us</Link>
+      </div>
+      <div className="mb-footer__col">
+        <p className="mb-footer__heading">Connect</p>
+        <div className="mb-footer__socials">
+          <a className="mb-footer__social" href="#">
+            <span className="material-symbols-outlined mb-footer__social-icon">public</span>
+          </a>
+          <a className="mb-footer__social" href="#">
+            <span className="material-symbols-outlined mb-footer__social-icon">alternate_email</span>
+          </a>
+        </div>
+        <p className="mb-footer__note">✦ Privacy and security are built into everything we do.</p>
+      </div>
+    </div>
+  </footer>
+);
+
 export default function LandingPage() {
-  const [activeSection, setActiveSection] = useState("section-hero");
-  const [visibleRevealIds, setVisibleRevealIds] = useState<Record<string, boolean>>({});
-  const [statsReady, setStatsReady] = useState(false);
-  const [statValues, setStatValues] = useState({
-    learners: 0,
-    courses: 0,
-    hours: 0,
-    rating: 0,
-  });
-  const sectionIds = useMemo(() => NAV_SECTIONS.map((item) => item.id), []);
-
-  useEffect(() => {
-    const sections = sectionIds
-      .map((id) => document.getElementById(id))
-      .filter((element): element is HTMLElement => element !== null);
-
-    if (!sections.length) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-
-        if (visible.length) {
-          setActiveSection(visible[0].target.id);
-        }
-      },
-      {
-        root: null,
-        threshold: [0.2, 0.35, 0.5, 0.7],
-        rootMargin: "-80px 0px -45% 0px",
-      }
-    );
-
-    sections.forEach((section) => observer.observe(section));
-    return () => observer.disconnect();
-  }, [sectionIds]);
-
-  useEffect(() => {
-    const revealElements = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal-id]"));
-    if (!revealElements.length) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-          const revealId = (entry.target as HTMLElement).dataset.revealId;
-          if (!revealId) return;
-          setVisibleRevealIds((prev) => ({ ...prev, [revealId]: true }));
-          observer.unobserve(entry.target);
-        });
-      },
-      { threshold: 0.16, rootMargin: "0px 0px -8% 0px" }
-    );
-
-    revealElements.forEach((element) => observer.observe(element));
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const statsSection = document.getElementById("section-stats");
-    if (!statsSection) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setStatsReady(true);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.35 }
-    );
-
-    observer.observe(statsSection);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!statsReady) return;
-
-    const durationMs = 1400;
-    const start = performance.now();
-    const targets = {
-      learners: 45000,
-      courses: 1200,
-      hours: 3200000,
-      rating: 49,
-    };
-
-    const frame = (timestamp: number) => {
-      const progress = Math.min((timestamp - start) / durationMs, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setStatValues({
-        learners: Math.round(targets.learners * eased),
-        courses: Math.round(targets.courses * eased),
-        hours: Math.round(targets.hours * eased),
-        rating: Math.round(targets.rating * eased),
-      });
-      if (progress < 1) requestAnimationFrame(frame);
-    };
-
-    requestAnimationFrame(frame);
-  }, [statsReady]);
+  const navigate = useNavigate();
 
   return (
-    <div className="landing-page">
-      <header className="site-header">
-        <div className="container header-inner">
-          <Link to="/" className="logo">
-            <img src={transLogo} alt="MindBridge Logo" />
-          </Link>
+    <div className="mb-landing-page">
+      <MindBridgeNavbar />
 
-          <nav className="main-nav">
-            {NAV_SECTIONS.map((item) => (
-              <a
-                key={item.id}
-                href={`#${item.id}`}
-                className={`nav-link ${activeSection === item.id ? "active" : ""}`}
-              >
-                {item.label}
-              </a>
-            ))}
-          </nav>
-
-          <div className="header-actions">
-            <Link to="/login" className="login-link">
-              Đăng nhập
-            </Link>
-            <Link to="/register" className="btn btn-primary btn-sm">
-              Bắt đầu
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <section id="section-hero" className="hero-section">
-        <div className="container hero-inner">
-          <div
-            data-reveal-id="hero-left"
-            className={`hero-content reveal ${visibleRevealIds["hero-left"] ? "visible" : ""}`}
-          >
-            <div className="badge">
-              <Sparkles size={14} />
-              <span>NỀN TẢNG HỌC TẬP THÔNG MINH</span>
-            </div>
-            <h1 className="hero-title">
-              Nâng cấp trải nghiệm học tập với <span className="text-highlight">AI</span> và lộ
-              trình cá nhân hóa
-            </h1>
-            <p className="hero-subtitle">
-              MindBridge kết nối học viên, giảng viên và quản trị trên một nền tảng duy nhất. Theo
-              dõi tiến độ theo thời gian thực, giao bài linh hoạt và đưa ra gợi ý học tập đúng lúc.
-            </p>
-            <div className="hero-buttons">
-              <Link to="/register" className="btn btn-dark">
-                Tạo tài khoản <ArrowRight size={16} />
-              </Link>
-              <a href="#section-journey" className="btn btn-outline">
-                Xem lộ trình học
-              </a>
-            </div>
-            <div className="hero-metrics-row">
-              <div>
-                <strong>98%</strong>
-                <span>Tỷ lệ hoàn thành khóa học</span>
-              </div>
-              <div>
-                <strong>24/7</strong>
-                <span>Hỗ trợ học tập liên tục</span>
-              </div>
-              <div>
-                <strong>10k+</strong>
-                <span>Lượt học mỗi ngày</span>
-              </div>
-            </div>
-          </div>
-
-          <div
-            data-reveal-id="hero-right"
-            className={`hero-visual reveal reveal-delay-1 ${visibleRevealIds["hero-right"] ? "visible" : ""}`}
-          >
-            <div className="visual-bg-blur"></div>
-            <div className="visual-main-card">
-              <div className="metric">
-                <div className="metric-icon">
-                  <BrainCircuit size={20} />
-                </div>
-                <div>
-                  <strong>Lộ trình AI</strong>
-                  <p>Tự động tối ưu theo điểm mạnh và điểm yếu</p>
-                </div>
-              </div>
-              <div className="metric">
-                <div className="metric-icon">
-                  <ChartColumnBig size={20} />
-                </div>
-                <div>
-                  <strong>Phân tích thời gian thực</strong>
-                  <p>Báo cáo tiến độ học tập theo bài, chương, khóa</p>
-                </div>
-              </div>
-              <div className="metric">
-                <div className="metric-icon">
-                  <ShieldCheck size={20} />
-                </div>
-                <div>
-                  <strong>Bảo mật và phân quyền</strong>
-                  <p>Quản lý truy cập rõ ràng cho từng vai trò</p>
-                </div>
-              </div>
-            </div>
-            <div className="visual-float-card">
-              <CirclePlay size={18} />
-              <span>Xem demo 2 phút</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="section-stats" className="stats-strip">
-        <div className="container stats-grid">
-          <div className="stats-item stat-pop">
-            <UsersRound size={18} />
-            <strong>{statValues.learners.toLocaleString("en-US")}+</strong>
-            <span>Học viên đang hoạt động</span>
-          </div>
-          <div className="stats-item stat-pop">
-            <GraduationCap size={18} />
-            <strong>{statValues.courses.toLocaleString("en-US")}+</strong>
-            <span>Khóa học chuyên sâu</span>
-          </div>
-          <div className="stats-item stat-pop">
-            <Clock3 size={18} />
-            <strong>{(statValues.hours / 1000000).toFixed(1)}M giờ</strong>
-            <span>Thời lượng học đã hoàn thành</span>
-          </div>
-          <div className="stats-item stat-pop">
-            <Star size={18} />
-            <strong>{(statValues.rating / 10).toFixed(1)}/5</strong>
-            <span>Đánh giá trải nghiệm nền tảng</span>
-          </div>
-        </div>
-      </section>
-
-      <section
-        id="section-features"
-        data-reveal-id="features"
-        className={`features-section reveal ${visibleRevealIds["features"] ? "visible" : ""}`}
-      >
-        <div className="container">
-          <div className="section-heading">
-            <span className="section-kicker">Tính năng nổi bật</span>
-            <h2>Được thiết kế để học nhanh hơn và dạy hiệu quả hơn</h2>
-            <p>
-              Hệ thống kết hợp AI và dữ liệu học tập để tạo vòng phản hồi liên tục: học, đánh giá,
-              đề xuất, cải thiện.
-            </p>
-          </div>
-
-          <div className="feature-grid">
-            <article className="feature-card">
-              <div className="feature-icon">
-                <Compass size={20} />
-              </div>
-              <h3>Lộ trình học cá nhân hóa</h3>
-              <p>Gợi ý nội dung và bài luyện tập theo tiến độ thực tế của từng học viên.</p>
-            </article>
-            <article className="feature-card">
-              <div className="feature-icon">
-                <BookOpenText size={20} />
-              </div>
-              <h3>Kho học liệu tập trung</h3>
-              <p>Quản lý bài giảng, quiz, assignment và tài nguyên trong một không gian thống nhất.</p>
-            </article>
-            <article className="feature-card">
-              <div className="feature-icon">
-                <Cpu size={20} />
-              </div>
-              <h3>AI hỗ trợ giảng dạy</h3>
-              <p>Tạo nhanh câu hỏi, gợi ý phản hồi và phát hiện điểm nghẽn học tập tự động.</p>
-            </article>
-            <article className="feature-card">
-              <div className="feature-icon">
-                <Layers3 size={20} />
-              </div>
-              <h3>Quản trị học phần linh hoạt</h3>
-              <p>Tùy chỉnh mô-đun theo lớp, theo nhóm hoặc theo mục tiêu đầu ra.</p>
-            </article>
-            <article className="feature-card">
-              <div className="feature-icon">
-                <Target size={20} />
-              </div>
-              <h3>Đánh giá theo năng lực</h3>
-              <p>Hệ thống rubric và theo dõi competency rõ ràng, minh bạch cho người học.</p>
-            </article>
-            <article className="feature-card">
-              <div className="feature-icon">
-                <Zap size={20} />
-              </div>
-              <h3>Vận hành tối ưu hiệu suất</h3>
-              <p>Giao diện nhẹ, phản hồi nhanh và khả năng mở rộng theo quy mô tổ chức.</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section
-        id="section-journey"
-        data-reveal-id="journey"
-        className={`journey-section reveal ${visibleRevealIds["journey"] ? "visible" : ""}`}
-      >
-        <div className="container">
-          <div className="section-heading">
-            <span className="section-kicker">Lộ trình trải nghiệm</span>
-            <h2>Từ đăng ký đến hoàn thành khóa học chỉ với 4 bước</h2>
-          </div>
-
-          <div className="journey-timeline">
-            <article className="journey-step">
-              <span className="step-index">01</span>
-              <h3>Tạo tài khoản theo vai trò</h3>
-              <p>Học viên, giảng viên hoặc quản trị đều có luồng onboarding riêng.</p>
-            </article>
-            <article className="journey-step">
-              <span className="step-index">02</span>
-              <h3>Chọn khóa học và mục tiêu</h3>
-              <p>Thiết lập mục tiêu học tập để hệ thống tạo kế hoạch phù hợp.</p>
-            </article>
-            <article className="journey-step">
-              <span className="step-index">03</span>
-              <h3>Học và làm bài có phản hồi</h3>
-              <p>Nhận đánh giá theo thời gian thực qua quiz, assignment và dashboard.</p>
-            </article>
-            <article className="journey-step">
-              <span className="step-index">04</span>
-              <h3>Tổng kết và tối ưu tiếp theo</h3>
-              <p>Hệ thống đề xuất nội dung kế tiếp dựa trên dữ liệu năng lực đạt được.</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section
-        data-reveal-id="testimonials"
-        className={`testimonials-section reveal ${visibleRevealIds["testimonials"] ? "visible" : ""}`}
-      >
-        <div className="container">
-          <div className="section-heading">
-            <span className="section-kicker">Phản hồi người dùng</span>
-            <h2>Được tin dùng bởi cả học viên lẫn giảng viên</h2>
-          </div>
-          <div className="testimonials-grid">
-            <article className="testimonial-card">
-              <div className="stars">
-                <Star size={14} />
-                <Star size={14} />
-                <Star size={14} />
-                <Star size={14} />
-                <Star size={14} />
-              </div>
-              <p>
-                “Mình nhìn rõ điểm yếu theo từng chương nên cải thiện nhanh hơn rất nhiều so với
-                cách học truyền thống.”
-              </p>
-              <span>Ngọc Anh - Sinh viên CNTT</span>
-            </article>
-            <article className="testimonial-card">
-              <div className="stars">
-                <Star size={14} />
-                <Star size={14} />
-                <Star size={14} />
-                <Star size={14} />
-                <Star size={14} />
-              </div>
-              <p>
-                “Tính năng quản lý lớp và tạo bài đánh giá giúp mình tiết kiệm rất nhiều thời gian
-                chấm và tổng hợp báo cáo.”
-              </p>
-              <span>Thầy Minh - Giảng viên Data</span>
-            </article>
-            <article className="testimonial-card">
-              <div className="stars">
-                <Star size={14} />
-                <Star size={14} />
-                <Star size={14} />
-                <Star size={14} />
-                <Star size={14} />
-              </div>
-              <p>
-                “Dashboard rõ ràng, hiệu năng ổn định. Team quản trị dễ theo dõi chỉ số hoạt động
-                của toàn bộ nền tảng.”
-              </p>
-              <span>Hà Phương - Quản trị học tập</span>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section
-        id="section-pricing"
-        data-reveal-id="pricing"
-        className={`pricing-section reveal ${visibleRevealIds["pricing"] ? "visible" : ""}`}
-      >
-        <div className="container">
-          <div className="section-heading">
-            <span className="section-kicker">Gói sử dụng</span>
-            <h2>Linh hoạt từ cá nhân đến tổ chức</h2>
-          </div>
-          <div className="pricing-grid">
-            <article className="pricing-card">
-              <h3>Starter</h3>
-              <p className="price">Miễn phí</p>
-              <ul>
-                <li>
-                  <CheckCircle2 size={16} /> Truy cập khóa học cơ bản
-                </li>
-                <li>
-                  <CheckCircle2 size={16} /> Quiz và theo dõi tiến độ
-                </li>
-                <li>
-                  <CheckCircle2 size={16} /> 1 lớp học cá nhân
-                </li>
-              </ul>
-              <Link to="/register" className="btn btn-outline full-width">
-                Dùng ngay
-              </Link>
-            </article>
-            <article className="pricing-card featured">
-              <h3>Pro Learning</h3>
-              <p className="price">
-                299K <span>/ tháng</span>
-              </p>
-              <ul>
-                <li>
-                  <CheckCircle2 size={16} /> Toàn bộ khóa học nâng cao
-                </li>
-                <li>
-                  <CheckCircle2 size={16} /> AI quiz và gợi ý học tập
-                </li>
-                <li>
-                  <CheckCircle2 size={16} /> Báo cáo chi tiết theo năng lực
-                </li>
-              </ul>
-              <Link to="/register" className="btn btn-primary full-width">
-                Bắt đầu Pro
-              </Link>
-            </article>
-            <article className="pricing-card">
-              <h3>Campus</h3>
-              <p className="price">Liên hệ</p>
-              <ul>
-                <li>
-                  <CheckCircle2 size={16} /> Quản trị nhiều lớp và giảng viên
-                </li>
-                <li>
-                  <CheckCircle2 size={16} /> Tùy chỉnh workflow theo tổ chức
-                </li>
-                <li>
-                  <CheckCircle2 size={16} /> Hỗ trợ triển khai chuyên sâu
-                </li>
-              </ul>
-              <Link to="/register" className="btn btn-outline full-width">
-                Tư vấn triển khai
-              </Link>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section
-        id="section-faq"
-        data-reveal-id="faq"
-        className={`faq-section reveal ${visibleRevealIds["faq"] ? "visible" : ""}`}
-      >
-        <div className="container">
-          <div className="section-heading">
-            <span className="section-kicker">Câu hỏi thường gặp</span>
-            <h2>Giải đáp nhanh trước khi bạn bắt đầu</h2>
-          </div>
-          <div className="faq-grid">
-            <article className="faq-item">
-              <h4>MindBridge phù hợp với ai?</h4>
-              <p>Phù hợp cho cả học viên cá nhân, trung tâm đào tạo và tổ chức giáo dục.</p>
-            </article>
-            <article className="faq-item">
-              <h4>Tôi có thể dùng miễn phí không?</h4>
-              <p>Có. Bạn có thể bắt đầu với gói Starter và nâng cấp khi cần tính năng nâng cao.</p>
-            </article>
-            <article className="faq-item">
-              <h4>Dữ liệu học tập có an toàn không?</h4>
-              <p>Hệ thống có phân quyền theo vai trò, theo dõi truy cập và chính sách bảo mật rõ ràng.</p>
-            </article>
-            <article className="faq-item">
-              <h4>Có hỗ trợ cho giảng viên tạo đề không?</h4>
-              <p>
-                Có. Giảng viên có thể tạo quiz/assignment thủ công hoặc dùng AI gợi ý để tiết kiệm
-                thời gian.
-              </p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section
-        data-reveal-id="final-cta"
-        className={`cta-section final-cta reveal ${visibleRevealIds["final-cta"] ? "visible" : ""}`}
-      >
-        <div className="container">
-          <div className="cta-card">
-            <div className="cta-content">
-              <h2>Sẵn sàng bứt tốc hành trình học tập?</h2>
-              <p>
-                Đăng ký trong 1 phút để trải nghiệm nền tảng học tập thông minh dành cho thời đại
-                mới.
-              </p>
-              <div className="cta-buttons">
-                <Link to="/register" className="btn btn-primary">
-                  Tạo tài khoản ngay
-                </Link>
-                <Link to="/login" className="btn btn-outline-light">
-                  Tôi đã có tài khoản
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <footer className="site-footer">
-        <div className="container">
-          <div className="footer-grid">
-            <div className="footer-brand">
-              <img src={transLogo} alt="MindBridge Logo" className="footer-logo" />
-              <p className="copyright">© 2026 MindBridge Co. All rights reserved.</p>
-            </div>
-            <div className="footer-links">
-              <h4>Nền tảng</h4>
-              <ul>
-                <li>
-                  <a href="#section-features">Tính năng</a>
-                </li>
-                <li>
-                  <a href="#section-pricing">Gói sử dụng</a>
-                </li>
-                <li>
-                  <a href="#section-faq">FAQ</a>
-                </li>
-              </ul>
-            </div>
-            <div className="footer-links">
-              <h4>Tài khoản</h4>
-              <ul>
-                <li>
-                  <Link to="/register">Đăng ký</Link>
-                </li>
-                <li>
-                  <Link to="/login">Đăng nhập</Link>
-                </li>
-                <li>
-                  <Link to="/forgot-password">Quên mật khẩu</Link>
-                </li>
-              </ul>
-            </div>
-            <div className="footer-social">
-              <h4>Giá trị cốt lõi</h4>
-              <div className="social-icons">
-                <span className="social-link">
-                  <BookOpenText size={18} />
+      <div className="mb-landing__body">
+        {/* Hero */}
+        <section className="mb-hero">
+          <div className="mb-hero__inner">
+            <div className="mb-hero__copy">
+              <div className="mb-hero__badge">
+                <span
+                  className="material-symbols-outlined mb-hero__badge-icon"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  bolt
                 </span>
-                <span className="social-link">
-                  <GraduationCap size={18} />
-                </span>
+                AI-POWERED LLM
               </div>
-              <p className="security-note">Học tập hiệu quả - cá nhân hóa - bảo mật.</p>
+              <h1 className="mb-hero__title">
+                The Intelligent Bridge to <span className="mb-hero__title-accent">Modern Learning</span>
+              </h1>
+              <p className="mb-hero__subtitle">
+                Redefining education through editorial precision and LLM intelligence. A workspace that adapts to your curiosity.
+              </p>
+              <div className="mb-hero__actions">
+                <button
+                  type="button"
+                  className="mb-btn mb-btn--cta"
+                  onClick={() => navigate("/register")}
+                >
+                  Get Started
+                  <span className="material-symbols-outlined">arrow_forward</span>
+                </button>
+                <button type="button" className="mb-btn mb-btn--ghost" onClick={() => navigate("/login")}>
+                  Become an Instructor
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-hero__visual">
+              <div className="mb-hero__halo" />
+              <div className="mb-hero__visual-stack">
+                <div className="mb-glass mb-hero__card-main">
+                  <div className="mb-hero__card-top">
+                    <div className="mb-hero__dots">
+                      <span className="mb-hero__dot mb-hero__dot--error" />
+                      <span className="mb-hero__dot mb-hero__dot--secondary" />
+                      <span className="mb-hero__dot mb-hero__dot--primary" />
+                    </div>
+                    <span className="mb-hero__progress">Progress: 84%</span>
+                  </div>
+                  <div className="mb-hero__bars">
+                    <div className="mb-hero__bar" style={{ width: "75%" }} />
+                    <div className="mb-hero__bar" style={{ width: "100%" }} />
+                    <div className="mb-hero__bar" style={{ width: "50%" }} />
+                  </div>
+                  <div className="mb-hero__chiprow">
+                    <div className="mb-hero__chip-icon">
+                      <span className="material-symbols-outlined">psychology</span>
+                    </div>
+                    <div className="mb-hero__chip-meta">
+                      <div className="mb-hero__chip-bar mb-hero__chip-bar--accent" />
+                      <div className="mb-hero__chip-bar" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-glass mb-hero__insight">
+                  <div className="mb-hero__insight-icon">
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontVariationSettings: "'FILL' 1" }}
+                    >
+                      auto_awesome
+                    </span>
+                  </div>
+                  <div>
+                    <p className="mb-hero__insight-title">AI Insight</p>
+                    <p className="mb-hero__insight-sub">Personalized quiz generated.</p>
+                  </div>
+                </div>
+
+                <div className="mb-glass mb-hero__health">
+                  <p className="mb-hero__health-title">Course Health</p>
+                  <div className="mb-hero__health-bars">
+                    <div style={{ height: "40%" }} />
+                    <div style={{ height: "60%" }} />
+                    <div className="mb-hero__health-bars--peak" style={{ height: "90%" }} />
+                    <div style={{ height: "50%" }} />
+                    <div style={{ height: "75%" }} />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </footer>
+        </section>
+
+        {/* Bento Features */}
+        <section className="mb-bento">
+          <div className="mb-bento__inner">
+            <div className="mb-bento__head">
+              <div>
+                <h2 className="mb-bento__title">Intelligent by Design</h2>
+                <p className="mb-bento__lead">
+                  Our features are built to eliminate friction and amplify comprehension using state-of-the-art AI.
+                </p>
+              </div>
+              <div className="mb-bento__tags">
+                <span className="mb-bento__tag">SCALABLE</span>
+                <span className="mb-bento__tag">SECURE</span>
+              </div>
+            </div>
+
+            <div className="mb-bento__grid">
+              <div className="mb-bento__cell mb-bento__cell--main">
+                <div className="mb-bento__cell-body">
+                  <div>
+                    <div className="mb-bento__icon mb-bento__icon--secondary">
+                      <span className="material-symbols-outlined">quiz</span>
+                    </div>
+                    <h3 className="mb-bento__cell-title">AI-Driven Quizzes</h3>
+                    <p className="mb-bento__cell-lead">
+                      Dynamic assessments that evolve based on student performance, ensuring no gap in knowledge goes unaddressed.
+                    </p>
+                  </div>
+                  <div className="mb-bento__chips">
+                    <span className="mb-bento__chip">Predictive Logic</span>
+                    <span className="mb-bento__chip">Automated Grading</span>
+                  </div>
+                </div>
+                <div className="mb-bento__cell-gradient" />
+                <img alt="Pattern" className="mb-bento__cell-pattern" src={BENTO_PATTERN_URL} />
+              </div>
+
+              <div className="mb-bento__cell mb-bento__cell--dark">
+                <div className="mb-bento__icon mb-bento__icon--ghost">
+                  <span className="material-symbols-outlined mb-bento__icon-text--accent">videocam</span>
+                </div>
+                <div>
+                  <h3 className="mb-bento__cell-title mb-bento__cell-title--invert">Live Sessions</h3>
+                  <p className="mb-bento__cell-lead mb-bento__cell-lead--invert">
+                    Real-time collaboration with integrated transcription and AI summaries.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mb-bento__cell mb-bento__cell--light">
+                <div className="mb-bento__icon mb-bento__icon--secondary-soft">
+                  <span className="material-symbols-outlined mb-bento__icon-text--secondary">assignment_turned_in</span>
+                </div>
+                <div>
+                  <h3 className="mb-bento__cell-title">Dynamic Assignments</h3>
+                  <p className="mb-bento__cell-lead">
+                    Assignments that adapt context and difficulty to the learner's specific pace.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mb-bento__cell mb-bento__cell--analytics">
+                <div className="mb-bento__analytics-body">
+                  <h3 className="mb-bento__cell-title">Predictive Analytics</h3>
+                  <p className="mb-bento__cell-lead">
+                    Spot trends before they happen. Our system predicts student success rates with 94% accuracy.
+                  </p>
+                </div>
+                <div className="mb-bento__analytics-graph">
+                  <div className="mb-bento__analytics-bar" style={{ width: "100%" }} />
+                  <div className="mb-bento__analytics-bar" style={{ width: "80%" }} />
+                  <div className="mb-bento__analytics-bar mb-bento__analytics-bar--strong" style={{ width: "100%" }} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* TVC Video */}
+        <section className="mb-tvc">
+          <div className="mb-tvc__overlay">
+            <div className="mb-tvc__cluster">
+              <button type="button" className="mb-tvc__play">
+                <span
+                  className="material-symbols-outlined mb-tvc__play-icon"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  play_arrow
+                </span>
+              </button>
+              <p className="mb-tvc__caption">Watch how it works</p>
+            </div>
+          </div>
+          <img alt="AI Platform in Action" className="mb-tvc__poster" src={VIDEO_POSTER_URL} />
+        </section>
+
+        {/* Certifications */}
+        <section className="mb-certs">
+          <div className="mb-certs__inner">
+            <div className="mb-certs__head">
+              <h2 className="mb-certs__title">Recognized Excellence</h2>
+              <p className="mb-certs__lead">Industry-leading certifications and student milestones.</p>
+            </div>
+            <div className="mb-certs__grid">
+              {CERTIFICATIONS.map((item) => (
+                <div key={item.label} className="mb-certs__card">
+                  <div className="mb-certs__icon">
+                    <span className="material-symbols-outlined">{item.icon}</span>
+                  </div>
+                  <p className="mb-certs__label">{item.label}</p>
+                  <p className="mb-certs__sub">{item.sub}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="mb-cta-section">
+          <div className="mb-cta-card">
+            <div className="mb-cta-card__bg">
+              <img alt="Background pattern" src={CTA_PATTERN_URL} />
+            </div>
+            <div className="mb-cta-card__content">
+              <h2 className="mb-cta-card__title">Ready to Bridge the Gap?</h2>
+              <p className="mb-cta-card__lead">
+                Join over 10,000 instructors who are already shaping the future of education with MindBridge.
+              </p>
+              <div className="mb-cta-card__actions">
+                <button
+                  type="button"
+                  className="mb-btn mb-btn--secondary"
+                  onClick={() => navigate("/login")}
+                >
+                  Start Free Trial
+                </button>
+                <button type="button" className="mb-btn mb-btn--outline-light" onClick={() => navigate("/contact")}>
+                  Contact Sales
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <MindBridgeFooter />
     </div>
   );
 }

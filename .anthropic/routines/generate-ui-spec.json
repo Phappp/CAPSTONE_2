@@ -1,0 +1,26 @@
+{
+  "name": "document-all-ui",
+  "description": "Scan React codebase, generate markdown specifications, handle auto-login via Playwright MCP, and capture authenticated teacher screens",
+  "steps": [
+    {
+      "action": "mkdir",
+      "path": "docs/user-interface-design/pages",
+      "description": "Create a dedicated folder for Page-level documentation"
+    },
+    {
+      "action": "mkdir",
+      "path": "docs/user-interface-design/components",
+      "description": "Create a dedicated folder for Shared Component documentation"
+    },
+    {
+      "action": "mkdir",
+      "path": "docs/user-interface-design/assets",
+      "description": "Ensure assets folder exists for UI screenshots"
+    },
+    {
+      "action": "custom_prompt",
+      "prompt": "Step 1: Scan 'frontend/src/pages' and 'frontend/src/components' to generate all English markdown specification tables following the CLAUDE.md guidelines. Step 2: Use Playwright MCP to handle authentication. Navigate to 'http://localhost:5173/login' (or the exact login page route). Read the Teacher credentials from CLAUDE.md, fill in the email and password inputs, and click the Login button. Wait until the browser successfully redirects to 'http://localhost:5173/teacher/dashboard' to ensure the session token/cookie is fully saved. Step 3: For each generated page document starting with 'Teacher...' (e.g., TeacherQuizEditorPage.md), map it to its respective frontend route under the '/teacher/' prefix. Use the authenticated browser context to navigate to each route, wait for the React components to completely render, take a snapshot of the viewport, and save it directly as 'docs/user-interface-design/assets/[PageName].png'.",
+      "description": "Analyze codebase, authenticate as a teacher via browser, and auto-capture secure dashboard screens"
+    }
+  ]
+}
