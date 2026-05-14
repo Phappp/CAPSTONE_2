@@ -1,0 +1,525 @@
+/* MindBridge Privacy Page — scoped styles */
+
+.mb-privacy-page {
+  --mb-primary: #0f172a;
+  --mb-primary-container: #1e293b;
+  --mb-secondary: #0d9488;
+  --mb-secondary-fixed: #71f8e4;
+  --mb-secondary-container: #6df5e1;
+  --mb-on-secondary-container: #006f64;
+  --mb-background: #f7f9fb;
+  --mb-surface-container: #eceef0;
+  --mb-on-surface: #191c1e;
+  --mb-on-surface-variant: #45474c;
+  --mb-outline-variant: #c5c6cd;
+  --mb-tertiary-fixed: #c4e7ff;
+
+  background: var(--mb-background);
+  color: var(--mb-on-surface);
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.mb-privacy-page * {
+  box-sizing: border-box;
+}
+
+.mb-privacy-page h1,
+.mb-privacy-page h2,
+.mb-privacy-page h3,
+.mb-privacy-page h4 {
+  font-family: "Manrope", "Inter", sans-serif;
+  margin: 0;
+}
+
+.mb-privacy-page p {
+  margin: 0;
+}
+
+.mb-privacy-page button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+.mb-privacy-page .material-symbols-outlined {
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}
+
+/* ---------- Navbar (shared) ---------- */
+.mb-privacy-page .mb-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid #f1f5f9;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.mb-privacy-page .mb-nav__inner {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mb-privacy-page .mb-nav__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: var(--mb-primary);
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+
+.mb-privacy-page .mb-nav__logo {
+  width: auto;
+  height: 3rem;
+}
+
+.mb-privacy-page .mb-nav__links {
+  display: none;
+  align-items: center;
+  gap: 2rem;
+  font-family: "Manrope", sans-serif;
+  font-weight: 600;
+  font-size: 0.875rem;
+  letter-spacing: -0.01em;
+}
+
+.mb-privacy-page .mb-nav__link {
+  color: #475569;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.mb-privacy-page .mb-nav__link:hover {
+  color: var(--mb-secondary);
+}
+
+.mb-privacy-page .mb-nav__cta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.mb-privacy-page .mb-nav__login {
+  color: #475569;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  transition:
+    color 0.2s ease,
+    transform 0.1s ease;
+}
+
+.mb-privacy-page .mb-nav__login:hover {
+  color: var(--mb-primary);
+}
+
+.mb-privacy-page .mb-nav__get-started {
+  background: var(--mb-secondary);
+  color: #fff;
+  padding: 0.625rem 1.5rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25);
+  transition: opacity 0.2s ease;
+}
+
+.mb-privacy-page .mb-nav__get-started:hover {
+  opacity: 0.9;
+}
+
+@media (min-width: 768px) {
+  .mb-privacy-page .mb-nav__links {
+    display: flex;
+  }
+}
+
+/* ---------- Body ---------- */
+.mb-privacy-page .mb-privacy__body {
+  padding-top: 4rem;
+  flex: 1;
+}
+
+.mb-privacy-page .mb-privacy__header {
+  background: #0f172a;
+  padding: 5rem 1.5rem;
+}
+
+.mb-privacy-page .mb-privacy__header-inner {
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+.mb-privacy-page .mb-privacy__title {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+  margin-bottom: 1rem;
+}
+
+.mb-privacy-page .mb-privacy__subtitle {
+  font-size: 1.125rem;
+  color: #94a3b8;
+}
+
+@media (min-width: 768px) {
+  .mb-privacy-page .mb-privacy__title {
+    font-size: 3rem;
+  }
+}
+
+/* ---------- Main layout ---------- */
+.mb-privacy-page .mb-privacy__main {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+
+.mb-privacy-page .mb-privacy__aside {
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.mb-privacy-page .mb-privacy__sticky {
+  position: sticky;
+  top: 7rem;
+}
+
+.mb-privacy-page .mb-privacy__toc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-left: 1px solid #e2e8f0;
+}
+
+.mb-privacy-page .mb-privacy__toc-link {
+  padding: 0.5rem 0 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #64748b;
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  margin-left: -1px;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.mb-privacy-page .mb-privacy__toc-link:hover {
+  color: var(--mb-on-surface);
+  border-color: #cbd5e1;
+}
+
+.mb-privacy-page .mb-privacy__toc-link--active {
+  color: var(--mb-secondary);
+  border-color: var(--mb-secondary);
+}
+
+.mb-privacy-page .mb-privacy__help {
+  margin-top: 3rem;
+  padding: 1.5rem;
+  background: rgba(109, 245, 225, 0.1);
+  border-radius: 0.5rem;
+  border: 1px solid rgba(13, 148, 136, 0.2);
+}
+
+.mb-privacy-page .mb-privacy__help-tag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--mb-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-bottom: 0.5rem;
+}
+
+.mb-privacy-page .mb-privacy__help-text {
+  font-size: 0.875rem;
+  color: #475569;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.mb-privacy-page .mb-privacy__help-link {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--mb-primary);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-color: var(--mb-secondary);
+  transition: color 0.2s ease;
+}
+
+.mb-privacy-page .mb-privacy__help-link:hover {
+  color: var(--mb-secondary);
+}
+
+.mb-privacy-page .mb-privacy__article {
+  flex: 1;
+  max-width: 50rem;
+  background: #fff;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  border: 1px solid #f1f5f9;
+  padding: 2rem;
+}
+
+.mb-privacy-page .mb-privacy__section {
+  margin-bottom: 3rem;
+}
+
+.mb-privacy-page .mb-privacy__section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--mb-primary-container);
+  margin-bottom: 1.5rem;
+}
+
+.mb-privacy-page .mb-privacy__subheading {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--mb-primary-container);
+  margin-bottom: 1rem;
+}
+
+.mb-privacy-page .mb-privacy__paragraph {
+  color: #475569;
+  line-height: 1.7;
+  margin-bottom: 1rem;
+}
+
+.mb-privacy-page .mb-privacy__list {
+  list-style: disc;
+  padding-left: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  color: #475569;
+}
+
+.mb-privacy-page .mb-privacy__list-label {
+  font-weight: 600;
+  color: var(--mb-on-surface);
+}
+
+.mb-privacy-page .mb-privacy__cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.mb-privacy-page .mb-privacy__card {
+  padding: 1.25rem;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 0.25rem;
+}
+
+.mb-privacy-page .mb-privacy__card-icon {
+  color: var(--mb-secondary);
+  margin-bottom: 0.75rem;
+  display: block;
+}
+
+.mb-privacy-page .mb-privacy__card-title {
+  font-weight: 600;
+  color: var(--mb-on-surface);
+  margin-bottom: 0.5rem;
+}
+
+.mb-privacy-page .mb-privacy__card-text {
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.mb-privacy-page .mb-privacy__callout {
+  background: var(--mb-primary-container);
+  padding: 1.5rem;
+  border-radius: 0.25rem;
+  color: #cbd5e1;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.mb-privacy-page .mb-privacy__callout-icon {
+  color: var(--mb-tertiary-fixed);
+  flex-shrink: 0;
+}
+
+.mb-privacy-page .mb-privacy__feedback {
+  margin-top: 3rem;
+  padding-top: 3rem;
+  border-top: 1px solid #f1f5f9;
+  text-align: center;
+}
+
+.mb-privacy-page .mb-privacy__feedback-prompt {
+  color: #94a3b8;
+  font-size: 0.875rem;
+  margin-bottom: 1.5rem;
+  font-style: italic;
+}
+
+.mb-privacy-page .mb-privacy__feedback-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.mb-privacy-page .mb-privacy__feedback-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  color: #475569;
+  background: #fff;
+  transition: background 0.2s ease;
+}
+
+.mb-privacy-page .mb-privacy__feedback-btn:hover {
+  background: #f8fafc;
+}
+
+.mb-privacy-page .mb-privacy__feedback-btn .material-symbols-outlined {
+  font-size: 1.125rem;
+}
+
+@media (min-width: 768px) {
+  .mb-privacy-page .mb-privacy__main {
+    flex-direction: row;
+    gap: 3rem;
+  }
+  .mb-privacy-page .mb-privacy__aside {
+    width: 250px;
+  }
+  .mb-privacy-page .mb-privacy__article {
+    padding: 3rem;
+  }
+  .mb-privacy-page .mb-privacy__cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---------- Footer (shared) ---------- */
+.mb-privacy-page .mb-footer {
+  background: #0f172a;
+  color: #2dd4bf;
+  padding: 3rem 2rem;
+}
+
+.mb-privacy-page .mb-footer__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  max-width: 80rem;
+  margin: 0 auto;
+  font-family: "Inter", sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+.mb-privacy-page .mb-footer__col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mb-privacy-page .mb-footer__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.mb-privacy-page .mb-footer__logo {
+  width: auto;
+  height: 3rem;
+}
+
+.mb-privacy-page .mb-footer__copy {
+  color: #94a3b8;
+  line-height: 1.6;
+}
+
+.mb-privacy-page .mb-footer__heading {
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 0.5rem;
+}
+
+.mb-privacy-page .mb-footer__link {
+  color: #94a3b8;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.mb-privacy-page .mb-footer__link:hover {
+  color: #fff;
+}
+
+.mb-privacy-page .mb-footer__socials {
+  display: flex;
+  gap: 1rem;
+}
+
+.mb-privacy-page .mb-footer__social {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  background: #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #cbd5e1;
+  text-decoration: none;
+  transition: background 0.2s ease;
+}
+
+.mb-privacy-page .mb-footer__social:hover {
+  background: var(--mb-secondary);
+  color: #fff;
+}
+
+.mb-privacy-page .mb-footer__social-icon {
+  font-size: 0.875rem;
+}
+
+.mb-privacy-page .mb-footer__note {
+  color: #64748b;
+  margin-top: 1rem;
+}
+
+@media (min-width: 768px) {
+  .mb-privacy-page .mb-footer__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

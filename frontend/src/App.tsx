@@ -1,9 +1,10 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import ScrollToTop from "./router/ScrollToTop";
 import LoginPage from "./pages/authentication/LoginPage";
 import RegisterPage from "./pages/authentication/RegisterPage";
 import ForgotPasswordPage from "./pages/authentication/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/authentication/ResetPasswordPage";
-import OAuthRedirectPage from "./pages/authentication/OAuthRedirectPage"; // Thêm import
+import OAuthRedirectPage from "./pages/authentication/OAuthRedirectPage";
 import StudentDashboard from "./pages/leaner/StudentDashboard";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -32,13 +33,18 @@ import MockPaymentPage from "./pages/leaner/MockPaymentPage";
 import LearnerSidebarLayout from "./layouts/LearnerSidebarLayout";
 import Authentication from "./router/Authentication";
 import LandingPage from "./pages/LandingPage";
+import PrivacyPage from "./pages/PrivacyPage";
+import ContactUsPage from "./pages/ContactUsPage";
 import SystemStatusOrb from "./components/SystemStatusOrb";
 
 export default function App() {
   return (
     <>
+      <ScrollToTop />
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/contact" element={<ContactUsPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
