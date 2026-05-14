@@ -53,6 +53,13 @@ export default class LessonResource {
   })
   review_status: string;
 
+  @Column({
+    type: 'enum',
+    enum: ['add', 'update', 'delete'],
+    default: 'add',
+  })
+  review_decision: string;
+
   @Column({ type: 'text', nullable: true })
   review_reason: string;
 

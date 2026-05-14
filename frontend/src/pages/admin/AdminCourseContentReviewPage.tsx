@@ -15,6 +15,7 @@ type LessonResource = {
   mime_type: string | null;
   size_bytes: number | null;
   review_status: "pending" | "approved" | "rejected";
+  review_decision?: "add" | "update" | "delete";
   review_reason: string | null;
   created_at: string;
   is_resubmitted?: boolean;

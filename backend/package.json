@@ -14,6 +14,8 @@
     "db:sync": "npx ts-node lib/sync-db.ts sync",
     "db:drop": "npx ts-node lib/sync-db.ts drop",
     "db:help": "npx ts-node lib/sync-db.ts",
+    "stt:backfill": "npx ts-node lib/backfill-youtube-stt.ts",
+    "stt:backfill:video": "npx ts-node lib/backfill-uploaded-video-stt.ts",
     "admin": "npx ts-node lib/create-admin.ts",
     "admin:create": "npx ts-node lib/create-admin.ts"
   },
@@ -26,6 +28,7 @@
     "axios": "^1.3.4",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
+    "bullmq": "^5.76.6",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "cloudinary": "^2.9.0",

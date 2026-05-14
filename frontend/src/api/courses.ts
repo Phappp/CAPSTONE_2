@@ -18,6 +18,7 @@ export const COURSES_API = {
   myReviewTimeline: (id: number | string) => `${COURSES_API_BASE}/${id}/review-timeline`,
   myRejectedResources: (id: number | string) => `${COURSES_API_BASE}/${id}/rejected-resources`,
   myPendingResources: (id: number | string) => `${COURSES_API_BASE}/${id}/pending-resources`,
+  myApprovedResources: (id: number | string) => `${COURSES_API_BASE}/${id}/approved-resources`,
   detail: (id: number | string) => `${COURSES_API_BASE}/${id}`,
   /** GV: thống kê tổng quan một khóa học (biểu đồ, enrollment, …). */
   managerOverview: (id: number | string) => `${COURSES_API_BASE}/${id}/manager-overview`,
@@ -26,6 +27,7 @@ export const COURSES_API = {
   update: (id: number | string) => `${COURSES_API_BASE}/${id}`,
   setStatus: (id: number | string) => `${COURSES_API_BASE}/${id}/status`,
   softDelete: (id: number | string) => `${COURSES_API_BASE}/${id}`,
+  hardDelete: (id: number | string) => `${COURSES_API_BASE}/${id}/permanent`,
   contentTree: (id: number | string) => `${COURSES_API_BASE}/${id}/content`,
   // Learner view (must be enrolled)
   learning: (id: number | string) => `${COURSES_API_BASE}/${id}/learning`,
@@ -33,6 +35,9 @@ export const COURSES_API = {
   leaderboard: (id: number | string) => `${COURSES_API_BASE}/${id}/leaderboard`,
   lessonHeartbeat: (id: number | string, lessonId: number | string) => `${COURSES_API_BASE}/${id}/lessons/${lessonId}/progress`,
   completeLesson: (id: number | string, lessonId: number | string) => `${COURSES_API_BASE}/${id}/lessons/${lessonId}/complete`,
+  lessonSummary: (id: number | string, lessonId: number | string) => `${COURSES_API_BASE}/${id}/lessons/${lessonId}/summary`,
+  requestLessonSummary: (id: number | string, lessonId: number | string) => `${COURSES_API_BASE}/${id}/lessons/${lessonId}/summary/request`,
+  regenerateLessonSummary: (id: number | string, lessonId: number | string) => `${COURSES_API_BASE}/${id}/lessons/${lessonId}/summary/regenerate`,
   // Course manager: completion rules + learner tracking
   completionRules: (id: number | string) => `${COURSES_API_BASE}/${id}/completion-rules`,
   learnersProgress: (id: number | string) => `${COURSES_API_BASE}/${id}/learners/progress`,
@@ -75,6 +80,8 @@ export const COURSES_API = {
   /** Giảng viên: điểm quiz theo học viên */
   quizLearnerScores: (courseId: number | string, lessonId: number | string) =>
     `${COURSES_API_BASE}/${courseId}/lessons/${lessonId}/quiz/learner-scores`,
+  quizAttemptDetail: (courseId: number | string, lessonId: number | string, attemptId: number | string) =>
+    `${COURSES_API_BASE}/${courseId}/lessons/${lessonId}/quiz/attempts/${attemptId}`,
   uploadCourseThumbnail: () => `${COURSES_API_BASE}/thumbnails/upload`,
    // NEW: Catalog & Enrollment endpoints
   catalog: `${COURSES_API_BASE}/catalog`,
@@ -85,5 +92,7 @@ export const COURSES_API = {
   myEnrollments: `${COURSES_API_BASE}/my-enrollments`,
   // Backward-compatible alias (avoid breaking older code paths)
   myEnrolled: `${COURSES_API_BASE}/my-enrollments`,
+  // Learning activity for dashboard
+  myLearningActivity: `${COURSES_API_BASE}/my/learning-activity`,
 } as const;
 

@@ -102,6 +102,14 @@ export default class BankQuestion {
     /** True nếu câu hỏi do AI sinh. */
     is_ai_generated: boolean;
 
+    @Column({ type: 'int', nullable: true })
+    /** Giới hạn số ký tự câu trả lời (nullable, null = không giới hạn). */
+    max_length: number | null;
+
+    @Column({ type: 'text', nullable: true })
+    /** Hướng dẫn chấm điểm cho câu hỏi tự luận/trả lời ngắn (nullable). */
+    grading_notes: string | null;
+
     @CreateDateColumn()
     /** Thời điểm tạo. */
     created_at: Date;

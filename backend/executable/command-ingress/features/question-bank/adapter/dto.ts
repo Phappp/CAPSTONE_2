@@ -91,6 +91,15 @@ export class AddBankQuestionBody extends RequestDto {
     @IsString()
     explanation?: string;
 
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    max_length?: number;
+
+    @IsOptional()
+    @IsString()
+    grading_notes?: string;
+
     bank_id: number;
     user_id: number;
 
@@ -104,6 +113,8 @@ export class AddBankQuestionBody extends RequestDto {
         this.points = body?.points != null ? Number(body.points) : undefined;
         this.options = Array.isArray(body?.options) ? body.options : undefined;
         this.explanation = body?.explanation != null ? String(body.explanation) : undefined;
+        this.max_length = body?.max_length != null ? Number(body.max_length) : undefined;
+        this.grading_notes = body?.grading_notes != null ? String(body.grading_notes) : undefined;
         this.bank_id = bankId;
         this.user_id = userId;
     }
@@ -174,6 +185,15 @@ export class UpdateBankQuestionBody extends RequestDto {
     @IsString()
     explanation?: string;
 
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    max_length?: number;
+
+    @IsOptional()
+    @IsString()
+    grading_notes?: string;
+
     constructor(body: any) {
       super();
       if (body?.question_type != null) this.question_type = String(body.question_type);
@@ -184,6 +204,8 @@ export class UpdateBankQuestionBody extends RequestDto {
       if (body?.points != null) this.points = Number(body.points);
       if (Array.isArray(body?.options)) this.options = body.options;
       if (body?.explanation != null) this.explanation = String(body.explanation);
+      if (body?.max_length != null) this.max_length = Number(body.max_length);
+      if (body?.grading_notes != null) this.grading_notes = String(body.grading_notes);
     }
 }
 
@@ -202,8 +224,8 @@ export class GenerateBankQuestionsAiBody extends RequestDto {
     difficulty?: 'easy' | 'medium' | 'hard';
 
     @IsOptional()
-    @IsIn(['multiple_choice', 'true_false', 'mixed'])
-    question_type?: 'multiple_choice' | 'true_false' | 'mixed';
+    @IsIn(['multiple_choice', 'true_false', 'short_answer', 'mixed'])
+    question_type?: 'multiple_choice' | 'true_false' | 'short_answer' | 'mixed';
 
     @IsOptional()
     @IsString()
@@ -229,7 +251,15 @@ export class GenerateBankQuestionsAiBody extends RequestDto {
       }
       if (body?.question_type != null) {
         const t = String(body.question_type).toLowerCase();
-        this.question_type = t === 'true_false' || t === 'mixed' ? t : 'multiple_choice';
+        if (t === 'true_false') {
+          this.question_type = 'true_false';
+        } else if (t === 'mixed') {
+          this.question_type = 'mixed';
+        } else if (t === 'short_answer') {
+          this.question_type = 'short_answer';
+        } else {
+          this.question_type = 'multiple_choice';
+        }
       }
       if (body?.extra_instructions != null) this.extra_instructions = String(body.extra_instructions);
       if (body?.attachment_name != null) this.attachment_name = String(body.attachment_name);

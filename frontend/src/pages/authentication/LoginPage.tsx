@@ -16,13 +16,13 @@ import {
 import "./LoginPage.css";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, remember: savedRemember, user: savedUser } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(savedRemember ? (savedUser?.email ?? "") : "");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
+  const [remember, setRemember] = useState(savedRemember);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

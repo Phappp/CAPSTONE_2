@@ -3,6 +3,7 @@ import toast, { Toaster } from "react-hot-toast";
 import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import { ASSIGNMENTS_API } from "../api/assignments";
+import { QUESTION_BANKS_API } from "../api/questionBanks";
 import LessonRichTextEditor from "./LessonRichTextEditor";
 import "./AssignmentEditor.css";
 
@@ -221,6 +222,19 @@ export default function AssignmentEditor(props: {
   const [assignmentKind, setAssignmentKind] = useState<AssignmentKind>("file_prompt");
   const [shortAnswerLines, setShortAnswerLines] = useState<string[]>([""]);
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<number>(30);
+
+  /** Các chế độ tạo câu hỏi trả lời ngắn */
+  const [shortAnswerCreateMode, setShortAnswerCreateMode] = useState<"manual" | "question_bank" | "csv" | "ai">("manual");
+  const [shortAnswerBanks, setShortAnswerBanks] = useState<Array<{ id: number; name: string }>>([]);
+  const [selectedShortAnswerBankId, setSelectedShortAnswerBankId] = useState<number | "">("");
+  const [shortAnswerBankQuestions, setShortAnswerBankQuestions] = useState<Array<{ id: number; question_text: string }>>([]);
+  const [pickedShortAnswerBankQuestionIds, setPickedShortAnswerBankQuestionIds] = useState<number[]>([]);
+  const [pendingShortAnswerFromBank, setPendingShortAnswerFromBank] = useState<string[]>([]);
+  const [csvImportErrors, setCsvImportErrors] = useState<string[]>([]);
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiTopic, setAiTopic] = useState("");
+  const [aiQuestionCount, setAiQuestionCount] = useState(5);
+  const [aiExtraInstructions, setAiExtraInstructions] = useState("");
 
   const [preview, setPreview] = useState<AssignmentPreview | null>(null);
   const [saving, setSaving] = useState(false);
@@ -569,6 +583,69 @@ export default function AssignmentEditor(props: {
     }
   }, [assignmentKind, selectedFiles.length]);
 
+  // Load question banks when in short_answer mode with question_bank mode
+  useEffect(() => {
+    if (assignmentKind !== "short_answer" || shortAnswerCreateMode !== "question_bank") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${url}${QUESTION_BANKS_API.list()}`, { headers: authHeaders });
+        if (cancelled) return;
+        if (!res.ok) throw new Error("Lỗi tải ngân hàng câu hỏi.");
+        const data = await res.json();
+        const banks: Array<{ id: number; name: string }> = (data.rows || data || []).map((b: any) => ({
+          id: Number(b.id),
+          name: String(b.name || ""),
+        }));
+        if (!cancelled) setShortAnswerBanks(banks);
+      } catch (e: any) {
+        if (!cancelled) toast.error(e?.message || "Lỗi tải ngân hàng câu hỏi.");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [assignmentKind, shortAnswerCreateMode, authHeaders]);
+
+  // Load questions from selected bank
+  useEffect(() => {
+    if (assignmentKind !== "short_answer" || shortAnswerCreateMode !== "question_bank") return;
+    if (!selectedShortAnswerBankId) {
+      setShortAnswerBankQuestions([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${url}${QUESTION_BANKS_API.questions(Number(selectedShortAnswerBankId))}`, { headers: authHeaders });
+        if (cancelled) return;
+        if (!res.ok) throw new Error("Lỗi tải câu hỏi.");
+        const data = await res.json();
+        const questions: Array<{ id: number; question_text: string }> = (data.questions || data || []).map((q: any) => ({
+          id: Number(q.id),
+          question_text: String(q.question_text || ""),
+        }));
+        if (!cancelled) setShortAnswerBankQuestions(questions);
+      } catch (e: any) {
+        if (!cancelled) toast.error(e?.message || "Lỗi tải câu hỏi.");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [assignmentKind, shortAnswerCreateMode, selectedShortAnswerBankId, authHeaders]);
+
+  // Listen for question bank pick messages (similar to ManualQuizEditor)
+  useEffect(() => {
+    if (assignmentKind !== "short_answer" || shortAnswerCreateMode !== "question_bank") return;
+    const onPickMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || data.source !== "question-bank-pick") return;
+      const questions: string[] = (data.questions || []).map((q: any) => String(q.question_text || "").trim()).filter(Boolean);
+      if (!questions.length) return;
+      setPendingShortAnswerFromBank((prev) => [...prev, ...questions]);
+      toast.success(`Đã nhận ${questions.length} câu hỏi từ Question Bank (tạm).`);
+    };
+    window.addEventListener("message", onPickMessage);
+    return () => window.removeEventListener("message", onPickMessage);
+  }, [assignmentKind, shortAnswerCreateMode]);
+
   useEffect(() => {
     if (!preview) return;
     if (editing) return;
@@ -624,6 +701,75 @@ export default function AssignmentEditor(props: {
     return texts.map((question_text) => ({ question_text }));
   };
 
+  const importShortAnswerFromBank = () => {
+    const picked = shortAnswerBankQuestions.filter((q) => pickedShortAnswerBankQuestionIds.includes(q.id));
+    if (!picked.length) {
+      toast.error("Vui lòng chọn ít nhất một câu hỏi.");
+      return;
+    }
+    setShortAnswerLines(picked.map((q) => q.question_text));
+    toast.success(`Đã thêm ${picked.length} câu hỏi từ ngân hàng.`);
+    setShortAnswerCreateMode("manual");
+  };
+
+  const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCsvImportErrors([]);
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      const errors: string[] = [];
+      const parsed: string[] = [];
+      lines.forEach((line, idx) => {
+        if (!line) return;
+        parsed.push(line);
+      });
+      if (!parsed.length) {
+        errors.push("File CSV trống hoặc không hợp lệ.");
+      }
+      setCsvImportErrors(errors);
+      if (parsed.length) {
+        setShortAnswerLines(parsed);
+        toast.success(`Đã nhập ${parsed.length} câu hỏi từ CSV.`);
+        setShortAnswerCreateMode("manual");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const generateShortAnswerByAI = async () => {
+    if (!aiTopic.trim()) {
+      toast.error("Vui lòng nhập chủ đề/tiêu đề.");
+      return;
+    }
+    setAiGenerating(true);
+    try {
+      const res = await fetch(`${url}/api/v1/ai/generate-short-answer-questions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({
+          topic: aiTopic.trim(),
+          count: Number(aiQuestionCount) || 5,
+          extra_instructions: aiExtraInstructions.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message || json?.error || "Lỗi khi tạo câu hỏi.");
+      const questions: string[] = json.questions || json.data || [];
+      if (!questions.length) throw new Error("Không nhận được câu hỏi nào từ AI.");
+      setShortAnswerLines(questions);
+      toast.success(`Đã tạo ${questions.length} câu hỏi bằng AI.`);
+      setShortAnswerCreateMode("manual");
+    } catch (err: any) {
+      toast.error(err?.message || "Lỗi khi tạo câu hỏi bằng AI.");
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
   const buildCreatePayload = () => {
     const passing = passingScore.trim() ? Number(passingScore) : null;
     return {
@@ -669,7 +815,7 @@ export default function AssignmentEditor(props: {
       );
       return;
     }
-    if (!effectiveAssignmentDescription) {
+    if (!effectiveAssignmentDescription && isFilePrompt) {
       toast.error(
         embeddedMode
           ? "Không tìm thấy mô tả bài học ở khối 1 để dùng làm mô tả/yêu cầu."
@@ -1196,38 +1342,131 @@ export default function AssignmentEditor(props: {
             <p style={{ fontSize: 13, color: "#6b7280", margin: "4px 0 10px" }}>
               Ít nhất một câu. Hệ thống sẽ gán id q1, q2, … theo thứ tự khi lưu.
             </p>
-            {shortAnswerLines.map((line, idx) => (
-              <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "flex-start" }}>
-                <span style={{ minWidth: 28, paddingTop: 8, color: "#6b7280" }}>{idx + 1}.</span>
-                <textarea
-                  rows={2}
-                  value={line}
-                  onChange={(e) =>
-                    setShortAnswerLines((prev) => prev.map((s, i) => (i === idx ? e.target.value : s)))
-                  }
-                  disabled={saving || readOnly}
-                  placeholder="Nội dung câu hỏi"
-                  style={{ flex: 1 }}
-                />
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  disabled={saving || readOnly || shortAnswerLines.length <= 1}
-                  onClick={() => setShortAnswerLines((prev) => prev.filter((_, i) => i !== idx))}
-                  style={{ marginTop: 4 }}
-                >
-                  Xóa
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+              <button type="button" className={`assignment-kind-btn ${shortAnswerCreateMode === "manual" ? "active" : ""}`} onClick={() => setShortAnswerCreateMode("manual")} disabled={saving || readOnly}>Thủ công</button>
+              <button type="button" className={`assignment-kind-btn ${shortAnswerCreateMode === "question_bank" ? "active" : ""}`} onClick={() => setShortAnswerCreateMode("question_bank")} disabled={saving || readOnly}>Từ Question Bank</button>
+              <button type="button" className={`assignment-kind-btn ${shortAnswerCreateMode === "csv" ? "active" : ""}`} onClick={() => setShortAnswerCreateMode("csv")} disabled={saving || readOnly}>Import CSV</button>
+              <button type="button" className={`assignment-kind-btn ${shortAnswerCreateMode === "ai" ? "active" : ""}`} onClick={() => setShortAnswerCreateMode("ai")} disabled={saving || readOnly}>Tạo bằng AI</button>
+            </div>
+
+            {/* Manual mode */}
+            {shortAnswerCreateMode === "manual" && (
+              <>
+                {shortAnswerLines.map((line, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "flex-start" }}>
+                    <span style={{ minWidth: 28, paddingTop: 8, color: "#6b7280" }}>{idx + 1}.</span>
+                    <textarea
+                      rows={2}
+                      value={line}
+                      onChange={(e) => setShortAnswerLines((prev) => prev.map((s, i) => (i === idx ? e.target.value : s)))}
+                      disabled={saving || readOnly}
+                      placeholder="Nội dung câu hỏi"
+                      style={{ flex: 1 }}
+                    />
+                    <button type="button" className="btn-secondary" disabled={saving || readOnly || shortAnswerLines.length <= 1} onClick={() => setShortAnswerLines((prev) => prev.filter((_, i) => i !== idx))} style={{ marginTop: 4 }}>Xóa</button>
+                  </div>
+                ))}
+                <button type="button" className="btn-secondary" disabled={saving || readOnly} onClick={() => setShortAnswerLines((prev) => [...prev, ""])}>Thêm câu</button>
+              </>
+            )}
+
+            {/* Question Bank mode */}
+            {shortAnswerCreateMode === "question_bank" && (
+              <div style={{ border: "1px dashed #cbd5e1", borderRadius: 10, padding: 16, background: "#f8fafc" }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                  <button type="button" className="btn-secondary" disabled={!selectedCourseId} onClick={() => {
+                    if (!selectedCourseId) return;
+                    const params = new URLSearchParams({ mode: "pick", question_type: "short_answer" });
+                    const contextKey = `qb-pick-sa:${selectedCourseId}:${lessonId || "na"}`;
+                    try {
+                      window.localStorage.setItem(contextKey, JSON.stringify({ questionKeys: shortAnswerLines.filter(Boolean), updatedAt: Date.now() }));
+                      params.set("contextKey", contextKey);
+                    } catch { /* noop */ }
+                    window.open(`/teacher/courses/${selectedCourseId}/question-banks?${params.toString()}`, "_blank");
+                  }}>
+                    Mở Question Bank để import câu hỏi
+                  </button>
+                </div>
+                {pendingShortAnswerFromBank.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <strong>Danh sách câu hỏi tạm ({pendingShortAnswerFromBank.length})</strong>
+                      <button type="button" className="btn-secondary" style={{ padding: "4px 8px" }} onClick={() => setPendingShortAnswerFromBank([])}>Xóa danh sách tạm</button>
+                    </div>
+                    <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: 8, padding: 8 }}>
+                      {pendingShortAnswerFromBank.map((q, idx) => (
+                        <div key={`pending-sa-${idx}`} style={{ padding: "6px 4px", borderBottom: "1px solid #f1f5f9", fontSize: 13 }}>
+                          {idx + 1}. {q}
+                        </div>
+                      ))}
+                    </div>
+                    <button type="button" className="btn-primary" style={{ marginTop: 12 }} onClick={() => {
+                      setShortAnswerLines((prev) => [...prev.filter(Boolean), ...pendingShortAnswerFromBank]);
+                      setPendingShortAnswerFromBank([]);
+                      toast.success("Đã thêm câu hỏi tạm vào danh sách.");
+                      setShortAnswerCreateMode("manual");
+                    }}>
+                      Chèn vào danh sách
+                    </button>
+                  </div>
+                )}
+                <hr style={{ margin: "16px 0" }} />
+                {/* <div className="field">
+                  <label>Hoặc chọn trực tiếp từ ngân hàng có sẵn</label>
+                  <select value={selectedShortAnswerBankId} onChange={(e) => { setSelectedShortAnswerBankId(e.target.value ? Number(e.target.value) : ""); setPickedShortAnswerBankQuestionIds([]); }} disabled={saving || readOnly}>
+                    <option value="">-- Chọn ngân hàng câu hỏi --</option>
+                    {shortAnswerBanks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                </div> */}
+                {shortAnswerBankQuestions.length > 0 && (
+                  <div className="field" style={{ marginTop: 12 }}>
+                    <label>Chọn câu hỏi</label>
+                    <div style={{ maxHeight: 300, overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: 8, padding: 8, marginTop: 6 }}>
+                      {shortAnswerBankQuestions.map((q) => (
+                        <label key={q.id} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 4px", cursor: "pointer", borderBottom: "1px solid #f1f5f9" }}>
+                          <input type="checkbox" checked={pickedShortAnswerBankQuestionIds.includes(q.id)} onChange={(e) => {
+                            setPickedShortAnswerBankQuestionIds((prev) => e.target.checked ? [...prev, q.id] : prev.filter((id) => id !== q.id));
+                          }} style={{ marginTop: 3 }} />
+                          <span style={{ fontSize: 13 }}>{q.question_text}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {csvImportErrors.length > 0 && csvImportErrors.map((err, i) => <p key={i} style={{ color: "#ef4444", fontSize: 13 }}>{err}</p>)}
+                {/* <button type="button" className="btn-primary" style={{ marginTop: 12 }} disabled={saving || readOnly || !selectedShortAnswerBankId || !pickedShortAnswerBankQuestionIds.length} onClick={importShortAnswerFromBank}>Thêm vào danh sách</button> */}
+              </div>
+            )}
+
+            {/* CSV mode */}
+            {shortAnswerCreateMode === "csv" && (
+              <div style={{ border: "1px dashed #cbd5e1", borderRadius: 10, padding: 16, background: "#f8fafc" }}>
+                <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 12 }}>Mỗi dòng trong file CSV là một câu hỏi. Mỗi dòng nên chỉ chứa nội dung câu hỏi (không có tiêu đề cột).</p>
+                <input type="file" accept=".csv,.txt" onChange={handleCsvImport} disabled={saving || readOnly} />
+                {csvImportErrors.length > 0 && csvImportErrors.map((err, i) => <p key={i} style={{ color: "#ef4444", fontSize: 13 }}>{err}</p>)}
+              </div>
+            )}
+
+            {/* AI mode */}
+            {shortAnswerCreateMode === "ai" && (
+              <div style={{ border: "1px dashed #cbd5e1", borderRadius: 10, padding: 16, background: "#f8fafc" }}>
+                <div className="field">
+                  <label>Chủ đề / Tiêu đề *</label>
+                  <input type="text" value={aiTopic} onChange={(e) => setAiTopic(e.target.value)} placeholder="VD: Toán lớp 4 - Phép cộng phân số" disabled={saving || readOnly || aiGenerating} />
+                </div>
+                <div className="field">
+                  <label>Số câu hỏi</label>
+                  <input type="number" min={1} max={20} value={aiQuestionCount} onChange={(e) => setAiQuestionCount(Number(e.target.value))} disabled={saving || readOnly || aiGenerating} style={{ maxWidth: 120 }} />
+                </div>
+                <div className="field">
+                  <label>Hướng dẫn thêm (tùy chọn)</label>
+                  <textarea rows={2} value={aiExtraInstructions} onChange={(e) => setAiExtraInstructions(e.target.value)} placeholder="VD: Câu hỏi mức độ dễ, có công thức toán" disabled={saving || readOnly || aiGenerating} />
+                </div>
+                <button type="button" className="btn-primary" disabled={saving || readOnly || aiGenerating || !aiTopic.trim()} onClick={generateShortAnswerByAI}>
+                  {aiGenerating ? "Đang tạo..." : "Tạo câu hỏi"}
                 </button>
               </div>
-            ))}
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={saving || readOnly}
-              onClick={() => setShortAnswerLines((prev) => [...prev, ""])}
-            >
-              Thêm câu
-            </button>
+            )}
           </div>
         ) : null}
 
