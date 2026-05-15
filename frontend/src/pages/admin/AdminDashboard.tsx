@@ -1252,7 +1252,7 @@ function KeysPanel({
         </div>
 
         <div className="keys-list">
-          <div className="key-card" style={{ background: "#f8fafc", border: "1px dashed #cbd5e1" }}>
+          <div className="key-card">
             <div style={{ display: "grid", gap: 8 }}>
               <input className="filter-input" placeholder="Nhãn (vd: key dự phòng #2)" value={newOpenRouterKeyLabel} onChange={(e) => setNewOpenRouterKeyLabel(e.target.value)} />
               <input className="filter-input" type="password" placeholder="Nhập khóa API OpenRouter" value={newOpenRouterApiKey} onChange={(e) => setNewOpenRouterApiKey(e.target.value)} />
@@ -1267,7 +1267,7 @@ function KeysPanel({
                 <div className="key-header">
                   <span className={`key-badge ${healthStatus}`}>{healthStatus.toUpperCase()}</span>
                   <span className="key-id">#{k.id}</span>
-                  {k.label && <span style={{ fontSize: 13, color: "#334155" }}>{k.label}</span>}
+                  {k.label && <span className="key-label">{k.label}</span>}
                 </div>
                 <div className="key-details">
                   <code className="key-preview">{k.key_preview}</code>
