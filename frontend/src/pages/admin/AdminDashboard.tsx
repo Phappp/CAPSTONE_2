@@ -108,7 +108,6 @@ export default function AdminDashboard() {
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [search, setSearch] = useState("");
-  const [fuzzy, setFuzzy] = useState(false);
   const [role, setRole] = useState<RoleFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [includeDeleted, setIncludeDeleted] = useState(false);
@@ -165,12 +164,12 @@ export default function AdminDashboard() {
 
   // Queries
   const usersQuery = useQuery({
-    queryKey: ["admin-users", { page, limit, search: fuzzy ? "" : search, role, status, includeDeleted }],
+    queryKey: ["admin-users", { page, limit, search, role, status, includeDeleted }],
     queryFn: () =>
       apiGetAdminUsers({
         page,
         limit,
-        search: fuzzy ? undefined : search.trim() || undefined,
+        search: search.trim() || undefined,
         role,
         status,
         includeDeleted,
@@ -287,14 +286,7 @@ export default function AdminDashboard() {
   const pagination = usersQuery.data?.pagination;
   const statistics = usersQuery.data?.statistics;
 
-  const displayedUsers = useMemo(() => {
-    if (!fuzzy || !search.trim()) return users;
-    const q = normalize(search);
-    return users.filter((u) => {
-      const hay = normalize(`${u.email} ${u.full_name || ""} ${u.id}`);
-      return fuzzyMatch(hay, q);
-    });
-  }, [users, fuzzy, search]);
+  const displayedUsers = users;
 
   const selectedOnPage = useMemo(() => {
     const ids = new Set(displayedUsers.map((u) => u.id));
@@ -343,7 +335,7 @@ export default function AdminDashboard() {
       showNotice("Nhập tên bộ lọc để lưu.");
       return;
     }
-    const value = { search, role, status, includeDeleted, fuzzy };
+    const value = { search, role, status, includeDeleted };
     setSavedFilters((prev) => {
       const without = prev.filter((f) => f.name !== name);
       return [...without, { name, value }];
@@ -360,7 +352,6 @@ export default function AdminDashboard() {
     setRole(found.value.role);
     setStatus(found.value.status);
     setIncludeDeleted(found.value.includeDeleted);
-    setFuzzy(found.value.fuzzy);
   };
 
   const deleteSavedFilter = (name: string) => {
@@ -803,27 +794,25 @@ export default function AdminDashboard() {
                   <Download size={14} /> XUẤT FILE
                 </button>
               </div>
-              <div className="filters-row">
-              <label className="filter-checkbox">
-                  <input type="checkbox" checked={fuzzy} onChange={(e) => { setPage(1); setFuzzy(e.target.checked); }} />
-                  <span>Tìm gần đúng</span>
-                </label>
-                <select className="filter-select" value={role} onChange={(e) => { setPage(1); setRole(e.target.value as RoleFilter); }} style={{ width: 140 }}>
-                  <option value="all">Tất cả vai trò</option>
+              <div className="filters-row" style={{ flexWrap: "wrap", gap: 8 }}>
+                <select className="filter-select" value={role} onChange={(e) => { setPage(1); setRole(e.target.value as RoleFilter); }} style={{ minWidth: 80 }}>
+                  <option value="all">Vai trò</option>
                   <option value="learner">Học viên</option>
                   <option value="course_manager">Giảng viên</option>
-                  <option value="admin">Quản trị viên</option>
+                  <option value="admin">Quản trị</option>
                 </select>
-                <select className="filter-select" value={status} onChange={(e) => { setPage(1); setStatus(e.target.value as StatusFilter); }} style={{ width: 140 }}>
-                  <option value="all">Tất cả trạng thái</option>
+                <select className="filter-select" value={status} onChange={(e) => { setPage(1); setStatus(e.target.value as StatusFilter); }} style={{ minWidth: 80 }}>
+                  <option value="all">Trạng thái</option>
                   <option value="active">Hoạt động</option>
                   <option value="pending">Chờ duyệt</option>
                   <option value="banned">Bị khóa</option>
                   <option value="deleted">Đã xóa</option>
                 </select>
+              </div>
+              <div className="filters-row">
                 <label className="filter-checkbox">
                   <input type="checkbox" checked={includeDeleted} onChange={(e) => { setPage(1); setIncludeDeleted(e.target.checked); }} />
-                  <span>Gồm cả đã xóa</span>
+                  <span>Gồm đã xóa</span>
                 </label>
               </div>
               <div className="filters-row">
@@ -1483,8 +1472,8 @@ function ManagerVerificationsPanel({
               <input className="filter-input" placeholder="Tìm theo email / họ tên" value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} style={{ paddingLeft: 36, width: "100%" }} />
             </div>
           </div>
-          <select className="filter-select" value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }} style={{ width: 140 }}>
-            <option value="all">Tất cả trạng thái</option>
+          <select className="filter-select" value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }} style={{ minWidth: 80, width: "auto", textAlign: "center" }}>
+            <option value="all">Tất cả</option>
             <option value="pending">Chờ duyệt</option>
             <option value="verified">Đã xác minh</option>
             <option value="rejected">Từ chối</option>
