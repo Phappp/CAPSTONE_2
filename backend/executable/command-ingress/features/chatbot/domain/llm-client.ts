@@ -58,6 +58,8 @@ export class OpenRouterClient {
                 headers: {
                     Authorization: `Bearer ${apiKey}`,
                     'Content-Type': 'application/json',
+                    'HTTP-Referer': process.env.APP_URL || 'https://e-learning.com',
+                    'X-Title': process.env.APP_NAME || 'e-Learning Platform',
                 },
                 body: JSON.stringify({
                     model,
