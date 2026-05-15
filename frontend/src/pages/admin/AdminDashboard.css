@@ -1,52 +1,59 @@
 /* ============================================================
-   AdminDashboard.css - Dark Cyberpunk NOC Theme
-   Part 1: Variables, Reset, Layout, Sidebar, Header
+   AdminDashboard.css - Modern Dark Admin Theme
    ============================================================ */
 
 :root {
-  /* Color System - Teal/Cyan Cyberpunk */
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-tertiary: #0f172a;
-  --bg-card: #1e293b;
-  --bg-card-hover: #283548;
+  /* ========================================
+     MODERN COLOR SYSTEM - 2026 Design Trends
+     ======================================== */
   
-  /* Accent Colors */
+  /* Background Colors */
+  --bg-primary: #0a0f1a;
+  --bg-secondary: #111827;
+  --bg-tertiary: #1a2332;
+  --bg-card: #141c2b;
+  --bg-card-hover: #1c2640;
+  --bg-elevated: #1e293b;
+  
+  /* Accent Colors - Teal Primary (#14b8a6) */
   --accent-primary: #14b8a6;
-  --accent-secondary: #38bdf8;
-  --accent-glow: rgba(20, 184, 166, 0.6);
-  --accent-glow-soft: rgba(20, 184, 166, 0.3);
+  --accent-secondary: #818cf8;
+  --accent-tertiary: #f472b6;
+  --accent-glow: rgba(20, 184, 166, 0.5);
+  --accent-glow-soft: rgba(20, 184, 166, 0.15);
   
   /* Text Colors */
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-accent: #14b8a6;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #8892a4;
+  --text-accent: #5eead4;
   
   /* Border Colors */
-  --border-default: #1e293b;
-  --border-accent: rgba(20, 184, 166, 0.5);
-  --border-hover: rgba(20, 184, 166, 0.8);
+  --border-default: #2d3a4f;
+  --border-accent: rgba(20, 184, 166, 0.4);
+  --border-hover: rgba(20, 184, 166, 0.7);
   
   /* Status Colors */
-  --status-success: #14b8a6;
+  --status-success: #10b981;
   --status-warning: #f59e0b;
   --status-error: #ef4444;
   --status-info: #38bdf8;
   
   /* Shadows */
-  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px var(--accent-glow-soft);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 24px rgba(20, 184, 166, 0.25);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.5);
   
   /* Typography */
-  --font-mono: 'Roboto Mono', 'Fira Code', monospace;
+  --font-mono: 'JetBrains Mono', 'Roboto Mono', 'Fira Code', monospace;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-heading: 'Manrope', 'Inter', sans-serif;
+  --font-heading: 'Plus Jakarta Sans', 'Manrope', 'Inter', sans-serif;
   
   /* Spacing */
-  --radius-sm: 0.25rem;
+  --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
   
   /* Transitions */
   --transition-fast: 150ms ease;
@@ -74,18 +81,18 @@ body {
   line-height: 1.6;
 }
 
-/* Grid Background Pattern */
+/* Grid Background Pattern - Subtle Modern */
 .admin-dashboard {
   display: flex;
   min-height: 100vh;
   background-color: var(--bg-primary);
   background-image: 
-    radial-gradient(circle at 1px 1px, rgba(30, 41, 59, 0.8) 1px, transparent 0);
-  background-size: 24px 24px;
+    radial-gradient(circle at 1px 1px, rgba(100, 116, 139, 0.15) 1px, transparent 0);
+  background-size: 32px 32px;
 }
 
 /* ============================================================
-   TOP NAVBAR
+   TOP NAVBAR - Glassmorphism Modern
    ============================================================ */
 .top-navbar {
   position: fixed;
@@ -98,11 +105,11 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 0 1.5rem;
-  background: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border-accent);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  background: rgba(10, 15, 26, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border-default);
+  box-shadow: var(--shadow-card);
 }
 
 .top-nav-left {
@@ -263,7 +270,7 @@ body {
 }
 
 /* ============================================================
-   SIDEBAR
+   SIDEBAR - Modern Elevated
    ============================================================ */
 .admin-sidebar {
   position: fixed;
@@ -274,7 +281,7 @@ body {
   display: flex;
   flex-direction: column;
   z-index: 50;
-  background: rgba(15, 23, 42, 0.98);
+  background: var(--bg-secondary);
   border-right: 1px solid var(--border-default);
   transition: width var(--transition-normal), transform var(--transition-normal);
 }
@@ -331,12 +338,14 @@ body {
   font-size: 1.25rem;
 }
 
-.sidebar-info h3 {
+.sidebar-logo {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 800;
-  color: var(--accent-primary);
+  color: #14b8a6;
   line-height: 1.2;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 12px rgba(20, 184, 166, 0.3);
 }
 
 .sidebar-info p {
@@ -502,7 +511,7 @@ body {
 }
 
 /* ============================================================
-   MAIN CONTENT
+   MAIN CONTENT - Accent Title Style
    ============================================================ */
 .admin-main {
   flex: 1;
@@ -527,9 +536,10 @@ body {
   font-family: var(--font-heading);
   font-size: 1.75rem;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--accent-primary);
   margin: 0 0 0.25rem;
   letter-spacing: -0.02em;
+  text-shadow: 0 0 20px rgba(20, 184, 166, 0.3);
 }
 
 .main-subtitle {
