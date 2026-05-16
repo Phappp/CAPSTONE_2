@@ -51,8 +51,8 @@ const MindBridgeFooter: React.FC = () => (
       <div className="mb-footer__col">
         <p className="mb-footer__heading">Company</p>
         <Link className="mb-footer__link" to="/privacy">Privacy Policy</Link>
-        <Link className="mb-footer__link" to="/">Terms of Service</Link>
-        <Link className="mb-footer__link" to="/">Cookie Policy</Link>
+        <Link className="mb-footer__link" to="/privacy">Terms of Service</Link>
+        <Link className="mb-footer__link" to="/privacy">Cookie Policy</Link>
         <Link className="mb-footer__link" to="/contact">Contact Us</Link>
       </div>
       <div className="mb-footer__col">

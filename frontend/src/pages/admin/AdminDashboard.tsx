@@ -81,6 +81,7 @@ import {
   PendingReviewCourse,
 } from "../../services/adminUsersClient";
 import "./AdminDashboard.css";
+import transLogo from "../../assets/trans-logo-2.png";
 
 type RoleFilter = "all" | "learner" | "course_manager" | "admin";
 type StatusFilter = "all" | "active" | "pending" | "banned" | "deleted";
@@ -709,7 +710,13 @@ export default function AdminDashboard() {
 
       <aside className={`admin-sidebar ${sidebarCollapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`}>
         <div className="sidebar-header">
-          {!sidebarCollapsed && <span className="sidebar-logo">MindBridge</span>}
+          {!sidebarCollapsed && <span className="sidebar-logo">
+            <img 
+              alt="MindBridge Logo"
+              className="logo-img"
+              src={transLogo}
+            />
+          </span>}
           <button className="sidebar-toggle" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
             {sidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
