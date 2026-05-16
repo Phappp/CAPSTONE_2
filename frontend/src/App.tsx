@@ -59,6 +59,7 @@ import PrivacyPage from "./pages/landing/PrivacyPage";
 import ContactUsPage from "./pages/landing/ContactUsPage";
 
 import LearnerSidebarLayout from "./layouts/LearnerSidebarLayout";
+import MarketingSidebarLayout from "./layouts/MarketingSidebarLayout";
 import SystemStatusOrb from "./components/SystemStatusOrb";
 // import TeacherLiveSessionPage from "./pages/teacher/LiveSessionPage";
 // import LiveSessionViewer from "./pages/leaner/LiveSessionViewer";
@@ -78,13 +79,15 @@ export default function App() {
         <Route path="/oauth/redirect" element={<OAuthRedirectPage />} />
         <Route path="/mfa-verify" element={<MFAVerificationPage />} />
 
-        {/* Public marketing pages */}
-        <Route path="/courses" element={<CoursesCatalogPage />} />
-        <Route path="/courses/:slug" element={<CourseDetailPage />} />
-        <Route path="/instructors" element={<InstructorsDirectoryPage />} />
-        <Route path="/instructors/:id" element={<InstructorDetailPage />} />
-        <Route path="/pricing" element={<PricingPlansPage />} />
-        <Route path="/resources" element={<ResourcesHubPage />} />
+        {/* Public marketing pages — with sidebar layout */}
+        <Route element={<MarketingSidebarLayout />}>
+          <Route path="/courses" element={<CoursesCatalogPage />} />
+          <Route path="/courses/:slug" element={<CourseDetailPage />} />
+          <Route path="/instructors" element={<InstructorsDirectoryPage />} />
+          <Route path="/instructors/:id" element={<InstructorDetailPage />} />
+          <Route path="/pricing" element={<PricingPlansPage />} />
+          <Route path="/resources" element={<ResourcesHubPage />} />
+        </Route>
 
       <Route path="/student/dashboard" element={<Navigate to="/learner/dashboard" replace />} />
       <Route

@@ -11,6 +11,13 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
   router.route('/catalog').get(optionalAuthorizedUser, controller.listPublishedCourses.bind(controller));
   router.route('/catalog/:slug').get(optionalAuthorizedUser, controller.getPublishedCourseBySlug.bind(controller));
   router.route('/catalog/:slug/prerequisite-graph').get(optionalAuthorizedUser, controller.getPublishedCoursePrerequisiteGraphBySlug.bind(controller));
+  router.route('/instructors/catalog').get(optionalAuthorizedUser, controller.listInstructorsCatalog.bind(controller));
+
+  // Course review routes
+  router.route('/:id/reviews').post(requireAuthorizedUser, controller.createReview.bind(controller));
+  router.route('/:id/reviews').get(optionalAuthorizedUser, controller.listReviews.bind(controller));
+  router.route('/:id/reviews/:reviewId').patch(requireAuthorizedUser, controller.updateReview.bind(controller));
+  router.route('/:id/reviews/:reviewId').delete(requireAuthorizedUser, controller.deleteReview.bind(controller));
 
   // Enrollment routes
   router.route('/:id/enroll').post(requireAuthorizedUser, controller.enrollCourse.bind(controller));

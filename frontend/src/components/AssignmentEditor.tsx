@@ -589,7 +589,7 @@ export default function AssignmentEditor(props: {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${url}${QUESTION_BANKS_API.list()}`, { headers: authHeaders });
+        const res = await fetch(`${url}${QUESTION_BANKS_API.list}`, { headers: authHeaders });
         if (cancelled) return;
         if (!res.ok) throw new Error("Lỗi tải ngân hàng câu hỏi.");
         const data = await res.json();
@@ -615,7 +615,7 @@ export default function AssignmentEditor(props: {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${url}${QUESTION_BANKS_API.questions(Number(selectedShortAnswerBankId))}`, { headers: authHeaders });
+        const res = await fetch(`${url}${QUESTION_BANKS_API.listQuestions(Number(selectedShortAnswerBankId))}`, { headers: authHeaders });
         if (cancelled) return;
         if (!res.ok) throw new Error("Lỗi tải câu hỏi.");
         const data = await res.json();

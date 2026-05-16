@@ -13,6 +13,7 @@ import { url } from '../../baseUrl';
 import { COURSES_API } from '../../api/courses';
 import { getAccessToken } from '../../utils/authStorage';
 import { useAuth } from '../../contexts/Auth';
+import { DEFAULT_COURSE_THUMB } from '../../utils/imageFallback';
 import './LearnerDashboard.css';
 
 interface MetricCard {
@@ -102,8 +103,6 @@ const deadlines: DeadlineItem[] = [
 ];
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const FALLBACK_THUMB =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuAuZHK_1as0p3iK3Vya7PWldwkBpCA6Aocycr5rCZVHotymC882jcZMXmNR9bkhl5ZTHGSXHebk-UU9hDqQjhpv2WeR7dePUcaTNxLYnikRda2AAWR2GL2iPRmAER14-d7R1ImMNdfWV6TYeYMAEeqO3UdYLWON1dHik0wtUAPo4twRuFu1zxVkw1Ft0CvEyR9Fdt7rTWMAAIZ2hzo0_k3a0B-Xaa35ILZ0uBYJwUIxFbs-X08JgPow7sUthofSB9iLdnIFrwGlBQ';
 
 const LearnerDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -257,7 +256,7 @@ const LearnerDashboard: React.FC = () => {
           title: c.course_title,
           instructor: c.instructor_name || 'Course Instructor',
           progress: Math.round(c.progress_percent || 0),
-          image: c.course_thumbnail || FALLBACK_THUMB,
+          image: c.course_thumbnail || DEFAULT_COURSE_THUMB,
           courseId: c.course_id,
           slug: c.course_slug,
         };
@@ -427,7 +426,7 @@ const LearnerDashboard: React.FC = () => {
                 {courseCards.map((c) => (
                   <article key={c.key} className="ld-course-card">
                     <div className="ld-course-media">
-                      <img src={c.image} alt={c.title} className="ld-course-img" />
+                      <img src={c.image} alt={c.title} className="ld-course-img" onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_COURSE_THUMB; }} />
                       <span className="ld-course-pill">{c.module}</span>
                     </div>
 

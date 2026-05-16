@@ -94,5 +94,10 @@ export const COURSES_API = {
   myEnrolled: `${COURSES_API_BASE}/my-enrollments`,
   // Learning activity for dashboard
   myLearningActivity: `${COURSES_API_BASE}/my/learning-activity`,
+  // Instructors catalog
+  instructorsCatalog: `${COURSES_API_BASE}/instructors/catalog`,
+  // Course reviews
+  reviews: (id: number | string) => `${COURSES_API_BASE}/${id}/reviews`,
+  review: (id: number | string, reviewId: number | string) => `${COURSES_API_BASE}/${id}/reviews/${reviewId}`,
 } as const;
 

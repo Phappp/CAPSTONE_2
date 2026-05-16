@@ -29,6 +29,7 @@ import PaymentRevenueLedger from '../../../../../internal/model/payment_revenue_
 import OpenRouterKey from '../../../../../internal/model/openrouter_key';
 import OpenRouterSetting from '../../../../../internal/model/openrouter_setting';
 import AuditLog from '../../../../../internal/model/audit_log';
+import CourseReview from '../../../../../internal/model/course_review';
 import crypto from 'crypto';
 import env from '../../../utils/env';
 
@@ -103,6 +104,10 @@ import {
   LessonResourceReviewTimelineResult,
   LearningActivityResult,
   LearningActivityDayPoint,
+  InstructorCatalogResult,
+  InstructorCatalogItem,
+  CourseReviewItem,
+  CourseReviewListResult,
 } from '../types';
 import { AiSummaryService, LessonSummaryPayload, LessonSummarySourceType } from '../../ai-summary/types';
 
@@ -1513,6 +1518,23 @@ export class CourseServiceImpl implements CourseService {
         .where('ci.course_id = c.id');
     }, 'instructors');
 
+    // Add avg rating and rating count
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('AVG(cr.rating)', 'rating')
+        .from(CourseReview, 'cr')
+        .where('cr.course_id = c.id')
+        .andWhere('cr.is_visible = true');
+    }, 'rating');
+
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(*)', 'cnt')
+        .from(CourseReview, 'cr')
+        .where('cr.course_id = c.id')
+        .andWhere('cr.is_visible = true');
+    }, 'rating_count');
+
     // Check if user is enrolled
     if (subjectUserId) {
       qb.addSelect((subQb) => {
@@ -1574,6 +1596,9 @@ export class CourseServiceImpl implements CourseService {
         is_enrolled: r.is_enrolled,
         can_enroll: subjectUserId ? canEnrollByPrerequisite : true,
         instructors: r.instructors,
+        avg_rating: r.rating ? Number(r.rating) : null,
+        rating: r.rating ? Number(r.rating) : null,
+        rating_count: Number(r.rating_count ?? 0),
       };
       return mapToPublishedCourseListItem(row);
     });
@@ -1650,6 +1675,23 @@ export class CourseServiceImpl implements CourseService {
         .where('ci.course_id = c.id');
     }, 'instructors');
 
+    // Add avg rating and rating count
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('AVG(cr.rating)', 'rating')
+        .from(CourseReview, 'cr')
+        .where('cr.course_id = c.id')
+        .andWhere('cr.is_visible = true');
+    }, 'rating');
+
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(*)', 'cnt')
+        .from(CourseReview, 'cr')
+        .where('cr.course_id = c.id')
+        .andWhere('cr.is_visible = true');
+    }, 'rating_count');
+
     // Check if user is enrolled
     if (subjectUserId) {
       qb.addSelect((subQb) => {
@@ -1691,6 +1733,8 @@ export class CourseServiceImpl implements CourseService {
       lessons_count: Number(raw.lessons_count ?? 0),
       price: raw.c_price ?? raw.price,
       total_duration_minutes: raw.total_duration_minutes ? Number(raw.total_duration_minutes) : null,
+      rating: raw.rating ? Number(raw.rating) : null,
+      rating_count: Number(raw.rating_count ?? 0),
       is_enrolled: !!raw.enrollment,
       enrollment: safeJsonParse<any | null>(raw.enrollment, null),
       instructors: safeJsonParse<any[]>(raw.instructors, []),
@@ -1766,6 +1810,61 @@ export class CourseServiceImpl implements CourseService {
       .getOne();
     if (!root) throw new Error('Không tìm thấy khóa học.');
     return this.buildPrerequisiteGraph(root as any, subjectUserId, 'published');
+  }
+
+  async listInstructorsCatalog(): Promise<InstructorCatalogResult> {
+    const now = new Date();
+
+    // Get all users who are instructors (have teacher/course_manager/admin role)
+    // and are linked to at least one published course
+    const qb = AppDataSource.getRepository(User)
+      .createQueryBuilder('u')
+      .innerJoin(CourseInstructor, 'ci', 'ci.instructor_id = u.id')
+      .innerJoin(Course, 'c', 'c.id = ci.course_id')
+      .where(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      )
+      .andWhere('c.deleted_at IS NULL')
+      .groupBy('u.id');
+
+    // Add course count (published courses only)
+    qb.addSelect('COUNT(DISTINCT c.id)', 'course_count');
+
+    // Add total learners across all published courses
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(DISTINCT ce.user_id)', 'total_learners')
+        .from(CourseEnrollment, 'ce')
+        .innerJoin(Course, 'cc', 'cc.id = ce.course_id')
+        .where('cc.created_by = u.id')
+        .andWhere(
+          `(cc.status = :published OR (cc.status = :draft AND cc.publish_scheduled_at IS NOT NULL AND cc.publish_scheduled_at <= :now))`,
+          { published: 'published', draft: 'draft', now }
+        )
+        .andWhere('cc.deleted_at IS NULL');
+    }, 'total_learners');
+
+    const result = await qb.getRawAndEntities();
+    const raw = result.raw;
+
+    const MIN_COURSES_FOR_TOP_RATED = 2;
+
+    const items: InstructorCatalogItem[] = raw.map((r: any) => ({
+      id: r.u_id,
+      full_name: r.u_full_name,
+      avatar_url: r.u_avatar_url,
+      title: r.u_bio ? r.u_full_name.split(' ').slice(-1)[0] + ' Expert' : null,
+      bio: r.u_bio,
+      course_count: Number(r.course_count ?? 0),
+      total_learners: Number(r.total_learners ?? 0),
+      top_rated: Number(r.course_count ?? 0) >= MIN_COURSES_FOR_TOP_RATED,
+    }));
+
+    return {
+      items,
+      total: items.length,
+    };
   }
 
   // Enrollment methods
@@ -6133,5 +6232,187 @@ export class CourseServiceImpl implements CourseService {
     }
 
     return { daily_activity: dailyActivity };
+  }
+
+  async createCourseReview(
+    userId: number,
+    courseId: number,
+    rating: number,
+    comment: string | null
+  ): Promise<CourseReviewItem> {
+    const reviewRepo = AppDataSource.getRepository(CourseReview);
+    const courseRepo = AppDataSource.getRepository(Course);
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    const now = new Date();
+
+    if (rating < 1 || rating > 5) {
+      throw new Error('Rating must be between 1 and 5.');
+    }
+
+    // Check if course exists and is effectively published
+    const course = await courseRepo
+      .createQueryBuilder('c')
+      .where('c.id = :courseId', { courseId })
+      .andWhere('c.deleted_at IS NULL')
+      .andWhere(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      )
+      .getOne();
+
+    if (!course) {
+      throw new Error('Course not found.');
+    }
+
+    // Check if user is enrolled
+    const enrollment = await enrollmentRepo.findOne({
+      where: { user_id: userId, course_id: courseId },
+    });
+
+    if (!enrollment) {
+      throw new Error('You must be enrolled in this course to leave a review.');
+    }
+
+    // Check if user already reviewed this course
+    const existingReview = await reviewRepo.findOne({
+      where: { user_id: userId, course_id: courseId },
+    });
+
+    if (existingReview) {
+      throw new Error('You have already reviewed this course. Use update instead.');
+    }
+
+    const review = reviewRepo.create({
+      user_id: userId,
+      course_id: courseId,
+      rating,
+      comment: comment?.trim() || null,
+      is_visible: true,
+    });
+
+    await reviewRepo.save(review);
+
+    const userRepo = AppDataSource.getRepository(User);
+    const user = await userRepo.findOne({ where: { id: userId } });
+
+    return {
+      id: review.id,
+      user_id: userId,
+      user_full_name: String((user as any)?.full_name ?? ''),
+      user_avatar: (user as any)?.avatar_url ?? null,
+      rating: review.rating,
+      comment: review.comment,
+      created_at: new Date(review.created_at).toISOString(),
+    };
+  }
+
+  async listCourseReviews(
+    courseId: number,
+    page: number,
+    pageSize: number
+  ): Promise<CourseReviewListResult> {
+    const reviewRepo = AppDataSource.getRepository(CourseReview);
+    const actualPage = Math.max(1, Number(page || 1));
+    const actualPageSize = Math.min(50, Math.max(1, Number(pageSize || 10)));
+
+    // Get total and avg rating
+    const statsQb = reviewRepo
+      .createQueryBuilder('cr')
+      .select('COUNT(*)', 'cnt')
+      .addSelect('AVG(cr.rating)', 'avg_rating')
+      .where('cr.course_id = :courseId', { courseId })
+      .andWhere('cr.is_visible = true');
+
+    const stats = await statsQb.getRawOne();
+
+    const total = Number(stats?.cnt ?? 0);
+    const avgRating = stats?.avg_rating != null ? Number(stats.avg_rating) : null;
+
+    // Get paginated reviews with user info
+    const reviews = await reviewRepo
+      .createQueryBuilder('cr')
+      .innerJoinAndSelect('cr.user', 'u')
+      .where('cr.course_id = :courseId', { courseId })
+      .andWhere('cr.is_visible = true')
+      .orderBy('cr.created_at', 'DESC')
+      .skip((actualPage - 1) * actualPageSize)
+      .take(actualPageSize)
+      .getMany();
+
+    const items: CourseReviewItem[] = reviews.map((r) => ({
+      id: r.id,
+      user_id: r.user_id,
+      user_full_name: String((r.user as any)?.full_name ?? ''),
+      user_avatar: (r.user as any)?.avatar_url ?? null,
+      rating: r.rating,
+      comment: r.comment,
+      created_at: new Date(r.created_at).toISOString(),
+    }));
+
+    return {
+      items,
+      page: actualPage,
+      page_size: actualPageSize,
+      total,
+      avg_rating: avgRating,
+      rating_count: total,
+    };
+  }
+
+  async updateCourseReview(
+    reviewId: number,
+    userId: number,
+    rating: number,
+    comment: string | null
+  ): Promise<CourseReviewItem> {
+    const reviewRepo = AppDataSource.getRepository(CourseReview);
+
+    if (rating < 1 || rating > 5) {
+      throw new Error('Rating must be between 1 and 5.');
+    }
+
+    const review = await reviewRepo.findOne({ where: { id: reviewId } });
+
+    if (!review) {
+      throw new Error('Review not found.');
+    }
+
+    if (review.user_id !== userId) {
+      throw new Error('You can only update your own review.');
+    }
+
+    review.rating = rating;
+    review.comment = comment?.trim() || null;
+
+    await reviewRepo.save(review);
+
+    const userRepo = AppDataSource.getRepository(User);
+    const user = await userRepo.findOne({ where: { id: review.user_id } });
+
+    return {
+      id: review.id,
+      user_id: review.user_id,
+      user_full_name: String((user as any)?.full_name ?? ''),
+      user_avatar: (user as any)?.avatar_url ?? null,
+      rating: review.rating,
+      comment: review.comment,
+      created_at: new Date(review.created_at).toISOString(),
+    };
+  }
+
+  async deleteCourseReview(reviewId: number, userId: number): Promise<void> {
+    const reviewRepo = AppDataSource.getRepository(CourseReview);
+
+    const review = await reviewRepo.findOne({ where: { id: reviewId } });
+
+    if (!review) {
+      throw new Error('Review not found.');
+    }
+
+    if (review.user_id !== userId) {
+      throw new Error('You can only delete your own review.');
+    }
+
+    await reviewRepo.remove(review);
   }
 }

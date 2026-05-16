@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -79,22 +79,37 @@ const NAV_ITEMS: NavItem[] = [
 export default function LearnerSidebarLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
 
   const displayName =
     user?.full_name?.trim() || user?.email?.split('@')[0] || 'Learner';
   const avatarUrl = user?.avatar_url || undefined;
   const initial = displayName.charAt(0).toUpperCase();
 
+  const handleLogout = async () => {
+    setAvatarMenuOpen(false);
+    await logout();
+    navigate("/");
+  };
+
   return (
     <div className="learner-layout">
-      <aside className="learner-layout__sidebar">
+      <aside
+        className={`learner-layout__sidebar${sidebarOpen ? ' learner-layout__sidebar--open' : ''}`}
+        onMouseEnter={() => setSidebarOpen(true)}
+        onMouseLeave={() => setSidebarOpen(false)}
+      >
         <div className="learner-layout__brand">
-          <img
-            src={transLogo}
-            alt="MindBridge Logo"
-            className="learner-layout__brand-img"
-          />
+          <Link to="/">
+            <img
+              src={transLogo}
+              alt="MindBridge Logo"
+              className="learner-layout__brand-img"
+            />
+          </Link>
+          {sidebarOpen && <span className="learner-layout__brand-name">MindBridge</span>}
         </div>
 
         <nav className="learner-layout__nav">
@@ -104,8 +119,8 @@ export default function LearnerSidebarLayout() {
               <Link
                 key={item.key}
                 to={item.to}
-                className={`learner-layout__nav-link ${
-                  active ? 'learner-layout__nav-link--active' : ''
+                className={`learner-layout__nav-link${
+                  active ? ' learner-layout__nav-link--active' : ''
                 }`}
               >
                 <span className="learner-layout__nav-icon">{item.icon}</span>
@@ -132,27 +147,65 @@ export default function LearnerSidebarLayout() {
             <Bell size={18} strokeWidth={2.1} />
             <span className="learner-layout__icon-dot" />
           </button>
-          <button
-            type="button"
-            className="learner-layout__icon-btn"
-            aria-label="Settings"
-            onClick={() => navigate('/learner/settings')}
-          >
-            <Settings size={18} strokeWidth={2.1} />
-          </button>
 
-          <div
-            className="learner-layout__avatar"
-            onClick={() => navigate('/learner/settings')}
-            role="button"
-            tabIndex={0}
-          >
-            {avatarUrl ? (
-              <img alt="User Profile" src={avatarUrl} />
-            ) : (
-              <div className="learner-layout__avatar-fallback">{initial}</div>
+          <div className="learner-layout__avatar-wrapper">
+            <button
+              type="button"
+              className="learner-layout__avatar"
+              aria-label="User menu"
+              aria-haspopup="true"
+              onClick={() => setAvatarMenuOpen((v) => !v)}
+            >
+              {avatarUrl ? (
+                <img alt={displayName} src={avatarUrl} />
+              ) : (
+                <div className="learner-layout__avatar-fallback">{initial}</div>
+              )}
+            </button>
+
+            {avatarMenuOpen && (
+              <div className="learner-layout__avatar-dropdown">
+                <div className="learner-layout__dropdown-header">
+                  <div className="learner-layout__dropdown-name">{displayName}</div>
+                  <div className="learner-layout__dropdown-email">{user?.email}</div>
+                </div>
+                <div className="learner-layout__dropdown-divider" />
+                <button
+                  type="button"
+                  className="learner-layout__dropdown-item"
+                  onClick={() => { setAvatarMenuOpen(false); navigate('/learner/settings'); }}
+                >
+                  <User size={15} strokeWidth={2} />
+                  Profile Settings
+                </button>
+                <button
+                  type="button"
+                  className="learner-layout__dropdown-item"
+                  onClick={() => { setAvatarMenuOpen(false); navigate('/learner/workspace'); }}
+                >
+                  <BookOpen size={15} strokeWidth={2} />
+                  Learning Workspace
+                </button>
+                <div className="learner-layout__dropdown-divider" />
+                <button
+                  type="button"
+                  className="learner-layout__dropdown-item learner-layout__dropdown-item--danger"
+                  onClick={handleLogout}
+                >
+                  <Settings size={15} strokeWidth={2} />
+                  Logout
+                </button>
+              </div>
             )}
           </div>
+
+          {/* Click outside to close */}
+          {avatarMenuOpen && (
+            <div
+              className="learner-layout__overlay"
+              onClick={() => setAvatarMenuOpen(false)}
+            />
+          )}
         </div>
       </header>
 

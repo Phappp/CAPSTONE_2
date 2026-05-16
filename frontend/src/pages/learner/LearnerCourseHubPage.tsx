@@ -5,6 +5,7 @@ import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { useAuth } from "../../contexts/Auth";
 import PrerequisiteGraph, { type PrerequisiteGraphData } from "../../components/PrerequisiteGraph";
+import { DEFAULT_COURSE_THUMB } from "../../utils/imageFallback";
 import "./LearnerCourseHubPage.css";
 
 type CourseDetail = {
@@ -200,11 +201,11 @@ export default function LearnerCourseHubPage() {
         {course ? (
           <div className="learnerHub__hero">
             <div className="learnerHub__thumb">
-              {course.thumbnail_url ? (
-                <img src={course.thumbnail_url} alt={course.title} />
-              ) : (
-                <div className="learnerHub__thumbPlaceholder">Không có hình ảnh</div>
-              )}
+              <img
+                src={course.thumbnail_url || DEFAULT_COURSE_THUMB}
+                alt={course.title}
+                onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_COURSE_THUMB; }}
+              />
             </div>
 
             <div className="learnerHub__heroMain">
