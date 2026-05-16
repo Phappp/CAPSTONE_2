@@ -1,0 +1,622 @@
+/* Chatbot FAB Button */
+.chatbot-fab {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+    z-index: 1000;
+    transition: all 0.3s ease;
+}
+
+.chatbot-fab:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 24px rgba(99, 102, 241, 0.5);
+}
+
+/* Chatbot Modal */
+.chatbot-modal {
+    position: fixed;
+    bottom: 90px;
+    right: 24px;
+    width: 380px;
+    height: 560px;
+    max-height: calc(100vh - 120px);
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: slideUp 0.3s ease;
+    transition: all 0.3s ease;
+}
+
+/* Expanded Sidebar Mode */
+.chatbot-expanded {
+    width: 450px;
+    height: calc(100vh - 48px);
+    max-height: calc(100vh - 48px);
+    bottom: 24px;
+    right: 24px;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Chatbot Header */
+.chatbot-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+}
+
+.chatbot-header-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.chatbot-header-icon {
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+}
+
+.chatbot-header-info h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.chatbot-header-info span {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.chatbot-header-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.chatbot-action-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.chatbot-action-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.chatbot-close-btn,
+.chatbot-clear-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.chatbot-close-btn:hover,
+.chatbot-clear-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Chatbot Messages */
+.chatbot-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: #f8fafc;
+}
+
+.chatbot-message {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    max-width: 85%;
+}
+
+.chatbot-message.user-message {
+    flex-direction: row-reverse;
+    margin-left: auto;
+}
+
+.chatbot-message.bot-message {
+    flex-direction: row;
+}
+
+.chatbot-bot-icon,
+.chatbot-user-icon {
+    flex-shrink: 0;
+    padding: 6px;
+    border-radius: 50%;
+}
+
+.chatbot-bot-icon {
+    background: #6366f1;
+    color: white;
+}
+
+.chatbot-user-icon {
+    background: #e2e8f0;
+    color: #64748b;
+}
+
+.chatbot-message-content {
+    padding: 10px 14px;
+    border-radius: 12px;
+    line-height: 1.5;
+    font-size: 14px;
+}
+
+.user-message .chatbot-message-content {
+    background: #6366f1;
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.bot-message .chatbot-message-content {
+    background: white;
+    color: #1e293b;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.chatbot-message-content p {
+    margin: 0;
+    white-space: pre-wrap;
+}
+
+/* Chatbot Loading */
+.chatbot-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #64748b;
+    font-size: 14px;
+}
+
+.chatbot-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Quick Replies */
+.chatbot-quick-replies {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 16px;
+}
+
+.chatbot-quick-reply-btn {
+    padding: 8px 14px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    font-size: 13px;
+    color: #6366f1;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.chatbot-quick-reply-btn:hover {
+    background: #6366f1;
+    color: white;
+    border-color: #6366f1;
+}
+
+/* References - Course Cards */
+.chatbot-references {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 16px;
+}
+
+.chatbot-course-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    width: 100%;
+}
+
+.chatbot-course-card:hover {
+    border-color: #6366f1;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+    transform: translateY(-1px);
+}
+
+.chatbot-course-icon {
+    padding: 10px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border-radius: 10px;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.chatbot-course-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.chatbot-course-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+    line-height: 1.3;
+}
+
+.chatbot-course-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.chatbot-course-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    background: #f1f5f9;
+    color: #64748b;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.chatbot-course-free {
+    font-size: 11px;
+    padding: 2px 8px;
+    background: #dcfce7;
+    color: #16a34a;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.chatbot-course-cert {
+    font-size: 11px;
+    padding: 2px 8px;
+    background: #fef3c7;
+    color: #d97706;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.chatbot-course-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.chatbot-course-progress-bar {
+    flex: 1;
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.chatbot-course-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.chatbot-course-progress-text {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6366f1;
+    white-space: nowrap;
+}
+
+.chatbot-course-arrow {
+    color: #6366f1;
+    opacity: 0.6;
+}
+
+.chatbot-course-card:hover .chatbot-course-arrow {
+    opacity: 1;
+}
+
+/* Chat Input */
+.chatbot-input-form {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    background: white;
+    border-top: 1px solid #e2e8f0;
+}
+
+.chatbot-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 24px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.chatbot-input:focus {
+    border-color: #6366f1;
+}
+
+.chatbot-input:disabled {
+    background: #f8fafc;
+}
+
+.chatbot-send-btn {
+    padding: 10px;
+    background: #6366f1;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.chatbot-send-btn:hover:not(:disabled) {
+    background: #4f46e5;
+}
+
+.chatbot-send-btn:disabled {
+    background: #cbd5e1;
+    cursor: not-allowed;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .chatbot-modal {
+        bottom: 0;
+        right: 0;
+        width: 100%;
+        height: 100%;
+        max-height: 100%;
+        border-radius: 0;
+    }
+
+    .chatbot-expanded {
+        width: 100%;
+        height: 100%;
+        max-height: 100%;
+        bottom: 0;
+        right: 0;
+    }
+
+    .chatbot-fab {
+        bottom: 16px;
+        right: 16px;
+    }
+}
+
+/* ===== Roadmap Inline Styles ===== */
+.roadmap-inline {
+    padding: 8px 16px;
+}
+
+.roadmap-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+    border-radius: 12px;
+    margin-bottom: 12px;
+}
+
+.roadmap-icon {
+    color: #6366f1;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.roadmap-info {
+    flex: 1;
+}
+
+.roadmap-title {
+    margin: 0 0 4px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.roadmap-description {
+    margin: 0 0 8px 0;
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.4;
+}
+
+.roadmap-meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.roadmap-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #6366f1;
+    font-weight: 500;
+}
+
+.roadmap-steps {
+    display: flex;
+    flex-direction: column;
+}
+
+.roadmap-step-wrapper {
+    position: relative;
+}
+
+.roadmap-step {
+    padding: 12px;
+    border-radius: 10px;
+    border-left: 3px solid;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.roadmap-step:hover {
+    transform: translateX(2px);
+}
+
+.roadmap-step-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.roadmap-step-number {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #6366f1;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.roadmap-step-title {
+    flex: 1;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.roadmap-step-level {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.roadmap-step-description {
+    margin: 0 0 8px 0;
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.4;
+}
+
+.roadmap-step-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.roadmap-step-skills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.roadmap-skill-tag {
+    font-size: 10px;
+    padding: 2px 6px;
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.roadmap-skill-more {
+    font-size: 10px;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.roadmap-step-duration {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.roadmap-connector {
+    width: 2px;
+    height: 12px;
+    background: #e2e8f0;
+    margin-left: 20px;
+}
+
+.roadmap-footer {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed #e2e8f0;
+}
+
+.roadmap-tip {
+    margin: 0;
+    font-size: 11px;
+    color: #94a3b8;
+    text-align: center;
+}

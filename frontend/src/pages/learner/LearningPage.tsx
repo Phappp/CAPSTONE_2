@@ -1,7 +1,7 @@
 /* LearningPage.tsx */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, type KeyboardEvent, type MouseEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, type MouseEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft, BookOpen, AlertCircle, FileQuestion, ChevronLeft, ChevronRight } from "lucide-react";
 import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
@@ -73,6 +73,7 @@ type QuizInfoPreview = {
   passing_score: number | null;
   max_attempts: number;
   attempts_used: number;
+  questions_count: number;
 };
 
 type LessonSummaryData = {
@@ -173,6 +174,7 @@ export default function LearningPage() {
   } | null>(null);
   const [lessonModalLoading, setLessonModalLoading] = useState(false);
   const [lessonModalError, setLessonModalError] = useState<string | null>(null);
+  const [currentLessonId, setCurrentLessonId] = useState<number | null>(null);
   const [quizStartConfirm, setQuizStartConfirm] = useState<{ lessonId: number; title: string } | null>(null);
   const [quizInfoLoading, setQuizInfoLoading] = useState(false);
   const [quizInfoError, setQuizInfoError] = useState<string | null>(null);
@@ -1004,6 +1006,7 @@ export default function LearningPage() {
           passing_score: typeof quiz?.passing_score === "number" ? quiz.passing_score : null,
           max_attempts: Number(quiz?.max_attempts || 0),
           attempts_used: Number(quiz?.attempts_used || 0),
+          questions_count: Array.isArray(quiz?.questions) ? quiz.questions.length : 0,
         });
       } catch (e: any) {
         if (!alive) return;
@@ -1020,13 +1023,107 @@ export default function LearningPage() {
   }, [quizStartConfirm, courseId, token]);
 
   // ============================================
+  // Keyboard shortcuts for navigation (before conditional returns)
+  // ============================================
+  useEffect(() => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (!lessonModal) return;
+
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      if (e.key === 'Escape' && lessonModalNavPick) {
+        e.preventDefault();
+        setLessonModalNavPick(null);
+        return;
+      }
+
+      const lessonModalNav = lessonModalNavPick ?? lessonModal;
+      if (!lessonModalNav) return;
+
+      const courseModules = course?.modules;
+      if (!courseModules?.length) return;
+
+      const modules = courseModules;
+      const progressUnlocked = progress?.unlocked_lesson_ids ?? [];
+      const unlockedSet = new Set<number>(progressUnlocked.map((id: number) => Number(id)));
+
+      const orderedIds: number[] = [];
+      const moduleIdByLessonId = new Map<number, number>();
+      for (const mod of modules) {
+        const sortedLessons = [...(mod.lessons || [])].sort((a, b) => {
+          const oa = Number(a.order_index ?? 0);
+          const ob = Number(b.order_index ?? 0);
+          if (oa !== ob) return oa - ob;
+          return Number(a.id) - Number(b.id);
+        });
+        for (const le of sortedLessons) {
+          orderedIds.push(le.id);
+          moduleIdByLessonId.set(le.id, mod.id);
+        }
+      }
+
+      const currentIndex = orderedIds.indexOf(lessonModalNav.lessonId);
+      if (currentIndex < 0) return;
+
+      const prevId = currentIndex > 0 ? orderedIds[currentIndex - 1] : null;
+      const nextId = currentIndex < orderedIds.length - 1 ? orderedIds[currentIndex + 1] : null;
+      const prevModuleId = prevId ? moduleIdByLessonId.get(prevId) ?? null : null;
+      const nextModuleId = nextId ? moduleIdByLessonId.get(nextId) ?? null : null;
+
+      const checkCanOpen = (mId: number, lId: number | null): boolean => {
+        if (!lId) return false;
+        const m = modules.find((x) => x.id === mId);
+        if (!m) return false;
+        const idx = modules.findIndex((x) => x.id === mId);
+        const lids = (m.lessons || []).map((l) => l.id);
+        const moduleOpenAt = m.open_at ? new Date(m.open_at) : null;
+        const moduleNotOpenedYet = moduleOpenAt && moduleOpenAt.getTime() > Date.now();
+        const anyUnlocked = lids.some((id) => unlockedSet.has(id));
+        const moduleUnlocked = progress ? anyUnlocked : idx === 0;
+        if (!moduleUnlocked || moduleNotOpenedYet) return false;
+        if (progress && !unlockedSet.has(lId)) return false;
+        return true;
+      };
+
+      const completedIds = new Set<number>((progress?.completed_lesson_ids || []).map((x) => Number(x)));
+
+      const canGoPrev = Boolean(prevId && prevModuleId);
+      const canGoNext = Boolean(nextId && nextModuleId && (completedIds.has(nextId) || checkCanOpen(nextModuleId, nextId)));
+
+      if (e.key === 'ArrowLeft' && canGoPrev && !lessonModalNavPick) {
+        e.preventDefault();
+        const targetModuleId = moduleIdByLessonId.get(prevId!) ?? null;
+        if (prevId && targetModuleId) {
+          setLessonModal({ moduleId: targetModuleId, lessonId: prevId });
+          setCurrentLessonId(prevId);
+        }
+      } else if (e.key === 'ArrowRight' && canGoNext && !lessonModalNavPick) {
+        e.preventDefault();
+        const targetModuleId = moduleIdByLessonId.get(nextId!) ?? null;
+        if (nextId && targetModuleId) {
+          setLessonModal({ moduleId: targetModuleId, lessonId: nextId });
+          setCurrentLessonId(nextId);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lessonModal, lessonModalNavPick, setLessonModal, setCurrentLessonId, course, progress]);
+
+  // ============================================
   // CONDITIONAL RETURNS (after all hooks)
   // ============================================
   if (loading && !course) {
     return (
       <div className="learningPage">
         <div className="learningPage__topbar">
-          <button className="learningPage__back" onClick={() => navigate(`/my-courses/${courseId}/${slug || ""}`)} type="button" disabled>← Quay lại</button>
+          <button className="learningPage__back" onClick={() => navigate(`/my-courses/${courseId}/${slug || ""}`)} type="button" disabled>
+            <ArrowLeft size={16} />
+            <span>Quay lại</span>
+          </button>
           <AvatarMenu />
         </div>
         <div className="learningPage__loading">Đang tải bản đồ lộ trình...</div>
@@ -1038,7 +1135,10 @@ export default function LearningPage() {
     return (
       <div className="learningPage">
         <div className="learningPage__topbar">
-          <button className="learningPage__back" onClick={() => navigate(`/my-courses/${courseId}/${slug || ""}`)} type="button">← Quay lại</button>
+          <button className="learningPage__back" onClick={() => navigate(`/my-courses/${courseId}/${slug || ""}`)} type="button">
+            <ArrowLeft size={16} />
+            <span>Quay lại</span>
+          </button>
           <AvatarMenu />
         </div>
         <div className="learningPage__errorBox">
@@ -1165,13 +1265,13 @@ export default function LearningPage() {
   });
   const processingLessonId = actionableOrdered[0] ?? null;
   const nextLessonIdVal = actionableOrdered[1] ?? null;
-  const modalLessonIndex = lessonModal ? orderedLessonIds.indexOf(lessonModal.lessonId) : -1;
+  const modalLessonIndex = currentLessonId ? orderedLessonIds.indexOf(currentLessonId) : -1;
   const modalPrevLessonId = modalLessonIndex > 0 ? orderedLessonIds[modalLessonIndex - 1] : null;
   const modalNextLessonId = modalLessonIndex >= 0 && modalLessonIndex < orderedLessonIds.length - 1 ? orderedLessonIds[modalLessonIndex + 1] : null;
   const modalPrevModuleId = modalPrevLessonId ? lessonModuleIdById.get(modalPrevLessonId) ?? null : null;
   const modalNextModuleId = modalNextLessonId ? lessonModuleIdById.get(modalNextLessonId) ?? null : null;
-  const modalCanGoPrev = Boolean(modalPrevLessonId && modalPrevModuleId && canOpenLesson(modalPrevModuleId, modalPrevLessonId));
-  const modalCanGoNext = Boolean(modalNextLessonId && modalNextModuleId && canOpenLesson(modalNextModuleId, modalNextLessonId));
+  const modalCanGoPrev = Boolean(modalPrevLessonId != null);
+  const modalCanGoNext = Boolean(modalNextLessonId && modalNextModuleId && (completedSet.has(modalNextLessonId) || canOpenLesson(modalNextModuleId, modalNextLessonId)));
   const modalLesson = lessonModal ? lessonById.get(lessonModal.lessonId) || null : null;
 
   const formatSeconds = (input: number): string => {
@@ -1230,21 +1330,22 @@ export default function LearningPage() {
     setLessonModal({ moduleId, lessonId });
   };
 
-  const openLessonFromModalNav = (targetLessonId: number | null) => {
+  const navigateToPrevLesson = (targetLessonId: number | null) => {
     if (!targetLessonId) return;
     const targetModuleId = lessonModuleIdById.get(targetLessonId);
     if (!targetModuleId) return;
-    if (!canOpenLesson(targetModuleId, targetLessonId)) return;
+    setLessonModalNavPick(null);
+    setCurrentLessonId(targetLessonId);
+    const le = lessonById.get(targetLessonId);
     const assessmentKinds = lessonAssessmentKindsById.get(targetLessonId) || [];
     if (!assessmentKinds.length) {
       openLessonDetail(targetModuleId, targetLessonId);
       return;
     }
     if (assessmentKinds.length === 1) {
-      setLessonModalNavPick(null);
-      const le = lessonById.get(targetLessonId);
       if (assessmentKinds[0] === "quiz") {
         requestStartQuiz(targetLessonId, le?.title || "");
+        setLessonModal(null);
       } else {
         openLearnerAssessmentInNewTab("assignment", targetLessonId, le?.title || "");
         setLessonModal(null);
@@ -1259,20 +1360,87 @@ export default function LearningPage() {
     });
   };
 
+  const navigateToNextLesson = (targetLessonId: number | null) => {
+    if (!targetLessonId) return;
+    const targetModuleId = lessonModuleIdById.get(targetLessonId);
+    if (!targetModuleId) return;
+    const isCompleted = completedSet.has(targetLessonId);
+    if (!isCompleted && !canOpenLesson(targetModuleId, targetLessonId)) return;
+    setLessonModalNavPick(null);
+    setCurrentLessonId(targetLessonId);
+    const le = lessonById.get(targetLessonId);
+    const assessmentKinds = lessonAssessmentKindsById.get(targetLessonId) || [];
+    if (!assessmentKinds.length) {
+      openLessonDetail(targetModuleId, targetLessonId);
+      return;
+    }
+    if (assessmentKinds.length === 1) {
+      if (assessmentKinds[0] === "quiz") {
+        requestStartQuiz(targetLessonId, le?.title || "");
+        setLessonModal(null);
+      } else {
+        openLearnerAssessmentInNewTab("assignment", targetLessonId, le?.title || "");
+        setLessonModal(null);
+        void fetchProgress();
+      }
+      return;
+    }
+    setLessonModalNavPick({
+      moduleId: targetModuleId,
+      lessonId: targetLessonId,
+      options: assessmentKinds,
+    });
+  };
+
+  // EmptyState component for better UX
+  const EmptyState = ({
+    icon,
+    title,
+    description,
+  }: {
+    icon: React.ReactNode;
+    title: string;
+    description: string;
+  }) => (
+    <div className="learningPage__emptyState">
+      <div className="learningPage__emptyStateIcon">{icon}</div>
+      <h3 className="learningPage__emptyStateTitle">{title}</h3>
+      <p className="learningPage__emptyStateDescription">{description}</p>
+    </div>
+  );
+
+  // Skeleton loader for loading states
+  const SkeletonLoader = () => (
+    <div className="learningPage__lessonModalEmpty">
+      <div className="learningPage__skeleton learningPage__skeletonTitle" />
+      <div className="learningPage__skeleton learningPage__skeletonText" />
+      <div className="learningPage__skeleton learningPage__skeletonText" />
+      <div className="learningPage__skeleton learningPage__skeletonText" />
+    </div>
+  );
+
   // Render AI Summary content component
   const renderAISummary = () => {
     if (isSummaryCollapsed) return null;
     
     if (!modalLesson || modalLesson.lesson_type === "quiz" || modalLesson.lesson_type === "assignment") {
       return (
-        <div className="learningPage__empty">
-          Tóm tắt AI chỉ khả dụng cho bài học video hoặc văn bản
-        </div>
+        <EmptyState
+          icon={<BookOpen size={40} />}
+          title="Tóm tắt AI"
+          description="Tính năng tóm tắt AI chỉ khả dụng cho bài học video hoặc văn bản."
+        />
       );
     }
 
+    const summaryStatusClass = lessonSummary?.status === "pending" || lessonSummary?.status === "processing"
+      ? "learningPage__aiSummary--processing"
+      : lessonSummary?.status === "succeeded" && lessonSummary?.overall_summary
+        ? "learningPage__aiSummary--ready"
+        : "";
+
     return (
-      <div className="learningPage__aiSummary">
+      <div className={`learningPage__aiSummary ${summaryStatusClass}`}>
         <div className="learningPage__aiSummaryHeader">
           <div className="learningPage__aiSummaryTitle">
             Tóm tắt AI
@@ -1476,7 +1644,10 @@ export default function LearningPage() {
   return (
     <div className="learningPage">
       <div className="learningPage__topbar">
-        <button className="learningPage__back" onClick={() => navigate(`/my-courses/${courseId}/${slug || ""}`)} type="button">← Quay lại</button>
+        <button className="learningPage__back" onClick={() => navigate(`/my-courses/${courseId}/${slug || ""}`)} type="button">
+          <ArrowLeft size={16} />
+          <span>Quay lại</span>
+        </button>
         <div className="learningPage__topbarCenter">
           <div className="learningPage__title">{course.title}</div>
           <div className="learningPage__meta">
@@ -1567,6 +1738,7 @@ export default function LearningPage() {
                                     disabled={!canClick}
                                     onClick={() => {
                                       setLessonModalNavPick(null);
+                                      setCurrentLessonId(le.id);
                                       if (le.lesson_type === "quiz") {
                                         requestStartQuiz(le.id, le.title || "");
                                         setLessonModal(null);
@@ -1650,10 +1822,11 @@ export default function LearningPage() {
                         <div className="learningPage__quizSideDesc">{quizInfoPreview.description}</div>
                       ) : null}
                       <div className="learningPage__quizSideMeta">
+                        <div>Số câu hỏi: <b>{quizInfoPreview.questions_count}</b></div>
                         <div>Thời gian: <b>{quizInfoPreview.time_limit_minutes != null ? `${quizInfoPreview.time_limit_minutes} phút` : "Không giới hạn"}</b></div>
                         <div>Điểm đạt: <b>{quizInfoPreview.passing_score != null ? `${quizInfoPreview.passing_score}%` : "Không yêu cầu"}</b></div>
                         <div>
-                          Số lượt: <b>{Math.max(0, quizInfoPreview.max_attempts - quizInfoPreview.attempts_used)}</b>/{quizInfoPreview.max_attempts}
+                          Số lượt còn lại: <b>{Math.max(0, quizInfoPreview.max_attempts - quizInfoPreview.attempts_used)}</b>/{quizInfoPreview.max_attempts}
                         </div>
                       </div>
                       <div className="learningPage__quizSideActions">
@@ -1673,18 +1846,28 @@ export default function LearningPage() {
                             void fetchProgress();
                           }}
                         >
-                          Bắt đầu làm bài
+                          {quizInfoPreview.attempts_used >= quizInfoPreview.max_attempts
+                            ? "Xem kết quả"
+                            : "Bắt đầu làm bài"}
                         </button>
                       </div>
                     </>
                   ) : null}
                 </div>
               ) : !lessonModal ? (
-                <div className="learningPage__lessonModalEmpty">Chọn bài học ở cây bên trái để bắt đầu.</div>
+                <EmptyState
+                  icon={<BookOpen size={40} />}
+                  title="Bắt đầu học ngay"
+                  description="Chọn một bài học từ cây nội dung bên trái để bắt đầu hành trình học tập của bạn."
+                />
               ) : lessonModalLoading ? (
-                <div className="learningPage__lessonModalEmpty">Đang tải tài nguyên...</div>
+                <SkeletonLoader />
               ) : lessonModalError ? (
-                <div className="learningPage__lessonModalEmpty">{lessonModalError}</div>
+                <EmptyState
+                  icon={<AlertCircle size={40} />}
+                  title="Đã xảy ra lỗi"
+                  description={lessonModalError}
+                />
               ) : lessonModalResources.length > 0 ? (
                 <div className="learningPage__lessonModalResources">
   {lessonModalResources.map((resource, index) => {
@@ -1741,12 +1924,16 @@ export default function LearningPage() {
               ) : modalLesson?.description ? (
                 <div className="learningPage__lessonModalText">{modalLesson.description}</div>
               ) : (
-                <div className="learningPage__lessonModalEmpty">Bài học chưa có tài nguyên.</div>
+                <EmptyState
+                  icon={<FileQuestion size={40} />}
+                  title="Chưa có tài nguyên"
+                  description="Bài học này chưa có tài liệu hoặc video đính kèm."
+                />
               )}
 
               {lessonHtmlContent ? (
                 lessonHtmlLoading ? (
-                  <div className="learningPage__lessonModalEmpty">Đang tải nội dung...</div>
+                  <SkeletonLoader />
                 ) : lessonHtmlContent ? (
                   <div className="learningPage__lessonHtmlContent">
                     <div
@@ -1755,7 +1942,11 @@ export default function LearningPage() {
                     />
                   </div>
                 ) : (
-                  <div className="learningPage__lessonModalEmpty">Không có nội dung HTML.</div>
+                  <EmptyState
+                    icon={<FileQuestion size={40} />}
+                    title="Không có nội dung"
+                    description="Nội dung HTML không khả dụng cho bài học này."
+                  />
                 )
               ) : null}
             </div>
@@ -1766,11 +1957,16 @@ export default function LearningPage() {
                 className="learningPage__lessonModalNavBtn"
                 disabled={!modalCanGoPrev}
                 onClick={() => {
-                  openLessonFromModalNav(modalPrevLessonId);
+                  navigateToPrevLesson(modalPrevLessonId);
                 }}
+                aria-label="Bài học trước"
               >
-                ← Previous
+                <ChevronLeft size={18} />
+                <span>Bài trước</span>
               </button>
+              <span className="learningPage__lessonModalNavPosition">
+                {modalLessonIndex >= 0 ? `${modalLessonIndex + 1} / ${orderedLessonIds.length}` : ''}
+              </span>
               {lessonModalNavPick ? (
                 <div className="learningPage__lessonModalNavPick">
                   <span className="learningPage__lessonModalNavPickLabel">Chọn đích:</span>
@@ -1806,10 +2002,12 @@ export default function LearningPage() {
                 className="learningPage__lessonModalNavBtn"
                 disabled={!modalCanGoNext}
                 onClick={() => {
-                  openLessonFromModalNav(modalNextLessonId);
+                  navigateToNextLesson(modalNextLessonId);
                 }}
+                aria-label="Bài học tiếp theo"
               >
-                Next →
+                <span>Bài tiếp</span>
+                <ChevronRight size={18} />
               </button>
             </div>
           </article>
@@ -1850,6 +2048,7 @@ export default function LearningPage() {
         <div
           className={`learningPage__countdown ${heartbeat.can_complete ? "learningPage__countdown--ready" : ""}`}
           aria-hidden="true"
+          // data-tooltip={heartbeat.can_complete ? "Bài học hoàn thành!" : `Tiến độ xem: ${Math.round(100 - countdownRemainingPct)}%`}
           style={{ ["--pct" as any]: countdownRemainingPct }}
         >
           <svg className="learningPage__countdownSvg" viewBox="0 0 48 48">

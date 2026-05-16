@@ -21,9 +21,6 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
   router.route('/:id/leaderboard').get(requireAuthorizedUser, controller.getCourseLeaderboard.bind(controller));
   router.route('/:id/lessons/:lessonId/progress').post(requireAuthorizedUser, controller.addLessonProgressHeartbeat.bind(controller));
   router.route('/:id/lessons/:lessonId/complete').post(requireAuthorizedUser, controller.completeLesson.bind(controller));
-  router.route('/:id/lessons/:lessonId/summary').get(requireAuthorizedUser, controller.getLessonSummary.bind(controller));
-  router.route('/:id/lessons/:lessonId/summary/request').post(requireAuthorizedUser, controller.requestLessonSummary.bind(controller));
-  router.route('/:id/lessons/:lessonId/summary/regenerate').post(requireAuthorizedUser, controller.regenerateLessonSummary.bind(controller));
   router.route('/:id/lessons/:lessonId/quiz/take').get(requireAuthorizedUser, controller.getLearnerQuizTake.bind(controller));
   router.route('/:id/lessons/:lessonId/quiz/submit').post(requireAuthorizedUser, controller.submitLearnerQuizTake.bind(controller));
   /** Giảng viên: điểm quiz theo từng học viên (ghi danh). */
