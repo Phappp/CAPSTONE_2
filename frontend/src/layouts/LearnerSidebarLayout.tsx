@@ -12,6 +12,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { useAuth } from '../contexts/Auth';
+import Chatbot from '../components/Chatbot/Chatbot';
 import transLogo from '../assets/trans-logo-2.png';
 import './LearnerSidebarLayout.css';
 
@@ -158,6 +159,7 @@ export default function LearnerSidebarLayout() {
       <main className="learner-layout__content">
         <Outlet />
       </main>
+      <Chatbot />
     </div>
   );
 }
