@@ -8,17 +8,20 @@ import RegisterPage from "./pages/authentication/RegisterPage";
 import ForgotPasswordPage from "./pages/authentication/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/authentication/ResetPasswordPage";
 import OAuthRedirectPage from "./pages/authentication/OAuthRedirectPage";
+import MFAVerificationPage from "./pages/authentication/MFAVerificationPage";
 
-import StudentDashboard from "./pages/learner/StudentDashboard";
-import CoursesCatalogPage from "./pages/learner/CoursesCatalogPage";
-import CoursePublicDetailPage from "./pages/learner/CoursePublicDetailPage";
-import ProfilePage from "./pages/ProfilePage";
-import ProfileSecurityPage from "./pages/ProfileSecurityPage";
+import CoursesCatalogPage from "./pages/landing/CoursesCatalogPage";
+import CourseDetailPage from "./pages/landing/CourseDetailPage";
+import InstructorsDirectoryPage from "./pages/landing/InstructorsDirectoryPage";
+import InstructorDetailPage from "./pages/landing/InstructorDetailPage";
+import PricingPlansPage from "./pages/landing/PricingPlansPage";
+import ResourcesHubPage from "./pages/landing/ResourcesHubPage";
+import ProfilePage from "./pages/landing/ProfilePage";
+import ProfileSecurityPage from "./pages/landing/ProfileSecurityPage";
 import LearningPage from "./pages/learner/LearningPage";
 import LearnerCourseHubPage from "./pages/learner/LearnerCourseHubPage";
 import LearningModuleLessonsPage from "./pages/learner/LearningModuleLessonsPage";
 import LearnerQuizTakePage from "./pages/learner/LearnerQuizTakePage";
-import LearnerAssignmentSubmitPage from "./pages/learner/LearnerAssignmentSubmitPage";
 import PaymentResultPage from "./pages/learner/PaymentResultPage";
 import MockPaymentPage from "./pages/learner/MockPaymentPage";
 import LiveSessionViewer from "./pages/learner/LiveSessionViewer";
@@ -51,9 +54,9 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminCourseContentReviewPage from "./pages/admin/AdminCourseContentReviewPage";
 
 
-import LandingPage from "./pages/LandingPage";
-import PrivacyPage from "./pages/PrivacyPage";
-import ContactUsPage from "./pages/ContactUsPage";
+import LandingPage from "./pages/landing/LandingPage";
+import PrivacyPage from "./pages/landing/PrivacyPage";
+import ContactUsPage from "./pages/landing/ContactUsPage";
 
 import LearnerSidebarLayout from "./layouts/LearnerSidebarLayout";
 import SystemStatusOrb from "./components/SystemStatusOrb";
@@ -71,15 +74,17 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/oauth/redirect" element={<OAuthRedirectPage />} />
+        <Route path="/mfa-verify" element={<MFAVerificationPage />} />
 
-      <Route
-        path="/student/dashboard"
-        element={
-          <Authentication allowedRoles={["learner", "student"]}>
-            <LearnerDashboard />
-          </Authentication>
-        }
-      />
+        {/* Public marketing pages */}
+        <Route path="/courses" element={<CoursesCatalogPage />} />
+        <Route path="/courses/:slug" element={<CourseDetailPage />} />
+        <Route path="/instructors" element={<InstructorsDirectoryPage />} />
+        <Route path="/instructors/:id" element={<InstructorDetailPage />} />
+        <Route path="/pricing" element={<PricingPlansPage />} />
+        <Route path="/resources" element={<ResourcesHubPage />} />
+
+      <Route path="/student/dashboard" element={<Navigate to="/learner/dashboard" replace />} />
       <Route
         path="/teacher/dashboard"
         element={
@@ -106,31 +111,21 @@ export default function App() {
       />
 
       <Route
-        path="/learner/dashboard"
-        element={
-          <Authentication allowedRoles={["learner", "student"]}>
-            <LearnerDashboard />
-          </Authentication>
-        }
-      />
-
-      <Route
         element={
           <Authentication allowedRoles={["learner", "student"]}>
             <LearnerSidebarLayout />
           </Authentication>
         }
       >
-        <Route path="/courses" element={<CoursesCatalogPage />} />
-        <Route path="/courses/:slug" element={<CoursePublicDetailPage />} />
         <Route path="/learning/:id/:slug" element={<LearningPage />} />
         <Route path="/learning/:id/:slug/modules/:moduleId" element={<LearningModuleLessonsPage />} />
         <Route path="/my-courses/:id/:slug" element={<LearnerCourseHubPage />} />
-        <Route path="/learner/assignment/:lessonId" element={<LearnerAssignmentSubmitPage />} />
+        <Route path="/learner/assignment/:lessonId" element={<AssignmentSubmission />} />
         <Route path="/mock-payment" element={<MockPaymentPage />} />
         <Route path="/payment-result" element={<PaymentResultPage />} />
 
         {/* New learner experience pages — standard endpoints */}
+        <Route path="/learner/dashboard" element={<LearnerDashboard />} />
         <Route path="/learner/my-courses" element={<MyCoursePage />} />
         <Route path="/learner/certificates" element={<MyCertificates />} />
         <Route path="/learner/workspace" element={<LearningWorkspace />} />

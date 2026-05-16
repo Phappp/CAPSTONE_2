@@ -1,15 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  GraduationCap,
   Award,
-  User,
-  BookOpen,
-  UploadCloud,
-  Video,
-  Bell,
-  Settings,
   Filter,
   Sparkles,
   LayoutGrid,
@@ -24,7 +16,6 @@ import {
   MessagesSquare,
   Trophy,
   TrendingUp,
-  ArrowUpRight,
   Loader2,
 } from 'lucide-react';
 import { url } from '../../baseUrl';
@@ -32,14 +23,6 @@ import { COURSES_API } from '../../api/courses';
 import { getAccessToken } from '../../utils/authStorage';
 import { useAuth } from '../../contexts/Auth';
 import './MyCertificates.css';
-
-interface NavItem {
-  key: string;
-  label: string;
-  icon: React.ReactNode;
-  to: string;
-  active?: boolean;
-}
 
 interface EnrolledCourse {
   id: number;
@@ -88,16 +71,6 @@ interface MilestoneItem {
   locked?: boolean;
 }
 
-const navItems: NavItem[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} strokeWidth={2.1} />, to: '/learner/dashboard' },
-  { key: 'my-courses', label: 'My Courses', icon: <GraduationCap size={20} strokeWidth={2.1} />, to: '/learner/my-courses' },
-  { key: 'certificates', label: 'Certificates', icon: <Award size={20} strokeWidth={2.1} />, to: '/learner/certificates', active: true },
-  { key: 'profile', label: 'Profile', icon: <User size={20} strokeWidth={2.1} />, to: '/learner/settings' },
-  { key: 'workspace', label: 'Learning Workspace', icon: <BookOpen size={20} strokeWidth={2.1} />, to: '/learner/workspace' },
-  { key: 'assignments', label: 'Assignments', icon: <UploadCloud size={20} strokeWidth={2.1} />, to: '/learner/assignments' },
-  { key: 'live', label: 'Live Session', icon: <Video size={20} strokeWidth={2.1} />, to: '/learner/schedule' },
-];
-
 const ICON_VARIANTS: Array<{
   icon: React.ReactNode;
   tone: CertificateItem['iconTone'];
@@ -127,7 +100,6 @@ const MyCertificates: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const displayName = user?.full_name?.trim() || user?.email || 'Alex Rivers';
   const avatarUrl = user?.avatar_url || undefined;
   const initial = (user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'L').toUpperCase();
 
@@ -262,75 +234,7 @@ const MyCertificates: React.FC = () => {
   const level = Math.max(1, Math.floor(totalXp / 250) + 1);
 
   return (
-    <div className="mcrt-root">
-      <aside className="mcrt-sidebar">
-        <div className="mcrt-brand">
-          <h1 className="mcrt-brand-title">MindBridge</h1>
-          <p className="mcrt-brand-sub">Learner Portal</p>
-        </div>
-
-        <nav className="mcrt-nav">
-          {navItems.map((item) => (
-            <Link
-              key={item.key}
-              to={item.to}
-              className={`mcrt-nav-link ${item.active ? 'mcrt-nav-link--active' : ''}`}
-            >
-              <span className="mcrt-nav-icon">{item.icon}</span>
-              <span className="mcrt-nav-label">{item.label}</span>
-              {item.active && <span className="mcrt-nav-indicator" />}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="mcrt-sidebar-cta">
-          <button
-            type="button"
-            className="mcrt-cta-btn"
-            onClick={() => navigate('/learner/dashboard')}
-          >
-            View Progress
-            <ArrowUpRight size={16} strokeWidth={2.4} />
-          </button>
-        </div>
-      </aside>
-
-      <header className="mcrt-topbar">
-        <div className="mcrt-topbar-left">
-          <a className="mcrt-topbar-link" href="#">Help</a>
-          <a className="mcrt-topbar-link" href="#">Resources</a>
-        </div>
-
-        <div className="mcrt-topbar-right">
-          <button type="button" className="mcrt-icon-btn" aria-label="Notifications">
-            <Bell size={18} strokeWidth={2.1} />
-            <span className="mcrt-icon-dot" />
-          </button>
-          <button
-            type="button"
-            className="mcrt-icon-btn"
-            aria-label="Settings"
-            onClick={() => navigate('/learner/settings')}
-          >
-            <Settings size={18} strokeWidth={2.1} />
-          </button>
-
-          <div className="mcrt-user">
-            <span className="mcrt-user-name">{displayName}</span>
-            <div
-              className="mcrt-avatar"
-              onClick={() => navigate('/learner/settings')}
-            >
-              {avatarUrl ? (
-                <img alt="User Profile" src={avatarUrl} />
-              ) : (
-                <div className="mcrt-avatar-fallback">{initial}</div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <div className="mcrt-page">
       <main className="mcrt-main">
         <section className="mcrt-page-head">
           <div>

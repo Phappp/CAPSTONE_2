@@ -1,18 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  GraduationCap,
-  Award,
-  User,
-  BookOpen,
-  UploadCloud,
-  Video,
   Search,
-  Bell,
-  Settings,
   ArrowRight,
-  ArrowUpRight,
   Bookmark,
   Compass,
   Loader2,
@@ -20,16 +10,7 @@ import {
 import { url } from '../../baseUrl';
 import { COURSES_API } from '../../api/courses';
 import { getAccessToken } from '../../utils/authStorage';
-import { useAuth } from '../../contexts/Auth';
 import './MyCoursePage.css';
-
-interface NavItem {
-  key: string;
-  label: string;
-  icon: React.ReactNode;
-  to: string;
-  active?: boolean;
-}
 
 interface FilterTab {
   key: string;
@@ -55,16 +36,6 @@ interface EnrollmentsResponse {
   message?: string;
 }
 
-const navItems: NavItem[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} strokeWidth={2.1} />, to: '/learner/dashboard' },
-  { key: 'my-courses', label: 'My Courses', icon: <GraduationCap size={20} strokeWidth={2.1} />, to: '/learner/my-courses', active: true },
-  { key: 'certificates', label: 'Certificates', icon: <Award size={20} strokeWidth={2.1} />, to: '/learner/certificates' },
-  { key: 'profile', label: 'Profile', icon: <User size={20} strokeWidth={2.1} />, to: '/learner/settings' },
-  { key: 'workspace', label: 'Learning Workspace', icon: <BookOpen size={20} strokeWidth={2.1} />, to: '/learner/workspace' },
-  { key: 'assignments', label: 'Assignments', icon: <UploadCloud size={20} strokeWidth={2.1} />, to: '/learner/assignments' },
-  { key: 'live', label: 'Live Session', icon: <Video size={20} strokeWidth={2.1} />, to: '/learner/schedule' },
-];
-
 const filterTabs: FilterTab[] = [
   { key: 'all', label: 'All Courses', status: 'all' },
   { key: 'in-progress', label: 'In Progress', status: 'active' },
@@ -77,7 +48,6 @@ const FALLBACK_THUMB =
 
 const MyCoursePage: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('all');
   const [courses, setCourses] = useState<EnrolledCourse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,8 +56,6 @@ const MyCoursePage: React.FC = () => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
   const currentTab = filterTabs.find((t) => t.key === activeTab) || filterTabs[0];
-  const avatarUrl = user?.avatar_url || undefined;
-  const initial = (user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'L').toUpperCase();
 
   useEffect(() => {
     const id = window.setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
@@ -162,84 +130,17 @@ const MyCoursePage: React.FC = () => {
   };
 
   return (
-    <div className="mc-root">
-      <aside className="mc-sidebar">
-        <div className="mc-brand">
-          <h1 className="mc-brand-title">MindBridge</h1>
-          <p className="mc-brand-sub">Learner Portal</p>
-        </div>
-
-        <nav className="mc-nav">
-          {navItems.map((item) => (
-            <Link
-              key={item.key}
-              to={item.to}
-              className={`mc-nav-link ${item.active ? 'mc-nav-link--active' : ''}`}
-            >
-              <span className="mc-nav-icon">{item.icon}</span>
-              <span className="mc-nav-label">{item.label}</span>
-              {item.active && <span className="mc-nav-indicator" />}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="mc-sidebar-cta">
-          <button
-            type="button"
-            className="mc-cta-btn"
-            onClick={() => navigate('/learner/dashboard')}
-          >
-            View Progress
-            <ArrowUpRight size={16} strokeWidth={2.4} />
-          </button>
-        </div>
-      </aside>
-
-      <header className="mc-topbar">
-        <div className="mc-search">
-          <Search size={16} strokeWidth={2.2} className="mc-search-icon" />
-          <input
-            type="text"
-            placeholder="Search courses..."
-            className="mc-search-input"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-
-        <div className="mc-topbar-right">
-          <nav className="mc-topnav">
-            <a className="mc-topnav-link" href="#">Help</a>
-            <a className="mc-topnav-link" href="#">Resources</a>
-          </nav>
-
-          <div className="mc-topbar-actions">
-            <button type="button" className="mc-icon-btn" aria-label="Notifications">
-              <Bell size={18} strokeWidth={2.1} />
-              <span className="mc-icon-dot" />
-            </button>
-            <button
-              type="button"
-              className="mc-icon-btn"
-              aria-label="Settings"
-              onClick={() => navigate('/learner/settings')}
-            >
-              <Settings size={18} strokeWidth={2.1} />
-            </button>
-            <div
-              className="mc-avatar"
-              onClick={() => navigate('/learner/settings')}
-            >
-              {avatarUrl ? (
-                <img alt="User Profile" src={avatarUrl} />
-              ) : (
-                <div className="mc-avatar-fallback">{initial}</div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <div className="mc-page">
+      <div className="mc-page-search">
+        <Search size={16} strokeWidth={2.2} className="mc-search-icon" />
+        <input
+          type="text"
+          placeholder="Search courses..."
+          className="mc-search-input"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
       <main className="mc-main">
         <div className="mc-container">
           <section className="mc-page-head">

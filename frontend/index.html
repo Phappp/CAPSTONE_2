@@ -21,6 +21,41 @@
                 rel="stylesheet" />
         <link rel="stylesheet"
                 href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+        <!-- Tailwind via CDN scoped to public marketing pages (preflight disabled so existing
+             scoped-CSS pages keep their resets). Activate by wrapping the page root with class "mb-public". -->
+        <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+        <script>
+                if (window.tailwind) {
+                        window.tailwind.config = {
+                                important: ".mb-public",
+                                corePlugins: { preflight: false },
+                                theme: {
+                                        extend: {
+                                                colors: {
+                                                        primary: "#091426",
+                                                        "primary-container": "#1e293b",
+                                                        secondary: "#006b5f",
+                                                        "on-surface": "#191c1e",
+                                                        "on-surface-variant": "#45474c",
+                                                        background: "#f7f9fb",
+                                                        surface: "#f7f9fb",
+                                                        "surface-container": "#eceef0",
+                                                        "surface-container-low": "#f2f4f6",
+                                                        "surface-container-lowest": "#ffffff",
+                                                        outline: "#75777d",
+                                                        "outline-variant": "#c5c6cd",
+                                                        "on-primary-container": "#8590a6",
+                                                },
+                                                fontFamily: {
+                                                        headline: ["Manrope", "sans-serif"],
+                                                        body: ["Inter", "sans-serif"],
+                                                        label: ["Inter", "sans-serif"],
+                                                },
+                                        },
+                                },
+                        };
+                }
+        </script>
 </head>
 
 <body>

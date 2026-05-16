@@ -1,23 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  GraduationCap,
-  Award,
-  User,
-  BookOpen,
-  UploadCloud,
-  Video,
-  Search,
-  Bell,
-  Settings,
   TrendingUp,
   BookMarked,
   BadgeCheck,
   ChevronLeft,
   ChevronRight,
   Plus,
-  ArrowUpRight,
   Loader2,
 } from 'lucide-react';
 import { url } from '../../baseUrl';
@@ -25,14 +14,6 @@ import { COURSES_API } from '../../api/courses';
 import { getAccessToken } from '../../utils/authStorage';
 import { useAuth } from '../../contexts/Auth';
 import './LearnerDashboard.css';
-
-interface NavItem {
-  key: string;
-  label: string;
-  icon: React.ReactNode;
-  to: string;
-  active?: boolean;
-}
 
 interface MetricCard {
   key: string;
@@ -96,16 +77,6 @@ interface LearningActivityResponse {
   daily_activity?: LearningActivityDay[];
 }
 
-const navItems: NavItem[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} strokeWidth={2.1} />, to: '/learner/dashboard', active: true },
-  { key: 'my-courses', label: 'My Courses', icon: <GraduationCap size={20} strokeWidth={2.1} />, to: '/learner/my-courses' },
-  { key: 'certificates', label: 'Certificates', icon: <Award size={20} strokeWidth={2.1} />, to: '/learner/certificates' },
-  { key: 'profile', label: 'Profile', icon: <User size={20} strokeWidth={2.1} />, to: '/learner/settings' },
-  { key: 'workspace', label: 'Learning Workspace', icon: <BookOpen size={20} strokeWidth={2.1} />, to: '/learner/workspace' },
-  { key: 'assignments', label: 'Assignments', icon: <UploadCloud size={20} strokeWidth={2.1} />, to: '/learner/assignments' },
-  { key: 'live', label: 'Live Session', icon: <Video size={20} strokeWidth={2.1} />, to: '/learner/schedule' },
-];
-
 const deadlines: DeadlineItem[] = [
   {
     key: 'd1',
@@ -147,7 +118,6 @@ const LearnerDashboard: React.FC = () => {
   const [studyHours, setStudyHours] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
 
   const courseRowRef = useRef<HTMLDivElement | null>(null);
 
@@ -157,8 +127,6 @@ const LearnerDashboard: React.FC = () => {
     if (user?.email) return user.email.split('@')[0];
     return 'Learner';
   }, [user]);
-
-  const avatarUrl = user?.avatar_url || undefined;
 
   useEffect(() => {
     let cancelled = false;
@@ -310,91 +278,8 @@ const LearnerDashboard: React.FC = () => {
     navigate(`/my-courses/${c.courseId}/${c.slug}`);
   };
 
-  const handleSearchSubmit = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'Enter') return;
-    const q = searchTerm.trim();
-    navigate(q ? `/courses?q=${encodeURIComponent(q)}` : '/courses');
-  };
-
   return (
-    <div className="ld-root">
-      <aside className="ld-sidebar">
-        <div className="ld-brand">
-          <h1 className="ld-brand-title">MindBridge</h1>
-          <p className="ld-brand-sub">Learner Portal</p>
-        </div>
-
-        <nav className="ld-nav">
-          {navItems.map((item) => (
-            <Link
-              key={item.key}
-              to={item.to}
-              className={`ld-nav-link ${item.active ? 'ld-nav-link--active' : ''}`}
-            >
-              <span className="ld-nav-icon">{item.icon}</span>
-              <span className="ld-nav-label">{item.label}</span>
-              {item.active && <span className="ld-nav-indicator" />}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="ld-sidebar-cta">
-          <button
-            type="button"
-            className="ld-cta-btn"
-            onClick={() => navigate('/learner/my-courses')}
-          >
-            View Progress
-            <ArrowUpRight size={16} strokeWidth={2.4} />
-          </button>
-        </div>
-      </aside>
-
-      <header className="ld-topbar">
-        <div className="ld-topbar-left">
-          <a className="ld-topbar-link" href="#">Help</a>
-          <a className="ld-topbar-link" href="#">Resources</a>
-        </div>
-
-        <div className="ld-topbar-right">
-          <div className="ld-search">
-            <Search size={16} strokeWidth={2.2} className="ld-search-icon" />
-            <input
-              type="text"
-              placeholder="Search courses..."
-              className="ld-search-input"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={handleSearchSubmit}
-            />
-          </div>
-
-          <button type="button" className="ld-icon-btn" aria-label="Notifications">
-            <Bell size={18} strokeWidth={2.1} />
-            <span className="ld-icon-dot" />
-          </button>
-
-          <button
-            type="button"
-            className="ld-icon-btn"
-            aria-label="Settings"
-            onClick={() => navigate('/learner/settings')}
-          >
-            <Settings size={18} strokeWidth={2.1} />
-          </button>
-
-          <div className="ld-avatar" onClick={() => navigate('/learner/settings')}>
-            {avatarUrl ? (
-              <img alt="User Profile" src={avatarUrl} />
-            ) : (
-              <div className="ld-avatar-fallback">
-                {displayName.charAt(0).toUpperCase()}
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
+    <div className="ld-page">
       <main className="ld-main">
         <section className="ld-welcome">
           <div>

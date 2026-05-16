@@ -1,14 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  GraduationCap,
-  Award,
   User,
-  Terminal,
-  ClipboardList,
-  Video,
-  Bell,
   Settings,
   ChevronRight,
   Play,
@@ -24,22 +17,12 @@ import {
   ListTodo,
   HelpCircle,
   Send,
-  School,
   Sparkles,
 } from 'lucide-react';
 import { url } from '../../baseUrl';
 import { COURSES_API } from '../../api/courses';
 import { getAccessToken } from '../../utils/authStorage';
-import { useAuth } from '../../contexts/Auth';
 import './LearningWorkspace.css';
-
-interface NavItem {
-  key: string;
-  label: string;
-  icon: React.ReactNode;
-  to: string;
-  active?: boolean;
-}
 
 interface TabItem {
   key: string;
@@ -80,16 +63,6 @@ interface ProgressResponse {
   lesson_title?: string;
   message?: string;
 }
-
-const navItems: NavItem[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} strokeWidth={2.1} />, to: '/learner/dashboard' },
-  { key: 'my-courses', label: 'My Courses', icon: <GraduationCap size={20} strokeWidth={2.1} />, to: '/learner/my-courses' },
-  { key: 'certificates', label: 'Certificates', icon: <Award size={20} strokeWidth={2.1} />, to: '/learner/certificates' },
-  { key: 'profile', label: 'Profile', icon: <User size={20} strokeWidth={2.1} />, to: '/learner/settings' },
-  { key: 'workspace', label: 'Learning Workspace', icon: <Terminal size={20} strokeWidth={2.1} />, to: '/learner/workspace', active: true },
-  { key: 'assignments', label: 'Assignments', icon: <ClipboardList size={20} strokeWidth={2.1} />, to: '/learner/assignments' },
-  { key: 'live', label: 'Live Session', icon: <Video size={20} strokeWidth={2.1} />, to: '/learner/schedule' },
-];
 
 const tabs: TabItem[] = [
   { key: 'content', label: 'Lesson Content' },
@@ -137,7 +110,6 @@ const quickActions: QuickAction[] = [
 
 const LearningWorkspace: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const queryCourseId = Number(searchParams.get('courseId'));
   const queryLessonId = Number(searchParams.get('lessonId'));
@@ -149,9 +121,6 @@ const LearningWorkspace: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
-
-  const avatarUrl = user?.avatar_url || undefined;
-  const initial = (user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'L').toUpperCase();
 
   const courseTitle = activeEnrollment?.course_title || 'Advanced UI Design';
   const lessonTitle = progress?.lesson_title || 'Mastering Responsive Pivots';
@@ -293,83 +262,7 @@ const LearningWorkspace: React.FC = () => {
   };
 
   return (
-    <div className="lw-root">
-      <header className="lw-topbar">
-        <div className="lw-topbar-left">
-          <span className="lw-brand-name">EduFlow LMS</span>
-          <nav className="lw-topnav">
-            <a className="lw-topnav-link" href="#">Help</a>
-            <a className="lw-topnav-link" href="#">Resources</a>
-          </nav>
-        </div>
-
-        <div className="lw-topbar-right">
-          <button type="button" className="lw-icon-btn" aria-label="Notifications">
-            <Bell size={18} strokeWidth={2.1} />
-            <span className="lw-icon-dot" />
-          </button>
-          <button
-            type="button"
-            className="lw-icon-btn"
-            aria-label="Settings"
-            onClick={() => navigate('/learner/settings')}
-          >
-            <Settings size={18} strokeWidth={2.1} />
-          </button>
-          <div
-            className="lw-avatar"
-            onClick={() => navigate('/learner/settings')}
-          >
-            {avatarUrl ? (
-              <img alt="User Profile" src={avatarUrl} />
-            ) : (
-              <div className="lw-avatar-fallback">{initial}</div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <aside className="lw-sidebar">
-        <div className="lw-brand">
-          <div className="lw-brand-mark">
-            <School size={18} strokeWidth={2.2} />
-          </div>
-          <div className="lw-brand-text">
-            <h2 className="lw-brand-title">EduFlow</h2>
-            <p className="lw-brand-sub">Learning Portal</p>
-          </div>
-        </div>
-
-        <nav className="lw-nav">
-          {navItems.map((item) => (
-            <Link
-              key={item.key}
-              to={item.to}
-              className={`lw-nav-link ${item.active ? 'lw-nav-link--active' : ''}`}
-            >
-              <span className="lw-nav-icon">{item.icon}</span>
-              <span className="lw-nav-label">{item.label}</span>
-              {item.active && <span className="lw-nav-indicator" />}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="lw-upsell">
-          <span className="lw-upsell-tag">Professional Track</span>
-          <p className="lw-upsell-headline">
-            Unlock advanced lessons &amp; AI tutoring
-          </p>
-          <button
-            type="button"
-            className="lw-upsell-btn"
-            onClick={() => navigate('/courses')}
-          >
-            Upgrade Plan
-          </button>
-          <span className="lw-upsell-glow" />
-        </div>
-      </aside>
-
+    <div className="lw-page">
       <main className="lw-main">
         <section className="lw-canvas">
           <div className="lw-crumbs">

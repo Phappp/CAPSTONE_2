@@ -14,6 +14,7 @@ import {
   apiGetGoogleAuthUrl,
   apiGetCurrentUser,
   apiRefreshToken,
+  apiVerify2FA,
   AuthUser as ApiAuthUser,
   AuthResponse,
   LoginParams,
@@ -47,6 +48,7 @@ type AuthContextValue = {
   refreshToken: string | null;
   remember: boolean;
   login: (params: LoginParams & { remember?: boolean; redirect?: boolean }) => Promise<AuthResponse | void>;
+  verifyMfa: (params: { email: string; code: string; remember?: boolean; redirect?: boolean }) => Promise<AuthResponse>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (patch: Partial<AuthUser>) => void;
@@ -121,7 +123,7 @@ function redirectByRole(
   const role = resolvePrimaryRole(user);
   // Hỗ trợ cả tên role cũ (student/teacher) và mới (learner/course_manager)
   if (role === "student" || role === "learner") {
-    navigate("/student/dashboard", { replace: true });
+    navigate("/learner/dashboard", { replace: true });
     return;
   }
   if (role === "teacher" || role === "course_manager") {
@@ -133,7 +135,7 @@ function redirectByRole(
     return;
   }
   // Mặc định: học viên
-  navigate("/student/dashboard", { replace: true });
+  navigate("/learner/dashboard", { replace: true });
 }
 
 export default function AuthProvider({ children }: { children: ReactNode }) {
@@ -308,6 +310,8 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshToken, user, remember, saveAuthToStorage]);
 
   // Hàm đăng nhập (hỗ trợ cả 2FA)
+  // Backend bỏ field `requires2FA` khi serialize → FE phát hiện 2FA qua việc
+  // response thiếu access_token (controller chỉ spread access_token/refresh_token/user).
   const login = useCallback(async (
     params: LoginParams & { remember?: boolean; redirect?: boolean }
   ): Promise<AuthResponse | void> => {
@@ -315,9 +319,13 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const data = await apiLogin(params);
 
-      // Nếu yêu cầu 2FA, trả về thông tin để hiển thị form 2FA
-      if (data.requires2FA) {
-        return data;
+      // 2FA: dùng cả `requires2FA` (nếu backend gửi) lẫn fallback "thiếu access_token".
+      if (data.requires2FA || !data.access_token) {
+        return {
+          ...data,
+          requires2FA: true,
+          email: data.email || params.email,
+        } as AuthResponse;
       }
 
       // Đăng nhập thành công
@@ -343,6 +351,41 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       }
       const code = err?.message as keyof typeof MESSAGES;
       throw new Error(MESSAGES[code] ?? MESSAGES.LOGIN_FAILED);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [navigate, saveAuthToStorage]);
+
+  // Hàm xác thực 2FA (gọi POST /api/auth/verify-2fa với { email, code }).
+  // apiVerify2FA tự unwrap `{ success, data: {...} }` của BE và normalize tên field.
+  const verifyMfa = useCallback(async (
+    params: { email: string; code: string; remember?: boolean; redirect?: boolean }
+  ): Promise<AuthResponse> => {
+    setIsLoading(true);
+    try {
+      const data = await apiVerify2FA({ email: params.email, code: params.code });
+
+      const { access_token, refresh_token, user } = data;
+      if (!access_token || !user) {
+        throw new Error("VERIFY_2FA_FAILED");
+      }
+      const rememberFlag = params.remember ?? false;
+
+      setAccessToken(access_token);
+      setRefreshToken(refresh_token);
+      setUser(user);
+      setRemember(rememberFlag);
+
+      saveAuthToStorage(access_token, refresh_token, user, rememberFlag);
+
+      if (params.redirect !== false) {
+        redirectByRole(user, navigate);
+      }
+
+      return data;
+    } catch (err: any) {
+      const code = err?.message as keyof typeof MESSAGES;
+      throw new Error(MESSAGES[code] ?? err?.message ?? "Mã xác thực không chính xác.");
     } finally {
       setIsLoading(false);
     }
@@ -669,6 +712,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     refreshToken,
     remember,
     login,
+    verifyMfa,
     loginWithGoogle,
     logout,
     updateUser,

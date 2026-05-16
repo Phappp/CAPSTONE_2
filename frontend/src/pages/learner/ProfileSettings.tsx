@@ -1,16 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  GraduationCap,
   Award,
   User,
-  BookOpen,
-  UploadCloud,
-  Video,
-  Bell,
-  Settings,
-  ArrowUpRight,
   Pencil,
   ShieldCheck,
   Filter,
@@ -26,14 +18,6 @@ import { PROFILE_API } from '../../api/profile';
 import { getAccessToken } from '../../utils/authStorage';
 import { useAuth } from '../../contexts/Auth';
 import './ProfileSettings.css';
-
-interface NavItem {
-  key: string;
-  label: string;
-  icon: React.ReactNode;
-  to: string;
-  active?: boolean;
-}
 
 interface TabItem {
   key: string;
@@ -58,16 +42,6 @@ interface ProfileData {
   created_at?: string;
   roles?: string[];
 }
-
-const navItems: NavItem[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} strokeWidth={2.1} />, to: '/learner/dashboard' },
-  { key: 'my-courses', label: 'My Courses', icon: <GraduationCap size={20} strokeWidth={2.1} />, to: '/learner/my-courses' },
-  { key: 'certificates', label: 'Certificates', icon: <Award size={20} strokeWidth={2.1} />, to: '/learner/certificates' },
-  { key: 'profile', label: 'Profile', icon: <User size={20} strokeWidth={2.1} />, to: '/learner/settings', active: true },
-  { key: 'workspace', label: 'Learning Workspace', icon: <BookOpen size={20} strokeWidth={2.1} />, to: '/learner/workspace' },
-  { key: 'assignments', label: 'Assignments', icon: <UploadCloud size={20} strokeWidth={2.1} />, to: '/learner/assignments' },
-  { key: 'live', label: 'Live Session', icon: <Video size={20} strokeWidth={2.1} />, to: '/learner/schedule' },
-];
 
 const tabs: TabItem[] = [
   { key: 'personal', label: 'Personal Info' },
@@ -304,63 +278,7 @@ const ProfileSettings: React.FC = () => {
   };
 
   return (
-    <div className="ps-root">
-      <aside className="ps-sidebar">
-        <div className="ps-brand">
-          <h1 className="ps-brand-title">MindBridge</h1>
-          <p className="ps-brand-sub">Learner Portal</p>
-        </div>
-
-        <nav className="ps-nav">
-          {navItems.map((item) => (
-            <Link
-              key={item.key}
-              to={item.to}
-              className={`ps-nav-link ${item.active ? 'ps-nav-link--active' : ''}`}
-            >
-              <span className="ps-nav-icon">{item.icon}</span>
-              <span className="ps-nav-label">{item.label}</span>
-              {item.active && <span className="ps-nav-indicator" />}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="ps-sidebar-cta">
-          <button
-            type="button"
-            className="ps-cta-btn"
-            onClick={() => navigate('/learner/dashboard')}
-          >
-            View Progress
-            <ArrowUpRight size={16} strokeWidth={2.4} />
-          </button>
-        </div>
-      </aside>
-
-      <header className="ps-topbar">
-        <div className="ps-topbar-left">
-          <a className="ps-topbar-link" href="#">Help</a>
-          <a className="ps-topbar-link" href="#">Resources</a>
-        </div>
-
-        <div className="ps-topbar-right">
-          <button type="button" className="ps-icon-btn" aria-label="Notifications">
-            <Bell size={18} strokeWidth={2.1} />
-            <span className="ps-icon-dot" />
-          </button>
-          <button type="button" className="ps-icon-btn" aria-label="Settings">
-            <Settings size={18} strokeWidth={2.1} />
-          </button>
-          <div className="ps-avatar">
-            {avatarUrl ? (
-              <img alt="User Profile" src={avatarUrl} />
-            ) : (
-              <div className="ps-avatar-fallback">{initial}</div>
-            )}
-          </div>
-        </div>
-      </header>
-
+    <div className="ps-page">
       <main className="ps-main">
         <div className="ps-container">
           <section className="ps-page-head">

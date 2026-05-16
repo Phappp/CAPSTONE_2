@@ -1,15 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  GraduationCap,
-  Award,
-  User,
-  Terminal,
-  ClipboardList,
-  Video,
-  Bell,
-  Settings,
   ChevronRight,
   FileText,
   CheckCircle2,
@@ -28,7 +19,6 @@ import {
   Mail,
   TrendingUp,
   Users,
-  School,
   Send,
   X,
   Loader2,
@@ -36,16 +26,7 @@ import {
 import { url } from '../../baseUrl';
 import { ASSIGNMENTS_API } from '../../api/assignments';
 import { getAccessToken } from '../../utils/authStorage';
-import { useAuth } from '../../contexts/Auth';
 import './AssignmentSubmission.css';
-
-interface NavItem {
-  key: string;
-  label: string;
-  icon: React.ReactNode;
-  to: string;
-  active?: boolean;
-}
 
 interface ResourceItem {
   key: string;
@@ -95,16 +76,6 @@ interface GradeRow {
   resubmission_count?: number | null;
 }
 
-const navItems: NavItem[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} strokeWidth={2.1} />, to: '/learner/dashboard' },
-  { key: 'my-courses', label: 'My Courses', icon: <GraduationCap size={20} strokeWidth={2.1} />, to: '/learner/my-courses' },
-  { key: 'certificates', label: 'Certificates', icon: <Award size={20} strokeWidth={2.1} />, to: '/learner/certificates' },
-  { key: 'profile', label: 'Profile', icon: <User size={20} strokeWidth={2.1} />, to: '/learner/settings' },
-  { key: 'workspace', label: 'Learning Workspace', icon: <Terminal size={20} strokeWidth={2.1} />, to: '/learner/workspace' },
-  { key: 'assignments', label: 'Assignments', icon: <ClipboardList size={20} strokeWidth={2.1} />, to: '/learner/assignments', active: true },
-  { key: 'live', label: 'Live Session', icon: <Video size={20} strokeWidth={2.1} />, to: '/learner/schedule' },
-];
-
 const fallbackInstructions = [
   'Analyze the provided "Current Dashboard" PDF to identify at least 5 major accessibility violations.',
   'Create a high-fidelity prototype in Figma (or your choice of tool) showcasing the redesigned components.',
@@ -147,9 +118,12 @@ const formatDueLabel = (iso: string | null): { label: string; pill: string | nul
 
 const AssignmentSubmission: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [searchParams] = useSearchParams();
-  const queryLessonId = Number(searchParams.get('lessonId'));
+  const routeParams = useParams();
+  const queryLessonId = Number(
+    routeParams.lessonId ?? searchParams.get('lessonId') ?? ''
+  );
+  const lessonTitleFromQuery = searchParams.get('title') || '';
 
   const [reflection, setReflection] = useState<string>('');
   const [files, setFiles] = useState<File[]>([]);
@@ -162,8 +136,6 @@ const AssignmentSubmission: React.FC = () => {
   const [submitOk, setSubmitOk] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const avatarUrl = user?.avatar_url || undefined;
-  const initial = (user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'L').toUpperCase();
 
   useEffect(() => {
     if (!queryLessonId || Number.isNaN(queryLessonId)) {
@@ -365,78 +337,7 @@ const AssignmentSubmission: React.FC = () => {
   };
 
   return (
-    <div className="as-root">
-      <header className="as-topbar">
-        <div className="as-topbar-left">
-          <span className="as-brand-name">EduFlow LMS</span>
-          <nav className="as-topnav">
-            <a className="as-topnav-link as-topnav-link--active" href="#">Help</a>
-            <a className="as-topnav-link" href="#">Resources</a>
-          </nav>
-        </div>
-
-        <div className="as-topbar-right">
-          <button type="button" className="as-icon-btn" aria-label="Notifications">
-            <Bell size={18} strokeWidth={2.1} />
-            <span className="as-icon-dot" />
-          </button>
-          <button
-            type="button"
-            className="as-icon-btn"
-            aria-label="Settings"
-            onClick={() => navigate('/learner/settings')}
-          >
-            <Settings size={18} strokeWidth={2.1} />
-          </button>
-          <div
-            className="as-avatar"
-            onClick={() => navigate('/learner/settings')}
-          >
-            {avatarUrl ? (
-              <img alt="User Profile" src={avatarUrl} />
-            ) : (
-              <div className="as-avatar-fallback">{initial}</div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <aside className="as-sidebar">
-        <div className="as-brand">
-          <div className="as-brand-mark">
-            <School size={18} strokeWidth={2.2} />
-          </div>
-          <div className="as-brand-text">
-            <h2 className="as-brand-title">EduFlow</h2>
-            <p className="as-brand-sub">Learning Portal</p>
-          </div>
-        </div>
-
-        <nav className="as-nav">
-          {navItems.map((item) => (
-            <Link
-              key={item.key}
-              to={item.to}
-              className={`as-nav-link ${item.active ? 'as-nav-link--active' : ''}`}
-            >
-              <span className="as-nav-icon">{item.icon}</span>
-              <span className="as-nav-label">{item.label}</span>
-              {item.active && <span className="as-nav-indicator" />}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="as-sidebar-cta">
-          <button
-            type="button"
-            className="as-cta-btn"
-            onClick={() => navigate('/courses')}
-          >
-            Upgrade Plan
-          </button>
-        </div>
-      </aside>
-
+    <div className="as-page">
       <main className="as-main">
         <header className="as-page-head">
           <nav className="as-crumbs">
@@ -447,7 +348,9 @@ const AssignmentSubmission: React.FC = () => {
             <span className="as-crumb as-crumb--active">Assignments</span>
           </nav>
           <h1 className="as-page-title">
-            {assignment?.title || 'Project: Designing an Accessibility-First Dashboard'}
+            {assignment?.title ||
+              lessonTitleFromQuery ||
+              'Project: Designing an Accessibility-First Dashboard'}
           </h1>
         </header>
 

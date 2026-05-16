@@ -1,7 +1,7 @@
 import React, { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./ContactUsPage.css";
-import transLogo from "../assets/trans-logo-2.png";
+import transLogo from "../../assets/trans-logo-2.png";
 
 const MAP_URL =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuDaw0GK197Yjr1aO0mXQZ9kd-K2nfJdl2z1khcCoC1Nv0BFBOUNMRFZf2Kw4DFKYXGU03Oo7Z6KuitYQw0HtN8oeOdAtYvUJ0iqK66RRkQMDdNMYkxcm31wFS_VLASGMrAwyY4SUDVjLfRDMgNvyEq_7AHPZuvUCMXTIHm5EB34vvSaF9dbChc5c9tJ4LeBnkpQpIuI096AQOjXqEp2tIVRK5IkdPJMmCprSr-BWyBHyWUTwxc3B2a5aNd6T18myjtzj5onxjdsGg";
@@ -15,10 +15,10 @@ const MindBridgeNavbar: React.FC = () => {
           <img alt="MindBridge Logo" className="mb-nav__logo" src={transLogo} />
         </Link>
         <div className="mb-nav__links">
-          <Link to="/" className="mb-nav__link">Courses</Link>
-          <Link to="/" className="mb-nav__link">Instructors</Link>
-          <Link to="/" className="mb-nav__link">Pricing</Link>
-          <Link to="/contact" className="mb-nav__link">Resources</Link>
+          <Link to="/courses" className="mb-nav__link">Courses</Link>
+          <Link to="/instructors" className="mb-nav__link">Instructors</Link>
+          <Link to="/pricing" className="mb-nav__link">Pricing</Link>
+          <Link to="/resources" className="mb-nav__link">Resources</Link>
         </div>
         <div className="mb-nav__cta">
           <button type="button" className="mb-nav__login" onClick={() => navigate("/login")}>
@@ -44,9 +44,9 @@ const MindBridgeFooter: React.FC = () => (
       </div>
       <div className="mb-footer__col">
         <p className="mb-footer__heading">Product</p>
-        <Link className="mb-footer__link" to="/">Courses</Link>
-        <Link className="mb-footer__link" to="/">Instructors</Link>
-        <Link className="mb-footer__link" to="/">Pricing</Link>
+        <Link className="mb-footer__link" to="/courses">Courses</Link>
+        <Link className="mb-footer__link" to="/instructors">Instructors</Link>
+        <Link className="mb-footer__link" to="/pricing">Pricing</Link>
       </div>
       <div className="mb-footer__col">
         <p className="mb-footer__heading">Company</p>

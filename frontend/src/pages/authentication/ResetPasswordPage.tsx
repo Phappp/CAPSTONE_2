@@ -51,13 +51,13 @@ export default function ResetPasswordPage() {
   return (
     <div className="auth-layout">
       <div className="auth-card">
-        <h1 className="auth-title">Đặt lại mật khẩu</h1>
-        <p className="auth-subtitle">Nhập mật khẩu mới cho tài khoản của bạn.</p>
+        <h1 className="auth-title">Secure Your Account Again</h1>
+        <p className="auth-subtitle">Enter a new password to regain access to your account.</p>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="new-password" className="form-label">
-              Mật khẩu mới
+              New Password
             </label>
             <input
               id="new-password"
@@ -66,14 +66,14 @@ export default function ResetPasswordPage() {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               className="form-input"
-              placeholder="Nhập mật khẩu mới"
+              placeholder="Enter new password"
               minLength={6}
             />
           </div>
 
           <div className="form-group">
             <label htmlFor="confirm-password" className="form-label">
-              Xác nhận mật khẩu mới
+              Confirm New Password
             </label>
             <input
               id="confirm-password"
@@ -82,7 +82,7 @@ export default function ResetPasswordPage() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               className="form-input"
-              placeholder="Nhập lại mật khẩu mới"
+              placeholder="Confirm new password"
               minLength={6}
             />
           </div>
@@ -91,7 +91,7 @@ export default function ResetPasswordPage() {
           {success && <div className="success-box">{success}</div>}
 
           <button type="submit" disabled={loading} className="primary-button">
-            {loading ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
+            {loading ? "Updating..." : "Update Password"}
           </button>
         </form>
 
@@ -101,7 +101,7 @@ export default function ResetPasswordPage() {
             className="link-button"
             onClick={() => navigate("/login")}
           >
-            Quay lại đăng nhập
+            Back to Login
           </button>
         </div>
       </div>

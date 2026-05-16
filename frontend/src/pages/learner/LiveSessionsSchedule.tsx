@@ -1,16 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  GraduationCap,
-  Award,
   User,
-  BookOpen,
-  ClipboardList,
-  Radio,
   Search,
-  Bell,
-  UserCircle,
   CalendarDays,
   Users,
   Clock,
@@ -31,22 +23,6 @@ import {
 import { useAuth } from '../../contexts/Auth';
 import './LiveSessionsSchedule.css';
 
-interface NavItem {
-  key: string;
-  label: string;
-  icon: React.ReactNode;
-  to: string;
-  active?: boolean;
-}
-
-interface MobileNavItem {
-  key: string;
-  label: string;
-  icon: React.ReactNode;
-  to: string;
-  active?: boolean;
-}
-
 interface SessionCard {
   key: string;
   id: number;
@@ -60,23 +36,6 @@ interface SessionCard {
   primaryIcon: React.ReactNode;
   secondaryIcon: React.ReactNode;
 }
-
-const navItems: NavItem[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} strokeWidth={2.1} />, to: '/learner/dashboard' },
-  { key: 'my-courses', label: 'My Courses', icon: <GraduationCap size={20} strokeWidth={2.1} />, to: '/learner/my-courses' },
-  { key: 'certificates', label: 'Certificates', icon: <Award size={20} strokeWidth={2.1} />, to: '/learner/certificates' },
-  { key: 'profile', label: 'Profile', icon: <User size={20} strokeWidth={2.1} />, to: '/learner/settings' },
-  { key: 'workspace', label: 'Learning Workspace', icon: <BookOpen size={20} strokeWidth={2.1} />, to: '/learner/workspace' },
-  { key: 'assignments', label: 'Assignments', icon: <ClipboardList size={20} strokeWidth={2.1} />, to: '/learner/assignments' },
-  { key: 'live', label: 'Live Session', icon: <Radio size={20} strokeWidth={2.1} />, to: '/learner/schedule', active: true },
-];
-
-const mobileNav: MobileNavItem[] = [
-  { key: 'home', label: 'Home', icon: <LayoutDashboard size={20} strokeWidth={2.1} />, to: '/learner/dashboard' },
-  { key: 'courses', label: 'Courses', icon: <GraduationCap size={20} strokeWidth={2.1} />, to: '/learner/my-courses' },
-  { key: 'live', label: 'Live', icon: <Radio size={20} strokeWidth={2.2} />, to: '/learner/schedule', active: true },
-  { key: 'profile', label: 'Profile', icon: <User size={20} strokeWidth={2.1} />, to: '/learner/settings' },
-];
 
 const formatSchedule = (session: LiveSession): { label: string; icon: 'clock' | 'calendar' } => {
   const dateStr = session.scheduledAt || session.startedAt;
@@ -105,16 +64,11 @@ const formatSchedule = (session: LiveSession): { label: string; icon: 'clock' | 
 
 const LiveSessionsSchedule: React.FC = () => {
   const navigate = useNavigate();
-  const { accessToken, user } = useAuth();
+  const { accessToken } = useAuth();
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-
-  const displayName = user?.full_name?.trim() || user?.email || 'Alex Rivera';
-  const userRole = user?.primary_role === 'course_manager' ? 'Course Manager' : 'Pro Learner';
-  const avatarUrl = user?.avatar_url || undefined;
-  const initial = displayName.charAt(0).toUpperCase();
 
   useEffect(() => {
     let cancelled = false;
@@ -179,70 +133,17 @@ const LiveSessionsSchedule: React.FC = () => {
   };
 
   return (
-    <div className="ls-root">
-      <aside className="ls-sidebar">
-        <div className="ls-brand">
-          <h1 className="ls-brand-title">MindBridge</h1>
-          <p className="ls-brand-sub">Learner Portal</p>
-        </div>
-
-        <nav className="ls-nav">
-          {navItems.map((item) => (
-            <Link
-              key={item.key}
-              to={item.to}
-              className={`ls-nav-link ${item.active ? 'ls-nav-link--active' : ''}`}
-            >
-              <span className="ls-nav-icon">{item.icon}</span>
-              <span className="ls-nav-label">{item.label}</span>
-              {item.active && <span className="ls-nav-indicator" />}
-            </Link>
-          ))}
-        </nav>
-
-        <div
-          className="ls-user-card"
-          onClick={() => navigate('/learner/settings')}
-        >
-          {avatarUrl ? (
-            <img className="ls-user-avatar" alt="User Profile" src={avatarUrl} />
-          ) : (
-            <div className="ls-user-avatar ls-user-avatar-fallback">{initial}</div>
-          )}
-          <div className="ls-user-info">
-            <p className="ls-user-name">{displayName}</p>
-            <p className="ls-user-role">{userRole}</p>
-          </div>
-        </div>
-      </aside>
-
-      <header className="ls-topbar">
-        <div className="ls-search">
-          <Search size={16} strokeWidth={2.2} className="ls-search-icon" />
-          <input
-            type="text"
-            placeholder="Search sessions, topics..."
-            className="ls-search-input"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-
-        <div className="ls-topbar-actions">
-          <button type="button" className="ls-icon-btn" aria-label="Notifications">
-            <Bell size={18} strokeWidth={2.1} />
-            <span className="ls-icon-dot" />
-          </button>
-          <button
-            type="button"
-            className="ls-icon-btn"
-            aria-label="Account"
-            onClick={() => navigate('/learner/settings')}
-          >
-            <UserCircle size={20} strokeWidth={2} />
-          </button>
-        </div>
-      </header>
+    <div className="ls-page">
+      <div className="ls-page-search">
+        <Search size={16} strokeWidth={2.2} className="ls-search-icon" />
+        <input
+          type="text"
+          placeholder="Search sessions, topics..."
+          className="ls-search-input"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
 
       <main className="ls-main">
         <div className="ls-container">
@@ -410,19 +311,6 @@ const LiveSessionsSchedule: React.FC = () => {
           </section>
         </div>
       </main>
-
-      <nav className="ls-mobile-nav">
-        {mobileNav.map((item) => (
-          <Link
-            key={item.key}
-            to={item.to}
-            className={`ls-mobile-link ${item.active ? 'ls-mobile-link--active' : ''}`}
-          >
-            <span className="ls-mobile-icon">{item.icon}</span>
-            <span className="ls-mobile-label">{item.label}</span>
-          </Link>
-        ))}
-      </nav>
     </div>
   );
 };
