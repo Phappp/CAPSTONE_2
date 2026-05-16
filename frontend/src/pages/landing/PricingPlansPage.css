@@ -1,0 +1,11 @@
+/* PricingPlansPage — scoped styles (prefix: pricing-) */
+
+.pricing-page .material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  display: inline-block;
+  line-height: 1;
+}
+
+.pricing-page .pricing-icon-filled {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}

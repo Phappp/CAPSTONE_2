@@ -1,0 +1,38 @@
+/* MFAVerificationPage — scoped styles (prefix: mfa-) */
+
+.mfa-page .material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+}
+
+.mfa-page .mfa-icon-filled {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.mfa-otp-input {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  border-radius: 0.75rem;
+  border: 2px solid #e0e3e5;
+  background: #ffffff;
+  color: #091426;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.mfa-otp-input:focus {
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.2);
+}
+
+.mfa-error {
+  padding: 10px 14px;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}

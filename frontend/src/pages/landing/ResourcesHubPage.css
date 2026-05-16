@@ -1,0 +1,16 @@
+/* ResourcesHubPage — scoped styles (prefix: resources-) */
+
+.resources-page .material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.resources-page .resources-icon-filled {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.resources-page h1,
+.resources-page h2,
+.resources-page h3,
+.resources-page h4 {
+  font-family: 'Manrope', sans-serif;
+}

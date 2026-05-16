@@ -1,0 +1,187 @@
+.live-session-page {
+  padding: 24px;
+}
+
+.live-session-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.live-session-page__title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.live-session-page__header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.btn-create,
+.btn-start,
+.btn-end,
+.btn-delete,
+.btn-cancel,
+.btn-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-create {
+  background: #2563eb;
+  color: #fff;
+}
+
+.btn-start {
+  background: #16a34a;
+  color: #fff;
+}
+
+.btn-end {
+  background: #dc2626;
+  color: #fff;
+}
+
+.btn-delete {
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid #fca5a5;
+}
+
+.btn-cancel {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.btn-submit {
+  background: #2563eb;
+  color: #fff;
+}
+
+.loading-state,
+.empty-state,
+.error-message {
+  margin-top: 20px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px;
+  border: 1px dashed #d1d5db;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.sessions-list {
+  display: grid;
+  gap: 16px;
+}
+
+.session-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.session-card__info h3 {
+  margin: 0 0 8px;
+}
+
+.session-card__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.course-name,
+.session-description,
+.session-meta {
+  margin: 8px 0 0;
+}
+
+.session-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.live-badge,
+.ended-badge,
+.scheduled-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.live-badge {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.ended-badge {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.scheduled-badge {
+  background: #e0f2fe;
+  color: #0c4a6e;
+}
+
+.create-form {
+  display: grid;
+  gap: 16px;
+}
+
+.form-group {
+  display: grid;
+  gap: 8px;
+}
+
+.form-group label {
+  font-weight: 600;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}

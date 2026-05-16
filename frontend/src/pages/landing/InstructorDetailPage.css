@@ -1,0 +1,20 @@
+/* InstructorDetailPage — scoped styles (prefix: instructor-detail-) */
+
+.instructor-detail-page .material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+}
+
+.instructor-detail-page .instructor-detail-icon-filled {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.instructor-detail-page .instructor-hero-bg {
+  background: linear-gradient(135deg, #091426 0%, #1e293b 100%);
+}
+
+.instructor-detail-page h1,
+.instructor-detail-page h2,
+.instructor-detail-page h3 {
+  font-family: 'Manrope', sans-serif;
+}
