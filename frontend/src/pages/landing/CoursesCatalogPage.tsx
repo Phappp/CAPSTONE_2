@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import PublicSiteHeader from "../../components/PublicSiteHeader";
-import PublicSiteFooter from "../../components/PublicSiteFooter";
+import MindBridgeHeader from "../../components/MindBridgeHeader";
+import MindBridgeFooter from "../../components/MindBridgeFooter";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { getAccessToken } from "../../utils/authStorage";
@@ -137,7 +137,7 @@ export default function CoursesCatalogPage() {
 
   return (
     <div className="mb-public catalog-page bg-[#F8FAFC] text-on-surface">
-      <PublicSiteHeader active="courses" />
+      <MindBridgeHeader active="courses" />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <section className="mb-16">
@@ -314,7 +314,7 @@ export default function CoursesCatalogPage() {
         </div>
       </main>
 
-      <PublicSiteFooter />
+      <MindBridgeFooter />
     </div>
   );
 }

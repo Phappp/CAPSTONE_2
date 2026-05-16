@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import PublicSiteHeader from "../../components/PublicSiteHeader";
-import PublicSiteFooter from "../../components/PublicSiteFooter";
+import MindBridgeHeader from "../../components/MindBridgeHeader";
+import MindBridgeFooter from "../../components/MindBridgeFooter";
 import "./InstructorsDirectoryPage.css";
 
 interface Instructor {
@@ -95,7 +95,7 @@ const INSTRUCTORS: Instructor[] = [
 export default function InstructorsDirectoryPage() {
   return (
     <div className="mb-public instructors-page bg-[#F8FAFC] text-on-background">
-      <PublicSiteHeader active="instructors" />
+      <MindBridgeHeader active="instructors" />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <header className="mb-16 text-center md:text-left">
@@ -166,7 +166,7 @@ export default function InstructorsDirectoryPage() {
         </section>
       </main>
 
-      <PublicSiteFooter />
+      <MindBridgeFooter />
     </div>
   );
 }

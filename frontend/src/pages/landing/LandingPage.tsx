@@ -1,7 +1,15 @@
-import React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import {
+  RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useNavigate } from "react-router-dom";
+import MindBridgeHeader from "../../components/MindBridgeHeader";
+import MindBridgeFooter from "../../components/MindBridgeFooter";
 import "./LandingPage.css";
-import transLogo from "../../assets/trans-logo-2.png";
+import "./LandingPage-sections.css";
 
 type Certification = {
   icon: string;
@@ -22,85 +30,1002 @@ const VIDEO_POSTER_URL =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuBXvct5HrjMKAIS-xbkY1XVyYhvz9pMjBjTUDC9xuEo0uW2qEDRcNDciWQULXZxQ8l2M0QXrjsYNCjdxNMGvLqlbrCKRQNK_ZMJSbIFYFwWNJSOfCGld151oSrqbQDMCxB3Fz5NxxLPBF5dhnw5VqDodFo2NyXWrLmbJ6CoL8RjGcwvBwqXkgTpJhB-dnMq1bSpwO7383kl7O1g3z8WlHwaOpZQiIPnNcCm12DDDbNFlKdHpgplpRgwioR93qDWFshf5xPNebwzPg";
 const CTA_PATTERN_URL =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuCwxWdCPac3naoLW3IgZ9bsbc4QrThXKiQOjPD4cmGrGqU8DfSOcquva1RV7YZLDjTwcFZ238mzLqYSVmS94neUk5yJf_lbnERW72r8Iv3sywln-XtUxx5X4NtEAv5yXFapZiu9Pb0ywuRgpY9quiOdW37nSDcUISQPfOKEYKTuwFCR5KIW7itEBXH11OKk5UzcgCLuzezhW_T2XKk4daXNG0Fb8Ol_5cUWSxN46oIDBqu48s6Ul6rQ2XMFN_lHhK7hnNF3znvzyw";
+const VIDEO_SRC =
+  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 
-const MindBridgeNavbar: React.FC = () => {
-  const navigate = useNavigate();
-  return (
-    <nav className="mb-nav">
-      <div className="mb-nav__inner">
-        <Link to="/" className="mb-nav__brand">
-          <img alt="MindBridge Logo" className="mb-nav__logo" src={transLogo} />
-        </Link>
-        <div className="mb-nav__links">
-          <Link to="/courses" className="mb-nav__link">Courses</Link>
-          <Link to="/instructors" className="mb-nav__link">Instructors</Link>
-          <Link to="/pricing" className="mb-nav__link">Pricing</Link>
-          <Link to="/resources" className="mb-nav__link">Resources</Link>
-        </div>
-        <div className="mb-nav__cta">
-          <button type="button" className="mb-nav__login" onClick={() => navigate("/login")}>
-            Login
-          </button>
-          <button type="button" className="mb-nav__get-started" onClick={() => navigate("/register")}>
-            Get Started
-          </button>
-        </div>
-      </div>
-    </nav>
-  );
+type Course = {
+  id: number;
+  title: string;
+  instructor: string;
+  thumbnail: string;
+  category: string;
+  level: string;
+  rating: number;
+  reviewCount: number;
+  students: number;
+  priceOriginal: number;
+  priceSale: number;
+  badge?: "Bestseller" | "New" | "Hot";
 };
 
-const MindBridgeFooter: React.FC = () => (
-  <footer className="mb-footer">
-    <div className="mb-footer__grid">
-      <div className="mb-footer__col">
-        <div className="mb-footer__brand">
-          <img alt="MindBridge Logo" className="mb-footer__logo" src={transLogo} />
+const COURSES: Course[] = [
+  {
+    id: 1,
+    title: "AI Prompt Engineering Masterclass",
+    instructor: "Dr. Linh Tran",
+    thumbnail:
+      "https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=720&q=80",
+    category: "AI & Machine Learning",
+    level: "Intermediate",
+    rating: 4.9,
+    reviewCount: 2810,
+    students: 18420,
+    priceOriginal: 89,
+    priceSale: 39,
+    badge: "Bestseller",
+  },
+  {
+    id: 2,
+    title: "Full-Stack Web Development 2026",
+    instructor: "Khoa Nguyen",
+    thumbnail:
+      "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=720&q=80",
+    category: "Tech Stack",
+    level: "Beginner",
+    rating: 4.8,
+    reviewCount: 4192,
+    students: 27340,
+    priceOriginal: 119,
+    priceSale: 49,
+  },
+  {
+    id: 3,
+    title: "Data Analytics with Python & SQL",
+    instructor: "Prof. Maria Santos",
+    thumbnail:
+      "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=720&q=80",
+    category: "Data Science",
+    level: "Intermediate",
+    rating: 4.7,
+    reviewCount: 1830,
+    students: 9520,
+    priceOriginal: 99,
+    priceSale: 44,
+    badge: "Hot",
+  },
+  {
+    id: 4,
+    title: "UX & UI Design Fundamentals",
+    instructor: "Aiko Yamamoto",
+    thumbnail:
+      "https://images.unsplash.com/photo-1561070791-2526d30994b8?auto=format&fit=crop&w=720&q=80",
+    category: "Design",
+    level: "Beginner",
+    rating: 4.9,
+    reviewCount: 2245,
+    students: 14200,
+    priceOriginal: 79,
+    priceSale: 29,
+    badge: "New",
+  },
+  {
+    id: 5,
+    title: "Digital Marketing & Growth",
+    instructor: "James Carter",
+    thumbnail:
+      "https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=720&q=80",
+    category: "Business",
+    level: "All Levels",
+    rating: 4.6,
+    reviewCount: 1611,
+    students: 8390,
+    priceOriginal: 109,
+    priceSale: 45,
+  },
+  {
+    id: 6,
+    title: "Business Strategy for Founders",
+    instructor: "Olivia Park",
+    thumbnail:
+      "https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&w=720&q=80",
+    category: "Business",
+    level: "Advanced",
+    rating: 4.8,
+    reviewCount: 980,
+    students: 6210,
+    priceOriginal: 149,
+    priceSale: 59,
+  },
+];
+
+type RoadmapStep = {
+  icon: string;
+  title: string;
+  desc: string;
+  tag: string;
+};
+
+const ROADMAP_STEPS: RoadmapStep[] = [
+  {
+    icon: "psychology",
+    title: "Smart Diagnosis",
+    desc: "Our AI assesses your skills, goals, and learning style in under five minutes — no guesswork required.",
+    tag: "Step 1",
+  },
+  {
+    icon: "auto_awesome",
+    title: "Personalized Path",
+    desc: "Receive a curriculum that adapts every week based on quizzes, time spent, and progress milestones.",
+    tag: "Step 2",
+  },
+  {
+    icon: "trending_up",
+    title: "Adaptive Lessons",
+    desc: "Difficulty, pacing, and examples shift in real time. You spend more time on weak areas and skip what you already master.",
+    tag: "Step 3",
+  },
+  {
+    icon: "verified",
+    title: "Skill Mastery",
+    desc: "Hands-on projects, peer feedback, and AI-graded checkpoints confirm true mastery — not just completion.",
+    tag: "Step 4",
+  },
+  {
+    icon: "rocket_launch",
+    title: "Career Launch",
+    desc: "Verified certificates, portfolio reviews, and recruiter matchmaking bridge you to your next opportunity.",
+    tag: "Step 5",
+  },
+];
+
+type FlashDeal = {
+  id: number;
+  title: string;
+  image: string;
+  originalPrice: number;
+  salePrice: number;
+  discountPct: number;
+  claimed: number;
+  total: number;
+};
+
+const FLASH_DEALS: FlashDeal[] = [
+  {
+    id: 1,
+    title: "AI Engineering Bootcamp",
+    image:
+      "https://images.unsplash.com/photo-1518709268805-4e9042af2176?auto=format&fit=crop&w=720&q=80",
+    originalPrice: 199,
+    salePrice: 79,
+    discountPct: 60,
+    claimed: 132,
+    total: 200,
+  },
+  {
+    id: 2,
+    title: "Cloud Architect Certification Track",
+    image:
+      "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=720&q=80",
+    originalPrice: 249,
+    salePrice: 119,
+    discountPct: 52,
+    claimed: 86,
+    total: 150,
+  },
+  {
+    id: 3,
+    title: "Product Management Intensive",
+    image:
+      "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=720&q=80",
+    originalPrice: 179,
+    salePrice: 69,
+    discountPct: 61,
+    claimed: 167,
+    total: 250,
+  },
+];
+
+type Testimonial = {
+  id: number;
+  name: string;
+  initials: string;
+  avatarColor: string;
+  role: string;
+  rating: number;
+  quote: string;
+};
+
+const TESTIMONIALS: Testimonial[] = [
+  {
+    id: 1,
+    name: "Sarah Johnson",
+    initials: "SJ",
+    avatarColor: "linear-gradient(135deg, #0d9488, #2dd4bf)",
+    role: "Junior Data Scientist · Acme Analytics",
+    rating: 5,
+    quote:
+      "MindBridge rewrote my career path. The adaptive quizzes spotted my weak spots in statistics, and within four months I landed my first analytics role. Every lesson felt tailored to me.",
+  },
+  {
+    id: 2,
+    name: "Daniel Pham",
+    initials: "DP",
+    avatarColor: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+    role: "Frontend Engineer · Nova Studio",
+    rating: 5,
+    quote:
+      "I tried three other platforms before this. Nothing compares to how MindBridge sequences lessons. The AI coach felt like a senior engineer mentoring me at 2 a.m. — patient, precise, and always there.",
+  },
+  {
+    id: 3,
+    name: "Priya Mehta",
+    initials: "PM",
+    avatarColor: "linear-gradient(135deg, #f59e0b, #ef4444)",
+    role: "UX Designer · Bloom Health",
+    rating: 5,
+    quote:
+      "The portfolio reviews and live sessions changed everything. I went from copy-pasting tutorials to leading design critiques. The platform respects your time and your ambition.",
+  },
+  {
+    id: 4,
+    name: "Marco Reyes",
+    initials: "MR",
+    avatarColor: "linear-gradient(135deg, #3b82f6, #06b6d4)",
+    role: "Cloud Engineer · Vertex Cloud",
+    rating: 4.5,
+    quote:
+      "From total beginner to AWS-certified in six months. The personalized roadmap kept me consistent, and I didn't waste a single hour on content I didn't need.",
+  },
+];
+
+type Stat = {
+  value: number;
+  suffix: string;
+  label: string;
+  icon: string;
+};
+
+const STATS: Stat[] = [
+  { value: 10000, suffix: "+", label: "Active Learners", icon: "groups" },
+  { value: 500, suffix: "+", label: "Curated Courses", icon: "library_books" },
+  { value: 95, suffix: "%", label: "Satisfaction Rate", icon: "favorite" },
+  { value: 120, suffix: "+", label: "Expert Instructors", icon: "school" },
+];
+
+type FaqItem = {
+  id: number;
+  q: string;
+  a: string;
+};
+
+const FAQS: FaqItem[] = [
+  {
+    id: 0,
+    q: "What payment methods do you accept?",
+    a: "We accept all major credit and debit cards, PayPal, Apple Pay, Google Pay, and major regional gateways including Momo, VNPay, and ZaloPay. Enterprise customers can pay by invoice.",
+  },
+  {
+    id: 1,
+    q: "Can I get a refund if a course is not right for me?",
+    a: "Yes. Every individual course is backed by a 14-day, no-questions-asked refund guarantee. Subscription plans can be canceled at any time and you keep access until the end of the billing period.",
+  },
+  {
+    id: 2,
+    q: "How do I receive my certificate after finishing a course?",
+    a: "Once you complete all required modules and pass the final assessment with at least 80 percent, your verified certificate is generated automatically and added to your profile. You can share it via a unique URL, on LinkedIn, or download it as a PDF.",
+  },
+  {
+    id: 3,
+    q: "Are courses self-paced or scheduled?",
+    a: "Most courses are fully self-paced so you can learn around your life. Selected cohort-based programs follow a weekly schedule with live sessions, and the next start date is always shown on the course page.",
+  },
+  {
+    id: 4,
+    q: "Do I get lifetime access to purchased courses?",
+    a: "Yes. Any course you purchase individually is yours to revisit forever, including all future updates from the instructor. Subscription content is accessible while your subscription is active.",
+  },
+  {
+    id: 5,
+    q: "Is there a discount for students or teams?",
+    a: "Verified students get an automatic 30 percent discount on individual courses. Teams of five or more enjoy enterprise pricing and can request a custom demo from our Sales team.",
+  },
+];
+
+/* ----- Utility hooks ----- */
+
+function useCountdown(target: Date) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+  const diff = Math.max(0, target.getTime() - now.getTime());
+  const totalSeconds = Math.floor(diff / 1000);
+  return {
+    hours: Math.floor(totalSeconds / 3600),
+    minutes: Math.floor((totalSeconds % 3600) / 60),
+    seconds: totalSeconds % 60,
+    isExpired: diff === 0,
+  };
+}
+
+function useCountUp(target: number, active: boolean, duration = 1800) {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (!active) {
+      setValue(0);
+      return;
+    }
+    let start: number | null = null;
+    let frame = 0;
+    const step = (ts: number) => {
+      if (start === null) start = ts;
+      const progress = Math.min(1, (ts - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.floor(target * eased));
+      if (progress < 1) frame = requestAnimationFrame(step);
+      else setValue(target);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [target, active, duration]);
+  return value;
+}
+
+function useInView<T extends Element>(
+  ref: RefObject<T | null>,
+  options?: IntersectionObserverInit,
+) {
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    if (!ref.current || seen) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setSeen(true);
+        obs.disconnect();
+      }
+    }, options);
+    obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, [ref, options, seen]);
+  return seen;
+}
+
+/* ----- Sub-components ----- */
+
+function Stars({ value }: { value: number }) {
+  const full = Math.floor(value);
+  const half = value - full >= 0.5;
+  const empty = 5 - full - (half ? 1 : 0);
+  return (
+    <span className="mb-stars" aria-label={`Rating: ${value} out of 5`}>
+      {Array.from({ length: full }).map((_, i) => (
+        <span
+          key={`f${i}`}
+          className="material-symbols-outlined mb-stars__star mb-stars__star--filled"
+          style={{ fontVariationSettings: "'FILL' 1" }}
+        >
+          star
+        </span>
+      ))}
+      {half && (
+        <span
+          className="material-symbols-outlined mb-stars__star mb-stars__star--filled"
+          style={{ fontVariationSettings: "'FILL' 1" }}
+        >
+          star_half
+        </span>
+      )}
+      {Array.from({ length: empty }).map((_, i) => (
+        <span
+          key={`e${i}`}
+          className="material-symbols-outlined mb-stars__star"
+        >
+          star
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function CoursesCarousel() {
+  const navigate = useNavigate();
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const [index, setIndex] = useState(0);
+  const [perView, setPerView] = useState(3);
+
+  useEffect(() => {
+    const update = () => {
+      const w = window.innerWidth;
+      if (w < 640) setPerView(1);
+      else if (w < 1024) setPerView(2);
+      else setPerView(3);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const maxIndex = Math.max(0, COURSES.length - perView);
+  useEffect(() => {
+    if (index > maxIndex) setIndex(maxIndex);
+  }, [index, maxIndex]);
+
+  const handlePrev = () => setIndex((i) => Math.max(0, i - 1));
+  const handleNext = () => setIndex((i) => Math.min(maxIndex, i + 1));
+
+  return (
+    <section className="mb-courses">
+      <div className="mb-courses__inner">
+        <div className="mb-courses__head">
+          <div>
+            <span className="mb-section-pill">
+              <span className="material-symbols-outlined">trending_up</span>
+              Trending Now
+            </span>
+            <h2 className="mb-section-title">Top Courses This Month</h2>
+            <p className="mb-section-lead">
+              Hand-picked programs loved by thousands of learners — start with a deal today.
+            </p>
+          </div>
+          <div className="mb-courses__controls">
+            <button
+              type="button"
+              className="mb-courses__arrow"
+              onClick={handlePrev}
+              disabled={index === 0}
+              aria-label="Previous courses"
+            >
+              <span className="material-symbols-outlined">chevron_left</span>
+            </button>
+            <button
+              type="button"
+              className="mb-courses__arrow"
+              onClick={handleNext}
+              disabled={index === maxIndex}
+              aria-label="Next courses"
+            >
+              <span className="material-symbols-outlined">chevron_right</span>
+            </button>
+          </div>
         </div>
-        <p className="mb-footer__copy">© 2026 MindBridge Co. The Intelligent Workspace.</p>
-      </div>
-      <div className="mb-footer__col">
-        <p className="mb-footer__heading">Product</p>
-        <Link className="mb-footer__link" to="/courses">Courses</Link>
-        <Link className="mb-footer__link" to="/instructors">Instructors</Link>
-        <Link className="mb-footer__link" to="/pricing">Pricing</Link>
-      </div>
-      <div className="mb-footer__col">
-        <p className="mb-footer__heading">Company</p>
-        <Link className="mb-footer__link" to="/privacy">Privacy Policy</Link>
-        <Link className="mb-footer__link" to="/privacy">Terms of Service</Link>
-        <Link className="mb-footer__link" to="/privacy">Cookie Policy</Link>
-        <Link className="mb-footer__link" to="/contact">Contact Us</Link>
-      </div>
-      <div className="mb-footer__col">
-        <p className="mb-footer__heading">Connect</p>
-        <div className="mb-footer__socials">
-          <a className="mb-footer__social" href="#">
-            <span className="material-symbols-outlined mb-footer__social-icon">public</span>
-          </a>
-          <a className="mb-footer__social" href="#">
-            <span className="material-symbols-outlined mb-footer__social-icon">alternate_email</span>
-          </a>
+
+        <div className="mb-courses__viewport">
+          <div
+            ref={trackRef}
+            className="mb-courses__track"
+            style={{
+              transform: `translateX(calc(-${index} * (100% / ${perView})))`,
+              ["--per-view" as string]: perView,
+            }}
+          >
+            {COURSES.map((course) => (
+              <article
+                key={course.id}
+                className="mb-course-card"
+                style={{ flex: `0 0 calc(100% / ${perView})` }}
+              >
+                <div className="mb-course-card__media">
+                  <img src={course.thumbnail} alt={course.title} loading="lazy" />
+                  {course.badge && (
+                    <span
+                      className={`mb-course-card__badge mb-course-card__badge--${course.badge.toLowerCase()}`}
+                    >
+                      {course.badge}
+                    </span>
+                  )}
+                  <span className="mb-course-card__category">{course.category}</span>
+                </div>
+                <div className="mb-course-card__body">
+                  <p className="mb-course-card__level">{course.level}</p>
+                  <h3 className="mb-course-card__title">{course.title}</h3>
+                  <p className="mb-course-card__instructor">by {course.instructor}</p>
+                  <div className="mb-course-card__rating">
+                    <span className="mb-course-card__rating-value">
+                      {course.rating.toFixed(1)}
+                    </span>
+                    <Stars value={course.rating} />
+                    <span className="mb-course-card__rating-count">
+                      ({course.reviewCount.toLocaleString()})
+                    </span>
+                  </div>
+                  <p className="mb-course-card__students">
+                    <span className="material-symbols-outlined">groups</span>
+                    {course.students.toLocaleString()} learners enrolled
+                  </p>
+                  <div className="mb-course-card__price">
+                    <span className="mb-course-card__price-sale">
+                      ${course.priceSale}
+                    </span>
+                    <span className="mb-course-card__price-original">
+                      ${course.priceOriginal}
+                    </span>
+                    <span className="mb-course-card__price-tag">
+                      Save ${course.priceOriginal - course.priceSale}
+                    </span>
+                  </div>
+                  <div className="mb-course-card__actions">
+                    <button
+                      type="button"
+                      className="mb-course-card__buy"
+                      onClick={() => navigate("/register")}
+                    >
+                      <span className="material-symbols-outlined">flash_on</span>
+                      Buy Now
+                    </button>
+                    <button
+                      type="button"
+                      className="mb-course-card__cart"
+                      onClick={() => navigate("/register")}
+                      aria-label="Add to cart"
+                    >
+                      <span className="material-symbols-outlined">shopping_cart</span>
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
-        <p className="mb-footer__note">✦ Privacy and security are built into everything we do.</p>
+
+        <div className="mb-courses__pager">
+          {Array.from({ length: maxIndex + 1 }).map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={`Go to slide ${i + 1}`}
+              className={`mb-courses__dot ${
+                i === index ? "mb-courses__dot--active" : ""
+              }`}
+              onClick={() => setIndex(i)}
+            />
+          ))}
+        </div>
       </div>
+    </section>
+  );
+}
+
+function LearningRoadmap() {
+  const [active, setActive] = useState(0);
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const nodeRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [layout, setLayout] = useState<{
+    firstCenter: number;
+    lastCenter: number;
+    activeCenter: number;
+  } | null>(null);
+  const [waveKey, setWaveKey] = useState(0);
+
+  const lastIndex = ROADMAP_STEPS.length - 1;
+  const isLast = active === lastIndex;
+  const step = ROADMAP_STEPS[active];
+
+  useEffect(() => {
+    const measure = () => {
+      const track = trackRef.current;
+      const first = nodeRefs.current[0];
+      const last = nodeRefs.current[lastIndex];
+      const current = nodeRefs.current[active];
+      if (!track || !first || !last || !current) return;
+      const trackLeft = track.getBoundingClientRect().left;
+      const centerOf = (el: HTMLElement) => {
+        const r = el.getBoundingClientRect();
+        return r.left + r.width / 2 - trackLeft;
+      };
+      setLayout({
+        firstCenter: centerOf(first),
+        lastCenter: centerOf(last),
+        activeCenter: centerOf(current),
+      });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [active, lastIndex]);
+
+  useEffect(() => {
+    if (isLast) setWaveKey((k) => k + 1);
+  }, [isLast]);
+
+  return (
+    <section className="mb-roadmap">
+      <div className="mb-roadmap__inner">
+        <div className="mb-roadmap__head">
+          <span className="mb-section-pill mb-section-pill--invert">
+            <span className="material-symbols-outlined">route</span>
+            AI Roadmap
+          </span>
+          <h2 className="mb-section-title mb-section-title--invert">
+            Dynamic Learning Roadmap
+          </h2>
+          <p className="mb-section-lead mb-section-lead--invert">
+            Hover or tap a node — watch the rocket fly to your next milestone.
+          </p>
+        </div>
+
+        <div className="mb-roadmap__board">
+          <div className="mb-roadmap__track" ref={trackRef}>
+            {layout && (
+              <>
+                <div
+                  className="mb-roadmap__line"
+                  style={{
+                    left: `${layout.firstCenter}px`,
+                    width: `${Math.max(0, layout.lastCenter - layout.firstCenter)}px`,
+                  }}
+                  aria-hidden
+                />
+                <div
+                  className="mb-roadmap__line-fill"
+                  style={{
+                    left: `${layout.firstCenter}px`,
+                    width: `${Math.max(0, layout.activeCenter - layout.firstCenter)}px`,
+                  }}
+                  aria-hidden
+                />
+                {isLast && (
+                  <div
+                    key={waveKey}
+                    className="mb-roadmap__wave"
+                    style={{
+                      left: `${layout.firstCenter}px`,
+                      width: `${Math.max(0, layout.lastCenter - layout.firstCenter)}px`,
+                    }}
+                    aria-hidden
+                  />
+                )}
+                <div
+                  className="mb-roadmap__rocket"
+                  style={{ left: `${layout.activeCenter}px` }}
+                  aria-hidden
+                >
+                  <span className="mb-roadmap__rocket-trail" aria-hidden />
+                  <span
+                    className="material-symbols-outlined mb-roadmap__rocket-icon"
+                    style={{ fontVariationSettings: "'FILL' 1" }}
+                  >
+                    rocket_launch
+                  </span>
+                </div>
+              </>
+            )}
+
+            {ROADMAP_STEPS.map((s, i) => (
+              <button
+                key={s.title}
+                ref={(el) => {
+                  nodeRefs.current[i] = el;
+                }}
+                type="button"
+                className={`mb-roadmap__node ${
+                  i <= active ? "mb-roadmap__node--reached" : ""
+                } ${i === active ? "mb-roadmap__node--active" : ""}`}
+                onMouseEnter={() => setActive(i)}
+                onFocus={() => setActive(i)}
+                onClick={() => setActive(i)}
+              >
+                <span className="mb-roadmap__node-circle">
+                  <span className="material-symbols-outlined">{s.icon}</span>
+                </span>
+                <span className="mb-roadmap__node-label">{s.title}</span>
+                <span className="mb-roadmap__node-tag">{s.tag}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="mb-roadmap__detail" key={active}>
+            <div className="mb-roadmap__detail-icon">
+              <span className="material-symbols-outlined">{step.icon}</span>
+            </div>
+            <div>
+              <p className="mb-roadmap__detail-tag">{step.tag}</p>
+              <h3 className="mb-roadmap__detail-title">{step.title}</h3>
+              <p className="mb-roadmap__detail-desc">{step.desc}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FlashSales() {
+  const navigate = useNavigate();
+  const target = useMemo(() => {
+    const t = new Date();
+    t.setHours(24, 0, 0, 0);
+    return t;
+  }, []);
+  const { hours, minutes, seconds } = useCountdown(target);
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  return (
+    <section className="mb-flash">
+      <div className="mb-flash__glow" aria-hidden />
+      <div className="mb-flash__inner">
+        <div className="mb-flash__head">
+          <div className="mb-flash__head-copy">
+            <span className="mb-section-pill mb-section-pill--accent">
+              <span
+                className="material-symbols-outlined"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                bolt
+              </span>
+              Flash Sale
+            </span>
+            <h2 className="mb-section-title">Limited-Time Offers</h2>
+            <p className="mb-section-lead">
+              Save up to 60% on selected courses today only. Hurry — these end soon.
+            </p>
+          </div>
+          <div className="mb-flash__countdown" aria-label="Time remaining">
+            <div className="mb-flash__unit">
+              <span className="mb-flash__digits">{pad(hours)}</span>
+              <span className="mb-flash__unit-label">Hours</span>
+            </div>
+            <span className="mb-flash__colon">:</span>
+            <div className="mb-flash__unit">
+              <span className="mb-flash__digits">{pad(minutes)}</span>
+              <span className="mb-flash__unit-label">Minutes</span>
+            </div>
+            <span className="mb-flash__colon">:</span>
+            <div className="mb-flash__unit mb-flash__unit--pulse">
+              <span className="mb-flash__digits">{pad(seconds)}</span>
+              <span className="mb-flash__unit-label">Seconds</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-flash__grid">
+          {FLASH_DEALS.map((deal) => {
+            const pct = Math.round((deal.claimed / deal.total) * 100);
+            return (
+              <article key={deal.id} className="mb-flash-card">
+                <div className="mb-flash-card__media">
+                  <img src={deal.image} alt={deal.title} loading="lazy" />
+                  <span className="mb-flash-card__discount">
+                    -{deal.discountPct}%
+                  </span>
+                </div>
+                <div className="mb-flash-card__body">
+                  <h3 className="mb-flash-card__title">{deal.title}</h3>
+                  <div className="mb-flash-card__prices">
+                    <span className="mb-flash-card__sale">${deal.salePrice}</span>
+                    <span className="mb-flash-card__original">
+                      ${deal.originalPrice}
+                    </span>
+                  </div>
+                  <div className="mb-flash-card__progress" aria-hidden>
+                    <div
+                      className="mb-flash-card__progress-fill"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className="mb-flash-card__progress-text">
+                    <strong>{deal.claimed}</strong> of {deal.total} spots claimed
+                  </p>
+                  <button
+                    type="button"
+                    className="mb-flash-card__cta"
+                    onClick={() => navigate("/register")}
+                  >
+                    Claim Offer
+                    <span className="material-symbols-outlined">arrow_forward</span>
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StatCard({ stat, active }: { stat: Stat; active: boolean }) {
+  const value = useCountUp(stat.value, active);
+  return (
+    <div className="mb-stats__card">
+      <span className="material-symbols-outlined mb-stats__icon">{stat.icon}</span>
+      <p className="mb-stats__value">
+        {value.toLocaleString()}
+        <span className="mb-stats__suffix">{stat.suffix}</span>
+      </p>
+      <p className="mb-stats__label">{stat.label}</p>
     </div>
-  </footer>
-);
+  );
+}
+
+function LiveStatistics() {
+  const sectionRef = useRef<HTMLDivElement | null>(null);
+  const inView = useInView(sectionRef, { threshold: 0.3 });
+
+  return (
+    <section className="mb-stats" ref={sectionRef}>
+      <div className="mb-stats__inner">
+        <div className="mb-stats__head">
+          <span className="mb-section-pill">
+            <span className="material-symbols-outlined">analytics</span>
+            Live Statistics
+          </span>
+          <h2 className="mb-section-title">Trusted by Learners Worldwide</h2>
+          <p className="mb-section-lead">
+            Real numbers from a growing global community of curious minds.
+          </p>
+        </div>
+        <div className="mb-stats__grid">
+          {STATS.map((s) => (
+            <StatCard key={s.label} stat={s} active={inView} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TestimonialsSlider() {
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (paused) return;
+    const t = window.setInterval(
+      () => setIndex((i) => (i + 1) % TESTIMONIALS.length),
+      6000,
+    );
+    return () => window.clearInterval(t);
+  }, [paused]);
+
+  return (
+    <section
+      className="mb-test"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      <div className="mb-test__inner">
+        <div className="mb-test__head">
+          <span className="mb-section-pill">
+            <span className="material-symbols-outlined">reviews</span>
+            Student Stories
+          </span>
+          <h2 className="mb-section-title">What Our Learners Say</h2>
+          <p className="mb-section-lead">
+            Real stories, real outcomes — from people who started right where you are.
+          </p>
+        </div>
+
+        <div className="mb-test__viewport">
+          <div
+            className="mb-test__track"
+            style={{ transform: `translateX(-${index * 100}%)` }}
+          >
+            {TESTIMONIALS.map((t) => (
+              <div className="mb-test__slide" key={t.id}>
+                <article className="mb-test__card">
+                  <span
+                    className="material-symbols-outlined mb-test__quote-icon"
+                    aria-hidden
+                  >
+                    format_quote
+                  </span>
+                  <Stars value={t.rating} />
+                  <p className="mb-test__quote">{t.quote}</p>
+                  <div className="mb-test__person">
+                    <div
+                      className="mb-test__avatar"
+                      style={{ background: t.avatarColor }}
+                      aria-hidden
+                    >
+                      {t.initials}
+                    </div>
+                    <div>
+                      <p className="mb-test__name">{t.name}</p>
+                      <p className="mb-test__role">{t.role}</p>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-test__dots">
+          {TESTIMONIALS.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={`Go to testimonial ${i + 1}`}
+              className={`mb-test__dot ${
+                i === index ? "mb-test__dot--active" : ""
+              }`}
+              onClick={() => setIndex(i)}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FAQAccordion() {
+  const [openId, setOpenId] = useState<number | null>(0);
+  return (
+    <section className="mb-faq">
+      <div className="mb-faq__inner">
+        <div className="mb-faq__head">
+          <span className="mb-section-pill">
+            <span className="material-symbols-outlined">help</span>
+            FAQ
+          </span>
+          <h2 className="mb-section-title">Frequently Asked Questions</h2>
+          <p className="mb-section-lead">
+            Everything you need to know before getting started with MindBridge.
+          </p>
+        </div>
+        <div className="mb-faq__list">
+          {FAQS.map((item) => {
+            const isOpen = openId === item.id;
+            return (
+              <div
+                key={item.id}
+                className={`mb-faq__item ${isOpen ? "mb-faq__item--open" : ""}`}
+              >
+                <button
+                  type="button"
+                  className="mb-faq__q"
+                  aria-expanded={isOpen}
+                  onClick={() => setOpenId(isOpen ? null : item.id)}
+                >
+                  <span className="mb-faq__q-text">{item.q}</span>
+                  <span
+                    className="material-symbols-outlined mb-faq__chevron"
+                    aria-hidden
+                  >
+                    expand_more
+                  </span>
+                </button>
+                <div className="mb-faq__a-wrap">
+                  <p className="mb-faq__a">{item.a}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ----- Main page ----- */
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const handlePlay = () => {
+    setVideoPlaying(true);
+    requestAnimationFrame(() => {
+      videoRef.current?.play().catch(() => {
+        /* user-initiated; will retry via native controls */
+      });
+    });
+  };
 
   return (
     <div className="mb-landing-page">
-      <MindBridgeNavbar />
+      <MindBridgeHeader />
 
       <div className="mb-landing__body">
         {/* Hero */}
         <section className="mb-hero">
           <div className="mb-hero__inner">
-            <div className="mb-hero__copy">
-              <div className="mb-hero__badge">
+            <div className="mb-hero__copy mb-reveal">
+              <div className="mb-hero__badge mb-hero__badge--animated">
                 <span
                   className="material-symbols-outlined mb-hero__badge-icon"
                   style={{ fontVariationSettings: "'FILL' 1" }}
@@ -109,31 +1034,39 @@ export default function LandingPage() {
                 </span>
                 AI-POWERED LLM
               </div>
-              <h1 className="mb-hero__title">
-                The Intelligent Bridge to <span className="mb-hero__title-accent">Modern Learning</span>
+              <h1 className="mb-hero__title mb-hero__title--animated">
+                The Intelligent Bridge to{" "}
+                <span className="mb-hero__title-accent mb-hero__title-accent--shimmer">
+                  Modern Learning
+                </span>
               </h1>
               <p className="mb-hero__subtitle">
-                Redefining education through editorial precision and LLM intelligence. A workspace that adapts to your curiosity.
+                Redefining education through editorial precision and LLM intelligence.
+                A workspace that adapts to your curiosity.
               </p>
               <div className="mb-hero__actions">
                 <button
                   type="button"
-                  className="mb-btn mb-btn--cta"
+                  className="mb-btn mb-btn--cta mb-btn--lift"
                   onClick={() => navigate("/register")}
                 >
                   Get Started
                   <span className="material-symbols-outlined">arrow_forward</span>
                 </button>
-                <button type="button" className="mb-btn mb-btn--ghost" onClick={() => navigate("/login")}>
+                <button
+                  type="button"
+                  className="mb-btn mb-btn--ghost mb-btn--lift"
+                  onClick={() => navigate("/login")}
+                >
                   Become an Instructor
                 </button>
               </div>
             </div>
 
             <div className="mb-hero__visual">
-              <div className="mb-hero__halo" />
+              <div className="mb-hero__halo mb-hero__halo--pulse" />
               <div className="mb-hero__visual-stack">
-                <div className="mb-glass mb-hero__card-main">
+                <div className="mb-glass mb-hero__card-main mb-hero__card-main--float">
                   <div className="mb-hero__card-top">
                     <div className="mb-hero__dots">
                       <span className="mb-hero__dot mb-hero__dot--error" />
@@ -158,7 +1091,7 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                <div className="mb-glass mb-hero__insight">
+                <div className="mb-glass mb-hero__insight mb-hero__insight--float">
                   <div className="mb-hero__insight-icon">
                     <span
                       className="material-symbols-outlined"
@@ -173,7 +1106,7 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                <div className="mb-glass mb-hero__health">
+                <div className="mb-glass mb-hero__health mb-hero__health--float">
                   <p className="mb-hero__health-title">Course Health</p>
                   <div className="mb-hero__health-bars">
                     <div style={{ height: "40%" }} />
@@ -266,23 +1199,52 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* TVC Video */}
+        {/* TVC Video — now interactive */}
         <section className="mb-tvc">
-          <div className="mb-tvc__overlay">
-            <div className="mb-tvc__cluster">
-              <button type="button" className="mb-tvc__play">
-                <span
-                  className="material-symbols-outlined mb-tvc__play-icon"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  play_arrow
-                </span>
-              </button>
-              <p className="mb-tvc__caption">Watch how it works</p>
-            </div>
-          </div>
-          <img alt="AI Platform in Action" className="mb-tvc__poster" src={VIDEO_POSTER_URL} />
+          {!videoPlaying ? (
+            <>
+              <div className="mb-tvc__overlay">
+                <div className="mb-tvc__cluster">
+                  <button
+                    type="button"
+                    className="mb-tvc__play mb-tvc__play--pulse"
+                    onClick={handlePlay}
+                    aria-label="Play promotional video"
+                  >
+                    <span
+                      className="material-symbols-outlined mb-tvc__play-icon"
+                      style={{ fontVariationSettings: "'FILL' 1" }}
+                    >
+                      play_arrow
+                    </span>
+                  </button>
+                  <p className="mb-tvc__caption">Watch how it works</p>
+                </div>
+              </div>
+              <img
+                alt="AI Platform in Action"
+                className="mb-tvc__poster"
+                src={VIDEO_POSTER_URL}
+              />
+            </>
+          ) : (
+            <video
+              ref={videoRef}
+              className="mb-tvc__video"
+              src={VIDEO_SRC}
+              poster={VIDEO_POSTER_URL}
+              controls
+              autoPlay
+              playsInline
+            />
+          )}
         </section>
+
+        {/* NEW: Trending Courses */}
+        <CoursesCarousel />
+
+        {/* NEW: Dynamic Learning Roadmap */}
+        <LearningRoadmap />
 
         {/* Certifications */}
         <section className="mb-certs">
@@ -305,6 +1267,15 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* NEW: Flash Sales */}
+        <FlashSales />
+
+        {/* NEW: Live Statistics */}
+        <LiveStatistics />
+
+        {/* NEW: Student Testimonials */}
+        <TestimonialsSlider />
+
         {/* CTA */}
         <section className="mb-cta-section">
           <div className="mb-cta-card">
@@ -319,18 +1290,25 @@ export default function LandingPage() {
               <div className="mb-cta-card__actions">
                 <button
                   type="button"
-                  className="mb-btn mb-btn--secondary"
+                  className="mb-btn mb-btn--secondary mb-btn--lift"
                   onClick={() => navigate("/login")}
                 >
                   Start Free Trial
                 </button>
-                <button type="button" className="mb-btn mb-btn--outline-light" onClick={() => navigate("/contact")}>
+                <button
+                  type="button"
+                  className="mb-btn mb-btn--outline-light mb-btn--lift"
+                  onClick={() => navigate("/contact")}
+                >
                   Contact Sales
                 </button>
               </div>
             </div>
           </div>
         </section>
+
+        {/* NEW: FAQ */}
+        <FAQAccordion />
       </div>
 
       <MindBridgeFooter />
