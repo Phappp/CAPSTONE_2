@@ -106,6 +106,7 @@ import {
   LearningActivityDayPoint,
   InstructorCatalogResult,
   InstructorCatalogItem,
+  InstructorDetailItem,
   CourseReviewItem,
   CourseReviewListResult,
 } from '../types';
@@ -763,6 +764,9 @@ function mapToPublishedCourseListItem(row: any): PublishedCourseListItem {
     is_enrolled: Number(row.is_enrolled ?? 0) > 0,
     can_enroll: row.can_enroll == null ? true : Boolean(row.can_enroll),
     instructors: safeJsonParse<any[]>(row.instructors, []),
+    rating: row.rating != null ? Number(row.rating) : null,
+    avg_rating: row.rating != null ? Number(row.rating) : null,
+    rating_count: Number(row.rating_count ?? 0),
   };
 }
 
@@ -1864,6 +1868,160 @@ export class CourseServiceImpl implements CourseService {
     return {
       items,
       total: items.length,
+    };
+  }
+
+  async getInstructorById(instructorId: number): Promise<InstructorDetailItem | null> {
+    const now = new Date();
+
+    // Get instructor info
+    const instructor = await AppDataSource.getRepository(User)
+      .createQueryBuilder('u')
+      .where('u.id = :instructorId', { instructorId })
+      .getOne();
+
+    if (!instructor) return null;
+
+    // Get instructor's published courses with count
+    const coursesQb = AppDataSource.getRepository(Course)
+      .createQueryBuilder('c')
+      .innerJoin(CourseInstructor, 'ci', 'ci.course_id = c.id AND ci.instructor_id = :instructorId', { instructorId })
+      .where('c.deleted_at IS NULL')
+      .andWhere(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      );
+
+    const courses = await coursesQb.getMany();
+    const courseCount = courses.length;
+
+    // Get total learners
+    const learnerCount = await AppDataSource.getRepository(CourseEnrollment)
+      .createQueryBuilder('ce')
+      .innerJoin(Course, 'c', 'c.id = ce.course_id')
+      .innerJoin(CourseInstructor, 'ci', 'ci.course_id = c.id AND ci.instructor_id = :instructorId', { instructorId })
+      .where(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      )
+      .andWhere('c.deleted_at IS NULL')
+      .select('COUNT(DISTINCT ce.user_id)', 'total')
+      .getRawOne();
+
+    // Get average rating from course reviews
+    const avgRatingResult = await AppDataSource.getRepository(CourseReview)
+      .createQueryBuilder('cr')
+      .innerJoin(Course, 'c', 'c.id = cr.course_id')
+      .innerJoin(CourseInstructor, 'ci', 'ci.course_id = c.id AND ci.instructor_id = :instructorId', { instructorId })
+      .where(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      )
+      .andWhere('c.deleted_at IS NULL')
+      .select('AVG(cr.rating)', 'avg_rating')
+      .getRawOne();
+
+    const avgRating = avgRatingResult?.avg_rating ? parseFloat(avgRatingResult.avg_rating) : 0;
+
+    // Build credentials based on instructor roles
+    const credentials: { icon: string; title: string; sub: string }[] = [];
+
+    // Check roles
+    const roles = await AppDataSource.getRepository(UserRole)
+      .createQueryBuilder('ur')
+      .innerJoin(Role, 'r', 'r.id = ur.role_id')
+      .where('ur.user_id = :instructorId', { instructorId })
+      .getMany();
+
+    const roleNames = roles.map((r: any) => r.role?.name || 'Instructor');
+    if (roleNames.includes('admin') || roleNames.includes('course_manager')) {
+      credentials.push({ icon: 'workspace_premium', title: 'Course Manager', sub: 'MindBridge Platform' });
+    }
+    if (courseCount >= 2) {
+      credentials.push({ icon: 'school', title: 'Expert Instructor', sub: `${courseCount} Courses` });
+    }
+    if (Number(learnerCount?.total || 0) >= 100) {
+      credentials.push({ icon: 'groups', title: 'Community Leader', sub: `${Number(learnerCount?.total || 0).toLocaleString()} Students` });
+    }
+
+    // Get courses with category info
+    // Get average rating per course
+    const courseIds = courses.map((c: any) => c.id);
+    const courseRatings: Record<number, number> = {};
+    const courseReviewCounts: Record<number, number> = {};
+
+    if (courseIds.length > 0) {
+      const ratingsResult = await AppDataSource.getRepository(CourseReview)
+        .createQueryBuilder('cr')
+        .where('cr.course_id IN (:...courseIds)', { courseIds })
+        .select('cr.course_id', 'course_id')
+        .addSelect('AVG(cr.rating)', 'avg_rating')
+        .addSelect('COUNT(*)', 'review_count')
+        .groupBy('cr.course_id')
+        .getRawMany();
+
+      ratingsResult.forEach((r: any) => {
+        courseRatings[r.course_id] = parseFloat(r.avg_rating) || 0;
+        courseReviewCounts[r.course_id] = parseInt(r.review_count) || 0;
+      });
+    }
+
+    const courseItems = courses.map((c: any) => ({
+      slug: c.slug || String(c.id),
+      title: c.title,
+      category: c.category || 'General',
+      description: c.short_description || c.description || '',
+      price: c.price ? `${Number(c.price).toLocaleString('vi-VN')} ₫` : 'Miễn phí',
+      image: c.thumbnail_url || null,
+      rating: courseRatings[c.id] || 0,
+      reviewCount: courseReviewCounts[c.id] || 0,
+    }));
+
+    // Get a sample testimony (random course review with rating >= 4)
+    const testimonyResult = await AppDataSource.getRepository(CourseReview)
+      .createQueryBuilder('cr')
+      .innerJoin(Course, 'c', 'c.id = cr.course_id')
+      .innerJoin(CourseInstructor, 'ci', 'ci.course_id = c.id AND ci.instructor_id = :instructorId', { instructorId })
+      .innerJoin(User, 'u', 'u.id = cr.user_id')
+      .where(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      )
+      .andWhere('c.deleted_at IS NULL')
+      .andWhere('cr.rating >= :minRating', { minRating: 4 })
+      .orderBy('RAND()')
+      .limit(1)
+      .getRawAndEntities();
+
+    let testimony: { quote: string; author: string; avatar: string | null } | null = null;
+    if (testimonyResult.raw.length > 0) {
+      const t = testimonyResult.raw[0];
+      testimony = {
+        quote: t.cr_comment || `I loved learning from ${instructor.full_name}! Highly recommend their courses.`,
+        author: t.u_full_name || 'Anonymous Student',
+        avatar: t.u_avatar_url || null,
+      };
+    }
+
+    // Parse bio into paragraphs
+    const bioText = instructor.bio || '';
+    const bioParagraphs = bioText.length > 0
+      ? bioText.split(/\n+/).filter(p => p.trim()).slice(0, 3)
+      : [`${instructor.full_name} is a dedicated instructor on MindBridge, sharing their expertise through high-quality courses.`];
+
+    return {
+      id: instructor.id,
+      full_name: instructor.full_name,
+      avatar_url: instructor.avatar_url,
+      bio: bioText,
+      stats: {
+        students: Number(learnerCount?.total || 0),
+        courses: courseCount,
+        rating: Math.round(avgRating * 10) / 10,
+      },
+      credentials,
+      courses: courseItems,
+      testimony,
     };
   }
 

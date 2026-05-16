@@ -81,6 +81,22 @@ export class CourseController extends BaseController {
     });
   }
 
+  async getInstructorById(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const instructorId = Number(req.params.id);
+      if (isNaN(instructorId)) {
+        res.status(400).json({ message: 'Invalid instructor ID' });
+        return;
+      }
+      const item = await this.service.getInstructorById(instructorId);
+      if (!item) {
+        res.status(404).json({ message: 'Instructor not found' });
+        return;
+      }
+      res.status(200).json({ item });
+    });
+  }
+
   // Course review routes
   async createReview(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {

@@ -11,6 +11,7 @@ import { url } from '../../baseUrl';
 import { COURSES_API } from '../../api/courses';
 import { getAccessToken } from '../../utils/authStorage';
 import { DEFAULT_COURSE_THUMB } from '../../utils/imageFallback';
+import LearnerFab from '../../components/LearnerFab';
 import './MyCoursePage.css';
 
 interface FilterTab {
@@ -255,6 +256,8 @@ const MyCoursePage: React.FC = () => {
           )}
         </div>
       </main>
+
+      <LearnerFab onClick={() => navigate('/my-courses')} />
     </div>
   );
 };

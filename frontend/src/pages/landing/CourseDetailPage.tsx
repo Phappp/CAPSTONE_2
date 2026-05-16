@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { House } from "lucide-react";
+import MindBridgeFooter from "../../components/MindBridgeFooter";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { getAccessToken } from "../../utils/authStorage";
 import { useAuth } from "../../contexts/Auth";
+import { DEFAULT_COURSE_THUMB } from "../../utils/imageFallback";
 import "./CourseDetailPage.css";
 
 interface ModuleLesson {
@@ -43,18 +46,7 @@ interface CourseDetail {
   best_seller?: boolean;
 }
 
-interface Review {
-  id: number;
-  user_id: number;
-  user_full_name: string;
-  user_avatar: string | null;
-  rating: number;
-  comment: string | null;
-  created_at: string;
-}
-
-const FALLBACK_HERO_IMG =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuC2CfqoRX0g7DDhkn5mgt5KAGvNliB4d76jddyUuLZDNoGcNp1XjnkSZ_xQnFTIY5y7gY-W-KpHEcRaOqKQaEQhfX9PJfUIfHAJWFbbGwyKyHHgqpn23OwcxIJgOehfMCf5BxFsIhneTLlT4Lbdy9t3e2ns9MezosB_h8wEjMCfNacxN1L0vVfuIqyIAp6nkBKFzs62gJsNgG6o9KTalD2Tl2bbn2U1AinVJnnaD-0kTSw_i98C106eqmhnACPIWZ7F43NNv_P9Vg";
+const FALLBACK_HERO_IMG = DEFAULT_COURSE_THUMB;
 
 const DEFAULT_LEARN_BULLETS = [
   "Implement CNNs for advanced image recognition and segmentation.",
@@ -66,7 +58,7 @@ const DEFAULT_LEARN_BULLETS = [
 export default function CourseDetailPage() {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
-  const { isAuthenticated, user: currentUser } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,16 +66,6 @@ export default function CourseDetailPage() {
   const [activeTab, setActiveTab] = useState<"overview" | "syllabus" | "instructor" | "reviews">("overview");
   const [openModules, setOpenModules] = useState<Record<number, boolean>>({});
   const [enrolling, setEnrolling] = useState(false);
-
-  // Review state
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [reviewStats, setReviewStats] = useState({ avg: 0 as number, count: 0 });
-  const [userReview, setUserReview] = useState<Review | null>(null);
-  const [reviewRating, setReviewRating] = useState(0);
-  const [hoverRating, setHoverRating] = useState(0);
-  const [reviewComment, setReviewComment] = useState("");
-  const [reviewLoading, setReviewLoading] = useState(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -102,25 +84,7 @@ export default function CourseDetailPage() {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error((data as any)?.message || "Course not found.");
         if (cancelled) return;
-
-        // Transform backend response to frontend CourseDetail shape
-        const instructors = Array.isArray((data as any).instructors) ? (data as any).instructors : [];
-        const primaryInstructor = instructors.find((i: any) => i.is_primary) || instructors[0];
-        const totalMinutes = (data as any).total_duration_minutes;
-        const hours = totalMinutes ? Math.ceil(totalMinutes / 60) : null;
-
-        const transformed: CourseDetail = {
-          ...(data as CourseDetail),
-          rating: (data as any).rating ?? (data as any).avg_rating ?? null,
-          rating_count: (data as any).rating_count ?? null,
-          instructor_name: primaryInstructor?.full_name ?? null,
-          instructor_avatar: primaryInstructor?.avatar_url ?? null,
-          duration_hours: hours,
-          category: null,
-          best_seller: false,
-        };
-
-        setCourse(transformed);
+        setCourse(data as CourseDetail);
         const firstModule = (data as CourseDetail)?.modules?.[0];
         if (firstModule?.id) setOpenModules({ [firstModule.id]: true });
       } catch (err: any) {
@@ -163,93 +127,6 @@ export default function CourseDetailPage() {
     }
   };
 
-  // Fetch reviews when course loads or tab is reviews
-  useEffect(() => {
-    if (!course?.id) return;
-    let cancelled = false;
-    const token = getAccessToken();
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
-
-    const fetchReviews = async () => {
-      try {
-        const res = await fetch(`${url}${COURSES_API.reviews(course.id)}`, { headers });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          if (cancelled) return;
-          setReviewStats({
-            avg: typeof data.avg_rating === "number" ? data.avg_rating : 0,
-            count: typeof data.rating_count === "number" ? data.rating_count : 0,
-          });
-          setReviews(Array.isArray(data.items) ? data.items : []);
-          if (token && currentUser) {
-            const me = data.items?.find(
-              (r: Review) => r.user_id === Number(currentUser.id)
-            );
-            if (me) {
-              setUserReview(me);
-              setReviewRating(me.rating);
-              setReviewComment(me.comment ?? "");
-            }
-          }
-        }
-      } catch {
-        // Silently fail — reviews are non-critical
-      }
-    };
-
-    fetchReviews();
-    return () => {
-      cancelled = true;
-    };
-  }, [course?.id, currentUser]);
-
-  const submitReview = async () => {
-    if (!course?.id || reviewRating === 0) return;
-    setReviewLoading(true);
-    setReviewError(null);
-    try {
-      const token = getAccessToken();
-      if (!token) return;
-      const res = await fetch(`${url}${COURSES_API.reviews(course.id)}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ rating: reviewRating, comment: reviewComment }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as any)?.message || "Failed to submit review.");
-      const newReview: Review = data;
-      setReviews((prev) => [newReview, ...prev]);
-      setUserReview(newReview);
-      const newCount = reviewStats.count + 1;
-      const newAvg =
-        newCount > 0
-          ? (reviewStats.avg * reviewStats.count + reviewRating) / newCount
-          : reviewRating;
-      setReviewStats({ avg: newAvg, count: newCount });
-    } catch (err: any) {
-      setReviewError(err?.message || "Failed to submit review.");
-    } finally {
-      setReviewLoading(false);
-    }
-  };
-
-  const renderStars = (rating: number) => {
-    const full = Math.floor(rating);
-    const half = rating - full >= 0.5;
-    const empty = 5 - full - (half ? 1 : 0);
-    const items: { key: string; icon: string; cls: string }[] = [];
-    for (let i = 0; i < full; i++) items.push({ key: `f${i}`, icon: "star", cls: "text-yellow-400" });
-    if (half) items.push({ key: "h", icon: "star_half", cls: "text-yellow-400" });
-    for (let i = 0; i < empty; i++) items.push({ key: `e${i}`, icon: "star", cls: "text-slate-300" });
-    return items;
-  };
-
   const learnBullets = useMemo(() => {
     if (course?.what_you_learn?.length) return course.what_you_learn;
     return DEFAULT_LEARN_BULLETS;
@@ -257,14 +134,13 @@ export default function CourseDetailPage() {
 
   const priceLabel = useMemo(() => {
     if (!course) return "";
-    if (typeof course.price !== "number" || course.price <= 0) return "Free";
-    return `$${course.price.toFixed(2)}`;
+    if (typeof course.price !== "number" || course.price <= 0) return "Miễn phí";
+    return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(course.price);
   }, [course]);
 
   if (loading) {
     return (
       <div className="mb-public course-detail-page bg-surface text-on-surface">
-        <MindBridgeHeader active="courses" />
         <main className="max-w-7xl mx-auto px-6 py-24 text-center text-on-surface-variant">
           Loading course…
         </main>
@@ -276,7 +152,6 @@ export default function CourseDetailPage() {
   if (error || !course) {
     return (
       <div className="mb-public course-detail-page bg-surface text-on-surface">
-        <MindBridgeHeader active="courses" />
         <main className="max-w-7xl mx-auto px-6 py-24 text-center">
           <h1 className="text-2xl font-bold text-primary mb-4">Course not found</h1>
           <p className="text-on-surface-variant mb-6">{error || "We couldn't find that course."}</p>
@@ -290,8 +165,7 @@ export default function CourseDetailPage() {
   }
 
   return (
-    <div className="course-detail-page bg-surface text-on-surface">
-
+    <div className="mb-public course-detail-page bg-surface text-on-surface">
       <main>
         <section className="bg-primary-container text-white py-16 md:py-24 overflow-hidden relative">
           <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center relative z-10">
@@ -336,10 +210,21 @@ export default function CourseDetailPage() {
                 <div className="flex flex-col">
                   <p className="text-sm text-on-primary-container">Rating</p>
                   <div className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-amber-400 course-detail-icon-filled">star</span>
-                    <span className="font-bold">{(course.rating ?? 4.9).toFixed(1)}</span>
+                    <span className="font-bold">{(course.rating ?? 0).toFixed(1)}</span>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <span
+                        key={star}
+                        className={`material-symbols-outlined text-sm ${
+                          star <= Math.round(course.rating ?? 0)
+                            ? 'text-amber-400 course-detail-icon-filled'
+                            : 'text-gray-400'
+                        }`}
+                      >
+                        star
+                      </span>
+                    ))}
                     <span className="text-on-primary-container text-sm">
-                      ({(course.learners_count ?? 0).toLocaleString()} students)
+                      ({(course.rating_count ?? 0).toLocaleString()} đánh giá)
                     </span>
                   </div>
                 </div>
@@ -351,6 +236,7 @@ export default function CourseDetailPage() {
                   className="w-full h-full object-cover"
                   src={course.thumbnail_url || FALLBACK_HERO_IMG}
                   alt={course.title}
+                  onError={(e) => { (e.target as HTMLImageElement).src = FALLBACK_HERO_IMG; }}
                 />
               </div>
             </div>
@@ -457,171 +343,7 @@ export default function CourseDetailPage() {
               )}
 
               {activeTab === "reviews" && (
-                <div className="space-y-8">
-                  {/* Summary row */}
-                  <div className="flex flex-col sm:flex-row gap-8 items-start">
-                    <div className="text-center min-w-[100px]">
-                      <div className="text-5xl font-extrabold text-primary">
-                        {reviewStats.avg > 0 ? reviewStats.avg.toFixed(1) : "—"}
-                      </div>
-                      <div className="flex justify-center mt-1 mb-1">
-                        {renderStars(reviewStats.avg).map((s) => (
-                          <span key={s.key} className={`material-symbols-outlined ${s.cls} text-lg`}>
-                            {s.icon}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="text-sm text-slate-500">{reviewStats.count} reviews</div>
-                    </div>
-                    <div className="flex-1 space-y-2 w-full">
-                      {[5, 4, 3, 2, 1].map((star) => {
-                        const pct =
-                          reviewStats.count > 0
-                            ? (reviews.filter((r) => r.rating === star).length / reviewStats.count) * 100
-                            : 0;
-                        return (
-                          <div key={star} className="flex items-center gap-2">
-                            <span className="text-sm w-4 text-right">{star}</span>
-                            <div className="flex-1 bg-slate-200 rounded-full h-2">
-                              <div
-                                className="bg-yellow-400 h-2 rounded-full transition-all"
-                                style={{ width: `${pct}%` }}
-                              />
-                            </div>
-                            <span className="text-xs text-slate-500 w-10">{pct.toFixed(0)}%</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Write review form */}
-                  {course.is_enrolled && !userReview && (
-                    <div className="border-t border-slate-200 pt-8">
-                      <h3 className="font-bold text-lg mb-4 text-primary">Write a Review</h3>
-                      {reviewError && (
-                        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
-                          {reviewError}
-                        </div>
-                      )}
-                      <div className="flex gap-1 mb-3">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <button
-                            key={star}
-                            type="button"
-                            onClick={() => setReviewRating(star)}
-                            onMouseEnter={() => setHoverRating(star)}
-                            onMouseLeave={() => setHoverRating(0)}
-                            className="p-1 hover:scale-110 transition-transform"
-                          >
-                            <span
-                              className={`material-symbols-outlined text-3xl ${
-                                star <= (hoverRating || reviewRating) ? "text-yellow-400" : "text-slate-300"
-                              }`}
-                              style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
-                            >
-                              star
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                      {reviewRating > 0 && (
-                        <p className="text-sm text-slate-500 mb-3">
-                          {reviewRating === 5
-                            ? "Excellent!"
-                            : reviewRating === 4
-                            ? "Very Good"
-                            : reviewRating === 3
-                            ? "Average"
-                            : reviewRating === 2
-                            ? "Poor"
-                            : "Very Poor"}
-                        </p>
-                      )}
-                      <textarea
-                        className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:border-[#0D9488] focus:outline-none transition-colors resize-none"
-                        rows={4}
-                        placeholder="Share your experience with this course..."
-                        value={reviewComment}
-                        onChange={(e) => setReviewComment(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="mt-3 bg-[#0D9488] text-white px-6 py-2.5 rounded-lg font-bold text-sm hover:brightness-110 transition-all disabled:opacity-50"
-                        disabled={reviewRating === 0 || reviewLoading}
-                        onClick={submitReview}
-                      >
-                        {reviewLoading ? "Submitting..." : "Submit Review"}
-                      </button>
-                    </div>
-                  )}
-
-                  {course.is_enrolled && userReview && (
-                    <div className="border-t border-slate-200 pt-6">
-                      <div className="flex items-center gap-2 mb-4">
-                        <span className="material-symbols-outlined text-secondary">check_circle</span>
-                        <h3 className="font-bold text-primary">Your Review</h3>
-                      </div>
-                      <div className="bg-slate-50 rounded-lg p-4">
-                        <div className="flex items-center gap-1 mb-2">
-                          {renderStars(userReview.rating).map((s) => (
-                            <span key={s.key} className={`material-symbols-outlined ${s.cls} text-sm`}>
-                              {s.icon}
-                            </span>
-                          ))}
-                        </div>
-                        {userReview.comment && (
-                          <p className="text-slate-600 text-sm">{userReview.comment}</p>
-                        )}
-                        <p className="text-xs text-slate-400 mt-2">
-                          {new Date(userReview.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {!course.is_enrolled && (
-                    <div className="bg-teal-50 border border-teal-100 rounded-lg p-4 text-sm text-slate-600">
-                      Enroll in this course to leave a review.
-                    </div>
-                  )}
-
-                  {/* Reviews list */}
-                  <div className="space-y-6">
-                    {reviews.length === 0 && (
-                      <div className="text-center text-slate-400 py-8">No reviews yet. Be the first!</div>
-                    )}
-                    {reviews.map((review) => (
-                      <div key={review.id} className="border-b border-slate-100 pb-6 last:border-0">
-                        <div className="flex items-start gap-3 mb-2">
-                          <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-500 text-sm flex-shrink-0">
-                            {review.user_full_name?.[0]?.toUpperCase() ?? "?"}
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between flex-wrap gap-2">
-                              <div className="font-bold text-sm text-slate-800">{review.user_full_name}</div>
-                              <div className="flex items-center gap-2">
-                                <div className="flex items-center gap-0.5">
-                                  {renderStars(review.rating).map((s) => (
-                                    <span key={s.key} className={`material-symbols-outlined ${s.cls} text-sm`}>
-                                      {s.icon}
-                                    </span>
-                                  ))}
-                                </div>
-                                <span className="text-xs text-slate-400">
-                                  {new Date(review.created_at).toLocaleDateString()}
-                                </span>
-                              </div>
-                            </div>
-                            {review.comment && (
-                              <p className="text-slate-600 text-sm mt-1 leading-relaxed">{review.comment}</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <div className="text-slate-500">Reviews module coming soon.</div>
               )}
             </div>
 
@@ -632,7 +354,7 @@ export default function CourseDetailPage() {
                     <span className="text-3xl font-extrabold text-primary">{priceLabel}</span>
                     {typeof course.original_price === "number" && course.original_price > (course.price ?? 0) && (
                       <span className="text-slate-400 line-through">
-                        ${course.original_price.toFixed(2)}
+                        {new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(course.original_price)}
                       </span>
                     )}
                   </div>
@@ -670,6 +392,15 @@ export default function CourseDetailPage() {
       </main>
 
       <MindBridgeFooter />
+
+      <button
+        type="button"
+        className="ld-fab"
+        aria-label="Add"
+        onClick={() => navigate('/learner/dashboard')}
+      >
+        <House size={22} strokeWidth={2.6} />
+      </button>
     </div>
   );
 }

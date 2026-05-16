@@ -12,6 +12,7 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
   router.route('/catalog/:slug').get(optionalAuthorizedUser, controller.getPublishedCourseBySlug.bind(controller));
   router.route('/catalog/:slug/prerequisite-graph').get(optionalAuthorizedUser, controller.getPublishedCoursePrerequisiteGraphBySlug.bind(controller));
   router.route('/instructors/catalog').get(optionalAuthorizedUser, controller.listInstructorsCatalog.bind(controller));
+  router.route('/instructors/:id').get(optionalAuthorizedUser, controller.getInstructorById.bind(controller));
 
   // Course review routes
   router.route('/:id/reviews').post(requireAuthorizedUser, controller.createReview.bind(controller));

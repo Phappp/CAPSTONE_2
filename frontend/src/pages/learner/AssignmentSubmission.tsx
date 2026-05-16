@@ -26,6 +26,7 @@ import {
 import { url } from '../../baseUrl';
 import { ASSIGNMENTS_API } from '../../api/assignments';
 import { getAccessToken } from '../../utils/authStorage';
+import LearnerFab from '../../components/LearnerFab';
 import './AssignmentSubmission.css';
 
 interface ResourceItem {
@@ -667,6 +668,8 @@ const AssignmentSubmission: React.FC = () => {
           <span>Loading assignment…</span>
         </div>
       )}
+
+      <LearnerFab onClick={() => navigate('/my-courses')} />
     </div>
   );
 };

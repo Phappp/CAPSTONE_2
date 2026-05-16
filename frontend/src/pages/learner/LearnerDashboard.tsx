@@ -6,7 +6,7 @@ import {
   BadgeCheck,
   ChevronLeft,
   ChevronRight,
-  Plus,
+  BookOpen,
   Loader2,
 } from 'lucide-react';
 import { url } from '../../baseUrl';
@@ -468,10 +468,10 @@ const LearnerDashboard: React.FC = () => {
       <button
         type="button"
         className="ld-fab"
-        aria-label="Add"
-        onClick={() => navigate('/courses')}
+        aria-label="Khóa học của tôi"
+        onClick={() => navigate('/my-courses')}
       >
-        <Plus size={22} strokeWidth={2.6} />
+        <BookOpen size={22} strokeWidth={2.6} />
       </button>
     </div>
   );

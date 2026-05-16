@@ -21,6 +21,7 @@ import {
   LiveSessionStatus,
 } from '../../services/liveSessionClient';
 import { useAuth } from '../../contexts/Auth';
+import LearnerFab from '../../components/LearnerFab';
 import './LiveSessionsSchedule.css';
 
 interface SessionCard {
@@ -311,6 +312,8 @@ const LiveSessionsSchedule: React.FC = () => {
           </section>
         </div>
       </main>
+
+      <LearnerFab onClick={() => navigate('/my-courses')} />
     </div>
   );
 };

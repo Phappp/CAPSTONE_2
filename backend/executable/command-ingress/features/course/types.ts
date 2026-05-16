@@ -404,6 +404,42 @@ export type InstructorCatalogResult = {
   total: number;
 };
 
+export type InstructorDetailItem = {
+  id: number;
+  full_name: string;
+  avatar_url: string | null;
+  bio: string | null;
+  stats: {
+    students: number;
+    courses: number;
+    rating: number;
+  };
+  credentials: {
+    icon: string;
+    title: string;
+    sub: string;
+  }[];
+  courses: {
+    slug: string;
+    title: string;
+    category: string;
+    description: string;
+    price: string;
+    image: string | null;
+    rating: number;
+    reviewCount: number;
+  }[];
+  testimony: {
+    quote: string;
+    author: string;
+    avatar: string | null;
+  } | null;
+};
+
+export type InstructorDetailResult = {
+  item: InstructorDetailItem | null;
+};
+
 export type CourseReviewItem = {
   id: number;
   user_id: number;
@@ -837,6 +873,7 @@ export interface CourseService {
   getPublishedCourseBySlug(subjectUserId: number | undefined, slug: string): Promise<CourseDetail>;
   getPublishedCoursePrerequisiteGraphBySlug(subjectUserId: number | undefined, slug: string): Promise<CoursePrerequisiteGraph>;
   listInstructorsCatalog(): Promise<InstructorCatalogResult>;
+  getInstructorById(instructorId: number): Promise<InstructorDetailItem | null>;
 
   // Enrollment methods
   enrollCourse(subjectUserId: number, courseId: number): Promise<EnrollmentResult>;

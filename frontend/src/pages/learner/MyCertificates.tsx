@@ -22,6 +22,7 @@ import { url } from '../../baseUrl';
 import { COURSES_API } from '../../api/courses';
 import { getAccessToken } from '../../utils/authStorage';
 import { useAuth } from '../../contexts/Auth';
+import LearnerFab from '../../components/LearnerFab';
 import './MyCertificates.css';
 
 interface EnrolledCourse {
@@ -426,6 +427,8 @@ const MyCertificates: React.FC = () => {
           </aside>
         </div>
       </main>
+
+      <LearnerFab onClick={() => navigate('/my-courses')} />
     </div>
   );
 };

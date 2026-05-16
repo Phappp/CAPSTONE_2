@@ -96,6 +96,7 @@ export const COURSES_API = {
   myLearningActivity: `${COURSES_API_BASE}/my/learning-activity`,
   // Instructors catalog
   instructorsCatalog: `${COURSES_API_BASE}/instructors/catalog`,
+  instructorDetail: (id: number | string) => `${COURSES_API_BASE}/instructors/${id}`,
   // Course reviews
   reviews: (id: number | string) => `${COURSES_API_BASE}/${id}/reviews`,
   review: (id: number | string, reviewId: number | string) => `${COURSES_API_BASE}/${id}/reviews/${reviewId}`,
