@@ -7,51 +7,37 @@ type ChatMessageProps = {
     };
 };
 
-function parseMarkdown(text: string): React.ReactNode[] {
-    // Convert literal \n to actual newlines first
-    const processed = text.replace(/\\n/g, '\n');
-    const lines = processed.split('\n');
-    const parts: React.ReactNode[] = [];
-    let key = 0;
+function renderMessage(text: string): string {
+    // Step 1: Unescape common JSON/string escape sequences
+    let processed = text
+        .replace(/\\n/g, '\n')
+        .replace(/\\"/g, '"')
+        .replace(/\\'/g, "'")
+        .replace(/\\\\/g, '\\');
 
-    for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
+    // Step 2: Convert **bold** to <strong>
+    processed = processed.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 
-        while (line.length > 0) {
-            // Match **bold** text
-            const boldMatch = line.match(/\*\*(.+?)\*\*/);
-            if (boldMatch && boldMatch.index !== undefined) {
-                // Add text before bold
-                if (boldMatch.index > 0) {
-                    parts.push(line.slice(0, boldMatch.index));
-                }
-                // Add bold text
-                parts.push(<strong key={key++}>{boldMatch[1]}</strong>);
-                line = line.slice(boldMatch.index + boldMatch[0].length);
-            } else {
-                parts.push(line);
-                break;
-            }
-        }
+    // Step 3: Convert markdown links [text](url) → text
+    processed = processed.replace(/\[(.+?)\]\((.+?)\)/g, '$1');
 
-        // Add <br /> between lines (except after the last line)
-        if (i < lines.length - 1) {
-            parts.push(<br key={key++} />);
-        }
-    }
+    // Step 4: Convert bullet points - and • to HTML
+    processed = processed.replace(/^[-•]\s+/gm, '• ');
 
-    return parts;
+    return processed;
 }
 
 export function ChatMessage({ message }: ChatMessageProps) {
     const isUser = message.role === 'user';
+    const rendered = renderMessage(message.content);
 
     return (
         <div className={`chatbot-message ${isUser ? 'user-message' : 'bot-message'}`}>
             {!isUser && <Bot size={20} className="chatbot-bot-icon" />}
-            <div className="chatbot-message-content">
-                <p>{parseMarkdown(message.content)}</p>
-            </div>
+            <div
+                className="chatbot-message-content"
+                dangerouslySetInnerHTML={{ __html: rendered.replace(/\n/g, '<br />') }}
+            />
         </div>
     );
 }

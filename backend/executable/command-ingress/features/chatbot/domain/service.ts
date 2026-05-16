@@ -13,6 +13,222 @@ import { findFAQByMessage, FAQItem } from './faq-knowledge';
 import { findRoadmapByTopic, Roadmap } from './roadmap-data';
 import { findCareerByKeyword, formatCareerInfo, CareerPath } from './career-data';
 
+// ====== Types for Comparison Feature ======
+type TopicKnowledge = {
+    ease_of_learning: string;
+    best_for: string;
+    job_demand: string;
+    ecosystem: string;
+    difficulty: 'beginner' | 'intermediate' | 'advanced';
+};
+
+type TopicStats = {
+    courseCount: number;
+    avgPrice: number | null;
+    levels: string[];
+};
+
+// ====== Static Knowledge Data for Topic Comparison ======
+const TOPIC_KNOWLEDGE: Record<string, TopicKnowledge> = {
+    python: {
+        ease_of_learning: 'Rất dễ, cú pháp đơn giản, lý tưởng cho người mới bắt đầu',
+        best_for: 'AI/Machine Learning, Data Science, Automation, Backend nhẹ',
+        job_demand: 'Rất cao, đặc biệt AI/ML, Data',
+        ecosystem: 'Khổng lồ: numpy, pandas, pytorch, fastapi, django',
+        difficulty: 'beginner',
+    },
+    java: {
+        ease_of_learning: 'Yêu cầu hiểu OOP và typing chặt chẽ hơn Python',
+        best_for: 'Backend enterprise, Android, hệ thống lớn, microservices',
+        job_demand: 'Cao và ổn định, nhiều tập đoàn lớn dùng Java',
+        ecosystem: 'Spring Boot, Hibernate, Android SDK',
+        difficulty: 'intermediate',
+    },
+    javascript: {
+        ease_of_learning: 'Dễ bắt đầu, có thể chạy trực tiếp trên trình duyệt',
+        best_for: 'Web frontend, Fullstack, Node.js backend, Mobile (React Native)',
+        job_demand: 'Rất cao, là ngôn ngữ phổ biến nhất thế giới',
+        ecosystem: 'React, Vue, Angular, Next.js, Express, Node.js',
+        difficulty: 'beginner',
+    },
+    typescript: {
+        ease_of_learning: 'Khó hơn JS một chút do có typing, nhưng dễ tiếp cận nếu biết JS',
+        best_for: 'Dự án lớn, enterprise, Fullstack type-safe',
+        job_demand: 'Cao trong dự án nghiêm túc',
+        ecosystem: 'Angular (mặc định), React + TS, Vue + TS, NestJS',
+        difficulty: 'intermediate',
+    },
+    'c++': {
+        ease_of_learning: 'Khó, cú pháp phức tạp, nhiều khái niệm low-level',
+        best_for: 'Game, System programming, Embedded, Performance-critical',
+        job_demand: 'Ổn định, đặc biệt trong game và system',
+        ecosystem: 'STL, Unreal Engine, Unity (C#)',
+        difficulty: 'advanced',
+    },
+    'c#': {
+        ease_of_learning: 'Khá dễ, cú pháp clean, do Microsoft phát triển',
+        best_for: 'Game (Unity), Desktop app, Backend .NET, Enterprise',
+        job_demand: 'Cao trong doanh nghiệp, đặc biệt tại Việt Nam',
+        ecosystem: '.NET, Unity, Xamarin, Blazor',
+        difficulty: 'intermediate',
+    },
+    go: {
+        ease_of_learning: 'Khá dễ, cú pháp tối giản, dễ đọc',
+        best_for: 'Backend cloud, Microservices, DevOps, Network programming',
+        job_demand: 'Tăng trưởng nhanh, đặc biệt trong cloud/SaaS',
+        ecosystem: 'Gin, Echo, gRPC, Docker, Kubernetes',
+        difficulty: 'intermediate',
+    },
+    rust: {
+        ease_of_learning: 'Khó nhất trong các ngôn ngữ hiện đại, ownership system phức tạp',
+        best_for: 'System programming, WebAssembly, Performance-critical, Security',
+        job_demand: 'Đang tăng nhưng còn ít vị trí hơn Go/Python',
+        ecosystem: 'Cargo, Rocket, Actix, WebAssembly',
+        difficulty: 'advanced',
+    },
+    php: {
+        ease_of_learning: 'Dễ bắt đầu, nhiều hosting hỗ trợ',
+        best_for: 'Web backend, CMS (WordPress), Dynamic websites',
+        job_demand: 'Giảm dần nhưng vẫn còn nhiều dự án cũ',
+        ecosystem: 'Laravel, Symfony, WordPress, Magento',
+        difficulty: 'beginner',
+    },
+    ruby: {
+        ease_of_learning: 'Rất dễ, cú pháp thanh lịch, developer-friendly',
+        best_for: 'Web backend, MVP, Scripting, Automation',
+        job_demand: 'Ít phổ biến hơn, nhưng Ruby on Rails vẫn mạnh',
+        ecosystem: 'Ruby on Rails, Sinatra, Jekyll',
+        difficulty: 'beginner',
+    },
+    swift: {
+        ease_of_learning: 'Khá dễ nếu biết Objective-C hoặc một OOP language',
+        best_for: 'iOS app, macOS app, Apple ecosystem',
+        job_demand: 'Cao nếu làm iOS, thị trường riêng',
+        ecosystem: 'SwiftUI, UIKit, Xcode',
+        difficulty: 'intermediate',
+    },
+    kotlin: {
+        ease_of_learning: 'Dễ hơn Java, cú pháp hiện đại hơn',
+        best_for: 'Android, Backend (Ktor, Spring Kotlin)',
+        job_demand: 'Cao trong phát triển Android',
+        ecosystem: 'Android Studio, Jetpack Compose, Spring',
+        difficulty: 'intermediate',
+    },
+    react: {
+        ease_of_learning: 'Dễ bắt đầu, có nhiều tutorial và community',
+        best_for: 'Web frontend, SPA, Cross-platform (React Native)',
+        job_demand: 'Rất cao, là framework frontend phổ biến nhất',
+        ecosystem: 'Next.js, React Native, Redux, Zustand, Tailwind',
+        difficulty: 'intermediate',
+    },
+    angular: {
+        ease_of_learning: 'Có learning curve cao, nhiều concepts phải học',
+        best_for: 'Enterprise web app, large-scale SPA',
+        job_demand: 'Cao trong doanh nghiệp, đặc biệt enterprise',
+        ecosystem: 'Angular Material, NgRx, RxJS',
+        difficulty: 'advanced',
+    },
+    vue: {
+        ease_of_learning: 'Dễ nhất trong 3 framework lớn (React, Angular, Vue)',
+        best_for: 'Web frontend, SPA vừa và nhỏ, dự án nhanh',
+        job_demand: 'Khá cao, đang tăng trưởng tốt',
+        ecosystem: 'Nuxt.js, Vuex/Pinia, Vuetify',
+        difficulty: 'beginner',
+    },
+    nodejs: {
+        ease_of_learning: 'Dễ nếu đã biết JavaScript',
+        best_for: 'Backend, API, real-time apps, microservices',
+        job_demand: 'Rất cao, đặc biệt với JS fullstack',
+        ecosystem: 'Express, NestJS, Fastify, Socket.io',
+        difficulty: 'intermediate',
+    },
+    django: {
+        ease_of_learning: 'Khá dễ, có admin panel built-in, batteries included',
+        best_for: 'Backend, MVP, rapid development, Python projects',
+        job_demand: 'Khá cao trong cộng đồng Python',
+        ecosystem: 'Django REST Framework, Celery, PostgreSQL',
+        difficulty: 'intermediate',
+    },
+    spring: {
+        ease_of_learning: 'Learning curve cao, nhiều config, nhiều cách làm',
+        best_for: 'Backend enterprise, Java microservice',
+        job_demand: 'Rất cao trong doanh nghiệp Java',
+        ecosystem: 'Spring Boot, Spring Security, Spring Data',
+        difficulty: 'advanced',
+    },
+    docker: {
+        ease_of_learning: 'Trung bình, có nhiều concepts cần hiểu',
+        best_for: 'DevOps, Deployment, Microservices, CI/CD',
+        job_demand: 'Rất cao, gần như bắt buộc trong DevOps',
+        ecosystem: 'Docker Compose, Kubernetes, Helm',
+        difficulty: 'intermediate',
+    },
+    kubernetes: {
+        ease_of_learning: 'Khó, nhiều concepts và objects',
+        best_for: 'Container orchestration, Cloud, DevOps',
+        job_demand: 'Cao, đặc biệt trong cloud-native',
+        ecosystem: 'Helm, kubectl, K9s, ArgoCD',
+        difficulty: 'advanced',
+    },
+    sql: {
+        ease_of_learning: 'Dễ học, cú pháp gần ngôn ngữ tự nhiên',
+        best_for: 'Data analysis, Backend, Database management',
+        job_demand: 'Rất cao, là kỹ năng bắt buộc',
+        ecosystem: 'MySQL, PostgreSQL, SQL Server, MongoDB (NoSQL)',
+        difficulty: 'beginner',
+    },
+    aws: {
+        ease_of_learning: 'Rất nhiều services, có learning curve cao',
+        best_for: 'Cloud computing, Backend infrastructure, Data',
+        job_demand: 'Rất cao, certifications có giá trị cao',
+        ecosystem: 'EC2, S3, Lambda, RDS, DynamoDB',
+        difficulty: 'advanced',
+    },
+    flutter: {
+        ease_of_learning: 'Dễ nếu biết Dart, hot reload nhanh',
+        best_for: 'Cross-platform mobile, iOS + Android từ 1 codebase',
+        job_demand: 'Đang tăng trưởng mạnh',
+        ecosystem: 'Dart, Riverpod, BLoC, Firebase',
+        difficulty: 'intermediate',
+    },
+    'react native': {
+        ease_of_learning: 'Dễ nếu biết React, có thể reuse code web',
+        best_for: 'Cross-platform mobile, iOS + Android',
+        job_demand: 'Khá cao, đặc biệt startup',
+        ecosystem: 'Expo, TypeScript, Redux, Firebase',
+        difficulty: 'intermediate',
+    },
+    html: {
+        ease_of_learning: 'Rất dễ, ngôn ngữ đánh dấu cơ bản nhất',
+        best_for: 'Web development, là nền tảng web',
+        job_demand: 'Bắt buộc cho web developer',
+        ecosystem: 'HTML5, CSS3, Accessibility',
+        difficulty: 'beginner',
+    },
+    css: {
+        ease_of_learning: 'Dễ học, nhưng mastery thì khó',
+        best_for: 'Web styling, responsive design, animations',
+        job_demand: 'Bắt buộc cho frontend',
+        ecosystem: 'Tailwind, Sass, Bootstrap, CSS-in-JS',
+        difficulty: 'intermediate',
+    },
+};
+
+// ====== Comparison System Prompt ======
+const COMPARISON_SYSTEM_PROMPT = `Bạn là chuyên gia tư vấn học tập thông minh cho nền tảng e-Learning.
+
+QUY TẮC PHẢN HỒI:
+1. Bắt đầu bằng SO SÁNH NGẮN GỌN (2-3 câu) — cái nào phù hợp đối tượng nào
+2. SO SÁNH THEO TIÊU CHÍ: Dễ học, Ứng dụng mạnh, Thị trường việc làm, Phù hợp với ai
+3. NẾU USER ĐÃ HỌC → GỢI Ý CÁ NHÂN HÓA dựa trên khóa đã học, recommend bước tiếp theo
+4. KẾT LUẬN: Nên học gì tiếp theo, roadmap cụ thể
+
+TRẢ VỀ TEXT THUẦN TÚY (không phải JSON), format markdown đẹp.
+KHÔNG render statistics thuần túy — phải có reasoning và tư vấn.
+LUÔN đề cập khóa đã học của user nếu có.
+Nếu cả 2 topic đều không có trong database, vẫn so sánh dựa trên kiến thức chuyên môn.
+Phản hồi bằng tiếng Việt, tự nhiên và thân thiện.`;
+
 const SYSTEM_PROMPT = `Bạn là trợ lý tư vấn khóa học thân thiện của nền tảng e-Learning.
 
 PHONG CÁCH TRÒ CHUYỆN:
@@ -20,9 +236,15 @@ PHONG CÁCH TRÒ CHUYỆN:
 - Sử dụng emoji một cách hợp lý 😊
 - Có thể trò chuyện thông thường ngoài việc tư vấn khóa học
 
+QUY TẮC OUTPUT BẮT BUỘC:
+- CHỉ output JSON với 4 fields: reply, references, quickReplies, action
+- TUYỆT ĐỐI KHÔNG output: analysis, thinking, reasoning, chain_of_thought, internal, notes
+- Nếu trả JSON → reply BẮT BUỘC bằng tiếng Việt (không dùng tiếng Anh)
+- Nếu chat thông thường → text tiếng Việt, không cần JSON
+
 QUY TẮC QUAN TRỌNG:
 1. Nếu user hỏi về khóa học, đăng ký, hoặc cần hiển thị danh sách → trả về JSON
-2. Nếu user chỉ chat thông thường → trả lời tự nhiên, không cần JSON
+2. Nếu user chỉ chat thông thường → trả lời tự nhiên bằng tiếng Việt, không cần JSON
 3. KHÔNG bắt buộc references nếu không có khóa học phù hợp
 4. quickReplies chỉ khi thực sự hữu ích
 
@@ -68,11 +290,22 @@ Case 7: Chat thông thường
 - CHỈ gợi ý khóa học từ DANH SÁCH KHÓA HỌC CÓ SẴN (AVAILABLE_COURSE) trong context
 - TUYỆT ĐỐI KHÔNG tạo ra, bịa đặt, hoặc đề xuất khóa học không có trong danh sách
 - TUYỆT ĐỐI KHÔNG thêm thông tin giá, tên, nội dung khóa học mà không có trong data
+- TUYỆT ĐỐI KHÔNG bịa thông tin về tiến độ học tập, chứng chỉ đã đạt được nếu không có trong data
 - Nếu DANH SÁCH KHÓA HỌC CÓ SẴN trống hoặc ghi "Không có khóa học phù hợp":
   → Trả lời: "Hiện tại mình chưa tìm được khóa học phù hợp với yêu cầu của bạn. Bạn thử hỏi chủ đề khác nhé!"
   → KHÔNG gợi ý bất kỳ khóa học nào, kể cả khóa miễn phí
 - references CHỈ chứa khóa học thực sự có trong AVAILABLE_COURSE
 - Nếu không có khóa học nào trong context, reply phải là TEXT THUẦN TÚY, không có references
+
+|CONTEXTUAL FOLLOW-UP (QUAN TRỌNG):
+- Khi user hỏi "khóa liên quan", "khóa tiếp theo", "nên học gì sau" mà KHÔNG nêu tên chủ đề:
+  → Phải dùng "CHỦ ĐỀ ĐANG ĐƯỢC NHẮC ĐẾN" trong context để xác định chủ đề
+  → Ví dụ: "có khóa nào liên quan để tôi mua không" + context có "nodejs" → gợi ý khóa liên quan NodeJS
+- Khi user nói "liên quan", "tiếp theo", "tương tự" mà context có enrolled courses:
+  → Ưu tiên gợi ý khóa nâng cao/bổ sung cho khóa đã học
+- KHÔNG bao giờ bỏ qua "CHỦ ĐỀ ĐANG ĐƯỢC NHẮC ĐẾN" để trả lời generic
+- Nếu context KHÔNG có active topic và user hỏi "khóa liên quan":
+  → Hỏi lại: "Bạn đang quan tâm đến chủ đề gì để mình gợi ý nhé?"
 `;
 
 export class ChatbotServiceImpl implements ChatbotService {
@@ -137,6 +370,14 @@ export class ChatbotServiceImpl implements ChatbotService {
         'nên học gì trước', 'học gì trước', 'học gì sau',
     ];
 
+    // Related course keywords — user wants to find related/next courses
+    private readonly RELATED_COURSE_INTENTS = [
+        'liên quan', 'tiếp theo', 'tương tự', 'mở rộng', 'nâng cao',
+        'bổ sung', 'học thêm', 'kế tiếp', 'next course', 'related',
+        'nên học gì sau', 'học gì tiếp', 'bước tiếp theo',
+        'rộng hơn', 'chuyên sâu', 'chuyên ngành',
+    ];
+
     // Career guidance keywords
     private readonly CAREER_INTENTS = [
         'nghề', 'career', 'làm nghề', 'job', 'mức lương', 'salary',
@@ -173,6 +414,15 @@ export class ChatbotServiceImpl implements ChatbotService {
                 ],
                 action: null,
             };
+        }
+
+        // ========== OWNERSHIP CONFIRMATION DETECTION ==========
+        // Handle "đã mua...đúng không" = user confirming enrollment, NOT payment request
+        // Must be BEFORE FAQ to avoid misclassification
+        const confirmMatch = this.detectOwnershipConfirmation(message);
+        if (confirmMatch) {
+            console.log('[Chatbot Debug] Ownership confirmation detected:', confirmMatch);
+            return await this.handleOwnershipConfirmation(userId, confirmMatch.topic, confirmMatch.courseTitle);
         }
 
         // ========== FAQ / POLICY DETECTION ==========
@@ -247,7 +497,7 @@ Bạn quan tâm đến nghề nào nhất?`,
         const comparisonIntent = this.detectComparisonIntent(message);
         if (comparisonIntent) {
             console.log('[Chatbot Debug] Comparison intent detected:', comparisonIntent);
-            return await this.generateComparisonResponse(comparisonIntent.topic1, comparisonIntent.topic2);
+            return await this.generateComparisonResponse(userId, comparisonIntent.topic1, comparisonIntent.topic2);
         }
 
         // Check if user is asking for details about a course mentioned in conversation
@@ -282,9 +532,22 @@ Bạn quan tâm đến nghề nào nhất?`,
             return this.getClarifyTopicResponse();
         }
 
-        // Step 2: Extract specific topics and price filter for DB search (Flow B)
+        // Step 2: Extract specific topics — ALSO resolve from conversation history
         const topics = this.extractTopicFromMessage(message);
         const priceFilter = this.extractPriceFilterFromMessage(message);
+
+        // ====== NEW: Resolve topic from history if current message is a follow-up ======
+        // Fixes: "có khóa nào liên quan" → topic from history
+        const isFollowUpRequest = this.RELATED_COURSE_INTENTS.some(kw => lowerMessage.includes(kw))
+            || lowerMessage.includes('khóa') && !topics.length;
+        if (isFollowUpRequest && topics.length === 0) {
+            const historyTopic = this.extractActiveTopicFromHistory(conversationHistory || []);
+            if (historyTopic) {
+                console.log('[Chatbot Debug] Resolved topic from history:', historyTopic);
+                topics.push(historyTopic);
+            }
+        }
+
         console.log('[Chatbot Debug] Extracted topics:', topics);
         console.log('[Chatbot Debug] Price filter:', priceFilter);
 
@@ -338,7 +601,8 @@ Bạn quan tâm đến nghề nào nhất?`,
             }
         }
 
-        const contextInfo = this.buildContextInfo(courses, enrolledCourses, enrolledCourseIds || [], userProfile, recentCourseContext);
+        const activeTopic = topics.length > 0 ? topics[0] : null;
+        const contextInfo = this.buildContextInfo(courses, enrolledCourses, enrolledCourseIds || [], userProfile, recentCourseContext, activeTopic);
         const conversationContext = this.buildConversationContext(conversationHistory || []);
 
         const messages = [
@@ -686,12 +950,50 @@ Bạn quan tâm đến nghề nào nhất?`,
         }).slice(0, 1);
     }
 
+    // ====== NEW: Extract active topic from conversation history ======
+    // Resolves contextual references like "khóa liên quan" → "NodeJS"
+    private extractActiveTopicFromHistory(history: ChatMessage[]): string | null {
+        const KNOWN_TOPICS = [
+            'python', 'java', 'javascript', 'typescript', 'c++', 'c#', 'go', 'rust',
+            'php', 'ruby', 'swift', 'kotlin', 'dart',
+            'react', 'angular', 'vue', 'nextjs', 'nodejs', 'node.js',
+            'html', 'css', 'sass', 'tailwind',
+            'sql', 'postgresql', 'mysql', 'mongodb', 'redis',
+            'docker', 'kubernetes', 'aws', 'azure', 'gcp',
+            'django', 'flask', 'spring', 'spring boot', 'express', 'nestjs',
+            'react native', 'flutter',
+            'machine learning', 'deep learning', 'ai', 'data science',
+            'git', 'linux', 'devops', 'ci/cd',
+            'excel', 'powerpoint', 'word',
+            'marketing', 'seo', 'content',
+            'figma', 'photoshop', 'illustrator',
+        ];
+
+        // Look at last 6 messages (3 turns) for topic mentions
+        const recentMessages = history.slice(-6);
+        for (const msg of [...recentMessages].reverse()) {
+            const lower = msg.content.toLowerCase();
+            for (const topic of KNOWN_TOPICS) {
+                if (lower.includes(topic)) {
+                    return topic;
+                }
+            }
+            // Also check for enrolled course titles
+            if (msg.role === 'assistant' && msg.content.includes('khóa')) {
+                const topicMatch = lower.match(/(?:python|java|javascript|typescript|c\+\+|c#|go|rust|php|ruby|swift|kotlin|dart|react|angular|vue|nextjs|nodejs|html|css|sql|docker|aws|git|excel|marketing|figma)/);
+                if (topicMatch) return topicMatch[1];
+            }
+        }
+        return null;
+    }
+
     private buildContextInfo(
         courses: any[],
         enrolledCourses: any[],
         excludeCourseIds: number[],
         userProfile: any,
-        recentCourseContext?: any
+        recentCourseContext?: any,
+        activeTopic?: string | null
     ): string {
         const enrolledCourseIds = enrolledCourses.map((e) => e.id);
         const allExcludeIds = [...new Set([...enrolledCourseIds, ...excludeCourseIds])];
@@ -745,7 +1047,26 @@ ${moduleSummary}
 `;
         }
 
+        // ====== NEW: Active topic from conversation context ======
+        let activeTopicInfo = '';
+        if (activeTopic) {
+            // Get enrolled courses matching this topic for context
+            const enrolledInTopic = enrolledCourses.filter((e) =>
+                e.title.toLowerCase().includes(activeTopic.toLowerCase())
+            );
+            const enrolledInTopicList = enrolledInTopic.length > 0
+                ? enrolledInTopic.map((e) => `${e.title} (${e.progress_percent}%)`).join(', ')
+                : 'Không có khóa nào';
+            activeTopicInfo = `
+CHỦ ĐỀ ĐANG ĐƯỢC NHẮC ĐẾN TRONG CUỘC TRÒ CHUYỆN: ${activeTopic.toUpperCase()}
+→ User đang quan tâm đến chủ đề "${activeTopic}"
+→ Khóa đã học về "${activeTopic}": ${enrolledInTopicList}
+→ Khi user hỏi "khóa liên quan", "khóa tiếp theo", "nên học gì" → GỢI Ý khóa liên quan đến "${activeTopic}"
+`;
+        }
+
         return `THÔNG TIN NGƯỜI DÙNG:
+${activeTopicInfo}
 - Họ tên: ${userProfile.full_name}
 - Đã đăng ký: ${enrolledCourses.length} khóa học
 ${recentCourseInfo}
@@ -760,6 +1081,7 @@ QUY TẮC QUAN TRỌNG KHI GỢI Ý KHÓA HỌC (RAG PATTERN):
 2. KHÔNG gợi ý khóa từ DANH SÁCH KHÓA HỌC ĐÃ ĐĂNG KÝ
 3. Nếu AVAILABLE_COURSE trống → thông báo và gợi ý chủ đề khác
 4. Khi user hỏi "gợi ý khóa học" → trả về ít nhất 1 khóa từ AVAILABLE_COURSE
+${activeTopic ? `5. Khi user hỏi "khóa liên quan", "khóa tiếp theo" → ưu tiên gợi ý khóa LIÊN QUAN đến "${activeTopic}"` : ''}
 
 KHI TRẢ LỜI:
 - reply có thể chứa thông tin khóa học tự nhiên (giá, level, nội dung...)
@@ -798,6 +1120,14 @@ KHI TRẢ LỜI:
                 } catch {
                     parsed = this.extractFieldsManually(cleaned);
                 }
+
+                // Strip reasoning/internal fields that leak into response
+                delete parsed.analysis;
+                delete parsed.thinking;
+                delete parsed.reasoning;
+                delete parsed.internal;
+                delete parsed.chain_of_thought;
+                delete parsed.notes;
             } else {
                 // No JSON found - treat as plain text response (natural chat)
                 return {
@@ -809,6 +1139,15 @@ KHI TRẢ LỜI:
             }
 
             if (parsed && typeof parsed === 'object') {
+                // If no reply after stripping reasoning fields, fall back to plain text
+                if (!parsed.reply) {
+                    return {
+                        reply: cleaned.slice(0, 3000),
+                        references: [],
+                        quickReplies: [],
+                        action: null,
+                    };
+                }
                 const reply = this.sanitizeString(parsed.reply || parsed.content || cleaned.slice(0, 3000));
                 const references = this.validateReferences(parsed.references);
                 const quickReplies = this.validateQuickReplies(parsed.quickReplies);
@@ -1032,6 +1371,107 @@ KHI TRẢ LỜI:
                 { text: 'Design', value: 'khóa design' },
                 { text: 'Kinh doanh', value: 'khóa kinh doanh' },
                 { text: 'Ngoại ngữ', value: 'khóa ngoại ngữ' },
+            ],
+            action: null,
+        };
+    }
+
+    // ====== OWNERSHIP CONFIRMATION: Handle "đã mua...đúng không" ======
+    private detectOwnershipConfirmation(message: string): { topic: string; courseTitle: string } | null {
+        const lower = message.toLowerCase().trim();
+
+        // Pattern: "đã mua" + optional "1 khóa" + topic + "đúng không" / "phải không" / "không"
+        // Examples:
+        //   "tôi đã mua 1 khóa nodejs đúng không"
+        //   "đã mua khóa python phải không"
+        //   "tôi đã đăng ký khóa react đúng không"
+        const patterns = [
+            /đã\s+(?:mua|đăng\s*ký|register|enroll)\s+(?:1\s+)?khóa?\s+(.+?)\s+(?:đúng\s+không|phải\s+không)$/i,
+            /đã\s+(?:mua|đăng\s*ký|register|enroll)\s+(?:1\s+)?khóa?\s+(.+?)\s+(?:không|\?)$/i,
+            /(?:tôi|mình)\s+(?:đã\s+)?(?:mua|đăng\s*ký)\s+(?:1\s+)?(?:khóa\s+)?(.+?)\s+(?:đúng\s+không|phải\s+không)$/i,
+        ];
+
+        const KNOWN_TOPICS = [
+            'python', 'java', 'javascript', 'typescript', 'c++', 'c#', 'go', 'rust',
+            'php', 'ruby', 'swift', 'kotlin', 'dart',
+            'react', 'angular', 'vue', 'nextjs', 'nodejs', 'node.js',
+            'html', 'css', 'sass', 'tailwind',
+            'sql', 'postgresql', 'mysql', 'mongodb', 'redis',
+            'docker', 'kubernetes', 'aws', 'azure', 'gcp',
+            'django', 'flask', 'spring', 'spring boot', 'express', 'nestjs',
+            'react native', 'flutter',
+            'machine learning', 'deep learning', 'ai', 'data science',
+            'git', 'linux', 'devops',
+            'excel', 'powerpoint', 'word',
+            'marketing', 'seo', 'content',
+            'figma', 'photoshop', 'illustrator',
+        ];
+
+        for (const pattern of patterns) {
+            const match = lower.match(pattern);
+            if (match) {
+                const topicOrTitle = match[1].trim();
+
+                // Try to find known topic in the match
+                for (const topic of KNOWN_TOPICS) {
+                    if (topicOrTitle.includes(topic) || topic.includes(topicOrTitle)) {
+                        return { topic, courseTitle: `${topic.charAt(0).toUpperCase() + topic.slice(1)} Cơ Bản` };
+                    }
+                }
+                // If no known topic, use the extracted text as course title
+                return { topic: topicOrTitle, courseTitle: topicOrTitle };
+            }
+        }
+        return null;
+    }
+
+    private async handleOwnershipConfirmation(
+        userId: number,
+        topic: string,
+        _courseTitle: string
+    ): Promise<ChatbotResponse> {
+        // Search for enrolled courses matching this topic
+        const enrolledCourses = await this.getEnrolledCourses(userId);
+        const matched = enrolledCourses.find((e) =>
+            e.title.toLowerCase().includes(topic.toLowerCase())
+        );
+
+        if (matched) {
+            return {
+                reply: `Đúng rồi bạn ơi! Bạn đã đăng ký khóa **${matched.title}** rồi 👍
+Tiến độ hiện tại của bạn: **${matched.progress_percent}%**
+
+Bạn có muốn tiếp tục học không?`,
+                references: [{
+                    type: 'course',
+                    id: matched.id,
+                    slug: matched.slug,
+                    title: matched.title,
+                    level: matched.level,
+                    price: matched.price,
+                    has_certificate: matched.has_certificate,
+                    progress_percent: matched.progress_percent,
+                }],
+                quickReplies: [
+                    { text: 'Tiếp tục học', value: `vào khóa ${matched.slug}` },
+                    { text: 'Khóa liên quan', value: 'có khóa nào liên quan để tôi mua không' },
+                    { text: 'Lộ trình học', value: `lộ trình học ${topic}` },
+                ],
+                action: null,
+            };
+        }
+
+        // User thinks they bought but not in DB
+        return {
+            reply: `Mình không thấy khóa học "${topic}" trong tài khoản của bạn nhé 😅
+
+Bạn có thể:
+- Kiểm tra lại tên khóa học
+- Hoặc mình giúp bạn tìm khóa "${topic}" để đăng ký nhé?`,
+            references: [],
+            quickReplies: [
+                { text: 'Tìm khóa NodeJS', value: 'tìm khóa nodejs' },
+                { text: 'Khóa của tôi', value: 'khóa học của tôi' },
             ],
             action: null,
         };
@@ -1659,50 +2099,61 @@ ${stepsText}
     }
 
     // ========== NEW: GENERATE COMPARISON RESPONSE ==========
-    private async generateComparisonResponse(topic1: string, topic2: string): Promise<ChatbotResponse> {
-        // Search courses for both topics
+    private async generateComparisonResponse(
+        userId: number,
+        topic1: string,
+        topic2: string
+    ): Promise<ChatbotResponse> {
+        // 1. Fetch courses for both topics
         const courses1 = await this.getPublishedCourses([topic1]);
         const courses2 = await this.getPublishedCourses([topic2]);
 
-        const hasCourses1 = courses1.length > 0;
-        const hasCourses2 = courses2.length > 0;
+        // 2. Fetch enrolled courses for personalization
+        const enrolledCourses = await this.getEnrolledCourses(userId);
+        const enrolledTopic1 = enrolledCourses.filter((e) =>
+            e.title.toLowerCase().includes(topic1.toLowerCase())
+        );
+        const enrolledTopic2 = enrolledCourses.filter((e) =>
+            e.title.toLowerCase().includes(topic2.toLowerCase())
+        );
 
-        let reply = `So sánh **${topic1}** và **${topic2}**:\n\n`;
+        // 3. Compute safe stats (no NaN possible)
+        const stats1 = this.computeTopicStats(courses1);
+        const stats2 = this.computeTopicStats(courses2);
 
-        // Basic comparison text
-        reply += `| Tiêu chí | ${topic1} | ${topic2} |\n`;
-        reply += `|----------|-----------|-----------|\n`;
-        reply += `| Khóa học có sẵn | ${hasCourses1 ? `${courses1.length} khóa` : 'Không có'} | ${hasCourses2 ? `${courses2.length} khóa` : 'Không có'} |\n`;
+        // 4. Get topic knowledge
+        const knowledge1 = this.getTopicKnowledge(topic1);
+        const knowledge2 = this.getTopicKnowledge(topic2);
 
-        if (hasCourses1) {
-            const avgPrice1 = courses1.reduce((sum, c) => sum + (c.price || 0), 0) / courses1.length;
-            const levels1 = [...new Set(courses1.map(c => c.level || 'N/A'))];
-            reply += `| Mức giá TB | ${avgPrice1 === 0 ? 'Miễn phí' : avgPrice1.toLocaleString('vi-VN') + ' VNĐ'} | `;
-        } else {
-            reply += `| Mức giá TB | - | `;
+        // 5. Build user prompt for LLM
+        const userPrompt = this.buildComparisonUserPrompt(
+            topic1, topic2,
+            knowledge1, knowledge2,
+            stats1, stats2,
+            enrolledTopic1, enrolledTopic2
+        );
+
+        // 6. Call LLM to generate reasoning + recommendation
+        const messages: Array<{ role: 'system' | 'user'; content: string }> = [
+            { role: 'system', content: COMPARISON_SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt },
+        ];
+
+        let reasoning = '';
+        try {
+            reasoning = await this.llmClient.chat(messages);
+        } catch (error) {
+            console.error('[Chatbot] Comparison LLM error:', error);
+            // Fallback: build a basic response if LLM fails
+            reasoning = this.buildBasicComparisonFallback(
+                topic1, topic2, knowledge1, knowledge2, stats1, stats2,
+                enrolledTopic1, enrolledTopic2
+            );
         }
 
-        if (hasCourses2) {
-            const avgPrice2 = courses2.reduce((sum, c) => sum + (c.price || 0), 0) / courses2.length;
-            reply += `${avgPrice2 === 0 ? 'Miễn phí' : avgPrice2.toLocaleString('vi-VN') + ' VNĐ'} |\n`;
-        } else {
-            reply += `- |\n`;
-        }
-
-        reply += `\n💡 **Nên chọn:**\n`;
-        if (hasCourses1 && hasCourses2) {
-            reply += `- Cả hai đều có khóa học chất lượng\n`;
-        } else if (hasCourses1) {
-            reply += `- **${topic1}** có nhiều khóa học hơn trên nền tảng\n`;
-        } else if (hasCourses2) {
-            reply += `- **${topic2}** có nhiều khóa học hơn trên nền tảng\n`;
-        } else {
-            reply += `- Mình chưa có khóa học cho cả hai chủ đề này\n`;
-        }
-
-        // Add course references
+        // 7. Build references
         const references: any[] = [
-            ...courses1.slice(0, 2).map(c => ({
+            ...courses1.slice(0, 2).map((c) => ({
                 type: 'course' as const,
                 id: c.id,
                 title: c.title,
@@ -1711,7 +2162,7 @@ ${stepsText}
                 price: c.price,
                 has_certificate: c.has_certificate,
             })),
-            ...courses2.slice(0, 2).map(c => ({
+            ...courses2.slice(0, 2).map((c) => ({
                 type: 'course' as const,
                 id: c.id,
                 title: c.title,
@@ -1723,14 +2174,144 @@ ${stepsText}
         ];
 
         return {
-            reply,
+            reply: reasoning,
             references,
             quickReplies: [
-                { text: `Tìm khóa ${topic1}`, value: `khóa ${topic1}` },
-                { text: `Tìm khóa ${topic2}`, value: `khóa ${topic2}` },
+                { text: `Khóa ${topic1}`, value: `khóa ${topic1}` },
+                { text: `Khóa ${topic2}`, value: `khóa ${topic2}` },
                 { text: 'So sánh khác', value: 'so sánh python và java' },
             ],
             action: { type: 'comparison', topic1, topic2 },
         };
+    }
+
+    // ========== NEW: Helper to compute safe topic stats ==========
+    private computeTopicStats(courses: any[]): TopicStats {
+        const prices = courses
+            .map((c) => c.price)
+            .filter((p): p is number => p != null && p !== undefined && p > 0);
+        const avgPrice = prices.length > 0
+            ? prices.reduce((sum, p) => sum + p, 0) / prices.length
+            : null;
+        const levels = [...new Set(courses.map((c) => c.level || 'N/A'))];
+        return { courseCount: courses.length, avgPrice, levels };
+    }
+
+    // ========== NEW: Helper to get topic knowledge with fallback ==========
+    private getTopicKnowledge(topic: string): TopicKnowledge {
+        const lower = topic.toLowerCase().trim();
+        const found = TOPIC_KNOWLEDGE[lower];
+        if (found) return found;
+        // Try partial match
+        const partialKey = Object.keys(TOPIC_KNOWLEDGE).find((k) => lower.includes(k) || k.includes(lower));
+        if (partialKey) return TOPIC_KNOWLEDGE[partialKey];
+        // Fallback
+        return {
+            ease_of_learning: 'Phụ thuộc vào khóa học cụ thể và background của bạn',
+            best_for: 'Nhiều ứng dụng đa dạng trong lĩnh vực IT',
+            job_demand: 'Cao trong thị trường IT hiện tại',
+            ecosystem: 'Phụ thuộc vào framework/library cụ thể',
+            difficulty: 'intermediate',
+        };
+    }
+
+    // ========== NEW: Build user prompt for comparison LLM ==========
+    private buildComparisonUserPrompt(
+        topic1: string,
+        topic2: string,
+        knowledge1: TopicKnowledge,
+        knowledge2: TopicKnowledge,
+        stats1: TopicStats,
+        stats2: TopicStats,
+        enrolledTopic1: any[],
+        enrolledTopic2: any[]
+    ): string {
+        const avgPrice1Text = stats1.avgPrice !== null
+            ? stats1.avgPrice.toLocaleString('vi-VN') + ' VNĐ'
+            : 'chưa có dữ liệu';
+        const avgPrice2Text = stats2.avgPrice !== null
+            ? stats2.avgPrice.toLocaleString('vi-VN') + ' VNĐ'
+            : 'chưa có dữ liệu';
+
+        const enrolled1Text = enrolledTopic1.length > 0
+            ? enrolledTopic1.map((e) => `${e.title} (${e.progress_percent}%)`).join(', ')
+            : 'Chưa học';
+        const enrolled2Text = enrolledTopic2.length > 0
+            ? enrolledTopic2.map((e) => `${e.title} (${e.progress_percent}%)`).join(', ')
+            : 'Chưa học';
+
+        return `So sánh **${topic1}** và **${topic2}**:
+
+--- KIẾN THỨC CHUYÊN MÔN ---
+${topic1}:
+  - Dễ học: ${knowledge1.ease_of_learning}
+  - Ứng dụng mạnh: ${knowledge1.best_for}
+  - Thị trường việc làm: ${knowledge1.job_demand}
+  - Ecosystem: ${knowledge1.ecosystem}
+  - Độ khó: ${knowledge1.difficulty}
+
+${topic2}:
+  - Dễ học: ${knowledge2.ease_of_learning}
+  - Ứng dụng mạnh: ${knowledge2.best_for}
+  - Thị trường việc làm: ${knowledge2.job_demand}
+  - Ecosystem: ${knowledge2.ecosystem}
+  - Độ khó: ${knowledge2.difficulty}
+
+--- DỮ LIỆU NỀN TẢNG ---
+${topic1}: ${stats1.courseCount} khóa, avg price: ${avgPrice1Text}, levels: ${stats1.levels.join(', ')}
+${topic2}: ${stats2.courseCount} khóa, avg price: ${avgPrice2Text}, levels: ${stats2.levels.join(', ')}
+
+--- KHÓA USER ĐÃ HỌC ---
+${topic1}: ${enrolled1Text}
+${topic2}: ${enrolled2Text}`;
+    }
+
+    // ========== NEW: Fallback comparison when LLM fails ==========
+    private buildBasicComparisonFallback(
+        topic1: string,
+        topic2: string,
+        knowledge1: TopicKnowledge,
+        knowledge2: TopicKnowledge,
+        stats1: TopicStats,
+        stats2: TopicStats,
+        enrolledTopic1: any[],
+        enrolledTopic2: any[]
+    ): string {
+        let reply = `## So sánh **${topic1}** và **${topic2}**\n\n`;
+
+        // Quick summary
+        reply += `**Tóm tắt:** ${topic1} phù hợp với ${knowledge1.best_for.split(',')[0].toLowerCase()}. `
+            + `${topic2} phù hợp với ${knowledge2.best_for.split(',')[0].toLowerCase()}.\n\n`;
+
+        // Comparison table
+        reply += `| Tiêu chí | ${topic1} | ${topic2} |\n`;
+        reply += `|----------|---------|-----------|\n`;
+        reply += `| Độ khó | ${knowledge1.difficulty} | ${knowledge2.difficulty} |\n`;
+        reply += `| Ứng dụng | ${knowledge1.best_for.split(',')[0]} | ${knowledge2.best_for.split(',')[0]} |\n`;
+        reply += `| Việc làm | ${knowledge1.job_demand.split(',')[0]} | ${knowledge2.job_demand.split(',')[0]} |\n`;
+        reply += `| Khóa có sẵn | ${stats1.courseCount} | ${stats2.courseCount} |\n`;
+
+        // Personalized recommendation
+        if (enrolledTopic1.length > 0 || enrolledTopic2.length > 0) {
+            reply += `\n**Dựa trên khóa bạn đã học:**\n`;
+            if (enrolledTopic1.length > 0) {
+                reply += `- Bạn đã học ${topic1}: ${enrolledTopic1.map((e) => `${e.title} (${e.progress_percent}%)`).join(', ')}\n`;
+            }
+            if (enrolledTopic2.length > 0) {
+                reply += `- Bạn đã học ${topic2}: ${enrolledTopic2.map((e) => `${e.title} (${e.progress_percent}%)`).join(', ')}\n`;
+            }
+        }
+
+        // Conclusion
+        reply += `\n**Nên chọn:** `;
+        if (knowledge1.difficulty === 'beginner' && knowledge2.difficulty !== 'beginner') {
+            reply += `Nếu bạn mới bắt đầu → ưu tiên **${topic1}**.\n`;
+        } else if (knowledge2.difficulty === 'beginner' && knowledge1.difficulty !== 'beginner') {
+            reply += `Nếu bạn mới bắt đầu → ưu tiên **${topic2}**.\n`;
+        } else {
+            reply += `Cả hai đều có giá trị. Hãy chọn dựa trên mục tiêu nghề nghiệp của bạn.\n`;
+        }
+
+        return reply;
     }
 }

@@ -34,7 +34,9 @@ Bạn cần mình hỗ trợ yêu cầu hoàn tiền không?`,
     {
         id: 'policy-payment',
         category: 'policy',
-        keywords: ['thanh toán', 'payment', 'chuyển khoản', 'visa', 'momo', 'zalo pay', 'napas'],
+        keywords: ['thanh toán như thế nào', 'cách thanh toán', 'thanh toán ra sao',
+            'hướng dẫn thanh toán', 'làm sao thanh toán', 'đăng ký như thế nào',
+            'thanh toán bằng', 'phương thức thanh toán', 'payment method'],
         question: 'Các phương thức thanh toán được chấp nhận?',
         answer: `Nền tảng hỗ trợ nhiều phương thức thanh toán:
 

@@ -18,7 +18,7 @@ import { createHttpServer } from './app';
 import AppDataSource from '../../lib/database';
 import { syncDatabase } from '../../lib/db-sync';
 import env from './utils/env';
-import { CourseServiceImpl } from './features/course/domain/service';
+import { AiSummaryServiceImpl } from './features/ai-summary/domain/service';
 
 // #region DEBUG: Hypothesis B - envalid parsed values
 // console.log('[DEBUG-B1] After envalid cleanEnv:', {
@@ -49,8 +49,8 @@ async function start() {
 
     if (env.STARTUP_SCAN_TRANSCRIPTS) {
       setImmediate(async () => {
-        const courseService = new CourseServiceImpl();
-        const result = await courseService.scanPendingTranscripts();
+        const aiSummaryService = new AiSummaryServiceImpl();
+        const result = await aiSummaryService.scanPendingTranscripts();
         if (result.queued > 0) {
           console.log(`[startup] Queued ${result.queued} pending video transcripts, skipped ${result.skipped}`);
         }

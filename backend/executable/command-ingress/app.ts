@@ -39,6 +39,9 @@ import { LiveSessionServiceImpl } from './features/live-session/domain/service';
 import initAiShortAnswerRoute from './features/ai-short-answer/adapter/route';
 import { AiShortAnswerController } from './features/ai-short-answer/adapter/controller';
 import initChatbotRoute from './features/chatbot/adapter/route';
+import { AiSummaryController } from './features/ai-summary/adapter/controller';
+import { AiSummaryServiceImpl } from './features/ai-summary/domain/service';
+import initAiSummaryRoute from './features/ai-summary/adapter/route';
 
 
 const app = express();
@@ -77,7 +80,10 @@ const createHttpServer = (redisClient: any) => {
   );
 
 
-  app.use('/api/v1/courses', initCourseRoute(new CourseController(new CourseServiceImpl())));
+  const aiSummaryService = new AiSummaryServiceImpl();
+  const courseServiceImpl = new CourseServiceImpl(aiSummaryService);
+  app.use('/api/v1/courses', initCourseRoute(new CourseController(courseServiceImpl)));
+  app.use('/api/v1/courses', initAiSummaryRoute(new AiSummaryController(aiSummaryService)));
   app.use('/api/v1', initAssignmentRoute(new AssignmentController(new AssignmentServiceImpl())));
   app.use('/api/v1/question-banks', initQuestionBankRoute());
   app.use('/api/v1/payments', initPaymentRoute(new PaymentController(new PaymentServiceImpl())));
