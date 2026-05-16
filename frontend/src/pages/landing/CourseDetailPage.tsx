@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import PublicSiteHeader from "../../components/PublicSiteHeader";
-import PublicSiteFooter from "../../components/PublicSiteFooter";
+import MindBridgeHeader from "../../components/MindBridgeHeader";
+import MindBridgeFooter from "../../components/MindBridgeFooter";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { getAccessToken } from "../../utils/authStorage";
@@ -141,11 +141,11 @@ export default function CourseDetailPage() {
   if (loading) {
     return (
       <div className="mb-public course-detail-page bg-surface text-on-surface">
-        <PublicSiteHeader active="courses" />
+        <MindBridgeHeader active="courses" />
         <main className="max-w-7xl mx-auto px-6 py-24 text-center text-on-surface-variant">
           Loading course…
         </main>
-        <PublicSiteFooter />
+        <MindBridgeFooter />
       </div>
     );
   }
@@ -153,7 +153,7 @@ export default function CourseDetailPage() {
   if (error || !course) {
     return (
       <div className="mb-public course-detail-page bg-surface text-on-surface">
-        <PublicSiteHeader active="courses" />
+        <MindBridgeHeader active="courses" />
         <main className="max-w-7xl mx-auto px-6 py-24 text-center">
           <h1 className="text-2xl font-bold text-primary mb-4">Course not found</h1>
           <p className="text-on-surface-variant mb-6">{error || "We couldn't find that course."}</p>
@@ -161,14 +161,14 @@ export default function CourseDetailPage() {
             ← Back to catalog
           </Link>
         </main>
-        <PublicSiteFooter />
+        <MindBridgeFooter />
       </div>
     );
   }
 
   return (
     <div className="mb-public course-detail-page bg-surface text-on-surface">
-      <PublicSiteHeader active="courses" />
+      <MindBridgeHeader active="courses" />
 
       <main>
         <section className="bg-primary-container text-white py-16 md:py-24 overflow-hidden relative">
@@ -383,7 +383,7 @@ export default function CourseDetailPage() {
         </section>
       </main>
 
-      <PublicSiteFooter />
+      <MindBridgeFooter />
     </div>
   );
 }

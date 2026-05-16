@@ -1,75 +1,10 @@
 import React, { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import MindBridgeHeader from "../../components/MindBridgeHeader";
+import MindBridgeFooter from "../../components/MindBridgeFooter";
 import "./ContactUsPage.css";
-import transLogo from "../../assets/trans-logo-2.png";
 
 const MAP_URL =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuDaw0GK197Yjr1aO0mXQZ9kd-K2nfJdl2z1khcCoC1Nv0BFBOUNMRFZf2Kw4DFKYXGU03Oo7Z6KuitYQw0HtN8oeOdAtYvUJ0iqK66RRkQMDdNMYkxcm31wFS_VLASGMrAwyY4SUDVjLfRDMgNvyEq_7AHPZuvUCMXTIHm5EB34vvSaF9dbChc5c9tJ4LeBnkpQpIuI096AQOjXqEp2tIVRK5IkdPJMmCprSr-BWyBHyWUTwxc3B2a5aNd6T18myjtzj5onxjdsGg";
-
-const MindBridgeNavbar: React.FC = () => {
-  const navigate = useNavigate();
-  return (
-    <nav className="mb-nav">
-      <div className="mb-nav__inner">
-        <Link to="/" className="mb-nav__brand">
-          <img alt="MindBridge Logo" className="mb-nav__logo" src={transLogo} />
-        </Link>
-        <div className="mb-nav__links">
-          <Link to="/courses" className="mb-nav__link">Courses</Link>
-          <Link to="/instructors" className="mb-nav__link">Instructors</Link>
-          <Link to="/pricing" className="mb-nav__link">Pricing</Link>
-          <Link to="/resources" className="mb-nav__link">Resources</Link>
-        </div>
-        <div className="mb-nav__cta">
-          <button type="button" className="mb-nav__login" onClick={() => navigate("/login")}>
-            Login
-          </button>
-          <button type="button" className="mb-nav__get-started" onClick={() => navigate("/register")}>
-            Get Started
-          </button>
-        </div>
-      </div>
-    </nav>
-  );
-};
-
-const MindBridgeFooter: React.FC = () => (
-  <footer className="mb-footer">
-    <div className="mb-footer__grid">
-      <div className="mb-footer__col">
-        <div className="mb-footer__brand">
-          <img alt="MindBridge Logo" className="mb-footer__logo" src={transLogo} />
-        </div>
-        <p className="mb-footer__copy">© 2026 MindBridge Co. The Intelligent Workspace.</p>
-      </div>
-      <div className="mb-footer__col">
-        <p className="mb-footer__heading">Product</p>
-        <Link className="mb-footer__link" to="/courses">Courses</Link>
-        <Link className="mb-footer__link" to="/instructors">Instructors</Link>
-        <Link className="mb-footer__link" to="/pricing">Pricing</Link>
-      </div>
-      <div className="mb-footer__col">
-        <p className="mb-footer__heading">Company</p>
-        <Link className="mb-footer__link" to="/privacy">Privacy Policy</Link>
-        <Link className="mb-footer__link" to="/privacy">Terms of Service</Link>
-        <Link className="mb-footer__link" to="/privacy">Cookie Policy</Link>
-        <Link className="mb-footer__link" to="/contact">Contact Us</Link>
-      </div>
-      <div className="mb-footer__col">
-        <p className="mb-footer__heading">Connect</p>
-        <div className="mb-footer__socials">
-          <a className="mb-footer__social" href="#">
-            <span className="material-symbols-outlined mb-footer__social-icon">public</span>
-          </a>
-          <a className="mb-footer__social" href="#">
-            <span className="material-symbols-outlined mb-footer__social-icon">alternate_email</span>
-          </a>
-        </div>
-        <p className="mb-footer__note">✦ Privacy and security are built into everything we do.</p>
-      </div>
-    </div>
-  </footer>
-);
 
 type InfoCardProps = {
   icon: string;
@@ -100,7 +35,7 @@ export default function ContactUsPage() {
 
   return (
     <div className="mb-contact-page">
-      <MindBridgeNavbar />
+      <MindBridgeHeader />
 
       <div className="mb-contact__body">
         <section className="mb-contact__hero">

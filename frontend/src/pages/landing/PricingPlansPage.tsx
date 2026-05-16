@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
-import PublicSiteHeader from "../../components/PublicSiteHeader";
-import PublicSiteFooter from "../../components/PublicSiteFooter";
+import MindBridgeHeader from "../../components/MindBridgeHeader";
+import MindBridgeFooter from "../../components/MindBridgeFooter";
 import "./PricingPlansPage.css";
 
 interface PricingPlan {
@@ -87,7 +87,7 @@ export default function PricingPlansPage() {
 
   return (
     <div className="mb-public pricing-page bg-[#F8FAFC] font-body text-on-surface">
-      <PublicSiteHeader active="pricing" />
+      <MindBridgeHeader active="pricing" />
 
       <main>
         <section className="py-20 px-4">
@@ -185,7 +185,7 @@ export default function PricingPlansPage() {
         </section>
       </main>
 
-      <PublicSiteFooter />
+      <MindBridgeFooter />
     </div>
   );
 }

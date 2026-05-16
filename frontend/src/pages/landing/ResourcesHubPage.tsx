@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import PublicSiteHeader from "../../components/PublicSiteHeader";
-import PublicSiteFooter from "../../components/PublicSiteFooter";
+import MindBridgeHeader from "../../components/MindBridgeHeader";
+import MindBridgeFooter from "../../components/MindBridgeFooter";
 import "./ResourcesHubPage.css";
 
 interface ResourceCard {
@@ -43,7 +43,7 @@ export default function ResourcesHubPage() {
 
   return (
     <div className="mb-public resources-page bg-[#F8FAFC] text-on-surface">
-      <PublicSiteHeader active="resources" />
+      <MindBridgeHeader active="resources" />
 
       <header className="pt-12 pb-16 px-4">
         <div className="max-w-4xl mx-auto text-center space-y-8">
@@ -180,7 +180,7 @@ export default function ResourcesHubPage() {
         </section>
       </main>
 
-      <PublicSiteFooter />
+      <MindBridgeFooter />
     </div>
   );
 }

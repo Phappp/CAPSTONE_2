@@ -1,0 +1,1426 @@
+/* ==========================================================================
+   LandingPage — Additional sections & animations
+   (Trending Courses, Dynamic Roadmap, Flash Sales, Live Stats, Testimonials, FAQ)
+   All rules scoped under .mb-landing-page to inherit existing design tokens.
+   ========================================================================== */
+
+/* ----- Global keyframes ----- */
+
+@keyframes mb-reveal-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes mb-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+
+/* Preserves the hero card's existing translateX(3rem) offset while floating. */
+@keyframes mb-float-card-main {
+  0%, 100% { transform: translateX(3rem) translateY(0); }
+  50%      { transform: translateX(3rem) translateY(-8px); }
+}
+
+@keyframes mb-pulse-soft {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50%      { transform: scale(1.06); opacity: 1; }
+}
+
+@keyframes mb-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes mb-badge-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.45); }
+  50%      { box-shadow: 0 0 0 8px rgba(13, 148, 136, 0); }
+}
+
+@keyframes mb-tick {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px); }
+}
+
+@keyframes mb-play-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.55), 0 12px 32px rgba(13, 148, 136, 0.45); }
+  50%      { box-shadow: 0 0 0 18px rgba(255, 255, 255, 0), 0 12px 32px rgba(13, 148, 136, 0.45); }
+}
+
+@keyframes mb-fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ----- Hero animation enhancements ----- */
+
+.mb-landing-page .mb-reveal {
+  animation: mb-reveal-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mb-landing-page .mb-hero__badge--animated {
+  animation: mb-badge-glow 2.4s ease-in-out infinite;
+}
+
+.mb-landing-page .mb-hero__title--animated {
+  animation: mb-reveal-up 0.9s 0.05s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mb-landing-page .mb-hero__title-accent--shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--mb-secondary) 0%,
+    #2dd4bf 25%,
+    #5eead4 50%,
+    #2dd4bf 75%,
+    var(--mb-secondary) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mb-shimmer 4s linear infinite;
+}
+
+.mb-landing-page .mb-hero__halo--pulse {
+  animation: mb-pulse-soft 5s ease-in-out infinite;
+}
+
+.mb-landing-page .mb-hero__card-main--float {
+  animation: mb-float-card-main 7s ease-in-out infinite;
+}
+
+.mb-landing-page .mb-hero__insight--float {
+  animation: mb-float 6s ease-in-out infinite;
+  animation-delay: -2s;
+}
+
+.mb-landing-page .mb-hero__health--float {
+  animation: mb-float 8s ease-in-out infinite;
+  animation-delay: -4s;
+}
+
+.mb-landing-page .mb-btn--lift {
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.22s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+  will-change: transform;
+}
+
+.mb-landing-page .mb-btn--lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(13, 148, 136, 0.28);
+}
+
+.mb-landing-page .mb-btn--lift:active {
+  transform: translateY(0);
+}
+
+/* ----- Shared section header tokens ----- */
+
+.mb-landing-page .mb-section-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 9999px;
+  background: rgba(13, 148, 136, 0.1);
+  color: var(--mb-secondary);
+  font-family: "Manrope", sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+
+.mb-landing-page .mb-section-pill .material-symbols-outlined {
+  font-size: 1rem;
+}
+
+.mb-landing-page .mb-section-pill--invert {
+  background: rgba(255, 255, 255, 0.12);
+  color: #5eead4;
+}
+
+.mb-landing-page .mb-section-pill--accent {
+  background: linear-gradient(135deg, #fde68a, #fbbf24);
+  color: #78350f;
+}
+
+.mb-landing-page .mb-section-title {
+  font-family: "Manrope", sans-serif;
+  font-size: clamp(1.875rem, 3vw, 2.5rem);
+  font-weight: 800;
+  color: var(--mb-primary);
+  letter-spacing: -0.02em;
+  margin-bottom: 0.75rem;
+  line-height: 1.15;
+}
+
+.mb-landing-page .mb-section-title--invert {
+  color: #fff;
+}
+
+.mb-landing-page .mb-section-lead {
+  color: var(--mb-on-surface-variant);
+  font-size: 1.05rem;
+  line-height: 1.6;
+  max-width: 42rem;
+}
+
+.mb-landing-page .mb-section-lead--invert {
+  color: #cbd5e1;
+}
+
+/* ----- Stars (rating) ----- */
+
+.mb-landing-page .mb-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: #fbbf24;
+}
+
+.mb-landing-page .mb-stars__star {
+  font-size: 1.05rem;
+  color: #e2e8f0;
+}
+
+.mb-landing-page .mb-stars__star--filled {
+  color: #fbbf24;
+}
+
+/* ==========================================================================
+   Trending Courses Carousel
+   ========================================================================== */
+
+.mb-landing-page .mb-courses {
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+  padding: 5rem 1.5rem;
+}
+
+.mb-landing-page .mb-courses__inner {
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+.mb-landing-page .mb-courses__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.mb-landing-page .mb-courses__controls {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.mb-landing-page .mb-courses__arrow {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 9999px;
+  background: #fff;
+  color: var(--mb-primary);
+  border: 1px solid #e2e8f0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    background 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.22s ease;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.mb-landing-page .mb-courses__arrow:hover:not(:disabled) {
+  background: var(--mb-secondary);
+  color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(13, 148, 136, 0.32);
+}
+
+.mb-landing-page .mb-courses__arrow:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.mb-landing-page .mb-courses__viewport {
+  overflow: hidden;
+  margin: 0 -0.75rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.mb-landing-page .mb-courses__track {
+  display: flex;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.mb-landing-page .mb-course-card {
+  padding: 0 0.75rem;
+}
+
+.mb-landing-page .mb-course-card__media {
+  position: relative;
+  border-radius: 1rem 1rem 0 0;
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  background: #f1f5f9;
+}
+
+.mb-landing-page .mb-course-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mb-landing-page .mb-course-card:hover .mb-course-card__media img {
+  transform: scale(1.06);
+}
+
+.mb-landing-page .mb-course-card__badge {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 9999px;
+  font-family: "Manrope", sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--mb-secondary);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(13, 148, 136, 0.35);
+}
+
+.mb-landing-page .mb-course-card__badge--new {
+  background: #6366f1;
+  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.35);
+}
+
+.mb-landing-page .mb-course-card__badge--hot {
+  background: #ef4444;
+  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.35);
+}
+
+.mb-landing-page .mb-course-card__category {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.4rem;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.mb-landing-page .mb-course-card__body {
+  padding: 1.1rem 1.25rem 1.25rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-top: 0;
+  border-radius: 0 0 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.mb-landing-page .mb-course-card:hover .mb-course-card__body {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.1);
+}
+
+.mb-landing-page .mb-course-card__level {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mb-secondary);
+}
+
+.mb-landing-page .mb-course-card__title {
+  font-family: "Manrope", sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--mb-primary);
+  line-height: 1.35;
+  min-height: 3rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mb-landing-page .mb-course-card__instructor {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.mb-landing-page .mb-course-card__rating {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+}
+
+.mb-landing-page .mb-course-card__rating-value {
+  font-weight: 700;
+  color: #b45309;
+}
+
+.mb-landing-page .mb-course-card__rating-count {
+  color: #94a3b8;
+}
+
+.mb-landing-page .mb-course-card__students {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.mb-landing-page .mb-course-card__students .material-symbols-outlined {
+  font-size: 1.05rem;
+  color: var(--mb-secondary);
+}
+
+.mb-landing-page .mb-course-card__price {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+
+.mb-landing-page .mb-course-card__price-sale {
+  font-family: "Manrope", sans-serif;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--mb-primary);
+}
+
+.mb-landing-page .mb-course-card__price-original {
+  color: #94a3b8;
+  text-decoration: line-through;
+  font-size: 0.95rem;
+}
+
+.mb-landing-page .mb-course-card__price-tag {
+  margin-left: auto;
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.35rem;
+}
+
+.mb-landing-page .mb-course-card__actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.mb-landing-page .mb-course-card__buy {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background: linear-gradient(135deg, #0d9488, #14b8a6);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.65rem 1rem;
+  border-radius: 0.65rem;
+  border: 0;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(13, 148, 136, 0.3);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.22s ease,
+    filter 0.2s ease;
+}
+
+.mb-landing-page .mb-course-card__buy:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(13, 148, 136, 0.45);
+  filter: brightness(1.05);
+}
+
+.mb-landing-page .mb-course-card__buy .material-symbols-outlined {
+  font-size: 1.05rem;
+}
+
+.mb-landing-page .mb-course-card__cart {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background: #fff;
+  color: var(--mb-primary);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.65rem;
+  border: 1px solid #cbd5e1;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.18s ease;
+}
+
+.mb-landing-page .mb-course-card__cart:hover {
+  background: var(--mb-primary);
+  color: #fff;
+  border-color: var(--mb-primary);
+  transform: translateY(-2px);
+}
+
+.mb-landing-page .mb-course-card__cart .material-symbols-outlined {
+  font-size: 1.05rem;
+}
+
+.mb-landing-page .mb-courses__pager {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 2rem;
+}
+
+.mb-landing-page .mb-courses__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: #cbd5e1;
+  border: 0;
+  cursor: pointer;
+  transition: background 0.2s ease, width 0.25s ease;
+  padding: 0;
+}
+
+.mb-landing-page .mb-courses__dot--active {
+  width: 1.5rem;
+  background: var(--mb-secondary);
+}
+
+@media (max-width: 640px) {
+  .mb-landing-page .mb-courses__head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* ==========================================================================
+   Dynamic Learning Roadmap
+   ========================================================================== */
+
+.mb-landing-page .mb-roadmap {
+  background: radial-gradient(ellipse at top, #1e293b 0%, #0f172a 60%, #020617 100%);
+  color: #fff;
+  padding: 5rem 1.5rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.mb-landing-page .mb-roadmap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(13, 148, 136, 0.25) 0%, transparent 40%),
+    radial-gradient(circle at 80% 90%, rgba(99, 102, 241, 0.18) 0%, transparent 45%);
+  pointer-events: none;
+}
+
+.mb-landing-page .mb-roadmap__inner {
+  max-width: 80rem;
+  margin: 0 auto;
+  position: relative;
+}
+
+.mb-landing-page .mb-roadmap__head {
+  text-align: center;
+  margin-bottom: 3.5rem;
+}
+
+.mb-landing-page .mb-roadmap__head .mb-section-lead {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.mb-landing-page .mb-roadmap__board {
+  display: grid;
+  gap: 2.5rem;
+}
+
+.mb-landing-page .mb-roadmap__track {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1.5rem 0 0.5rem;
+}
+
+.mb-landing-page .mb-roadmap__line {
+  position: absolute;
+  top: 2.75rem;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  /* left and width are JS-driven so endpoints align with actual node centers. */
+}
+
+.mb-landing-page .mb-roadmap__line-fill {
+  position: absolute;
+  top: 2.75rem;
+  height: 2px;
+  background: linear-gradient(90deg, #2dd4bf, #5eead4);
+  border-radius: 9999px;
+  box-shadow: 0 0 14px rgba(45, 212, 191, 0.6);
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  /* left and width are JS-driven. */
+}
+
+/* ----- Roadmap rocket marker -----
+   Floats ABOVE the track with a glowing vertical tether dropping to the line.
+   This avoids overlapping the step circles / label text. */
+
+.mb-landing-page .mb-roadmap__rocket {
+  position: absolute;
+  top: -0.4rem;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #fde68a 0%, #fbbf24 50%, #f59e0b 100%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateX(-50%);
+  z-index: 4;
+  pointer-events: none;
+  box-shadow:
+    0 6px 18px rgba(251, 191, 36, 0.55),
+    0 0 0 4px rgba(251, 191, 36, 0.18);
+  transition: left 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: left;
+}
+
+.mb-landing-page .mb-roadmap__rocket-icon {
+  color: #78350f;
+  font-size: 1.35rem;
+  line-height: 1;
+  animation: mb-rocket-bob 2.2s ease-in-out infinite;
+}
+
+/* Glowing tether linking the floating rocket to the path. */
+.mb-landing-page .mb-roadmap__rocket-trail {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 2px;
+  height: 1rem;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    to bottom,
+    rgba(251, 191, 36, 0.75) 0%,
+    rgba(251, 191, 36, 0) 100%
+  );
+  border-radius: 9999px;
+  filter: blur(0.5px);
+  pointer-events: none;
+}
+
+@keyframes mb-rocket-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px); }
+}
+
+/* ----- Roadmap Live Wave (final step celebration) ----- */
+
+.mb-landing-page .mb-roadmap__wave {
+  position: absolute;
+  top: calc(2.75rem - 0.625rem);
+  height: 1.25rem;
+  border-radius: 9999px;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.mb-landing-page .mb-roadmap__wave::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 35%;
+  height: 0.5rem;
+  transform: translate(-100%, -50%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(251, 191, 36, 0.4) 20%,
+    rgba(253, 230, 138, 0.9) 50%,
+    rgba(251, 191, 36, 0.4) 80%,
+    transparent 100%
+  );
+  filter: blur(1.5px);
+  border-radius: 9999px;
+  box-shadow: 0 0 24px rgba(251, 191, 36, 0.45);
+  animation: mb-roadmap-wave 2.4s 0.2s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes mb-roadmap-wave {
+  0%   { transform: translate(-100%, -50%); opacity: 0; }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translate(285%, -50%); opacity: 0; }
+}
+
+.mb-landing-page .mb-roadmap__node {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  flex: 1;
+  padding: 0;
+}
+
+.mb-landing-page .mb-roadmap__node-circle {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 9999px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform 0.25s ease,
+    background 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.mb-landing-page .mb-roadmap__node-circle .material-symbols-outlined {
+  color: #cbd5e1;
+  font-size: 1.5rem;
+  transition: color 0.25s ease;
+}
+
+.mb-landing-page .mb-roadmap__node--reached .mb-roadmap__node-circle {
+  background: rgba(45, 212, 191, 0.18);
+  border-color: rgba(45, 212, 191, 0.55);
+}
+
+.mb-landing-page .mb-roadmap__node--reached .mb-roadmap__node-circle .material-symbols-outlined {
+  color: #5eead4;
+}
+
+.mb-landing-page .mb-roadmap__node--active .mb-roadmap__node-circle {
+  background: linear-gradient(135deg, #14b8a6, #2dd4bf);
+  border-color: #5eead4;
+  transform: scale(1.15);
+  box-shadow: 0 0 0 8px rgba(45, 212, 191, 0.18), 0 12px 28px rgba(13, 148, 136, 0.45);
+}
+
+.mb-landing-page .mb-roadmap__node--active .mb-roadmap__node-circle .material-symbols-outlined {
+  color: #fff;
+}
+
+.mb-landing-page .mb-roadmap__node-label {
+  font-family: "Manrope", sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  text-align: center;
+  transition: color 0.2s ease;
+}
+
+.mb-landing-page .mb-roadmap__node--active .mb-roadmap__node-label {
+  color: #fff;
+}
+
+.mb-landing-page .mb-roadmap__node-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.mb-landing-page .mb-roadmap__node--active .mb-roadmap__node-tag {
+  color: #5eead4;
+}
+
+.mb-landing-page .mb-roadmap__detail {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  padding: 1.75rem;
+  border-radius: 1.25rem;
+  max-width: 44rem;
+  margin: 0 auto;
+  animation: mb-fade-up 0.4s ease both;
+}
+
+.mb-landing-page .mb-roadmap__detail-icon {
+  flex: 0 0 auto;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.85rem;
+  background: linear-gradient(135deg, #14b8a6, #2dd4bf);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(13, 148, 136, 0.4);
+}
+
+.mb-landing-page .mb-roadmap__detail-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #5eead4;
+  margin-bottom: 0.35rem;
+}
+
+.mb-landing-page .mb-roadmap__detail-title {
+  font-family: "Manrope", sans-serif;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 0.5rem;
+}
+
+.mb-landing-page .mb-roadmap__detail-desc {
+  color: #cbd5e1;
+  line-height: 1.6;
+}
+
+@media (max-width: 640px) {
+  .mb-landing-page .mb-roadmap__track {
+    overflow-x: auto;
+    padding-bottom: 1rem;
+  }
+  .mb-landing-page .mb-roadmap__node {
+    min-width: 6rem;
+  }
+}
+
+/* ==========================================================================
+   Flash Sales (Limited-Time Offers)
+   ========================================================================== */
+
+.mb-landing-page .mb-flash {
+  position: relative;
+  background: linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%);
+  padding: 5rem 1.5rem;
+  overflow: hidden;
+}
+
+.mb-landing-page .mb-flash__glow {
+  position: absolute;
+  top: -10%;
+  right: -10%;
+  width: 30rem;
+  height: 30rem;
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.35) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.mb-landing-page .mb-flash__inner {
+  position: relative;
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+.mb-landing-page .mb-flash__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-bottom: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.mb-landing-page .mb-flash__head-copy {
+  max-width: 36rem;
+}
+
+.mb-landing-page .mb-flash__countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--mb-primary);
+  padding: 1rem 1.4rem;
+  border-radius: 1rem;
+  color: #fff;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.25);
+}
+
+.mb-landing-page .mb-flash__unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 3rem;
+}
+
+.mb-landing-page .mb-flash__digits {
+  font-family: "Manrope", sans-serif;
+  font-size: 1.85rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.mb-landing-page .mb-flash__unit-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  color: #94a3b8;
+  text-transform: uppercase;
+  margin-top: 0.35rem;
+}
+
+.mb-landing-page .mb-flash__colon {
+  font-family: "Manrope", sans-serif;
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #475569;
+  margin-bottom: 0.85rem;
+}
+
+.mb-landing-page .mb-flash__unit--pulse .mb-flash__digits {
+  animation: mb-tick 1s ease-in-out infinite;
+  color: #fbbf24;
+}
+
+.mb-landing-page .mb-flash__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .mb-landing-page .mb-flash__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.mb-landing-page .mb-flash-card {
+  background: #fff;
+  border-radius: 1.1rem;
+  overflow: hidden;
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  box-shadow: 0 8px 24px rgba(180, 83, 9, 0.08);
+  display: flex;
+  flex-direction: column;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.mb-landing-page .mb-flash-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 22px 44px rgba(180, 83, 9, 0.18);
+}
+
+.mb-landing-page .mb-flash-card__media {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+}
+
+.mb-landing-page .mb-flash-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mb-landing-page .mb-flash-card:hover .mb-flash-card__media img {
+  transform: scale(1.07);
+}
+
+.mb-landing-page .mb-flash-card__discount {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.6rem;
+  font-family: "Manrope", sans-serif;
+  font-weight: 800;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  box-shadow: 0 8px 18px rgba(220, 38, 38, 0.4);
+  animation: mb-pulse-soft 2.2s ease-in-out infinite;
+}
+
+.mb-landing-page .mb-flash-card__body {
+  padding: 1.25rem 1.35rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  flex: 1;
+}
+
+.mb-landing-page .mb-flash-card__title {
+  font-family: "Manrope", sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--mb-primary);
+}
+
+.mb-landing-page .mb-flash-card__prices {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.mb-landing-page .mb-flash-card__sale {
+  font-family: "Manrope", sans-serif;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #dc2626;
+}
+
+.mb-landing-page .mb-flash-card__original {
+  color: #94a3b8;
+  text-decoration: line-through;
+}
+
+.mb-landing-page .mb-flash-card__progress {
+  height: 0.5rem;
+  background: #fef3c7;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.mb-landing-page .mb-flash-card__progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f59e0b, #ef4444);
+  border-radius: 9999px;
+  transition: width 0.6s ease;
+}
+
+.mb-landing-page .mb-flash-card__progress-text {
+  font-size: 0.8rem;
+  color: #92400e;
+}
+
+.mb-landing-page .mb-flash-card__progress-text strong {
+  color: #b45309;
+  font-weight: 700;
+}
+
+.mb-landing-page .mb-flash-card__cta {
+  margin-top: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 0.75rem 1.1rem;
+  border-radius: 0.7rem;
+  border: 0;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(239, 68, 68, 0.35);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.22s ease,
+    filter 0.2s ease;
+}
+
+.mb-landing-page .mb-flash-card__cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 26px rgba(239, 68, 68, 0.48);
+  filter: brightness(1.05);
+}
+
+.mb-landing-page .mb-flash-card__cta .material-symbols-outlined {
+  font-size: 1.05rem;
+}
+
+@media (max-width: 640px) {
+  .mb-landing-page .mb-flash__head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .mb-landing-page .mb-flash__digits {
+    font-size: 1.4rem;
+  }
+  .mb-landing-page .mb-flash__colon {
+    font-size: 1.4rem;
+    margin-bottom: 0.7rem;
+  }
+}
+
+/* ==========================================================================
+   Live Statistics
+   ========================================================================== */
+
+.mb-landing-page .mb-stats {
+  background: #fff;
+  padding: 4.5rem 1.5rem;
+}
+
+.mb-landing-page .mb-stats__inner {
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+.mb-landing-page .mb-stats__head {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.mb-landing-page .mb-stats__head .mb-section-lead {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.mb-landing-page .mb-stats__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .mb-landing-page .mb-stats__grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.mb-landing-page .mb-stats__card {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 1.1rem;
+  padding: 1.75rem 1.25rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.mb-landing-page .mb-stats__card:hover {
+  transform: translateY(-4px);
+  border-color: var(--mb-secondary);
+  box-shadow: 0 16px 36px rgba(13, 148, 136, 0.15);
+}
+
+.mb-landing-page .mb-stats__icon {
+  font-size: 2rem;
+  color: var(--mb-secondary);
+  background: rgba(13, 148, 136, 0.1);
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mb-landing-page .mb-stats__value {
+  font-family: "Manrope", sans-serif;
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--mb-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.mb-landing-page .mb-stats__suffix {
+  color: var(--mb-secondary);
+}
+
+.mb-landing-page .mb-stats__label {
+  font-size: 0.95rem;
+  color: var(--mb-on-surface-variant);
+  font-weight: 500;
+}
+
+/* ==========================================================================
+   Student Testimonials
+   ========================================================================== */
+
+.mb-landing-page .mb-test {
+  background: linear-gradient(180deg, #f1f5f9 0%, #ffffff 100%);
+  padding: 5rem 1.5rem;
+}
+
+.mb-landing-page .mb-test__inner {
+  max-width: 64rem;
+  margin: 0 auto;
+}
+
+.mb-landing-page .mb-test__head {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.mb-landing-page .mb-test__head .mb-section-lead {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.mb-landing-page .mb-test__viewport {
+  overflow: hidden;
+  border-radius: 1.5rem;
+}
+
+.mb-landing-page .mb-test__track {
+  display: flex;
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.mb-landing-page .mb-test__slide {
+  flex: 0 0 100%;
+  padding: 0.5rem;
+}
+
+.mb-landing-page .mb-test__card {
+  position: relative;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.5rem;
+  padding: 2.5rem 2rem 2rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.mb-landing-page .mb-test__quote-icon {
+  position: absolute;
+  top: 1rem;
+  right: 1.25rem;
+  font-size: 4rem;
+  color: rgba(13, 148, 136, 0.12);
+  line-height: 1;
+}
+
+.mb-landing-page .mb-test__quote {
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: var(--mb-primary);
+  font-style: italic;
+}
+
+.mb-landing-page .mb-test__person {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.mb-landing-page .mb-test__avatar {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-family: "Manrope", sans-serif;
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+  flex: 0 0 auto;
+}
+
+.mb-landing-page .mb-test__name {
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  color: var(--mb-primary);
+}
+
+.mb-landing-page .mb-test__role {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.mb-landing-page .mb-test__dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 1.75rem;
+}
+
+.mb-landing-page .mb-test__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: #cbd5e1;
+  border: 0;
+  cursor: pointer;
+  transition: background 0.2s ease, width 0.25s ease;
+  padding: 0;
+}
+
+.mb-landing-page .mb-test__dot--active {
+  width: 1.5rem;
+  background: var(--mb-secondary);
+}
+
+/* ==========================================================================
+   FAQ Accordion
+   ========================================================================== */
+
+.mb-landing-page .mb-faq {
+  background: #f8fafc;
+  padding: 5rem 1.5rem 6rem;
+}
+
+.mb-landing-page .mb-faq__inner {
+  max-width: 56rem;
+  margin: 0 auto;
+}
+
+.mb-landing-page .mb-faq__head {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.mb-landing-page .mb-faq__head .mb-section-lead {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.mb-landing-page .mb-faq__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mb-landing-page .mb-faq__item {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.9rem;
+  overflow: hidden;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.25s ease;
+}
+
+.mb-landing-page .mb-faq__item:hover {
+  border-color: rgba(13, 148, 136, 0.4);
+}
+
+.mb-landing-page .mb-faq__item--open {
+  border-color: var(--mb-secondary);
+  box-shadow: 0 12px 28px rgba(13, 148, 136, 0.12);
+}
+
+.mb-landing-page .mb-faq__q {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  padding: 1.15rem 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-family: "Manrope", sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--mb-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.mb-landing-page .mb-faq__q-text {
+  flex: 1;
+}
+
+.mb-landing-page .mb-faq__chevron {
+  color: var(--mb-secondary);
+  transition: transform 0.3s ease;
+  font-size: 1.5rem;
+}
+
+.mb-landing-page .mb-faq__item--open .mb-faq__chevron {
+  transform: rotate(180deg);
+}
+
+.mb-landing-page .mb-faq__a-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mb-landing-page .mb-faq__item--open .mb-faq__a-wrap {
+  grid-template-rows: 1fr;
+}
+
+.mb-landing-page .mb-faq__a {
+  overflow: hidden;
+  padding: 0 1.4rem;
+  color: var(--mb-on-surface-variant);
+  line-height: 1.65;
+}
+
+.mb-landing-page .mb-faq__item--open .mb-faq__a {
+  padding: 0 1.4rem 1.25rem;
+}
+
+/* ==========================================================================
+   TVC play button pulse + inline video
+   ========================================================================== */
+
+.mb-landing-page .mb-tvc__play--pulse {
+  animation: mb-play-pulse 2.4s ease-in-out infinite;
+}
+
+.mb-landing-page .mb-tvc__play--pulse:hover {
+  animation-play-state: paused;
+  transform: scale(1.08);
+}
+
+.mb-landing-page .mb-tvc__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+}
