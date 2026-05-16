@@ -309,6 +309,9 @@
 .login-section .checkbox-input {
   width: 16px;
   height: 16px;
+  border: 1px solid #c5c6cd;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 .login-section .forgot-link {

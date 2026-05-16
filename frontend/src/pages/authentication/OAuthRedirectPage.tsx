@@ -50,7 +50,7 @@ export default function OAuthRedirectPage() {
             navigate("/admin", { replace: true });
             return;
         }
-        navigate("/student/dashboard", { replace: true });
+        navigate("/learner/dashboard", { replace: true });
     };
 
     useEffect(() => {

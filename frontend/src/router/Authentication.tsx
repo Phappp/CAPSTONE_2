@@ -26,7 +26,7 @@ export default function Authentication({
         if (role === "course_manager" || role === "teacher") {
             return <Navigate to="/teacher/dashboard" replace />;
         }
-        return <Navigate to="/student/dashboard" replace />;
+        return <Navigate to="/learner/dashboard" replace />;
     }
 
     return (

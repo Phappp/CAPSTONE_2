@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./PrivacyPage.css";
-import transLogo from "../assets/trans-logo-2.png";
+import transLogo from "../../assets/trans-logo-2.png";
 
 const SECTION_IDS = ["introduction", "data-collection", "how-we-use", "sharing", "security"] as const;
 type SectionId = (typeof SECTION_IDS)[number];
@@ -15,10 +15,10 @@ const MindBridgeNavbar: React.FC = () => {
           <img alt="MindBridge Logo" className="mb-nav__logo" src={transLogo} />
         </Link>
         <div className="mb-nav__links">
-          <Link to="/" className="mb-nav__link">Courses</Link>
-          <Link to="/" className="mb-nav__link">Instructors</Link>
-          <Link to="/" className="mb-nav__link">Pricing</Link>
-          <Link to="/" className="mb-nav__link">Resources</Link>
+          <Link to="/courses" className="mb-nav__link">Courses</Link>
+          <Link to="/instructors" className="mb-nav__link">Instructors</Link>
+          <Link to="/pricing" className="mb-nav__link">Pricing</Link>
+          <Link to="/resources" className="mb-nav__link">Resources</Link>
         </div>
         <div className="mb-nav__cta">
           <button type="button" className="mb-nav__login" onClick={() => navigate("/login")}>
@@ -44,15 +44,15 @@ const MindBridgeFooter: React.FC = () => (
       </div>
       <div className="mb-footer__col">
         <p className="mb-footer__heading">Product</p>
-        <Link className="mb-footer__link" to="/">Courses</Link>
-        <Link className="mb-footer__link" to="/">Instructors</Link>
-        <Link className="mb-footer__link" to="/">Pricing</Link>
+        <Link className="mb-footer__link" to="/courses">Courses</Link>
+        <Link className="mb-footer__link" to="/instructors">Instructors</Link>
+        <Link className="mb-footer__link" to="/pricing">Pricing</Link>
       </div>
       <div className="mb-footer__col">
         <p className="mb-footer__heading">Company</p>
         <Link className="mb-footer__link" to="/privacy">Privacy Policy</Link>
-        <Link className="mb-footer__link" to="/">Terms of Service</Link>
-        <Link className="mb-footer__link" to="/">Cookie Policy</Link>
+        <Link className="mb-footer__link" to="/privacy">Terms of Service</Link>
+        <Link className="mb-footer__link" to="/privacy">Cookie Policy</Link>
         <Link className="mb-footer__link" to="/contact">Contact Us</Link>
       </div>
       <div className="mb-footer__col">

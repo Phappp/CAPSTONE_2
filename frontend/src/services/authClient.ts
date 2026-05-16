@@ -144,6 +144,8 @@ export async function apiLogin(params: LoginParams): Promise<AuthResponse> {
 }
 
 // Xác thực 2FA
+// Backend trả về: { success: true, data: { accessToken, refreshToken, user } }
+// Cần unwrap `data` và normalize tên field về snake_case mà FE đang dùng.
 export async function apiVerify2FA(params: {
   email: string;
   code: string;
@@ -156,13 +158,18 @@ export async function apiVerify2FA(params: {
     body: JSON.stringify(params),
   });
 
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const code = data?.code || "VERIFY_2FA_FAILED";
-    throw new Error(code);
+  const data = await res.json().catch(() => ({} as any));
+  if (!res.ok || data?.success === false) {
+    const message = data?.message || data?.code || "VERIFY_2FA_FAILED";
+    throw new Error(message);
   }
 
-  return data as AuthResponse;
+  const payload = data?.data ?? data;
+  return {
+    access_token: payload?.accessToken ?? payload?.access_token,
+    refresh_token: payload?.refreshToken ?? payload?.refresh_token,
+    user: payload?.user,
+  } as AuthResponse;
 }
 
 // Đăng xuất

@@ -18,10 +18,10 @@ export default function ForgotPasswordPage() {
     try {
       await apiForgotPassword({ email });
       setSuccess(
-        "Liên kết đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra email."
+        "The password reset link has been sent. Please check your email."
       );
     } catch (err: any) {
-      setError(err?.message ?? "Không thể gửi yêu cầu, vui lòng thử lại.");
+      setError(err?.message ?? "Unable to send request, please try again.");
     } finally {
       setLoading(false);
     }
@@ -30,15 +30,15 @@ export default function ForgotPasswordPage() {
   return (
     <div className="auth-layout">
       <div className="auth-card">
-        <h1 className="auth-title">Quên mật khẩu</h1>
+        <h1 className="auth-title">Forgot Your Password? We’ve Got You Covered</h1>
         <p className="auth-subtitle">
-          Nhập email đã đăng ký để nhận liên kết đặt lại mật khẩu.
+          Enter the email address associated with your account and we’ll send you a link to reset your password.
         </p>
 
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
+          <div className="form-group text-black">
             <label htmlFor="email" className="form-label">
-              Email
+              Email Address
             </label>
             <input
               id="email"
@@ -46,8 +46,8 @@ export default function ForgotPasswordPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="form-input"
-              placeholder="you@example.com"
+              className="form-input text-black placeholder-gray-400"
+              placeholder="Enter your email address"
             />
           </div>
 
@@ -55,7 +55,7 @@ export default function ForgotPasswordPage() {
           {success && <div className="success-box">{success}</div>}
 
           <button type="submit" disabled={loading} className="primary-button">
-            {loading ? "Đang gửi..." : "Gửi liên kết đặt lại"}
+            {loading ? "Sending..." : "Send Reset Link"}
           </button>
         </form>
 
@@ -65,7 +65,7 @@ export default function ForgotPasswordPage() {
             className="link-button"
             onClick={() => navigate("/login")}
           >
-            Quay lại đăng nhập
+            Back to Login
           </button>
         </div>
       </div>

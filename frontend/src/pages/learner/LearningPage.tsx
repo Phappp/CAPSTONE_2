@@ -8,7 +8,7 @@ import { COURSES_API } from "../../api/courses";
 import { ASSIGNMENTS_API } from "../../api/assignments";
 import { useAuth } from "../../contexts/Auth";
 import type { ModuleItem } from "../../components/LearnerCourseContentTree";
-import { isLikelyVideoResource, parseYoutubeVideoId } from "../teacher/lesson-studio/utils";
+import { isLikelyVideoResource, parseYoutubeVideoId } from "../courseManager/lesson-studio/utils";
 import "../../components/CourseContentSimpleTree.css";
 import "./LearningPage.css";
 

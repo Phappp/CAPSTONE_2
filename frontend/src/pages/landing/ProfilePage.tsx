@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Camera, CheckCircle2, Copy, House, Trash2, TriangleAlert, Upload } from "lucide-react";
-import AvatarMenu from "../components/AvatarMenu";
-import CommonModal from "../components/CommonModal";
-import { url } from "../baseUrl";
-import { PROFILE_API } from "../api/profile";
-import { useAuth } from "../contexts/Auth";
-import { getAccessToken } from "../utils/authStorage";
+import AvatarMenu from "../../components/AvatarMenu";
+import CommonModal from "../../components/CommonModal";
+import { url } from "../../baseUrl";
+import { PROFILE_API } from "../../api/profile";
+import { useAuth } from "../../contexts/Auth";
+import { getAccessToken } from "../../utils/authStorage";
 import "./ProfilePage.css";
 
 interface ProfileStatistics {

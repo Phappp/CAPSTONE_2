@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { House, Lock, Save, Shield } from "lucide-react";
-import AvatarMenu from "../components/AvatarMenu";
-import { url } from "../baseUrl";
-import { PROFILE_API } from "../api/profile";
-import { useAuth } from "../contexts/Auth";
-import { getAccessToken } from "../utils/authStorage";
+import AvatarMenu from "../../components/AvatarMenu";
+import { url } from "../../baseUrl";
+import { PROFILE_API } from "../../api/profile";
+import { useAuth } from "../../contexts/Auth";
+import { getAccessToken } from "../../utils/authStorage";
 import "./ProfilePage.css";
 
 export default function ProfileSecurityPage() {
