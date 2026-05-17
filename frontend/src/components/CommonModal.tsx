@@ -27,6 +27,8 @@ type CommonModalProps = {
   onCancel?: () => void;
   closeOnOverlayClick?: boolean;
   closeOnEscape?: boolean;
+  /** Extra class on the overlay — use to scope theme variants (e.g. "common-modal--dark"). */
+  className?: string;
 };
 
 const variantIcons = {
@@ -61,6 +63,7 @@ export default function CommonModal(props: CommonModalProps) {
     onCancel,
     closeOnOverlayClick = true,
     closeOnEscape = true,
+    className,
   } = props;
 
   const handleOverlayClick = useCallback(() => {
@@ -108,9 +111,15 @@ export default function CommonModal(props: CommonModalProps) {
   const iconColors = variantColors[variant];
 
   return (
-    <div className="common-modal-overlay" onClick={handleOverlayClick}>
+    <div
+      className={`common-modal-overlay ${className ?? ""}`}
+      onClick={handleOverlayClick}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="common-modal-title"
+    >
       <div
-        className={`common-modal-card ${variant}`}
+        className={`common-modal-card ${variant}${destructive ? " is-destructive" : ""}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="common-modal-header">
@@ -118,9 +127,12 @@ export default function CommonModal(props: CommonModalProps) {
             className={`common-modal-icon ${variant}`}
             style={{ backgroundColor: iconColors.bg, color: iconColors.color }}
           >
+            <span className="common-modal-icon__pulse" aria-hidden />
             <IconComponent size={20} />
           </div>
-          <div className="common-modal-title">{title}</div>
+          <div id="common-modal-title" className="common-modal-title">
+            {title}
+          </div>
           <button
             type="button"
             className="common-modal-close"
@@ -154,7 +166,8 @@ export default function CommonModal(props: CommonModalProps) {
             }`}
             onClick={handleConfirm}
           >
-            {confirmText}
+            <span className="common-modal-btn__shine" aria-hidden />
+            <span className="common-modal-btn__label">{confirmText}</span>
           </button>
         </div>
       </div>

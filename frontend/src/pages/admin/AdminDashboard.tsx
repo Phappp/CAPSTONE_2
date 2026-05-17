@@ -47,7 +47,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import AvatarMenu from "../../components/AvatarMenu";
-import CommonModal from "../../components/CommonModal";
+import CommonModal, { ConfirmModal } from "../../components/CommonModal";
 import { useAuth } from "../../contexts/Auth";
 import {
   AdminUser,
@@ -104,6 +104,18 @@ export default function AdminDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [view, setView] = useState<AdminView>("users");
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogoutConfirm = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   // Users state
   const [page, setPage] = useState(1);
@@ -745,7 +757,10 @@ export default function AdminDashboard() {
               </>
             )}
           </div>
-          <button className="logout-btn" onClick={logout}>
+          <button
+            className="logout-btn"
+            onClick={() => setLogoutConfirmOpen(true)}
+          >
             <LogOut size={16} />
             {!sidebarCollapsed && <span>Đăng xuất</span>}
           </button>
@@ -1043,8 +1058,21 @@ export default function AdminDashboard() {
         message={noticeModal.message}
         variant={noticeModal.variant}
         showCancel={false}
+        className="common-modal--dark"
         onClose={() => setNoticeModal({ open: false, title: "", message: "", variant: "info" })}
         onConfirm={() => setNoticeModal({ open: false, title: "", message: "", variant: "info" })}
+      />
+
+      <ConfirmModal
+        open={logoutConfirmOpen}
+        title="Xác nhận đăng xuất"
+        message="Bạn có chắc chắn muốn đăng xuất khỏi tài khoản quản trị? Mọi phiên làm việc chưa lưu có thể bị mất."
+        confirmText={loggingOut ? "Đang đăng xuất..." : "Đăng xuất"}
+        cancelText="Hủy"
+        destructive
+        className="common-modal--dark"
+        onConfirm={handleLogoutConfirm}
+        onClose={() => setLogoutConfirmOpen(false)}
       />
     </div>
   );

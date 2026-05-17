@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/Auth";
+import { ConfirmModal } from "./CommonModal";
 import "./AvatarMenu.css";
 
 function getRoleLabel(role?: string | null) {
@@ -27,9 +28,21 @@ function getInitials(name?: string | null, email?: string | null) {
 export default function AvatarMenu() {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const navigate = useNavigate();
 
   const initials = getInitials(user?.full_name, user?.email);
+
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <div className="avatarMenuContainer">
@@ -82,13 +95,24 @@ export default function AvatarMenu() {
             className="dropdownItem dropdownItem--danger"
             onClick={() => {
               setOpen(false);
-              logout();
+              setLogoutConfirmOpen(true);
             }}
           >
             Đăng xuất
           </button>
         </div>
       )}
+
+      <ConfirmModal
+        open={logoutConfirmOpen}
+        title="Xác nhận đăng xuất"
+        message="Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này? Mọi phiên làm việc chưa lưu có thể bị mất."
+        confirmText={loggingOut ? "Đang đăng xuất..." : "Đăng xuất"}
+        cancelText="Hủy"
+        destructive
+        onConfirm={handleLogout}
+        onClose={() => setLogoutConfirmOpen(false)}
+      />
     </div>
   );
 }
