@@ -137,7 +137,7 @@ export default function ProfilePage() {
         });
         if (!res.ok) {
           const text = await res.text();
-          throw new Error(text || "Không thể tải thông tin hồ sơ.");
+          throw new Error(text || "Cannot load profile information.");
         }
         const json = await res.json();
         if (ignore) return;
@@ -157,7 +157,7 @@ export default function ProfilePage() {
         setForm(nextForm);
         setOriginalForm(nextForm);
       } catch (e: any) {
-        if (!ignore) setErrorMessage(e?.message || "Không thể tải hồ sơ.");
+        if (!ignore) setErrorMessage(e?.message || "Cannot load profile information.");
       } finally {
         if (!ignore) setLoading(false);
       }
@@ -179,7 +179,7 @@ export default function ProfilePage() {
           headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         });
         const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(json?.message || "Không thể tải checklist cấp phép.");
+        if (!res.ok) throw new Error(json?.message || "Cannot load course manager readiness information.");
         const data = json.data as ManagerReadiness;
         setManagerReadiness(data);
         setApplicationForm({
@@ -197,7 +197,7 @@ export default function ProfilePage() {
         setEvidenceLinks(Array.from(new Set(links)));
       } catch (e: any) {
         setManagerReadiness(null);
-        setManagerReadinessError(e?.message || "Không thể tải checklist cấp phép.");
+        setManagerReadinessError(e?.message || "Cannot load course manager readiness information.");
       } finally {
         setManagerReadinessLoading(false);
       }

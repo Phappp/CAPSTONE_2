@@ -602,11 +602,11 @@ export default function TeacherCourseOverviewPage() {
                 onClick={() => navigate("/teacher/dashboard?section=course")}
               >
                 <span className="material-symbols-outlined">arrow_back</span>
-                Threeck danh sách
+                Back to Course Managerment  
               </button>
             </div>
             <h1 className="dashboard-title">Course overview</h1>
-            <p className="dashboard-subtitle">Theo dõi hiệu suất and tiến độ học viên</p>
+            <p className="dashboard-subtitle">Follow student performance and progress</p>
           </div>
           <AvatarMenu />
         </div>
@@ -615,7 +615,7 @@ export default function TeacherCourseOverviewPage() {
         {loading && !data ? (
           <div className="loading-state">
             <span className="material-symbols-outlined loading-icon">sync</span>
-            <p>Đang tải tổng quan khóa học...</p>
+            <p>Loading course overview...</p>
           </div>
         ) : null}
 
@@ -641,7 +641,7 @@ export default function TeacherCourseOverviewPage() {
 
         {!error && rejectedResources.length > 0 && (
           <div className="warning-message warning-message--rejected">
-            Yes {rejectedResources.length} nội dung bị from chối. Vui lòng mat mục cần sửa để cập nhật and gửi lại.
+            {rejectedResources.length} resources rejected. Please check the review status for details and fix the issues to get your course approved.
           </div>
         )}
 
@@ -649,7 +649,7 @@ export default function TeacherCourseOverviewPage() {
           <div className="chart-card" style={{ marginBottom: 16 }}>
             <div className="chart-card-header">
               <span className="chart-card-icon material-symbols-outlined">pending_actions</span>
-              <h3 className="chart-card-title">Content pending duyệt ({pendingResources.length})</h3>
+              <h3 className="chart-card-title">Content pending review ({pendingResources.length})</h3>
             </div>
             <div style={{ display: "grid", gap: 8 }}>
               {pendingResources.slice(0, 8).map((item) => (
@@ -674,12 +674,12 @@ export default function TeacherCourseOverviewPage() {
                     </div>
                   </div>
                   <span className={`status-badge ${item.is_resubmitted ? "status-badge--draft" : "status-badge--pending_review"}`}>
-                    {item.is_resubmitted ? "Send lại" : "Mới gửi"}
+                    {item.is_resubmitted ? "Send again" : "New submission"}
                   </span>
                 </div>
               ))}
               {pendingResources.length > 8 && (
-                <div style={{ fontSize: 12, color: "#64748b" }}>Và {pendingResources.length - 8} mục khác...</div>
+                <div style={{ fontSize: 12, color: "#64748b" }}>And {pendingResources.length - 8} more items...</div>
               )}
             </div>
           </div>
@@ -697,19 +697,19 @@ export default function TeacherCourseOverviewPage() {
                       className="btn-secondary"
                       onClick={() => navigate(`/teacher/courses/${courseId}/content?tab=content`)}
                       disabled={loading || withdrawingReview}
-                      title="Open nội dung bị from chối để sửa and gửi lại"
+                      title="Open rejected content to edit and resubmit"
                     >
                       <span className="material-symbols-outlined">build</span>
-                      {rejectedResources.length > 0 ? `Open mục cần sửa (${rejectedResources.length})` : "Open mục cần sửa"}
+                      {rejectedResources.length > 0 ? `Open items to edit (${rejectedResources.length})` : "Open items to edit"}
                     </button>
                     <button
                       className="btn-secondary"
                       onClick={() => void withdrawReviewRequest()}
                       disabled={loading || withdrawingReview}
-                      title="Thu hồi yêu cầu duyệt để quay về bản nháp"
+                      title="Withdraw review request to return to draft and continue editing"
                     >
                       <span className="material-symbols-outlined">undo</span>
-                      {withdrawingReview ? "Đang thu hồi..." : "Thu hồi yêu cầu duyệt"}
+                      {withdrawingReview ? "Withdrawing..." : "Withdraw Review Request"}
                     </button>
                   </div>
                 ) : c.status === "draft" ? (
@@ -718,18 +718,18 @@ export default function TeacherCourseOverviewPage() {
                       className="btn-primary"
                       onClick={() => void submitForReview()}
                       disabled={loading || submittingReview}
-                      title="Send khóa học để quản trị viên duyệt"
+                      title="Send course for review"
                     >
                       <span className="material-symbols-outlined">send</span>
-                      {submittingReview ? "Đang gửi..." : "Send duyệt"}
+                      {submittingReview ? "Sending..." : "Send for Review"}
                     </button>
                     <button
                       className="btn-secondary review-status-btn"
                       onClick={() => void openReviewModal()}
-                      title="View trạng thái duyệt khóa học"
+                      title="View review status of the course"
                     >
                       <span className="material-symbols-outlined">fact_check</span>
-                      Status duyệt
+                      Approval Status
                       {(pendingResources.length > 0 || rejectedResources.length > 0) && (
                         <span className="review-badge-container">
                           {pendingResources.length > 0 && (
@@ -746,10 +746,12 @@ export default function TeacherCourseOverviewPage() {
                   <button
                     className="btn-secondary review-status-btn"
                     onClick={() => void openReviewModal()}
-                    title="View trạng thái duyệt khóa học"
+                    title="View review status of the course"
                   >
-                    <span className="material-symbols-outlined">fact_check</span>
-                    Status duyệt
+                    <span className="material-symbols-outlined" style={{color: "#6c757d"}}>fact_check</span>
+                    <span style={{color: "#6c757d"}}>
+                      Approval Status
+                    </span>
                     {(pendingResources.length > 0 || rejectedResources.length > 0) && (
                       <span className="review-badge-container">
                         {pendingResources.length > 0 && (
@@ -776,12 +778,12 @@ export default function TeacherCourseOverviewPage() {
                 <div className="course-info-large">
                   <div className="course-title-section">
                     <h1 className="course-title-large">{c.title}</h1>
-                    <span className={`status-badge status-badge--${c.status}`}>
-                      {statusLabel}
+                      <span className={`status-badge status-badge--${c.status}`}>
+                        {statusLabel}
                     </span>
                   </div>
                   <p className="course-slug">/{c.slug}</p>
-                  <p className="course-description-large">{c.short_description || "No mô tả ngắn."}</p>
+                  <p className="course-description-large">{c.short_description || "No short description available."}</p>
                 </div>
               </div>
               
@@ -791,28 +793,38 @@ export default function TeacherCourseOverviewPage() {
                   Chỉnh sửa
                 </button> */}
                 <button className="btn-secondary" onClick={() => navigate(`/teacher/courses/${courseId}/content?tab=content`)}>
-                  <span className="material-symbols-outlined">format_list_bulleted</span>
-                  Content
+                  <span className="material-symbols-outlined" style={{color: "#6c757d"}}>format_list_bulleted</span>
+                  <span style={{color: "#6c757d"}}>
+                    Content
+                  </span>
                 </button>
                 <button className="btn-secondary" onClick={() => navigate(`/teacher/courses/${courseId}/grading`)}>
-                  <span className="material-symbols-outlined">assignment_turned_in</span>
-                  Chấm điểm
+                  <span className="material-symbols-outlined" style={{color: "#6c757d"}}>assignment_turned_in</span>
+                  <span style={{color: "#6c757d"}}>
+                    Grade Assignments
+                  </span>
                 </button>
                 <button className="btn-secondary" onClick={openGraphModal}>
-                  <span className="material-symbols-outlined">account_tree</span>
-                  Sơ đồ tiên quyết
+                  <span className="material-symbols-outlined" style={{color: "#6c757d"}}>account_tree</span>
+                  <span style={{color: "#6c757d"}}>
+                    Prerequisite Diagram
+                  </span>
                 </button>
                 {/* <button className="btn-secondary" onClick={() => navigate(`/teacher/courses/${courseId}/assessments`)}>
-                  <span className="material-symbols-outlined">quiz</span>
+                  <span className="material-symbols-outlined" style={{color: "#6c757d"}}>quiz</span>
                   Quiz & Assignment
                 </button> */}
                 <button className="btn-secondary" onClick={() => navigate(`/teacher/courses/${courseId}/question-banks`)}>
-                  <span className="material-symbols-outlined">question_answer</span>
+                  <span className="material-symbols-outlined" style={{color: "#6c757d"}}>question_answer</span>
+                  <span style={{color: "#6c757d"}}>
                   Question bank
+                  </span>
                 </button>
                 <button className="btn-secondary" onClick={() => navigate(`/teacher/live-sessions/${courseId}`)}>
-                  <span className="material-symbols-outlined">live_tv</span>
-                  Session Live
+                  <span className="material-symbols-outlined" style={{color: "#6c757d"}}>live_tv</span>
+                  <span style={{color: "#6c757d"}}>
+                    Live sessions
+                  </span>
                 </button>
                 {/* <button className="btn-secondary" onClick={() => void load()} disabled={loading}>
                   <span className="material-symbols-outlined">refresh</span>
@@ -824,16 +836,16 @@ export default function TeacherCourseOverviewPage() {
             {/* Quick Stats Section */}
             <div className="section-header">
               <span className="material-symbols-outlined section-icon">insights</span>
-              <h2 className="section-title">Thống kê nhanh</h2>
+              <h2 className="section-title">Quick Stats</h2>
             </div>
             <div className="stats-grid">
               {[
                 { label: "Students", value: c.learners_count, icon: "group", color: "#3b82f6" },
                 { label: "Module", value: c.modules_count, icon: "library_books", color: "#8b5cf6" },
                 { label: "Lesson", value: c.lessons_count, icon: "menu_book", color: "#10b981" },
-                { label: "Tiến độ TB", value: `${data?.avg_progress_percent ?? 0}%`, icon: "trending_up", color: "#f59e0b" },
-                { label: "Lesson yes Quiz", value: data?.lessons_with_quiz_count ?? 0, icon: "quiz", color: "#ec4899" },
-                { label: "Lesson yes bài tập", value: data?.lessons_with_assignment_count ?? 0, icon: "assignment", color: "#f97316" },
+                { label: "Average Progress", value: `${data?.avg_progress_percent ?? 0}%`, icon: "trending_up", color: "#f59e0b" },
+                { label: "Lessons with Quiz", value: data?.lessons_with_quiz_count ?? 0, icon: "quiz", color: "#ec4899" },
+                { label: "Lessons with Assignment", value: data?.lessons_with_assignment_count ?? 0, icon: "assignment", color: "#f97316" },
               ].map((x) => (
                 <div key={x.label} className="stat-card">
                   <div className="stat-card-icon" style={{ background: `${x.color}10`, color: x.color }}>
@@ -850,20 +862,20 @@ export default function TeacherCourseOverviewPage() {
             {/* Charts Section */}
             <div className="section-header">
               <span className="material-symbols-outlined section-icon">analytics</span>
-              <h2 className="section-title">Phân tích & Xu hướng</h2>
+              <h2 className="section-title">Analysis & Trends</h2>
             </div>
             <div className="charts-row">
               <div className="chart-card">
                 <div className="chart-card-header">
                   <span className="chart-card-icon material-symbols-outlined">show_chart</span>
-                  <h3 className="chart-card-title">Ghi danh theo month</h3>
+                  <h3 className="chart-card-title">Enrollment by Month</h3>
                 </div>
                 <LineMini labels={data?.enrollment_trend?.labels ?? []} values={data?.enrollment_trend?.values ?? []} />
               </div>
               <div className="chart-card">
                 <div className="chart-card-header">
                   <span className="chart-card-icon material-symbols-outlined">pie_chart</span>
-                  <h3 className="chart-card-title">Status ghi danh</h3>
+                  <h3 className="chart-card-title">Enrollment Status</h3>
                 </div>
                 <PieMini data={enrollmentPie.length ? enrollmentPie : [{ label: "No data yet", value: 0, color: "#e2e8f0" }]} />
               </div>
@@ -872,13 +884,13 @@ export default function TeacherCourseOverviewPage() {
             {/* Additional Stats Section */}
             <div className="section-header">
               <span className="material-symbols-outlined section-icon">bar_chart</span>
-              <h2 className="section-title">Phân bố chi tiết</h2>
+              <h2 className="section-title">Detailed Distribution</h2>
             </div>
             <div className="stats-row-3col">
               <div className="chart-card">
                 <div className="chart-card-header">
                   <span className="chart-card-icon material-symbols-outlined">smart_display</span>
-                  <h3 className="chart-card-title">Type bài học</h3>
+                  <h3 className="chart-card-title">Lesson Content Types</h3>
                 </div>
                 <BarChartMini data={lessonContentBars} />
               </div>
@@ -892,7 +904,7 @@ export default function TeacherCourseOverviewPage() {
               <div className="chart-card">
                 <div className="chart-card-header">
                   <span className="chart-card-icon material-symbols-outlined">speed</span>
-                  <h3 className="chart-card-title">Tiến độ học viên</h3>
+                  <h3 className="chart-card-title">Learner Progress</h3>
                 </div>
                 <BarChartMini data={progressBars} />
               </div>
@@ -901,7 +913,7 @@ export default function TeacherCourseOverviewPage() {
             {/* Learners Ranking Section */}
             <div className="section-header">
               <span className="material-symbols-outlined section-icon">leaderboard</span>
-              <h2 className="section-title">Table xếp hạng học viên</h2>
+              <h2 className="section-title">Learner Rankings</h2>
             </div>
             <div className="chart-card learners-section">
               <div className="learners-toolbar">
@@ -910,7 +922,7 @@ export default function TeacherCourseOverviewPage() {
                   <input
                     type="text"
                     className="search-input"
-                    placeholder="Search theo tên or email..."
+                    placeholder="Search by name or email..."
                     value={learnerQ}
                     onChange={(e) => {
                       setLearnerPage(1);
@@ -920,8 +932,10 @@ export default function TeacherCourseOverviewPage() {
                   />
                 </div>
                 <button className="btn-secondary btn-sm" onClick={() => void fetchLearnerProgress()} disabled={learnerLoading}>
-                  <span className="material-symbols-outlined">refresh</span>
-                  Tải lại
+                  <span className="material-symbols-outlined" style={{color: "#6c757d"}}>refresh</span>
+                  <span style={{color: "#6c757d"}}>
+                    Refresh
+                  </span>
                 </button>
               </div>
 
@@ -931,13 +945,13 @@ export default function TeacherCourseOverviewPage() {
                 <table className="learners-table">
                   <thead>
                     <tr>
-                      <th>Hạng</th>
+                      <th>Rank</th>
                       <th>Students</th>
-                      <th>Tiến độ</th>
+                      <th>Progress</th>
                       <th>Complete</th>
                       <th>Time</th>
                       <th>Status</th>
-                      <th>Attempt truy cập cuối</th>
+                      <th>Last Access</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -982,7 +996,7 @@ export default function TeacherCourseOverviewPage() {
                           <td>{Math.round(Number(it.time_spent_seconds ?? 0) / 60)} phút</td>
                           <td>
                             <span className={`status-badge-small status-${it.status === "active" ? "active" : "completed"}`}>
-                              {it.status === "active" ? "Đang học" : it.status === "completed" ? "Complete" : it.status}
+                              {it.status === "active" ? "Active" : it.status === "completed" ? "Completed" : it.status}
                             </span>
                           </td>
                           <td className="last-access">
@@ -994,7 +1008,7 @@ export default function TeacherCourseOverviewPage() {
                       <tr>
                         <td colSpan={7} className="table-empty">
                           <span className="material-symbols-outlined">inbox</span>
-                          <p>No data yet học viên</p>
+                          <p>No data yet for learners</p>
                         </td>
                       </tr>
                     )}
@@ -1005,7 +1019,7 @@ export default function TeacherCourseOverviewPage() {
               {learnerResult && (
                 <div className="learners-pagination">
                   <div className="pagination-info">
-                    Tổng: <strong>{learnerResult.total}</strong> học viên
+                    Total: <strong>{learnerResult.total}</strong> learners
                   </div>
                   <div className="pagination-controls">
                     <button
@@ -1014,7 +1028,7 @@ export default function TeacherCourseOverviewPage() {
                       disabled={learnerLoading || learnerPage <= 1}
                     >
                       <span className="material-symbols-outlined">chevron_left</span>
-                      Trước
+                      Previous
                     </button>
                     <span className="pagination-current">Page {learnerResult.page}</span>
                     <button
@@ -1037,7 +1051,7 @@ export default function TeacherCourseOverviewPage() {
                   <div className="modal-header">
                     <h3 className="modal-title">
                       <span className="material-symbols-outlined">account_tree</span>
-                      Sơ đồ tiên quyết
+                      Prerequisite Graph
                     </h3>
                     <button className="modal-close" onClick={() => setGraphModalOpen(false)}>
                       <span className="material-symbols-outlined">close</span>
@@ -1047,7 +1061,7 @@ export default function TeacherCourseOverviewPage() {
                     {graphLoading ? (
                       <div className="loading-state small">
                         <span className="material-symbols-outlined loading-icon">sync</span>
-                        <p>Đang tải sơ đồ...</p>
+                        <p>Loading graph...</p>
                       </div>
                     ) : (
                       <PrerequisiteGraph
@@ -1076,7 +1090,7 @@ export default function TeacherCourseOverviewPage() {
                   <div className="modal-header">
                     <h3 className="modal-title">
                       <span className="material-symbols-outlined">fact_check</span>
-                      Status duyệt khóa học
+                      Course Review Status
                     </h3>
                     <button className="modal-close" onClick={() => setReviewModalOpen(false)}>
                       <span className="material-symbols-outlined">close</span>
@@ -1120,7 +1134,7 @@ export default function TeacherCourseOverviewPage() {
                       onClick={() => setReviewTab("timeline")}
                     >
                       <span className="material-symbols-outlined">history</span>
-                      Lịch sử
+                      History
                     </button>
                   </div>
 
@@ -1138,7 +1152,7 @@ export default function TeacherCourseOverviewPage() {
                             {pendingResources.length === 0 ? (
                               <div className="empty-state">
                                 <span className="material-symbols-outlined">inbox</span>
-                                <p>No yes tài nguyên nào pending duyệt</p>
+                                <p>No pending resources for review</p>
                               </div>
                             ) : (
                               <div className="review-list">
@@ -1166,7 +1180,7 @@ export default function TeacherCourseOverviewPage() {
                                     </div>
                                     <div className="review-item-status">
                                       <span className={`status-badge ${item.is_resubmitted ? "status-badge--draft" : "status-badge--pending_review"}`}>
-                                        {item.is_resubmitted ? "Send lại" : "Mới gửi"}
+                                        {item.is_resubmitted ? "Resubmitted" : "New submission"}
                                       </span>
                                     </div>
                                   </div>
@@ -1182,7 +1196,7 @@ export default function TeacherCourseOverviewPage() {
                             {approvedResources.length === 0 ? (
                               <div className="empty-state">
                                 <span className="material-symbols-outlined">inbox</span>
-                                <p>No tài nguyên nào được duyệt</p>
+                                <p>No resources approved</p>
                               </div>
                             ) : (
                               <div className="review-list">
@@ -1228,7 +1242,7 @@ export default function TeacherCourseOverviewPage() {
                             {rejectedResources.length === 0 ? (
                               <div className="empty-state">
                                 <span className="material-symbols-outlined">inbox</span>
-                                <p>No yes tài nguyên nào bị from chối</p>
+                                <p>No rejected resources</p>
                               </div>
                             ) : (
                               <div className="review-list">
@@ -1246,7 +1260,7 @@ export default function TeacherCourseOverviewPage() {
                                       </div>
                                       {item.review_reason && (
                                         <div className="review-item-reason">
-                                          <strong>Lý do:</strong> {item.review_reason}
+                                          <strong>Reason:</strong> {item.review_reason}
                                         </div>
                                       )}
                                       {item.review_event_at && (
@@ -1283,7 +1297,7 @@ export default function TeacherCourseOverviewPage() {
                             {reviewTimeline.length === 0 ? (
                               <div className="empty-state">
                                 <span className="material-symbols-outlined">inbox</span>
-                                <p>No lịch sử duyệt</p>
+                                <p>No review history</p>
                               </div>
                             ) : (
                               <div className="timeline-list">
@@ -1296,11 +1310,11 @@ export default function TeacherCourseOverviewPage() {
                                     <div className="timeline-content">
                                       <div className="timeline-header">
                                         <span className={`timeline-badge timeline-badge--${event.decision}`}>
-                                          {event.decision === "submit" && "Send duyệt"}
+                                          {event.decision === "submit" && "Send for Review"}
                                           {event.decision === "approve" && "Approve"}
                                           {event.decision === "reject" && "Reject"}
                                           {event.decision === "archive" && "Archive"}
-                                          {event.decision === "revert_draft" && "Thu hồi"}
+                                          {event.decision === "revert_draft" && "Revert to Draft"}
                                         </span>
                                         <span className="timeline-date">
                                           {new Date(event.created_at).toLocaleDateString("vi-VN", {

@@ -134,8 +134,8 @@ export default function LearnerSidebarLayout() {
 
       <header className="learner-layout__topbar">
         <div className="learner-layout__topbar-left">
-          <a className="learner-layout__topbar-link" href="#">Help</a>
-          <a className="learner-layout__topbar-link" href="#">Resources</a>
+          <a className="learner-layout__topbar-link" href="/contact">Help</a>
+          <a className="learner-layout__topbar-link" href="/resources">Resources</a>
         </div>
 
         <div className="learner-layout__topbar-right">
