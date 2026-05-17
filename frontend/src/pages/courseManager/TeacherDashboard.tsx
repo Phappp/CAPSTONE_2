@@ -11,6 +11,7 @@ import TeacherShell, {
 import TeacherLiveSessionPage from "./LiveSessionPage";
 import "./TeacherDashboard.css";
 import { Video } from "lucide-react";
+import { DEFAULT_COURSE_THUMB } from "../../utils/imageFallback";
 
 type CourseViewMode = "list" | "grid" | "compact";
 
@@ -127,6 +128,7 @@ export default function TeacherDashboard() {
     page_size: number;
     total: number;
   } | null>(null);
+  const [ratings, setRatings] = useState<Record<number, { rating: number; rating_count: number }>>({});
   const [modalState, setModalState] = useState<{
     open: boolean;
     title: string;
@@ -239,7 +241,33 @@ export default function TeacherDashboard() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.message || "Failed to load course list.");
     setResult(data);
-    };
+  };
+
+  const fetchRatings = async (courseIds: number[]) => {
+    if (!courseIds.length) return;
+    try {
+      const results = await Promise.all(
+        courseIds.map(async (id) => {
+          const res = await fetch(`${url}${COURSES_API.detail(id)}`, {
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          });
+          if (!res.ok) return null;
+          const data = await res.json().catch(() => ({}));
+          return { id, rating: data.rating ?? 0, rating_count: data.rating_count ?? 0 };
+        })
+      );
+      const newRatings: Record<number, { rating: number; rating_count: number }> = {};
+      results.forEach((r) => {
+        if (r) newRatings[r.id] = { rating: r.rating, rating_count: r.rating_count };
+      });
+      setRatings((prev) => ({ ...prev, ...newRatings }));
+    } catch {
+      // ignore
+    }
+  };
 
   const fetchRevenue = async () => {
     setFinanceLoading(true);
@@ -288,6 +316,8 @@ export default function TeacherDashboard() {
     setError(null);
     try {
       await Promise.all([fetchStats(), fetchList(), fetchRevenue()]);
+      const courseIds = (result?.items ?? []).map((c: any) => c.id);
+      if (courseIds.length) fetchRatings(courseIds);
     } catch (e: any) {
       setError(e?.message || "An error occurred.");
     } finally {
@@ -356,6 +386,13 @@ export default function TeacherDashboard() {
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, q, sort.sort_by, sort.sort_dir]);
+
+  useEffect(() => {
+    if (!result?.items?.length) return;
+    const courseIds = result.items.map((c: any) => c.id);
+    const missingIds = courseIds.filter((id: number) => !ratings[id]);
+    if (missingIds.length) fetchRatings(missingIds);
+  }, [result]);
 
   useEffect(() => {
     if (section !== "dashboard") return;
@@ -898,6 +935,17 @@ export default function TeacherDashboard() {
     );
   };
 
+  const renderStars = (rating: number) => {
+    const full = Math.floor(rating);
+    const half = rating - full >= 0.5;
+    const empty = 5 - full - (half ? 1 : 0);
+    const items: { key: string; icon: string; cls: string }[] = [];
+    for (let i = 0; i < full; i++) items.push({ key: `f${i}`, icon: "star", cls: "text-yellow-400" });
+    if (half) items.push({ key: "h", icon: "star_half", cls: "text-yellow-400" });
+    for (let i = 0; i < empty; i++) items.push({ key: `e${i}`, icon: "star", cls: "text-slate-300" });
+    return items;
+  };
+
   const formatVnd = (amount: number) => {
     try {
       return new Intl.NumberFormat("vi-VN", {
@@ -1336,11 +1384,13 @@ export default function TeacherDashboard() {
                   <div className="course-card-content">
                     <div className="course-thumbnail">
                       {c.thumbnail_url ? (
-                        <img src={c.thumbnail_url} alt={c.title} />
+                        <img
+                          src={c.thumbnail_url}
+                          alt={c.title}
+                          onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_COURSE_THUMB; }}
+                        />
                       ) : (
-                        <div className="thumbnail-placeholder">
-                          <span className="material-symbols-outlined">menu_book</span>
-                        </div>
+                        <img src={DEFAULT_COURSE_THUMB} alt={c.title} />
                       )}
                     </div>
                     
@@ -1373,6 +1423,19 @@ export default function TeacherDashboard() {
                           <span className="material-symbols-outlined meta-icon">menu_book</span>
                           {c.lessons_count ?? 0} lessons
                         </span>
+                      </div>
+                      <div className="course-rating">
+                        <span className="rating-stars">
+                          {renderStars(ratings[c.id]?.rating ?? 0).map((s) => (
+                            <span key={s.key} className={`material-symbols-outlined ${s.cls}`}>
+                              {s.icon}
+                            </span>
+                          ))}
+                        </span>
+                        <span className="rating-value">{(ratings[c.id]?.rating ?? 0).toFixed(1)}</span>
+                        {ratings[c.id]?.rating_count > 0 && (
+                          <span className="rating-count">({ratings[c.id].rating_count})</span>
+                        )}
                       </div>
                       <div style={{ marginTop: 6 }}>
                         {c.quality_gate?.ready ? (
