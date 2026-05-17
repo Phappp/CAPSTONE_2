@@ -4,6 +4,7 @@ import { House } from "lucide-react";
 import MindBridgeFooter from "../../components/MindBridgeFooter";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
+import { PAYMENTS_API } from "../../api/payments";
 import { getAccessToken } from "../../utils/authStorage";
 import { useAuth } from "../../contexts/Auth";
 import { DEFAULT_COURSE_THUMB } from "../../utils/imageFallback";
@@ -110,16 +111,45 @@ export default function CourseDetailPage() {
     setEnrolling(true);
     try {
       const token = getAccessToken();
-      const res = await fetch(`${url}${COURSES_API.enroll(course.id)}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as any)?.message || "Enrollment failed.");
-      navigate(`/my-courses/${course.id}/${course.slug}`);
+      const isPaid = typeof course.price === "number" && course.price > 0;
+
+      if (isPaid) {
+        // Paid course: create payment order first, then redirect to payment page
+        const res = await fetch(`${url}${PAYMENTS_API.createMomoOrder}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ course_id: course.id }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((data as any)?.message || "Không thể tạo đơn thanh toán.");
+
+        const { payment_url, status } = data as { payment_url: string; status: string };
+
+        if (status === "paid") {
+          // Already paid in a previous order — go directly to course
+          navigate(`/my-courses/${course.id}/${course.slug}`);
+        } else if (payment_url) {
+          // Redirect to the payment page (mock or real MoMo)
+          window.location.href = payment_url;
+        } else {
+          throw new Error("Không nhận được liên kết thanh toán.");
+        }
+      } else {
+        // Free course: enroll directly
+        const res = await fetch(`${url}${COURSES_API.enroll(course.id)}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((data as any)?.message || "Enrollment failed.");
+        navigate(`/my-courses/${course.id}/${course.slug}`);
+      }
     } catch (err: any) {
       setError(err?.message || "Enrollment failed.");
     } finally {
