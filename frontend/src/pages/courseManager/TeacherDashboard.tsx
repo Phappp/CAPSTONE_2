@@ -1285,15 +1285,15 @@ export default function TeacherDashboard() {
                   disabled={loading}
                 >
                   <option value="updated_at:desc">
-                    <span className="material-symbols-outlined">update</span> Recently updated
+                    <span className="material-symbols-outlined">Recently updated</span>
                   </option>
                   <option value="updated_at:asc">Oldest</option>
                   <option value="created_at:desc">Newly created</option>
                   <option value="created_at:asc">Earliest</option>
                   <option value="title:asc">Name A → Z</option>
                   <option value="title:desc">Name Z → A</option>
-                  <option value="learners_count:desc">Students nhiều nhất</option>
-                  <option value="learners_count:asc">Students ít nhất</option>
+                  <option value="learners_count:desc">Most students</option>
+                  <option value="learners_count:asc">Fewest students</option>
                 </select>
               </div>
 
@@ -1353,25 +1353,25 @@ export default function TeacherDashboard() {
                             : c.status === "draft"
                               ? "Draft"
                               : c.status === "pending_review"
-                                ? "Chờ quản trị viên duyệt"
+                                ? "Waiting for admin approval"
                                 : "Archived"}
                         </span>
                       </div>
                       <p className="course-description">
-                        {c.short_description || "No mô tả"}
+                        {c.short_description || "No description."}
                       </p>
                       <div className="course-meta">
                         <span className="meta-item">
                           <span className="material-symbols-outlined meta-icon">group</span>
-                          {c.learners_count ?? 0} học viên
+                          {c.learners_count ?? 0} students
                         </span>
                         <span className="meta-item">
                           <span className="material-symbols-outlined meta-icon">library_books</span>
-                          {c.modules_count ?? 0} chương
+                          {c.modules_count ?? 0} chapters
                         </span>
                         <span className="meta-item">
                           <span className="material-symbols-outlined meta-icon">menu_book</span>
-                          {c.lessons_count ?? 0} bài học
+                          {c.lessons_count ?? 0} lessons
                         </span>
                       </div>
                       <div style={{ marginTop: 6 }}>
@@ -1382,7 +1382,7 @@ export default function TeacherDashboard() {
                             style={{ color: "#b45309", fontSize: 12, fontWeight: 700 }}
                             title={(c.quality_gate?.issues || []).join("\n")}
                           >
-                            Quality gate: Chưa đạt
+                            Quality gate: Not yet achieved
                           </span>
                         )}
                       </div>
@@ -1473,7 +1473,7 @@ export default function TeacherDashboard() {
                 <div className="empty-state-icon">
                   <span className="material-symbols-outlined">inbox</span>
                 </div>
-                <p className="empty-state-text">No khóa học nào</p>
+                <p className="empty-state-text">No courses available.</p>
                 {/* <button className="btn-primary btn-sm" onClick={() => navigate("/teacher/courses/new")}>
                   <span className="material-symbols-outlined">add</span>
                   Create course đầu tiên
@@ -1484,7 +1484,7 @@ export default function TeacherDashboard() {
             {/* Pagination */}
             <div className="pagination">
               <div className="pagination-info">
-                {loading ? "Loading..." : `Hiển thị ${result?.items?.length ?? 0} / ${result?.total ?? 0} khóa học`}
+                {loading ? "Loading..." : `Showing ${result?.items?.length ?? 0} / ${result?.total ?? 0} courses`}
               </div>
               <div className="pagination-controls">
                 <button
