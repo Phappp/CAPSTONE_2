@@ -42,6 +42,7 @@ import initChatbotRoute from './features/chatbot/adapter/route';
 import { AiSummaryController } from './features/ai-summary/adapter/controller';
 import { AiSummaryServiceImpl } from './features/ai-summary/domain/service';
 import initAiSummaryRoute from './features/ai-summary/adapter/route';
+import initAnalyticsRoute from './features/analytics/adapter/route';
 
 
 const app = express();
@@ -90,6 +91,7 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/v1/live-sessions', initLiveSessionRoute(new LiveSessionController(new LiveSessionServiceImpl())));
   app.use('/api/v1/ai', initAiShortAnswerRoute(new AiShortAnswerController()));
   app.use('/api/v1/chatbot', initChatbotRoute());
+  app.use('/api/v1', initAnalyticsRoute());
   app.use(recoverMiddleware);
 
   // app.use('/search', searchRouter);

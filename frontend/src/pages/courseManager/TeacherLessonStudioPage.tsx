@@ -16,21 +16,14 @@ import {
   CheckCircle,
   AlertCircle,
   Loader2,
-  RefreshCw,
   Plus,
   Timer,
-  Send,
-  Volume2,
-  Maximize2,
-  ChevronDown,
-  ChevronUp,
-  ChevronRight,
-  Pencil,
 } from "lucide-react";
 import { ASSIGNMENTS_API } from "../../api/assignments";
 import { COURSES_API } from "../../api/courses";
 import { url } from "../../baseUrl";
 import { useAuth } from "../../contexts/Auth";
+import TeacherShell from "../../components/TeacherShell";
 import type {
   AssignmentKind,
   AssignmentShortAnswerQuestion,
@@ -58,7 +51,7 @@ import {
   LessonInfoCard,
   QuizEditorSection,
 } from "./lesson-studio/EditorSections";
-import "./TeacherDashboard.css";
+import "./TeacherLessonStudioPage.css";
 
 export default function TeacherLessonStudioPage() {
   const navigate = useNavigate();
@@ -214,7 +207,6 @@ export default function TeacherLessonStudioPage() {
           } else {
             htmlText = await viewRes.text().catch(() => "");
           }
-          // Extract body content if it's a full HTML document (Tiềm potential stored as <html>...</html>)
           let cleanHtml = htmlText;
           const bodyMatch = htmlText.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
           if (bodyMatch && bodyMatch[1]) {
@@ -428,7 +420,6 @@ export default function TeacherLessonStudioPage() {
       if (richHtml.trim()) {
         const htmlPayload = buildLessonHtmlPayload(lessonTitle || lesson.title, richHtml);
         const form = new FormData();
-        // Dùng Blob + filename để tránh phụ thuộc File constructor (một số môi trường có thể không hỗ trợ ổn định).
         form.append("file", htmlPayload.blob, htmlPayload.filename);
         const res = await fetch(`${url}${COURSES_API.uploadLessonResource(courseId, lessonId)}`, {
           method: "POST",
@@ -489,7 +480,6 @@ export default function TeacherLessonStudioPage() {
           : `/teacher/courses/${courseId}/lessons/${lessonId}/studio`,
         { replace: true }
       );
-      // setSuccessMessage("Đã chọn loại nội dung cho bài học.");
     } catch (e: any) {
       setError(e?.message || "Không thể chọn loại bài học.");
     } finally {
@@ -526,6 +516,7 @@ export default function TeacherLessonStudioPage() {
     setAssignmentLocked(false);
     chooseAssignmentKind(nextKind, true);
   };
+
   const removeAssignmentAttachment = async (filePath: string) => {
     if (!assignmentPreview?.assignment_id) {
       setError("Không tìm thấy mã bài tập để xóa file đính kèm.");
@@ -566,6 +557,7 @@ export default function TeacherLessonStudioPage() {
       setSaving(false);
     }
   };
+
   const appendAssignmentAttachments = async () => {
     if (!assignmentPreview?.assignment_id) {
       setError("Không tìm thấy mã bài tập để thêm file đính kèm.");
@@ -636,7 +628,7 @@ export default function TeacherLessonStudioPage() {
 
   const currentVideoResource = resources.find((r) => isLikelyVideoResource(r)) || null;
   const currentYoutubeId = currentVideoResource ? parseYoutubeVideoId(currentVideoResource.url || "") : null;
-  const contentHtmlResource = resources.find((r) => 
+  const contentHtmlResource = resources.find((r) =>
     (r.mime_type || "").includes("text/html") ||
     (r.filename || "").toLowerCase().endsWith(".html") ||
     (r.url || "").toLowerCase().endsWith(".html")
@@ -752,1210 +744,526 @@ export default function TeacherLessonStudioPage() {
     }
   }, [assignmentPreview]);
 
-  const quizDraftChanged = useMemo(
-    () => JSON.stringify(quizQuestionsDraft) !== JSON.stringify(savedQuizQuestions),
-    [quizQuestionsDraft, savedQuizQuestions]
-  );
-  const lessonMetaDirty = useMemo(() => {
-    return (
-      lessonTitle.trim() !== initialLessonTitle.trim() ||
-      lessonDescription.trim() !== initialLessonDescription.trim() ||
-      selectedModuleId !== initialModuleId ||
-      (showNewModuleInput && pendingNewModuleTitle.trim().length > 0)
-    );
-  }, [
-    lessonTitle,
-    initialLessonTitle,
-    lessonDescription,
-    initialLessonDescription,
-    selectedModuleId,
-    initialModuleId,
-    showNewModuleInput,
-    pendingNewModuleTitle,
-  ]);
-  const studioContentDirty = useMemo(() => richHtml.trim() !== initialRichHtml.trim(), [richHtml, initialRichHtml]);
   if (!courseId || !lessonId || Number.isNaN(courseId) || Number.isNaN(lessonId)) return null;
 
   return (
-    <div className="teacher-dashboard">
-      <div className="dashboard-container">
-        {/* Header */}
-        <div className="dashboard-header">
-          <div className="header-title-section">
-            <div className="back-nav">
-              <button
-                type="button"
-                className="back-btn"
-                onClick={() => navigate(`/teacher/courses/${courseId}/content?tab=content`)}
-              >
-                <ArrowLeft size={18} />
-                Nội dung khóa học
-              </button>
-              {/* <button
-                type="button"
-                className="btn-secondary"
-                style={{ marginLeft: "0.5rem", width: "auto" }}
-                onClick={() => void createModuleFromStudio()}
-                disabled={saving || loading}
-                title="Thêm chương mới"
-              >
-                <Plus size={16} />
-                Thêm chương
-              </button> */}
+    <TeacherShell activeNav="courses" showFab={false}>
+      <div className="ls-page">
+        <div className="ls-container">
+          {/* Back navigation */}
+          <div className="ls-back-nav">
+            <button
+              type="button"
+              className="ls-back-btn"
+              onClick={() => navigate(`/teacher/courses/${courseId}/content?tab=content`)}
+            >
+              <ArrowLeft size={16} />
+              Nội dung khóa học
+            </button>
+          </div>
+
+          {/* Error / Success / Warning messages */}
+          {error && (
+            <div className="ls-error-box">
+              <AlertCircle size={18} />
+              {error}
             </div>
-            {/* <h1 className="dashboard-title" style={{ fontWeight: 500, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={() => navigate(`/teacher/courses/${courseId}/content?tab=content`)}
-                style={{ border: "none", background: "transparent", padding: 0, margin: 0, cursor: "pointer", color: "inherit", font: "inherit" }}
-                title="Đi tới nội dung khóa học"
-              >
-                {courseTitle}
-              </button>
-              <ChevronRight size={16} color="#94a3b8" />
-              <button
-                type="button"
-                onClick={() => navigate(`/teacher/courses/${courseId}/content?tab=content`)}
-                style={{ border: "none", background: "transparent", padding: 0, margin: 0, cursor: "pointer", color: "inherit", font: "inherit" }}
-                title="Đi tới chương trong content builder"
-              >
-                {selectedModuleTitle}
-              </button>
-              <ChevronRight size={16} color="#94a3b8" />
-              <button
-                type="button"
-                onClick={() => navigate(`/teacher/courses/${courseId}/lessons/${lessonId}/studio`)}
-                style={{ border: "none", background: "transparent", padding: 0, margin: 0, cursor: "pointer", color: "inherit", font: "inherit" }}
-                title="Mở studio của mục hiện tại"
-              >
-                {lessonDisplayLabel}
-              </button>
-            </h1> */}
-          </div>
-        </div>
-
-        {/* Messages */}
-        {error && (
-          <div className="error-box" style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
-            <AlertCircle size={18} />
-            {error}
-          </div>
-        )}
-        {successMessage && (
-          <div className="success-box" style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem", background: "#dcfce7", color: "#166534", borderColor: "#bbf7d0" }}>
-            <CheckCircle size={18} />
-            {successMessage}
-          </div>
-        )}
-        {isReadOnlyByReview && (
-          <div className="warning-message" style={{ marginBottom: "1rem" }}>
-            Khóa học đang chờ duyệt. Bạn chỉ có thể chỉnh sửa những mục đang bị từ chối.
-          </div>
-        )}
-
-        {shouldPickLessonType ? (
-          <div className="lesson-type-picker-screen">
-            <div className="lesson-type-picker-title">Chọn loại nội dung cho bài học mới</div>
-            <div className="lesson-type-picker-actions">
-              <button
-                type="button"
-                className="lesson-type-choice-btn choice-content"
-                disabled={isReadOnlyByReview || selectingLessonType || saving || loading}
-                onClick={() => void chooseNewLessonType("text")}
-              >
-                Bài học
-              </button>
-              <button
-                type="button"
-                className="lesson-type-choice-btn choice-quiz"
-                disabled={isReadOnlyByReview || selectingLessonType || saving || loading}
-                onClick={() => void chooseNewLessonType("quiz")}
-              >
-                Quizz
-              </button>
-              <button
-                type="button"
-                className="lesson-type-choice-btn choice-assignment"
-                disabled={isReadOnlyByReview || selectingLessonType || saving || loading}
-                onClick={() => void chooseNewLessonType("assignment")}
-              >
-                Bài tập
-              </button>
+          )}
+          {successMessage && (
+            <div className="ls-success-box">
+              <CheckCircle size={18} />
+              {successMessage}
             </div>
-          </div>
-        ) : shouldPickAssignmentKind ? (
-          <div className="lesson-type-picker-screen">
-            <div className="lesson-type-picker-title">Chọn dạng bài tập</div>
-            <div className="lesson-type-picker-actions">
-              <button
-                type="button"
-                className="lesson-type-choice-btn choice-assignment"
-                disabled={isReadOnlyByReview || saving || loading}
-                onClick={() => chooseAssignmentKind("file_prompt")}
-              >
-                Tự luận
-              </button>
-              <button
-                type="button"
-                className="lesson-type-choice-btn choice-quiz"
-                disabled={isReadOnlyByReview || saving || loading}
-                onClick={() => chooseAssignmentKind("short_answer")}
-              >
-                Trả lời ngắn
-              </button>
+          )}
+          {isReadOnlyByReview && (
+            <div className="ls-warning">
+              Khóa học đang chờ duyệt. Bạn chỉ có thể chỉnh sửa những mục đang bị từ chối.
             </div>
-          </div>
-        ) : (
-        /* Two column layout */
-        <div className="studio-two-column">
-          {/* Left column - Editor */}
-          <div className="studio-left-column">
-            {!shouldPickLessonType && (
-            <>
-            {/* Block 1 - Lesson Info */}
-            <LessonInfoCard
-              activeSection={activeSection}
-              lessonTitle={lessonTitle}
-              setLessonTitle={setLessonTitle}
-              lessonDescription={lessonDescription}
-              setLessonDescription={setLessonDescription}
-              moduleOptions={moduleOptions}
-              selectedModuleId={selectedModuleId}
-              setSelectedModuleId={setSelectedModuleId}
-              showNewModuleInput={showNewModuleInput}
-              setShowNewModuleInput={setShowNewModuleInput}
-              pendingNewModuleTitle={pendingNewModuleTitle}
-              setPendingNewModuleTitle={setPendingNewModuleTitle}
-              saving={saving}
-              loading={loading}
-              saveLessonMeta={saveLessonMeta}
-              createModuleFromStudio={createModuleFromStudio}
-              readOnly={isReadOnlyByReview}
-            />
+          )}
 
-            {/* Block 2 + 3 - Content editor */}
-            <ContentEditorSection
-              activeSection={activeSection}
-              isAssessmentLesson={isAssessmentLesson}
-              videoInputMode={videoInputMode}
-              setVideoInputMode={setVideoInputMode}
-              saving={saving}
-              loading={loading}
-              setPendingFile={setPendingFile}
-              pendingFile={pendingFile}
-              uploadFile={uploadFile}
-              uploadProgress={uploadProgress}
-              youtubeUrl={youtubeUrl}
-              setYoutubeUrl={setYoutubeUrl}
-              addYoutube={addYoutube}
-              currentVideoResource={currentVideoResource}
-              currentYoutubeId={currentYoutubeId}
-              removeResource={removeResource}
-              canDeleteResource={canDeleteResource}
-              otherResources={otherResources}
-              contentHtmlResource={contentHtmlResource}
-              saveStudio={saveStudio}
-              richHtml={richHtml}
-              setRichHtml={setRichHtml}
-              isRejectedContext={isContentRejectedContext}
-              readOnly={isReadOnlyByReview}
-            />
-            <QuizEditorSection
-              activeSection={activeSection}
-              fixedCourses={fixedCourses}
-              token={token}
-              loading={loading}
-              saving={saving}
-              courseId={courseId}
-              lessonId={lessonId}
-              lessonTitle={lessonTitle}
-              setSavedQuizQuestions={setSavedQuizQuestions}
-              setQuizPreviewConfig={setQuizPreviewConfig}
-              quizSaveSignal={quizSaveSignal}
-              setQuizSaveSignal={setQuizSaveSignal}
-              quizQuestionsDraft={quizQuestionsDraft}
-              setQuizQuestionsDraft={setQuizQuestionsDraft}
-              expandedSavedQuestions={expandedSavedQuestions}
-              setExpandedSavedQuestions={setExpandedSavedQuestions}
-              editingSavedQuestions={editingSavedQuestions}
-              setEditingSavedQuestions={setEditingSavedQuestions}
-              editingBuffers={editingBuffers}
-              setEditingBuffers={setEditingBuffers}
-              quizReviewResource={quizReviewResource}
-              isRejectedContext={Boolean(isQuizRejectedContext)}
-              readOnly={isReadOnlyByReview}
-            />
-            <AssignmentEditorSection
-              activeSection={activeSection}
-              fixedCourses={fixedCourses}
-              token={token}
-              loading={loading}
-              saving={saving}
-              lessonId={lessonId}
-              setAssignmentShortQuestions={setAssignmentShortQuestions}
-              setAssignmentPreview={setAssignmentPreview}
-              assignmentSaveSignal={assignmentSaveSignal}
-              setAssignmentSaveSignal={setAssignmentSaveSignal}
-              assignmentEditSignal={assignmentEditSignal}
-              setAssignmentEditSignal={setAssignmentEditSignal}
-              assignmentCancelEditSignal={assignmentCancelEditSignal}
-              setAssignmentCancelEditSignal={setAssignmentCancelEditSignal}
-              assignmentLocked={assignmentLocked}
-              setAssignmentLocked={setAssignmentLocked}
-              assignmentEditing={assignmentEditing}
-              setAssignmentEditing={setAssignmentEditing}
-              setAssignmentDirty={setAssignmentDirty}
-              requestedAssignmentKind={requestedAssignmentKind}
-              autoSaveKindSwitch={autoSaveKindSwitch}
-              assignmentPreview={assignmentPreview}
-              currentAssignmentKind={currentAssignmentKind}
-              assignmentShortQuestions={assignmentShortQuestions}
-              pendingAssignmentFiles={pendingAssignmentFiles}
-              setPendingAssignmentFiles={setPendingAssignmentFiles}
-              appendAssignmentAttachments={appendAssignmentAttachments}
-              removeAssignmentAttachment={removeAssignmentAttachment}
-              isRejectedContext={isAssignmentRejectedContext}
-              readOnly={isReadOnlyByReview}
-            />
-
-            </>
-            )}
-          </div>
-
-          {/* Right column - Preview */}
-          {!shouldPickLessonType && (
-          <div className="studio-right-column">
-            <div className="studio-card preview-card">
-              <div className="studio-card-header">
-                <div className="studio-card-title">
-                  <Eye size={18} />
-                  <h2>Xem như học viên</h2>
-                </div>
+          {/* Type picker screen */}
+          {shouldPickLessonType ? (
+            <div className="ls-type-picker">
+              <div className="ls-type-picker__title">Chọn loại nội dung cho bài học mới</div>
+              <div className="ls-type-picker__actions">
+                <button
+                  type="button"
+                  className="ls-type-choice-btn ls-type-choice-btn--content"
+                  disabled={isReadOnlyByReview || selectingLessonType || saving || loading}
+                  onClick={() => void chooseNewLessonType("text")}
+                >
+                  Bài học
+                </button>
+                <button
+                  type="button"
+                  className="ls-type-choice-btn ls-type-choice-btn--quiz"
+                  disabled={isReadOnlyByReview || selectingLessonType || saving || loading}
+                  onClick={() => void chooseNewLessonType("quiz")}
+                >
+                  Quizz
+                </button>
+                <button
+                  type="button"
+                  className="ls-type-choice-btn ls-type-choice-btn--assignment"
+                  disabled={isReadOnlyByReview || selectingLessonType || saving || loading}
+                  onClick={() => void chooseNewLessonType("assignment")}
+                >
+                  Bài tập
+                </button>
               </div>
-              <div className="studio-card-content">
-                {loading ? (
-                  <div className="preview-loading">
-                    <Loader2 size={32} className="spin" />
-                    <p>Đang tải preview...</p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Lesson header */}
-                    <div className="preview-lesson-header">
-                      <div
-                        style={{
-                          fontSize: "0.98rem",
-                          color: "#334155",
-                          marginBottom: "0.35rem",
-                          fontWeight: 800,
-                          lineHeight: 1.35,
-                        }}
-                      >
-                        {truncateLabel(moduleOptions.find((m) => m.id === selectedModuleId)?.title || "Chưa chọn chương")}
-                        <span
-                          aria-hidden="true"
-                          style={{
-                            margin: "0 0.4rem",
-                            fontSize: "1.2rem",
-                            color: "#cbd5e1",
-                            fontWeight: 700,
-                            verticalAlign: "middle",
-                          }}
-                        >
-                          ›
-                        </span>
-                        {truncateLabel(lessonTitle || lesson?.title || `Bài học #${lessonId}`)}
-                      </div>
-                      {/* <h3 className="preview-title">{lessonTitle || lesson?.title || `Bài học #${lessonId}`}</h3> */}
-                      {hasLessonDescription ? <p className="preview-description">{lessonDescription?.trim()}</p> : null}
-                    </div>
+            </div>
+          ) : shouldPickAssignmentKind ? (
+            <div className="ls-type-picker">
+              <div className="ls-type-picker__title">Chọn dạng bài tập</div>
+              <div className="ls-type-picker__actions">
+                <button
+                  type="button"
+                  className="ls-type-choice-btn ls-type-choice-btn--assignment"
+                  disabled={isReadOnlyByReview || saving || loading}
+                  onClick={() => chooseAssignmentKind("file_prompt")}
+                >
+                  Tự luận
+                </button>
+                <button
+                  type="button"
+                  className="ls-type-choice-btn ls-type-choice-btn--quiz"
+                  disabled={isReadOnlyByReview || saving || loading}
+                  onClick={() => chooseAssignmentKind("short_answer")}
+                >
+                  Trả lời ngắn
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Two-column layout */
+            <div className="ls-studio-two-column">
+              {/* Left column — Editor */}
+              <div className="ls-editor-col">
+                <LessonInfoCard
+                  activeSection={activeSection}
+                  lessonTitle={lessonTitle}
+                  setLessonTitle={setLessonTitle}
+                  lessonDescription={lessonDescription}
+                  setLessonDescription={setLessonDescription}
+                  moduleOptions={moduleOptions}
+                  selectedModuleId={selectedModuleId}
+                  setSelectedModuleId={setSelectedModuleId}
+                  showNewModuleInput={showNewModuleInput}
+                  setShowNewModuleInput={setShowNewModuleInput}
+                  pendingNewModuleTitle={pendingNewModuleTitle}
+                  setPendingNewModuleTitle={setPendingNewModuleTitle}
+                  saving={saving}
+                  loading={loading}
+                  saveLessonMeta={saveLessonMeta}
+                  createModuleFromStudio={createModuleFromStudio}
+                  readOnly={isReadOnlyByReview}
+                />
 
-                    {activeSection === "quiz" ? (
-                      <div className="preview-content">
-                        {(quizPreviewConfig.passing_score != null || quizRemainingSeconds != null) && (
-                          <div
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                              gap: 8,
-                              marginBottom: 10,
-                            }}
-                          >
-                            {quizPreviewConfig.passing_score != null && Number.isFinite(quizPreviewConfig.passing_score) && (
-                              <div className="attachment-item" style={{ marginBottom: 0 }}>
-                                <div style={{ width: "100%" }}>
-                                  <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Điểm đạt</div>
-                                  <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
-                                    {`${quizPreviewConfig.passing_score}%`}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                            {quizRemainingSeconds != null && (
-                              <div className="attachment-item" style={{ marginBottom: 0 }}>
-                                <div style={{ width: "100%", display: "flex", alignItems: "center", gap: 8 }}>
-                                  <Timer size={16} color="#64748b" />
-                                  <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
-                                    {`${String(Math.floor(quizRemainingSeconds / 60)).padStart(2, "0")}:${String(
-                                      quizRemainingSeconds % 60
-                                    ).padStart(2, "0")}`}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {quizQuestionsDraft.length ? (
-                          <div style={{ display: "grid", gap: 10 }}>
-                            {quizQuestionsDraft.map((item, idx) => {
-                              const shuffledOptions = shuffleBySeed(item.options || [], `${item.question_text}-${idx}`);
-                              return (
-                                <div key={`preview-quiz-${idx}`} className="attachment-item" style={{ alignItems: "flex-start" }}>
-                                  <div style={{ width: "100%" }}>
-                                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
-                                      Câu {idx + 1}: {item.question_text || "(trống)"}
-                                    </div>
-                                    <div style={{ display: "grid", gap: 6 }}>
-                                      {shuffledOptions.map((opt, optIdx) => (
-                                        <div
-                                          key={`opt-${idx}-${optIdx}`}
-                                          style={{
-                                            fontSize: 12,
-                                            color: "#334155",
-                                            border: "1px solid #e2e8f0",
-                                            borderRadius: 8,
-                                            padding: "8px 10px",
-                                            background: "#ffffff",
-                                          }}
-                                        >
-                                          {String.fromCharCode(65 + optIdx)}. {opt.option_text || "(trống)"}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                        
+                <ContentEditorSection
+                  activeSection={activeSection}
+                  isAssessmentLesson={isAssessmentLesson}
+                  videoInputMode={videoInputMode}
+                  setVideoInputMode={setVideoInputMode}
+                  saving={saving}
+                  loading={loading}
+                  setPendingFile={setPendingFile}
+                  pendingFile={pendingFile}
+                  uploadFile={uploadFile}
+                  uploadProgress={uploadProgress}
+                  youtubeUrl={youtubeUrl}
+                  setYoutubeUrl={setYoutubeUrl}
+                  addYoutube={addYoutube}
+                  currentVideoResource={currentVideoResource}
+                  currentYoutubeId={currentYoutubeId}
+                  removeResource={removeResource}
+                  canDeleteResource={canDeleteResource}
+                  otherResources={otherResources}
+                  contentHtmlResource={contentHtmlResource}
+                  saveStudio={saveStudio}
+                  richHtml={richHtml}
+                  setRichHtml={setRichHtml}
+                  isRejectedContext={isContentRejectedContext}
+                  readOnly={isReadOnlyByReview}
+                />
+
+                <QuizEditorSection
+                  activeSection={activeSection}
+                  fixedCourses={fixedCourses}
+                  token={token}
+                  loading={loading}
+                  saving={saving}
+                  courseId={courseId}
+                  lessonId={lessonId}
+                  lessonTitle={lessonTitle}
+                  setSavedQuizQuestions={setSavedQuizQuestions}
+                  setQuizPreviewConfig={setQuizPreviewConfig}
+                  quizSaveSignal={quizSaveSignal}
+                  setQuizSaveSignal={setQuizSaveSignal}
+                  quizQuestionsDraft={quizQuestionsDraft}
+                  setQuizQuestionsDraft={setQuizQuestionsDraft}
+                  expandedSavedQuestions={expandedSavedQuestions}
+                  setExpandedSavedQuestions={setExpandedSavedQuestions}
+                  editingSavedQuestions={editingSavedQuestions}
+                  setEditingSavedQuestions={setEditingSavedQuestions}
+                  editingBuffers={editingBuffers}
+                  setEditingBuffers={setEditingBuffers}
+                  quizReviewResource={quizReviewResource}
+                  isRejectedContext={Boolean(isQuizRejectedContext)}
+                  readOnly={isReadOnlyByReview}
+                />
+
+                <AssignmentEditorSection
+                  activeSection={activeSection}
+                  fixedCourses={fixedCourses}
+                  token={token}
+                  loading={loading}
+                  saving={saving}
+                  lessonId={lessonId}
+                  setAssignmentShortQuestions={setAssignmentShortQuestions}
+                  setAssignmentPreview={setAssignmentPreview}
+                  assignmentSaveSignal={assignmentSaveSignal}
+                  setAssignmentSaveSignal={setAssignmentSaveSignal}
+                  assignmentEditSignal={assignmentEditSignal}
+                  setAssignmentEditSignal={setAssignmentEditSignal}
+                  assignmentCancelEditSignal={assignmentCancelEditSignal}
+                  setAssignmentCancelEditSignal={setAssignmentCancelEditSignal}
+                  assignmentLocked={assignmentLocked}
+                  setAssignmentLocked={setAssignmentLocked}
+                  assignmentEditing={assignmentEditing}
+                  setAssignmentEditing={setAssignmentEditing}
+                  setAssignmentDirty={setAssignmentDirty}
+                  requestedAssignmentKind={requestedAssignmentKind}
+                  autoSaveKindSwitch={autoSaveKindSwitch}
+                  assignmentPreview={assignmentPreview}
+                  currentAssignmentKind={currentAssignmentKind}
+                  assignmentShortQuestions={assignmentShortQuestions}
+                  pendingAssignmentFiles={pendingAssignmentFiles}
+                  setPendingAssignmentFiles={setPendingAssignmentFiles}
+                  appendAssignmentAttachments={appendAssignmentAttachments}
+                  removeAssignmentAttachment={removeAssignmentAttachment}
+                  isRejectedContext={isAssignmentRejectedContext}
+                  readOnly={isReadOnlyByReview}
+                />
+              </div>
+
+              {/* Right column — Preview */}
+              <div className="ls-preview-col">
+                <div className="ls-studio-card ls-preview-card">
+                  <div className="ls-studio-card__head">
+                    <div className="ls-studio-card__title">
+                      <Eye size={18} />
+                      <h2>Xem như học viên</h2>
+                    </div>
+                  </div>
+                  <div className="ls-studio-card__body">
+                    {loading ? (
+                      <div className="ls-preview-loading">
+                        <Loader2 size={32} className="ls-preview-loading__spin" />
+                        <p>Đang tải preview...</p>
                       </div>
-                    ) : activeSection === "assignment" ? (
-                      <div className="preview-content">
-                        {!assignmentPreview ? null : (
-                          <div style={{ display: "grid", gap: 10 }}>
-                            <div
-                              style={{
+                    ) : (
+                      <>
+                        {/* Lesson header */}
+                        <div className="ls-preview-header">
+                          <div style={{
+                            fontSize: "0.98rem",
+                            color: "#334155",
+                            marginBottom: "0.35rem",
+                            fontWeight: 800,
+                            lineHeight: 1.35,
+                          }}>
+                            {truncateLabel(moduleOptions.find((m) => m.id === selectedModuleId)?.title || "Chưa chọn chương")}
+                            <span aria-hidden="true" style={{
+                              margin: "0 0.4rem",
+                              fontSize: "1.2rem",
+                              color: "#cbd5e1",
+                              fontWeight: 700,
+                              verticalAlign: "middle",
+                            }}>
+                              ›
+                            </span>
+                            {truncateLabel(lessonTitle || lesson?.title || `Bài học #${lessonId}`)}
+                          </div>
+                          {hasLessonDescription ? (
+                            <p className="ls-preview-description">{lessonDescription?.trim()}</p>
+                          ) : null}
+                        </div>
+
+                        {activeSection === "quiz" ? (
+                          <div className="ls-preview-content">
+                            {(quizPreviewConfig.passing_score != null || quizRemainingSeconds != null) && (
+                              <div style={{
                                 display: "grid",
                                 gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
                                 gap: 8,
-                              }}
-                            >
-                              {assignmentPreview.due_date && (
-                                <div className="attachment-item" style={{ marginBottom: 0 }}>
-                                  <div style={{ width: "100%" }}>
-                                    <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Hạn nộp</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
-                                      {new Date(assignmentPreview.due_date).toLocaleString("vi-VN", {
-                                        hour12: false,
-                                        day: "2-digit",
-                                        month: "2-digit",
-                                        year: "numeric",
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })}
+                                marginBottom: 10,
+                              }}>
+                                {quizPreviewConfig.passing_score != null && Number.isFinite(quizPreviewConfig.passing_score) && (
+                                  <div className="ls-attachment-item" style={{ marginBottom: 0 }}>
+                                    <div style={{ width: "100%" }}>
+                                      <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Điểm đạt</div>
+                                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
+                                        {`${quizPreviewConfig.passing_score}%`}
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              )}
-                              <div className="attachment-item" style={{ marginBottom: 0 }}>
-                                <div style={{ width: "100%" }}>
-                                  <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Thang điểm</div>
-                                  <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
-                                    {assignmentPreview.max_score}
+                                )}
+                                {quizRemainingSeconds != null && (
+                                  <div className="ls-attachment-item" style={{ marginBottom: 0 }}>
+                                    <div style={{ width: "100%", display: "flex", alignItems: "center", gap: 8 }}>
+                                      <Timer size={16} color="#64748b" />
+                                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
+                                        {`${String(Math.floor(quizRemainingSeconds / 60)).padStart(2, "0")}:${String(
+                                          quizRemainingSeconds % 60
+                                        ).padStart(2, "0")}`}
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
+                                )}
                               </div>
-                              {assignmentPreview.passing_score != null && (
-                                <div className="attachment-item" style={{ marginBottom: 0 }}>
-                                  <div style={{ width: "100%" }}>
-                                    <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Điểm đạt</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
-                                      {assignmentPreview.passing_score}
+                            )}
+                            {quizQuestionsDraft.length ? (
+                              <div style={{ display: "grid", gap: 10 }}>
+                                {quizQuestionsDraft.map((item, idx) => {
+                                  const shuffledOptions = shuffleBySeed(item.options || [], `${item.question_text}-${idx}`);
+                                  return (
+                                    <div key={`preview-quiz-${idx}`} className="ls-attachment-item" style={{ alignItems: "flex-start" }}>
+                                      <div style={{ width: "100%" }}>
+                                        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
+                                          Câu {idx + 1}: {item.question_text || "(trống)"}
+                                        </div>
+                                        <div style={{ display: "grid", gap: 6 }}>
+                                          {shuffledOptions.map((opt, optIdx) => (
+                                            <div
+                                              key={`opt-${idx}-${optIdx}`}
+                                              style={{
+                                                fontSize: 12,
+                                                color: "#334155",
+                                                border: "1px solid #e2e8f0",
+                                                borderRadius: 8,
+                                                padding: "8px 10px",
+                                                background: "#ffffff",
+                                              }}
+                                            >
+                                              {String.fromCharCode(65 + optIdx)}. {opt.option_text || "(trống)"}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : activeSection === "assignment" ? (
+                          <div className="ls-preview-content">
+                            {!assignmentPreview ? null : (
+                              <div style={{ display: "grid", gap: 10 }}>
+                                <div style={{
+                                  display: "grid",
+                                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                                  gap: 8,
+                                }}>
+                                  {assignmentPreview.due_date && (
+                                    <div className="ls-attachment-item" style={{ marginBottom: 0 }}>
+                                      <div style={{ width: "100%" }}>
+                                        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Hạn nộp</div>
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
+                                          {new Date(assignmentPreview.due_date).toLocaleString("vi-VN", {
+                                            hour12: false,
+                                            day: "2-digit",
+                                            month: "2-digit",
+                                            year: "numeric",
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                  <div className="ls-attachment-item" style={{ marginBottom: 0 }}>
+                                    <div style={{ width: "100%" }}>
+                                      <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Thang điểm</div>
+                                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
+                                        {assignmentPreview.max_score}
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              )}
-                              {assignmentPreview.allow_resubmission && (
-                                <div className="attachment-item" style={{ marginBottom: 0 }}>
-                                  <div style={{ width: "100%" }}>
-                                    <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Nộp lại</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
-                                      {`Tối đa ${assignmentPreview.max_resubmissions} lần`}
+                                  {assignmentPreview.passing_score != null && (
+                                    <div className="ls-attachment-item" style={{ marginBottom: 0 }}>
+                                      <div style={{ width: "100%" }}>
+                                        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Điểm đạt</div>
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
+                                          {assignmentPreview.passing_score}
+                                        </div>
+                                      </div>
                                     </div>
-                                  </div>
+                                  )}
+                                  {assignmentPreview.allow_resubmission && (
+                                    <div className="ls-attachment-item" style={{ marginBottom: 0 }}>
+                                      <div style={{ width: "100%" }}>
+                                        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Nộp lại</div>
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
+                                          {`Tối đa ${assignmentPreview.max_resubmissions} lần`}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
 
-                            {assignmentDescriptionHtml ? (
-                              <div
-                                className="attachment-item"
-                                style={{ alignItems: "flex-start", background: "#ffffff", borderColor: "#e2e8f0" }}
-                              >
-                                <div style={{ width: "100%" }}>
-                                  <div
-                                    className="rich-preview"
-                                    dangerouslySetInnerHTML={{
-                                      __html: assignmentDescriptionHtml,
-                                    }}
-                                  />
-                                </div>
+                                {assignmentDescriptionHtml ? (
+                                  <div className="ls-attachment-item" style={{ alignItems: "flex-start", background: "#ffffff", borderColor: "#e2e8f0" }}>
+                                    <div style={{ width: "100%" }}>
+                                      <div className="ls-rich-preview" dangerouslySetInnerHTML={{ __html: assignmentDescriptionHtml }} />
+                                    </div>
+                                  </div>
+                                ) : null}
+
+                                {hasAssignmentAttachments ? (
+                                  <div className="ls-attachment-item" style={{ alignItems: "flex-start" }}>
+                                    <div style={{ width: "100%" }}>
+                                      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>File đính kèm đề bài</div>
+                                      <div style={{ display: "grid", gap: 6 }}>
+                                        {assignmentPreview.attachments.map((a, idx) => (
+                                          <div
+                                            key={`asg-preview-attachment-${idx}-${a.file_path}`}
+                                            style={{
+                                              display: "flex",
+                                              alignItems: "center",
+                                              justifyContent: "space-between",
+                                              gap: 8,
+                                              border: "1px solid #e2e8f0",
+                                              borderRadius: 8,
+                                              padding: "8px 10px",
+                                              background: "#ffffff",
+                                            }}
+                                          >
+                                            <div style={{ fontSize: 12, color: "#334155", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                              {a.file_name || "Tệp đính kèm"}
+                                            </div>
+                                            <a href={a.signed_url} target="_blank" rel="noreferrer" className="ls-attachment-link">
+                                              <LinkIcon size={14} />
+                                              Mở
+                                            </a>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : null}
+
+                                {assignmentPreview.assignment_kind === "short_answer" && hasAssignmentShortQuestions ? (
+                                  <div className="ls-attachment-item" style={{ alignItems: "flex-start" }}>
+                                    <div style={{ width: "100%" }}>
+                                      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Câu hỏi trả lời ngắn</div>
+                                      <div style={{ display: "grid", gap: 6 }}>
+                                        {assignmentShortQuestions
+                                          .slice()
+                                          .sort((a, b) => a.order_index - b.order_index)
+                                          .map((q, idx) => (
+                                            <div
+                                              key={`learner-short-${q.id}-${idx}`}
+                                              style={{
+                                                border: "1px solid #e2e8f0",
+                                                borderRadius: 8,
+                                                padding: "8px 10px",
+                                                fontSize: 12,
+                                                color: "#334155",
+                                                background: "#ffffff",
+                                              }}
+                                            >
+                                              <strong style={{ color: "#0f172a" }}>Câu {idx + 1}:</strong> {q.question_text || "(trống)"}
+                                            </div>
+                                          ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            {/* Video player */}
+                            {hasPreviewVideo ? (
+                              <div className="ls-preview-video">
+                                {pendingFile && pendingFilePreviewUrl && isLikelyVideoFile(pendingFile) ? (
+                                  <video controls className="ls-video-player">
+                                    <source src={pendingFilePreviewUrl} type={pendingFile.type || "video/mp4"} />
+                                    Trình duyệt không hỗ trợ phát video.
+                                  </video>
+                                ) : currentYoutubeId ? (
+                                  <div className="ls-video-embed">
+                                    <iframe
+                                      src={`https://www.youtube.com/embed/${currentYoutubeId}?rel=0`}
+                                      title="Lesson video preview"
+                                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                      allowFullScreen
+                                    />
+                                  </div>
+                                ) : (
+                                  <video controls className="ls-video-player">
+                                    <source src={currentVideoResource?.url} type={currentVideoResource?.mime_type || "video/mp4"} />
+                                    Trình duyệt không hỗ trợ phát video.
+                                  </video>
+                                )}
                               </div>
                             ) : null}
 
-                            {hasAssignmentAttachments ? (
-                              <div className="attachment-item" style={{ alignItems: "flex-start" }}>
-                                <div style={{ width: "100%" }}>
-                                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>File đính kèm đề bài</div>
-                                  <div style={{ display: "grid", gap: 6 }}>
-                                    {assignmentPreview.attachments.map((a, idx) => (
-                                      <div
-                                        key={`asg-preview-attachment-${idx}-${a.file_path}`}
-                                        style={{
-                                          display: "flex",
-                                          alignItems: "center",
-                                          justifyContent: "space-between",
-                                          gap: 8,
-                                          border: "1px solid #e2e8f0",
-                                          borderRadius: 8,
-                                          padding: "8px 10px",
-                                          background: "#ffffff",
-                                        }}
-                                      >
-                                        <div style={{ fontSize: 12, color: "#334155", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                          {a.file_name || "Tệp đính kèm"}
+                            {/* Attachments preview */}
+                            {hasPreviewAttachments ? (
+                              <div className="ls-preview-attachments">
+                                <div className="ls-section-label">Tài liệu đính kèm</div>
+                                {pendingAttachmentFile && (
+                                  <div className="ls-attachment-item ls-attachment-item--draft">
+                                    <div className="ls-attachment-item__left">
+                                      {pendingAttachmentFile.type.startsWith("image/") ? <Image size={16} /> : <File size={16} />}
+                                      <span className="ls-attachment-item__name">{pendingAttachmentFile.name}</span>
+                                    </div>
+                                    <span className="ls-attachment-badge--draft">Bản nháp chưa lưu</span>
+                                  </div>
+                                )}
+                                {otherResources.length > 0
+                                  ? otherResources.map((r) => (
+                                      <div key={r.id} className="ls-attachment-item">
+                                        <div className="ls-attachment-item__left">
+                                          {(r.mime_type || "").startsWith("image/") ? <Image size={16} /> : <FileText size={16} />}
+                                          <span className="ls-attachment-item__name">{r.filename || "Tài liệu"}</span>
+                                          {r.size_bytes ? <span className="ls-attachment-item__size">{formatFileSize(r.size_bytes)}</span> : null}
                                         </div>
-                                        <a href={a.signed_url} target="_blank" rel="noreferrer" className="attachment-link">
+                                        <a
+                                          href={r.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="ls-attachment-link"
+                                        >
                                           <LinkIcon size={14} />
                                           Mở
                                         </a>
                                       </div>
-                                    ))}
-                                  </div>
-                                </div>
+                                    ))
+                                  : null}
                               </div>
                             ) : null}
 
-                            {assignmentPreview.assignment_kind === "short_answer" && hasAssignmentShortQuestions ? (
-                              <div className="attachment-item" style={{ alignItems: "flex-start" }}>
-                                <div style={{ width: "100%" }}>
-                                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Câu hỏi trả lời ngắn</div>
-                                  <div style={{ display: "grid", gap: 6 }}>
-                                    {assignmentShortQuestions
-                                      .slice()
-                                      .sort((a, b) => a.order_index - b.order_index)
-                                      .map((q, idx) => (
-                                        <div
-                                          key={`learner-short-${q.id}-${idx}`}
-                                          style={{
-                                            border: "1px solid #e2e8f0",
-                                            borderRadius: 8,
-                                            padding: "8px 10px",
-                                            fontSize: 12,
-                                            color: "#334155",
-                                            background: "#ffffff",
-                                          }}
-                                        >
-                                          <strong style={{ color: "#0f172a" }}>Câu {idx + 1}:</strong> {q.question_text || "(trống)"}
-                                        </div>
-                                      ))}
-                                  </div>
-                                </div>
+                            {/* Rich content preview */}
+                            {hasRichContent ? (
+                              <div className="ls-preview-content">
+                                <div className="ls-rich-preview" dangerouslySetInnerHTML={{ __html: richHtml }} />
                               </div>
                             ) : null}
-                            
-                          </div>
+                          </>
                         )}
-                      </div>
-                    ) : (
-                      <>
-                        {/* Video player */}
-                        {hasPreviewVideo ? (
-                          <div className="preview-video">
-                            {pendingFile && pendingFilePreviewUrl && isLikelyVideoFile(pendingFile) ? (
-                              <video controls className="video-player">
-                                <source src={pendingFilePreviewUrl} type={pendingFile.type || "video/mp4"} />
-                                Trình duyệt không hỗ trợ phát video.
-                              </video>
-                            ) : currentYoutubeId ? (
-                              <div className="video-embed">
-                                <iframe
-                                  src={`https://www.youtube.com/embed/${currentYoutubeId}?rel=0`}
-                                  title="Lesson video preview"
-                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                  allowFullScreen
-                                />
-                              </div>
-                            ) : (
-                              <video controls className="video-player">
-                                <source src={currentVideoResource?.url} type={currentVideoResource?.mime_type || "video/mp4"} />
-                                Trình duyệt không hỗ trợ phát video.
-                              </video>
-                            )}
-                          </div>
-                        ) : null}
-
-                        {/* Attachments preview */}
-                        {hasPreviewAttachments ? (
-                          <div className="preview-attachments">
-                            <div className="section-label">Tài liệu đính kèm</div>
-                            {pendingAttachmentFile && (
-                              <div className="attachment-item attachment-item-draft">
-                                <div className="attachment-left">
-                                  {pendingAttachmentFile.type.startsWith("image/") ? <Image size={16} /> : <File size={16} />}
-                                  <span className="attachment-name">{pendingAttachmentFile.name}</span>
-                                </div>
-                                <span className="attachment-badge-draft">Bản nháp chưa lưu</span>
-                              </div>
-                            )}
-                            {otherResources.length > 0
-                              ? otherResources.map((r) => (
-                                  <div key={r.id} className="attachment-item">
-                                    <div className="attachment-left">
-                                      {(r.mime_type || "").startsWith("image/") ? <Image size={16} /> : <FileText size={16} />}
-                                      <span className="attachment-name">{r.filename || "Tài liệu"}</span>
-                                      {r.size_bytes ? <span className="attachment-size">{formatFileSize(r.size_bytes)}</span> : null}
-                                    </div>
-                                    <a
-                                      href={r.url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="attachment-link"
-                                    >
-                                      <LinkIcon size={14} />
-                                      Mở
-                                    </a>
-                                  </div>
-                                ))
-                              : null}
-                          </div>
-                        ) : null}
-
-                        {/* Rich content preview */}
-                        {hasRichContent ? (
-                          <div className="preview-content">
-                            <div
-                              className="rich-preview"
-                              dangerouslySetInnerHTML={{
-                                __html: richHtml,
-                              }}
-                            />
-                          </div>
-                        ) : null}
                       </>
                     )}
-                  </>
-                )}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
           )}
         </div>
-        )}
       </div>
-
-      <style>{`
-        .studio-two-column {
-          display: grid;
-          grid-template-columns: minmax(0, 60%) minmax(0, 40%);
-          gap: 1.5rem;
-        }
-
-        .lesson-type-picker-screen {
-          min-height: calc(100vh - 260px);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 1rem;
-          padding: 1rem;
-        }
-
-        .lesson-type-picker-title {
-          font-size: 1.35rem;
-          font-weight: 800;
-          color: #0f172a;
-          text-align: center;
-        }
-
-        .lesson-type-picker-actions {
-          display: flex;
-          gap: 1rem;
-          flex-wrap: wrap;
-          justify-content: center;
-        }
-
-        .lesson-type-choice-btn {
-          min-width: 180px;
-          padding: 0.95rem 1.25rem;
-          border-radius: 14px;
-          border: 1px solid transparent;
-          font-size: 1.02rem;
-          font-weight: 700;
-          cursor: pointer;
-          transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
-        }
-
-        .lesson-type-choice-btn:hover:not(:disabled) {
-          transform: translateY(-1px);
-          box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
-          filter: brightness(0.98);
-        }
-
-        .lesson-type-choice-btn:disabled {
-          opacity: 0.65;
-          cursor: not-allowed;
-        }
-
-        .lesson-type-choice-btn.choice-content {
-          background: #e0f2fe;
-          border-color: #7dd3fc;
-          color: #075985;
-        }
-
-        .lesson-type-choice-btn.choice-quiz {
-          background: #ede9fe;
-          border-color: #c4b5fd;
-          color: #5b21b6;
-        }
-
-        .lesson-type-choice-btn.choice-assignment {
-          background: #dcfce7;
-          border-color: #86efac;
-          color: #166534;
-        }
-
-        .studio-left-column,
-        .studio-right-column {
-          display: flex;
-          flex-direction: column;
-          gap: 1.5rem;
-        }
-
-        .studio-card {
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 20px;
-          overflow: hidden;
-          transition: all 0.2s ease;
-        }
-
-        .studio-card:hover {
-          border-color: #cbd5e1;
-          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
-        }
-
-        .studio-card-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 1rem 1.25rem;
-          background: #f8fafc;
-          border-bottom: 1px solid #e2e8f0;
-          flex-wrap: wrap;
-          gap: 0.75rem;
-        }
-
-        .studio-card-title {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .studio-card-title h2 {
-          font-size: 1rem;
-          font-weight: 600;
-          color: #0f172a;
-          margin: 0;
-        }
-
-        .studio-card-content {
-          padding: 1.25rem;
-        }
-
-        .form-group {
-          margin-bottom: 1rem;
-        }
-
-        .form-group:last-child {
-          margin-bottom: 0;
-        }
-
-        .form-label {
-          display: block;
-          font-size: 0.85rem;
-          font-weight: 600;
-          color: #0f172a;
-          margin-bottom: 0.5rem;
-        }
-
-        .upload-section,
-        .youtube-section {
-          margin-bottom: 1rem;
-        }
-
-        .upload-row,
-        .youtube-row {
-          display: flex;
-          gap: 0.75rem;
-          align-items: center;
-          flex-wrap: wrap;
-        }
-
-        .file-name {
-          flex: 1;
-          font-size: 0.85rem;
-          color: #64748b;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .progress-bar {
-          margin-top: 0.5rem;
-          height: 4px;
-          background: #e2e8f0;
-          border-radius: 4px;
-          overflow: hidden;
-        }
-
-        .progress-fill {
-          height: 100%;
-          background: linear-gradient(135deg, #0f172a, #1e293b);
-          border-radius: 4px;
-          transition: width 0.3s ease;
-        }
-
-        .youtube-icon {
-          color: #ff0000;
-        }
-
-        .section-label {
-          font-size: 0.8rem;
-          font-weight: 600;
-          color: #64748b;
-          text-transform: uppercase;
-          letter-spacing: 0.03em;
-          margin-bottom: 0.75rem;
-        }
-
-        .current-video-section,
-        .other-resources-section {
-          margin-top: 1rem;
-          padding-top: 1rem;
-          border-top: 1px solid #e2e8f0;
-        }
-
-        .current-video-item,
-        .resource-item {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 0.6rem 0.75rem;
-          background: #f8fafc;
-          border-radius: 12px;
-          margin-bottom: 0.5rem;
-        }
-
-        .video-info,
-        .resource-info {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          flex: 1;
-        }
-
-        .video-name,
-        .resource-name {
-          font-size: 0.85rem;
-          font-weight: 500;
-          color: #0f172a;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          min-width: 0;
-          flex-shrink: 1;
-        }
-
-        .video-size,
-        .resource-size {
-          font-size: 0.7rem;
-          color: #94a3b8;
-        }
-
-        .resource-review-badge {
-          font-size: 0.68rem;
-          font-weight: 600;
-          text-transform: uppercase;
-          border-radius: 999px;
-          padding: 0.14rem 0.48rem;
-          letter-spacing: 0.02em;
-        }
-
-        .resource-review-badge.pending {
-          color: #b45309;
-          background: #ffedd5;
-        }
-
-        .resource-review-badge.approved {
-          color: #166534;
-          background: #dcfce7;
-        }
-
-        .resource-review-badge.rejected {
-          color: #b91c1c;
-          background: #fee2e2;
-        }
-
-        .reject-reason-trigger {
-          width: 22px;
-          height: 22px;
-          border: 1px solid #fecaca;
-          border-radius: 999px;
-          background: #fff1f2;
-          color: #b91c1c;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0;
-          cursor: pointer;
-        }
-
-        .reject-reason-trigger:hover {
-          background: #ffe4e6;
-        }
-
-        .btn-resubmit-warning {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.42rem;
-          min-height: 36px;
-          padding: 0.45rem 0.8rem;
-          border-radius: 10px;
-          border: 1px solid #d97706;
-          background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
-          color: #ffffff;
-          font-size: 0.84rem;
-          font-weight: 700;
-          line-height: 1;
-          cursor: pointer;
-          transition: all 0.18s ease;
-          box-shadow: 0 2px 6px rgba(217, 119, 6, 0.25);
-        }
-
-        .btn-resubmit-warning:hover:not(:disabled) {
-          background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
-          border-color: #b45309;
-          box-shadow: 0 4px 10px rgba(180, 83, 9, 0.3);
-          transform: translateY(-1px);
-        }
-
-        .btn-resubmit-warning:active:not(:disabled) {
-          transform: translateY(0);
-          box-shadow: 0 1px 4px rgba(180, 83, 9, 0.24);
-        }
-
-        .btn-resubmit-warning:focus-visible {
-          outline: 2px solid #fde68a;
-          outline-offset: 2px;
-        }
-
-        .btn-resubmit-warning:disabled {
-          cursor: not-allowed;
-          opacity: 0.72;
-          transform: none;
-          box-shadow: none;
-        }
-
-        .resource-review-reason {
-          font-size: 0.72rem;
-          color: #b91c1c;
-          background: #fff1f2;
-          border: 1px solid #fecdd3;
-          border-radius: 8px;
-          padding: 0.22rem 0.45rem;
-          margin-right: 0.5rem;
-        }
-
-        .empty-state {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 2rem;
-          text-align: center;
-          color: #94a3b8;
-        }
-
-        .empty-state svg {
-          margin-bottom: 0.5rem;
-          opacity: 0.5;
-        }
-
-        .empty-state p {
-          font-size: 0.85rem;
-          margin: 0;
-        }
-
-        .btn-icon-danger {
-          background: transparent;
-          border: none;
-          color: #ef4444;
-          cursor: pointer;
-          padding: 0.25rem;
-          border-radius: 6px;
-          transition: all 0.2s;
-        }
-
-        .btn-icon-danger:hover:not(:disabled) {
-          background: #fef2f2;
-          color: #dc2626;
-        }
-
-        .editor-hint {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          margin-top: 0.75rem;
-          padding: 0.5rem 0.75rem;
-          background: #f1f5f9;
-          border-radius: 10px;
-          font-size: 0.75rem;
-          color: #64748b;
-        }
-
-        /* Preview styles */
-        .preview-card {
-          position: sticky;
-          top: 1rem;
-        }
-
-        .preview-loading {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 3rem;
-          color: #94a3b8;
-        }
-
-        .preview-loading .spin {
-          animation: spin 1s linear infinite;
-          margin-bottom: 1rem;
-        }
-
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-
-        .preview-lesson-header {
-          margin-bottom: 1rem;
-          padding-bottom: 0.75rem;
-          border-bottom: 1px solid #e2e8f0;
-        }
-
-        .preview-title {
-          font-size: 1.1rem;
-          font-weight: 700;
-          color: #0f172a;
-          margin: 0 0 0.35rem;
-        }
-
-        .preview-description {
-          font-size: 0.85rem;
-          color: #64748b;
-          margin: 0;
-          line-height: 1.5;
-        }
-
-        .preview-video {
-          margin-bottom: 1rem;
-        }
-
-        .video-embed {
-          position: relative;
-          width: 100%;
-          padding-top: 56.25%;
-          border-radius: 12px;
-          overflow: hidden;
-          background: #000;
-        }
-
-        .video-embed iframe {
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          border: none;
-        }
-
-        .video-player {
-          width: 100%;
-          border-radius: 12px;
-        }
-
-        .empty-video {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 2rem;
-          background: #f8fafc;
-          border-radius: 12px;
-          text-align: center;
-          color: #94a3b8;
-        }
-
-        .preview-attachments {
-          margin-bottom: 1rem;
-        }
-
-        .attachment-item {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 0.5rem;
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 0.65rem 0.75rem;
-          margin-bottom: 0.5rem;
-        }
-
-        .attachment-item-draft {
-          border-style: dashed;
-          border-color: #94a3b8;
-          background: #f8fafc;
-        }
-
-        .attachment-left {
-          display: flex;
-          align-items: center;
-          gap: 0.45rem;
-          min-width: 0;
-          flex-wrap: wrap;
-        }
-
-        .attachment-name {
-          font-size: 0.84rem;
-          font-weight: 500;
-          color: #0f172a;
-          max-width: 220px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .attachment-size {
-          font-size: 0.72rem;
-          color: #64748b;
-        }
-
-        .attachment-link {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.35rem;
-          font-size: 0.8rem;
-          color: #0f172a;
-          text-decoration: none;
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
-          padding: 0.35rem 0.55rem;
-        }
-
-        .attachment-link:hover {
-          background: #f1f5f9;
-        }
-
-        .attachment-badge-draft {
-          font-size: 0.68rem;
-          color: #334155;
-          background: #e2e8f0;
-          border-radius: 999px;
-          padding: 0.2rem 0.45rem;
-          white-space: nowrap;
-        }
-
-        .empty-attachments {
-          background: #f8fafc;
-          border: 1px dashed #cbd5e1;
-          border-radius: 12px;
-          color: #94a3b8;
-          text-align: center;
-          padding: 0.75rem;
-          font-size: 0.82rem;
-        }
-
-        .preview-content {
-          margin-top: 1rem;
-        }
-
-        .rich-preview {
-          background: #f8fafc;
-          border-radius: 12px;
-          padding: 1rem;
-          font-size: 0.9rem;
-          line-height: 1.6;
-          color: #334155;
-        }
-
-        .rich-preview .empty-content {
-          color: #94a3b8;
-          text-align: center;
-          margin: 0;
-        }
-
-        .success-box {
-          background: #dcfce7;
-          border: 1px solid #bbf7d0;
-          border-radius: 12px;
-          padding: 0.75rem 1rem;
-          color: #166534;
-        }
-
-        /* Responsive */
-        @media (max-width: 1024px) {
-          .studio-two-column {
-            grid-template-columns: 1fr;
-          }
-          
-          .preview-card {
-            position: static;
-          }
-        }
-
-        @media (max-width: 640px) {
-          .studio-card-header {
-            flex-direction: column;
-            align-items: flex-start;
-          }
-          
-          .upload-row,
-          .youtube-row {
-            flex-direction: column;
-            align-items: stretch;
-          }
-          
-          .file-name {
-            text-align: center;
-          }
-        }
-      `}</style>
-    </div>
+    </TeacherShell>
   );
 }

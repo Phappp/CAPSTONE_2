@@ -295,6 +295,7 @@ export default function TeacherLiveSessionPage() {
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         title="Create New Live Session"
+        onConfirm={() => {}}
       >
         <div className="create-form">
           <div className="form-group">

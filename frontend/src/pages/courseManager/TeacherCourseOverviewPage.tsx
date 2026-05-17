@@ -596,13 +596,13 @@ export default function TeacherCourseOverviewPage() {
         <div className="dashboard-header">
           <div className="header-title-section">
             <div className="back-nav">
-              <button 
-                type="button" 
-                className="back-btn" 
+              <button
+                type="button"
+                className="back-btn"
                 onClick={() => navigate("/teacher/dashboard?section=course")}
               >
                 <span className="material-symbols-outlined">arrow_back</span>
-                Back to Course Managerment  
+                Back to Course Management
               </button>
             </div>
             <h1 className="dashboard-title">Course overview</h1>

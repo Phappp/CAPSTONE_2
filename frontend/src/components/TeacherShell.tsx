@@ -47,9 +47,9 @@ type NavEntry = {
 const SIDEBAR_NAV: NavEntry[] = [
   { key: "overview", label: "Overview", icon: "dashboard", to: "/teacher/dashboard" },
   { key: "analytics", label: "Student Insights", icon: "analytics", to: "/teacher/analytics" },
-  { key: "courses", label: "Curriculum", icon: "library_books", to: "/teacher/dashboard?section=course" },
-  { key: "assignments", label: "Assignments", icon: "assignment_add", to: "/teacher/dashboard?section=course" },
-  { key: "grading", label: "Grading", icon: "rule", to: "/teacher/dashboard?section=course" },
+  // { key: "courses", label: "Curriculum", icon: "library_books", to: "/teacher/course-builder" },
+  // { key: "assignments", label: "Assignments", icon: "assignment_add", to: "/teacher/assignment-builder" },
+  // { key: "grading", label: "Grading", icon: "rule", to: "/teacher/grading-station" },
   { key: "discussions", label: "Discussions", icon: "forum", to: "/teacher/discussions" },
 ];
 
