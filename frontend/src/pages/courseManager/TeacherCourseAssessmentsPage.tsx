@@ -45,11 +45,11 @@ export default function TeacherCourseAssessmentsPage() {
         fetch(`${url}${COURSES_API.contentTree(courseId)}`, { headers: { ...authHeaders } }),
       ]);
       const det = await detRes.json().catch(() => ({}));
-      if (!detRes.ok) throw new Error(det?.message || "Không tải được khóa học.");
+      if (!detRes.ok) throw new Error(det?.message || "Failed to load course.");
       setCourseTitle(String(det?.title ?? ""));
 
       const tree = await treeRes.json().catch(() => ({}));
-      if (!treeRes.ok) throw new Error(tree?.message || "Không tải được nội dung khóa học.");
+      if (!treeRes.ok) throw new Error(tree?.message || "No tải được nội dung khóa học.");
 
       const out: LessonRow[] = [];
       (tree.modules ?? []).forEach((mod: any, mi: number) => {
@@ -58,7 +58,7 @@ export default function TeacherCourseAssessmentsPage() {
             id: l.id,
             title: l.title,
             lesson_type: l.lesson_type || "text",
-            moduleTitle: mod.title || `Chương ${mi + 1}`,
+            moduleTitle: mod.title || `Module ${mi + 1}`,
             moduleOrder: mi + 1,
             lessonOrder: li + 1,
             has_quiz: Boolean(l.has_quiz),
@@ -117,7 +117,7 @@ export default function TeacherCourseAssessmentsPage() {
         {/* <div className="dashboard-header teacher-course-overview__top">
           <div className="teacher-course-overview__topLeft" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <button type="button" className="secondary-button back-button" onClick={() => navigate(`/teacher/courses/${courseId}`)}>
-              ← Tổng quan khóa học
+              ← Course overview
             </button>
             <button type="button" className="secondary-button back-button" onClick={() => navigate(`/teacher/courses/${courseId}/edit`)}>
               Chỉnh sửa khóa học
@@ -131,8 +131,8 @@ export default function TeacherCourseAssessmentsPage() {
             Quản lý Quizz &amp; bài tập
           </h1>
           <p className="course-stats" style={{ margin: 0, lineHeight: 1.5 }}>
-            {courseTitle ? <strong>{courseTitle}</strong> : "—"} · chọn bài trong bảng rồi mở form soạn. Tiến độ học viên mở khóa
-            theo thứ tự bài trong khóa học.
+            {courseTitle ? <strong>{courseTitle}</strong> : "—"} · chọn bài in bảng rồi mat form soạn. Tiến độ học viên mat khóa
+            theo thứ tự bài in khóa học.
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
             <button type="button" className="secondary-button" onClick={() => void load()} disabled={loading}>
@@ -150,16 +150,16 @@ export default function TeacherCourseAssessmentsPage() {
         {!loading || rows.length ? (
           <div className="chart-card" style={{ overflowX: "auto" }}>
             <div className="chart-card-title" style={{ marginBottom: 12 }}>
-              Danh sách bài học
+              List bài học
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
               <thead>
                 <tr style={{ textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>
-                  <th style={{ padding: "8px 10px" }}>Chương</th>
+                  <th style={{ padding: "8px 10px" }}>Module</th>
                   <th style={{ padding: "8px 10px" }}>Bài</th>
-                  {/* <th style={{ padding: "8px 10px" }}>Loại</th> */}
+                  {/* <th style={{ padding: "8px 10px" }}>Type</th> */}
                   <th style={{ padding: "8px 10px" }}>Quizz</th>
-                  <th style={{ padding: "8px 10px" }}>Bài tập</th>
+                  <th style={{ padding: "8px 10px" }}>Assignment</th>
                   <th style={{ padding: "8px 10px", minWidth: 220 }}>Thao tác</th>
                 </tr>
               </thead>
@@ -173,15 +173,15 @@ export default function TeacherCourseAssessmentsPage() {
                       {r.lessonOrder}. {r.title}
                     </td>
                     {/* <td style={{ padding: "10px", color: "#64748b" }}>{r.lesson_type}</td> */}
-                    <td style={{ padding: "10px" }}>{r.has_quiz ? "Có" : "—"}</td>
-                    <td style={{ padding: "10px" }}>{r.has_assignment ? "Có" : "—"}</td>
+                    <td style={{ padding: "10px" }}>{r.has_quiz ? "Yes" : "—"}</td>
+                    <td style={{ padding: "10px" }}>{r.has_assignment ? "Yes" : "—"}</td>
                     <td style={{ padding: "10px" }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                         <button type="button" className="secondary-button" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => openEditorTab(r.id, "quiz")}>
-                          Soạn Quizz
+                          Edit quiz
                         </button>
                         <button type="button" className="secondary-button" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => openEditorTab(r.id, "assignment")}>
-                          Soạn bài tập
+                          Edit assignment
                         </button>
                         {r.has_assignment || r.has_quiz ? (
                           <button
@@ -190,7 +190,7 @@ export default function TeacherCourseAssessmentsPage() {
                             style={{ padding: "6px 12px", fontSize: 13, borderColor: "#4f46e5", color: "#4338ca" }}
                             onClick={() => openRoster(r)}
                           >
-                            Danh sách / điểm
+                            List / điểm
                           </button>
                         ) : null}
                       </div>
@@ -199,7 +199,7 @@ export default function TeacherCourseAssessmentsPage() {
                 ))}
               </tbody>
             </table>
-            {!rows.length && !loading ? <p className="course-stats" style={{ marginTop: 12 }}>Chưa có bài học. Hãy thêm chương/bài ở trang xây dựng nội dung.</p> : null}
+            {!rows.length && !loading ? <p className="course-stats" style={{ marginTop: 12 }}>No bài học. Please thêm chương/bài at trang xây dựng nội dung.</p> : null}
           </div>
         ) : null}
       </div>

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import CourseContentTreeEditor from "../../components/CourseContentTreeEditor";
 import CourseAssessmentModal, { type CourseAssessmentModalTab } from "../../components/CourseAssessmentModal";
 import { useAuth } from "../../contexts/Auth";
 import CommonModal from "../../components/CommonModal";
+import TeacherShell from "../../components/TeacherShell";
 import "./TeacherCourseDetailPage.css";
 
 type CourseStatus = "draft" | "pending_review" | "published" | "archived";
@@ -143,12 +143,12 @@ export default function TeacherCourseDetailPage() {
   const ensureVerifiedForCourseActions = (): boolean => {
     if (!managerBlocked) return true;
     const note = user?.manager_verification?.review_note
-      ? `\n\nGhi chú từ quản trị viên: ${user.manager_verification.review_note}`
+      ? `\n\nNote from administrator: ${user.manager_verification.review_note}`
       : "";
     setModalState({
       open: true,
-      title: "Cần cấp phép giảng viên",
-      message: `Tính năng này yêu cầu tài khoản giảng viên đã được xác minh.${note}\n\nBạn sẽ được chuyển đến trang hồ sơ để xem trạng thái xác minh.`,
+      title: "Instructor verification required",
+      message: `This feature requires a verified instructor account.${note}\n\nYou will be redirected to your profile to check verification status.`,
       onConfirm: () => {
         setModalState({ open: false, title: "", message: "" });
         navigate("/profile");
@@ -267,7 +267,7 @@ export default function TeacherCourseDetailPage() {
       let changed = false;
       for (const id of selectedPrerequisiteIds) {
         if (!map.has(id) && id !== courseId) {
-          map.set(id, { id, title: `Khóa học #${id}`, slug: "" });
+          map.set(id, { id, title: `Course #${id}`, slug: "" });
           changed = true;
         }
       }
@@ -292,7 +292,7 @@ export default function TeacherCourseDetailPage() {
       },
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.message || "Không thể tải chi tiết khóa học.");
+    if (!res.ok) throw new Error(data?.message || "Failed to load chi tiết khóa học.");
     setCourse(data as CourseDetail);
     const nextForm = {
       title: data.title ?? "",
@@ -328,7 +328,7 @@ export default function TeacherCourseDetailPage() {
         },
       });
       const data = (await res.json().catch(() => ({}))) as Partial<CompletionRules> & { message?: string };
-      if (!res.ok) throw new Error(data?.message || "Không thể tải quy tắc hoàn thành.");
+      if (!res.ok) throw new Error(data?.message || "Failed to load quy tắc hoàn thành.");
       const next = data as CompletionRules;
       setRules(next);
       setRulesDraft({
@@ -337,7 +337,7 @@ export default function TeacherCourseDetailPage() {
         text_min_seconds: String(next.text_min_seconds ?? 30),
       });
     } catch (e: any) {
-      setRulesError(e?.message || "Không thể tải quy tắc hoàn thành.");
+      setRulesError(e?.message || "Failed to load quy tắc hoàn thành.");
       setRules(null);
     } finally {
       setRulesLoading(false);
@@ -355,7 +355,7 @@ export default function TeacherCourseDetailPage() {
         },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as any)?.message || "Không thể tải timeline duyệt.");
+      if (!res.ok) throw new Error((data as any)?.message || "Failed to load timeline duyệt.");
       setReviewTimeline(Array.isArray((data as any)?.items) ? (data as any).items : []);
     } catch {
       setReviewTimeline([]);
@@ -425,10 +425,10 @@ export default function TeacherCourseDetailPage() {
         body: JSON.stringify(payload),
       });
       const data = (await res.json().catch(() => ({}))) as Partial<CompletionRules> & { message?: string };
-      if (!res.ok) throw new Error(data?.message || "Không thể lưu quy tắc hoàn thành.");
+      if (!res.ok) throw new Error(data?.message || "No thể lưu quy tắc hoàn thành.");
       setRules(data as CompletionRules);
     } catch (e: any) {
-      setRulesError(e?.message || "Không thể lưu quy tắc hoàn thành.");
+      setRulesError(e?.message || "No thể lưu quy tắc hoàn thành.");
     } finally {
       setRulesLoading(false);
     }
@@ -442,7 +442,7 @@ export default function TeacherCourseDetailPage() {
     setLoading(true);
     setError(null);
     fetchDetail()
-      .catch((e: any) => setError(e?.message || "Đã xảy ra lỗi."))
+      .catch((e: any) => setError(e?.message || "An error occurred."))
       .finally(() => setLoading(false));
     void fetchCompletionRules();
     void fetchPrerequisiteOptions();
@@ -491,10 +491,10 @@ export default function TeacherCourseDetailPage() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message || "Không thể lưu thay đổi.");
+        throw new Error(data?.message || "No thể lưu thay đổi.");
       }
 
-      // Nếu có thay đổi trạng thái thì chỉ cập nhật khi bấm "Lưu thay đổi"
+      // Nếu yes thay đổi trạng thái thì chỉ cập nhật khi bấm "Save changes"
       const scheduledAt = form.publish_scheduled_at ? new Date(form.publish_scheduled_at) : null;
       const scheduleFuture = scheduledAt && scheduledAt.getTime() > Date.now();
 
@@ -509,14 +509,14 @@ export default function TeacherCourseDetailPage() {
         });
         if (!res2.ok) {
           const data2 = await res2.json().catch(() => ({}));
-          throw new Error(data2?.message || "Không thể cập nhật trạng thái.");
+          throw new Error(data2?.message || "No thể cập nhật trạng thái.");
         }
       }
 
       await fetchDetail();
       setSaveSuccessOpen(true);
     } catch (e: any) {
-      setError(e?.message || "Đã xảy ra lỗi.");
+      setError(e?.message || "An error occurred.");
     } finally {
       setLoading(false);
     }
@@ -537,11 +537,11 @@ export default function TeacherCourseDetailPage() {
         body: JSON.stringify({ status: nextStatus }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as any)?.message || "Không thể cập nhật trạng thái.");
+      if (!res.ok) throw new Error((data as any)?.message || "No thể cập nhật trạng thái.");
       await fetchDetail();
       setSelectedStatus(nextStatus);
     } catch (e: any) {
-      setError(e?.message || "Đã xảy ra lỗi.");
+      setError(e?.message || "An error occurred.");
     } finally {
       setLoading(false);
     }
@@ -561,11 +561,11 @@ export default function TeacherCourseDetailPage() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message || "Không thể xóa khóa học.");
+        throw new Error(data?.message || "No thể xóa khóa học.");
       }
       navigate("/teacher/dashboard");
     } catch (e: any) {
-      setError(e?.message || "Đã xảy ra lỗi.");
+      setError(e?.message || "An error occurred.");
     } finally {
       setLoading(false);
     }
@@ -585,11 +585,11 @@ export default function TeacherCourseDetailPage() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message || "Không thể xóa vĩnh viễn khóa học.");
+        throw new Error(data?.message || "No thể xóa vĩnh viễn khóa học.");
       }
       navigate("/teacher/dashboard");
     } catch (e: any) {
-      setError(e?.message || "Đã xảy ra lỗi.");
+      setError(e?.message || "An error occurred.");
     } finally {
       setLoading(false);
     }
@@ -611,39 +611,39 @@ export default function TeacherCourseDetailPage() {
   };
 
   return (
-    <div className="dashboard-page">
-      <div className="course-detail-header">
-        <div className="course-detail-header-left">
-          <button
-            type="button"
-            className="secondary-button back-button"
-            onClick={() => navigate(`/teacher/courses/${courseId}`)}
-          >
-            ← Tổng quan khóa học
-          </button>
-          <div className="course-detail-info">
-            <div className="course-detail-title">
-              {course ? course.title : "Chi tiết khóa học"}
-            </div>
-            <div className="course-detail-slug">
-              {course ? (
-                <span className="course-detail-slug-text">{course.slug}</span>
-              ) : (
-                "Đang tải..."
-              )}
+    <TeacherShell activeNav="courses" activeTopNav="courses" showFab={false}>
+      <div className="dashboard-page td-shell">
+        <div className="course-detail-header">
+          <div className="course-detail-header-left">
+            <button
+              type="button"
+              className="secondary-button back-button"
+              onClick={() => navigate(`/teacher/courses/${courseId}`)}
+            >
+              ← Course overview
+            </button>
+            <div className="course-detail-info">
+              <div className="course-detail-title">
+                {course ? course.title : "Course details"}
+              </div>
+              <div className="course-detail-slug">
+                {course ? (
+                  <span className="course-detail-slug-text">{course.slug}</span>
+                ) : (
+                  "Loading..."
+                )}
+              </div>
             </div>
           </div>
         </div>
-        <AvatarMenu />
-      </div>
 
       <div className="wizard-card course-detail-main-card">
         {saveSuccessOpen && (
           <div className="save-success-modal-overlay" role="dialog" aria-modal="true">
             <div className="save-success-modal">
-              <div className="save-success-modal-title">Lưu thay đổi thành công</div>
+              <div className="save-success-modal-title">Save changes thành công</div>
               <div className="save-success-modal-message">
-                Bạn muốn quay trở về danh sách khóa học hay tiếp tục ở lại trang này?
+                Would you like to return to the course list, or stay on this page?
               </div>
               <div className="save-success-modal-actions">
                 <button
@@ -654,7 +654,7 @@ export default function TeacherCourseDetailPage() {
                     navigate(`/teacher/courses/${courseId}`);
                   }}
                 >
-                  Về tổng quan
+                  Go to overview
                 </button>
                 <button
                   type="button"
@@ -671,10 +671,10 @@ export default function TeacherCourseDetailPage() {
         {deleteDialogOpen && (
           <div className="save-success-modal-overlay" role="dialog" aria-modal="true">
             <div className="save-success-modal">
-              <div className="save-success-modal-title">Xóa khóa học</div>
+              <div className="save-success-modal-title">Delete course</div>
               <div className="save-success-modal-message">
-                <p>Bạn có chắc chắn muốn xóa khóa học <strong>"{course?.title}"</strong> không?</p>
-                <p style={{ marginTop: "1rem" }}>Chọn loại xóa:</p>
+                <p>Are you sure you want to delete khóa học <strong>"{course?.title}"</strong> no?</p>
+                <p style={{ marginTop: "1rem" }}>Select loại xóa:</p>
               </div>
               <div className="save-success-modal-actions" style={{ flexDirection: "column", gap: "0.75rem" }}>
                 <button
@@ -693,7 +693,7 @@ export default function TeacherCourseDetailPage() {
                   onClick={() => hardDel()}
                   disabled={loading}
                 >
-                  Xóa khóa học
+                  Delete course
                 </button>
                 <button
                   type="button"
@@ -701,7 +701,7 @@ export default function TeacherCourseDetailPage() {
                   style={{ width: "100%", justifyContent: "center" }}
                   onClick={() => setDeleteDialogOpen(false)}
                 >
-                  Hủy
+                  Cancel
                 </button>
               </div>
             </div>
@@ -713,12 +713,12 @@ export default function TeacherCourseDetailPage() {
             {course ? (
               <span className={`course-status-badge ${getStatusClassName(course.status)}`}>
                 {course.status === "published"
-                  ? "Đã xuất bản"
+                  ? "Published"
                   : course.status === "pending_review"
                     ? "Chờ quản trị viên duyệt"
                   : course.status === "draft"
-                    ? "Bản nháp"
-                    : "Đã lưu trữ"}
+                    ? "Draft"
+                    : "Archived"}
               </span>
             ) : null}
           </div>
@@ -743,7 +743,7 @@ export default function TeacherCourseDetailPage() {
                   }}
                   disabled={loading}
                 >
-                  Đặt thành bản nháp
+                  Set as draft
                 </button>
                 {course?.status !== "archived" ? (
                   <button
@@ -755,7 +755,7 @@ export default function TeacherCourseDetailPage() {
                     }}
                     disabled={loading}
                   >
-                    Đặt thành đã xuất bản
+                    Set as published
                   </button>
                 ) : null}
                 <button
@@ -767,7 +767,7 @@ export default function TeacherCourseDetailPage() {
                   }}
                   disabled={loading}
                 >
-                  Gửi duyệt quản trị viên
+                  Send duyệt quản trị viên
                 </button>
                 <button
                   type="button"
@@ -790,7 +790,7 @@ export default function TeacherCourseDetailPage() {
                   }}
                   disabled={loading}
                 >
-                  Xóa khóa học
+                  Delete course
                 </button>
               </div>
             ) : null}
@@ -813,7 +813,7 @@ export default function TeacherCourseDetailPage() {
         <div className="course-detail-two-column">
           <div>
             <div className="form-group">
-              <label className="form-label">Tên khóa học</label>
+              <label className="form-label">Name khóa học</label>
               <input
                 className="form-input"
                 value={form.title}
@@ -822,7 +822,7 @@ export default function TeacherCourseDetailPage() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Mô tả ngắn</label>
+              <label className="form-label">Short description</label>
               <textarea
                 className="form-input"
                 rows={3}
@@ -852,7 +852,7 @@ export default function TeacherCourseDetailPage() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Xuất bản tự động lúc (tùy chọn)</label>
+              <label className="form-label">Publish tự động lúc (tùy chọn)</label>
               <input
                 type="datetime-local"
                 className="form-input"
@@ -862,7 +862,7 @@ export default function TeacherCourseDetailPage() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Mục tiêu học tập</label>
+              <label className="form-label">Learning objectives</label>
               {form.learning_objectives.map((item, idx) => (
                 <div key={`obj-${idx}`} style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
                   <input
@@ -890,7 +890,7 @@ export default function TeacherCourseDetailPage() {
                     }
                     disabled={loading}
                   >
-                    Xóa 
+                    Delete 
                   </button>
                 </div>
               ))}
@@ -905,13 +905,13 @@ export default function TeacherCourseDetailPage() {
                 }
                 disabled={loading}
               >
-                + Thêm mục tiêu
+                + Add objective
               </button>
             </div>
             <div className="form-group">
-              <label className="form-label">Yêu cầu tiên quyết</label>
+              <label className="form-label">Require tiên quyết</label>
               <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 8 }}>
-                Học viên phải hoàn tất các khóa bên dưới trước khi đăng ký khóa này.
+                Students phải hoàn tất các khóa bên under trước khi đăng ký khóa này.
               </div>
               <div style={{ display: "grid", gap: "0.5rem", maxHeight: 220, overflow: "auto", border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }}>
                 {prerequisiteOptions.length ? (
@@ -954,18 +954,18 @@ export default function TeacherCourseDetailPage() {
                         {checked ? (
                           <span style={{ color: "#15803d", fontWeight: 800, fontSize: 12 }}>✓ Đã chọn</span>
                         ) : c.selectable === false ? (
-                          <span style={{ color: "#b91c1c", fontWeight: 800, fontSize: 12 }} title={c.reason || ""}>Không khả dụng</span>
+                          <span style={{ color: "#b91c1c", fontWeight: 800, fontSize: 12 }} title={c.reason || ""}>Unavailable</span>
                         ) : null}
                       </label>
                     );
                   })
                 ) : (
-                  <div style={{ color: "#6b7280" }}>Chưa có khóa học để chọn.</div>
+                  <div style={{ color: "#6b7280" }}>No khóa học để chọn.</div>
                 )}
               </div>
               {legacyPrerequisites.length ? (
                 <div style={{ marginTop: 8, color: "#92400e", fontSize: 12 }}>
-                  Không map được một số điều kiện cũ: {legacyPrerequisites.join(", ")}
+                  Cannot map một số điều kiện cũ: {legacyPrerequisites.join(", ")}
                 </div>
               ) : null}
             </div>
@@ -973,7 +973,7 @@ export default function TeacherCourseDetailPage() {
 
           <div>
             <div className="form-group">
-              <label className="form-label">Cấp độ</label>
+              <label className="form-label">Level</label>
               <select
                 className="form-input"
                 value={form.level}
@@ -986,14 +986,14 @@ export default function TeacherCourseDetailPage() {
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Ngôn ngữ</label>
+              <label className="form-label">Language</label>
               <select
                 className="form-input"
                 value={form.language}
                 onChange={(e) => setForm((p) => ({ ...p, language: e.target.value }))}
                 disabled={loading}
               >
-                <option value="vi">Tiếng Việt</option>
+                <option value="vi">Vietnamese</option>
                 <option value="en">English</option>
               </select>
             </div>
@@ -1008,7 +1008,7 @@ export default function TeacherCourseDetailPage() {
                       className="course-thumbnail-img"
                     />
                   ) : (
-                    <span className="course-thumbnail-placeholder">Chưa có ảnh</span>
+                    <span className="course-thumbnail-placeholder">No ảnh</span>
                   )}
                 </div>
                 <div className="course-thumbnail-input-group">
@@ -1021,7 +1021,7 @@ export default function TeacherCourseDetailPage() {
                   />
                   <div className="course-thumbnail-actions">
                     <label className="secondary-button" style={{ cursor: "pointer" }}>
-                      Chọn ảnh từ máy
+                      Choose image from device
                       <input
                         type="file"
                         accept="image/*"
@@ -1058,14 +1058,14 @@ export default function TeacherCourseDetailPage() {
                       />
                     </label>
                     <span className="course-thumbnail-hint">
-                      Ảnh tỉ lệ 16:9 sẽ hiển thị đẹp nhất.
+                      Image aspect 16:9 sẽ hiển thị đẹp nhất.
                     </span>
                   </div>
                 </div>
               </div>
             </div>
             <div className="form-group">
-              <label className="form-label">Giá (VNĐ)</label>
+              <label className="form-label">Price (VNĐ)</label>
               <input
                 className="form-input"
                 inputMode="numeric"
@@ -1076,15 +1076,15 @@ export default function TeacherCourseDetailPage() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Có chứng chỉ</label>
+              <label className="form-label">Yes chứng chỉ</label>
               <select
                 className="form-input"
                 value={form.has_certificate ? "yes" : "no"}
                 onChange={(e) => setForm((p) => ({ ...p, has_certificate: e.target.value === "yes" }))}
                 disabled={loading}
               >
-                <option value="no">Không</option>
-                <option value="yes">Có</option>
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
               </select>
             </div>
             <div className="form-group">
@@ -1114,8 +1114,8 @@ export default function TeacherCourseDetailPage() {
           <div className="course-stats">
             {course ? (
               <>
-                Học viên: <b>{course.learners_count}</b> · Chương: <b>{course.modules_count}</b> ·
-                Bài học: <b>{course.lessons_count}</b>
+                Students: <b>{course.learners_count}</b> · Module: <b>{course.modules_count}</b> ·
+                Lesson: <b>{course.lessons_count}</b>
               </>
             ) : null}
           </div>
@@ -1127,7 +1127,7 @@ export default function TeacherCourseDetailPage() {
               onClick={save}
               disabled={loading || !isDirty}
             >
-              Lưu thay đổi
+              Save changes
             </button>
           </div>
         </div>
@@ -1152,13 +1152,13 @@ export default function TeacherCourseDetailPage() {
             ))}
           </div>
         ) : (
-          <div className="course-stats" style={{ marginTop: 8 }}>Chưa có lịch sử duyệt.</div>
+          <div className="course-stats" style={{ marginTop: 8 }}>No lịch sử duyệt.</div>
         )}
       </div>
 
       <div className="wizard-card content-editor-card">
         <div className="content-editor-header">
-          <div className="content-editor-title">Nội dung khóa học</div>
+          <div className="content-editor-title">Content khóa học</div>
         </div>
         <CourseContentTreeEditor
           courseId={courseId}
@@ -1175,20 +1175,20 @@ export default function TeacherCourseDetailPage() {
           {/* <div style={{ flex: "1 1 280px" }}>
             <div className="content-editor-title">Quizz &amp; bài tập</div>
             <p className="course-stats" style={{ margin: "8px 0 0", maxWidth: 720, lineHeight: 1.5 }}>
-              Mở khung soạn toàn màn hình để tập trung. Chọn bài trong form, hoặc từ cây nội dung: menu <strong>⋯</strong> → &quot;Soạn Quizz&quot; / &quot;Soạn bài tập&quot;; trên mỗi chương có nút{" "}
-              <strong>bài đầu chương</strong>. Thêm/sắp xếp bài trong phần nội dung hoặc{" "}
+              Open khung soạn toàn màn hình để tập trung. Select bài in form, or from cây nội dung: menu <strong>⋯</strong> → &quot;Edit quiz&quot; / &quot;Edit assignment&quot;; on mỗi chương yes nút{" "}
+              <strong>bài đầu chương</strong>. Add/sắp xếp bài in phần nội dung or{" "}
               <button type="button" className="secondary-button" style={{ padding: "4px 12px", fontSize: 13 }} onClick={() => navigate(`/teacher/courses/${courseId}/content`)}>
-                mở trang xây dựng nội dung
+                mat trang xây dựng nội dung
               </button>
               .
             </p>
           </div> */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, flexShrink: 0 }}>
             <button type="button" className="primary-button" onClick={() => openAssessmentModal("quiz")}>
-              Mở soạn Quizz
+              Open soạn Quizz
             </button>
             <button type="button" className="secondary-button" onClick={() => openAssessmentModal("assignment")}>
-              Mở soạn bài tập
+              Open soạn bài tập
             </button>
           </div>
         </div>
@@ -1215,7 +1215,7 @@ export default function TeacherCourseDetailPage() {
               Tải lại
             </button>
             <button type="button" className="primary-button" onClick={saveCompletionRules} disabled={rulesLoading}>
-              Lưu quy tắc
+              Save quy tắc
             </button>
           </div>
         </div>
@@ -1261,7 +1261,7 @@ export default function TeacherCourseDetailPage() {
               Đang áp dụng:{" "}
               {rules ? (
                 <>
-                  Video ≥ <b>{rules.video_min_seconds}s</b> hoặc ≥ <b>{rules.video_min_percent}</b> · Text ≥ <b>{rules.text_min_seconds}s</b>
+                  Video ≥ <b>{rules.video_min_seconds}s</b> or ≥ <b>{rules.video_min_percent}</b> · Text ≥ <b>{rules.text_min_seconds}s</b>
                 </>
               ) : (
                 <span>--</span>
@@ -1283,6 +1283,7 @@ export default function TeacherCourseDetailPage() {
           setModalState({ open: false, title: "", message: "" });
         }}
       />
-    </div>
+      </div>
+    </TeacherShell>
   );
 }

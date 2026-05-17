@@ -1,12 +1,12 @@
 // TeacherCourseContentBuilderPage.tsx
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { useAuth } from "../../contexts/Auth";
 import CourseContentSimpleTree from "../../components/CourseContentSimpleTree";
 import TeacherCourseAssessmentsPage from "./TeacherCourseAssessmentsPage";
+import TeacherShell from "../../components/TeacherShell";
 import "./TeacherDashboard.css";
 import "./TeacherCourseContentBuilderPage.css";
 
@@ -517,7 +517,8 @@ export default function TeacherCourseDetailPage() {
   if (!courseId || Number.isNaN(courseId)) return null;
 
   return (
-    <div className="teacher-dashboard content-builder-page">
+    <TeacherShell activeNav="curriculum" activeTopNav="courses" showFab={false}>
+    <div className="teacher-dashboard content-builder-page td-shell">
       <div className="dashboard-container">
         {/* Header */}
         <div className="dashboard-header">
@@ -560,7 +561,6 @@ export default function TeacherCourseDetailPage() {
               Quản lý thông tin, nội dung, bài kiểm tra và quy tắc hoàn thành khóa học
             </p> */}
           </div>
-          <AvatarMenu />
         </div>
 
         {/* Status Bar */}
@@ -1136,5 +1136,6 @@ export default function TeacherCourseDetailPage() {
         </div>
       )}
     </div>
+    </TeacherShell>
   );
 }
