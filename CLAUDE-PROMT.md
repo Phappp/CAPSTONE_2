@@ -1,44 +1,41 @@
-Role: Senior UI/UX Engineer & Frontend Architect
-Task: Enhance and modernize the UI/UX design of 7 individual HTML files inside the `learner` directory, converting them into polished React+TypeScript components while strictly preserving existing operational logic.
+Role: Senior Frontend Architect & Refactoring Specialist
+Task: Convert the newly added HTML files inside the teacher/course manager directory into modular React+TypeScript components, delete obsolete UI files, update the router system (`App.tsx`), and bind frontend states with existing Backend APIs without changing any backend code.
 
-[CONTEXT & PROJECT STRUCTURE]
-The project is a modern React web application built with:
+[CONTEXT & TARGET ARTIFACTS]
+Based on the provided directory layout, we have raw HTML templates (marked as 'U') that need to be transformed into production-ready React components matching our architectural framework.
 
-- Build Tool: Vite
-- Language: TypeScript (React.FC)
-- Styling: Dedicated CSS files per page component
-- File Location: Files are already split and located inside `src/pages/learner/`
+Target Conversion & Replacement Mapping:
+1. `AssignmentBuilder.html` -> Convert and integrate logic with -> `src/pages/courseManager/TeacherAssignmentEditorPage.tsx`
+2. `CourseBuilder.html` -> Convert and integrate logic with -> `src/pages/courseManager/TeacherCourseContentBuilderPage.tsx`
+3. `CourseManager.html` -> Convert and integrate logic with -> `src/pages/courseManager/TeacherCourseDetailPage.tsx`
+4. `CourseManagerDashboard.html` -> Convert and integrate logic with -> `src/pages/courseManager/TeacherDashboard.tsx`
+5. `DiscussionBoardManagement.html` -> Convert to -> `src/pages/courseManager/DiscussionBoardManagementPage.tsx` & `.css`
+6. `GradingFeedbackStation.html` -> Convert and integrate logic with -> `src/pages/courseManager/TeacherGradingCenterPage.tsx`
+7. `StudentAnalytics.html` -> Convert to -> `src/pages/courseManager/StudentAnalyticsPage.tsx` & `.css`
 
-[INPUT DATA - TARGET FILES]
-You will process the following 7 distinct files within `src/pages/learner/`:
+[INSTRUCTIONS & COMPLIANCE RULES]
 
-1. Learner Dashboard (`LearnerDashboard.tsx` / `.css`)
-2. My Course Page (`MyCoursePage.tsx` / `.css`)
-3. My Certificates (`MyCertificates.tsx` / `.css`)
-4. Learning Workspace (`LearningWorkspace.tsx` / `.css`)
-5. Assignment & Submission (`AssignmentSubmission.tsx` / `.css`)
-6. Live Sessions Schedule (`LiveSessionsSchedule.tsx` / `.css`)
-7. Profile & Settings (`ProfileSettings.tsx` / `.css`)
+1. PURGE REDUNDANT LEGACY & RAW HTML FILES:
+   - Once a template is successfully converted, permanently remove/delete the raw `.html` source files from the directory to keep the workspace clean.
+   - Clean up any old, unused placeholder page components that are completely replaced by these new layouts.
 
-[STRICT REFACTORING CONSTRAINT: UI/UX ONLY]
+2. TARGETED CONVERSION & UI MODERNIZATION:
+   - Convert all listed templates into fully typed TypeScript Functional Components (`React.FC`).
+   - Translate all standard HTML markup to JSX (`className`, `htmlFor`, object style notation).
+   - Extract styling blocks into their respective scoped `.css` companion files. Ensure class definitions use explicit, unique scoping prefixes to block global styling pollution.
+   - Inject modern micro-interactions (hover, focus, transitions) onto all action triggers, course management nodes, grading matrix cells, and analytics graphs.
 
-- NO FUNCTIONAL CHANGES: Do not touch, alter, or remove any form submission handlers, API fetching logic, state hooks, props definition, or dynamic data bindings.
-- NO BACKEND REFACTOR: Preserve all existing variable names, structural logic loops, and conditional rendering conditions.
+3. FRONTEND TO BACKEND DATA BINDING (API LINKS):
+   - Inspect the existing data-fetching routines or Axios hooks inside `src/api/` related to course creation, module building, grade submission, assignment details, and class statistics.
+   - Inject the functional state hooks, props definitions, and request/mutation hooks directly into the new component bodies.
+   - Match variable signatures exactly with the backend JSON schemas.
+   - CRITICAL CONSTRAINT: Absolutely DO NOT rewrite, modify, or touch any backend server code or database controllers.
 
-[UI/UX MODERNIZATION RULES]
-
-1. Visual Upgrade: Apply a clean, modern, premium SaaS dashboard aesthetic. Optimize shadows (box-shadow), card corners (border-radius), layout borders, and alignment.
-2. Micro-interactions: Add smooth CSS transitions (`transition: all 0.2s ease-in-out`) for all hover, active, and focus states on buttons, inputs, navigation links, and clickable cards.
-3. Typography & Spacing: Clean up text hierarchy using proportional sizing and optimize whitespace padding/margin to prevent cramped UI layouts.
-4. CSS Scoping: All styles must be contained within their respective `.css` companion files. Use unique prefixes to completely prevent global style pollution.
-5. Code Quality: Ensure valid JSX syntax (e.g., `className`, `htmlFor`, object notation for inline styles) and preserve TypeScript types.
+4. MASTER ROUTING SYNCHRONIZATION (`App.tsx`):
+   - Refactor `src/App.tsx` to clear out broken imports of deleted files and attach the updated components.
+   - Ensure these teacher-facing screens are securely wrapped under the proper `<Authentication allowedRoles={["course_manager", "teacher"]}>` middleware blocks.
 
 [OUTPUT EXPECTED]
-Directly edit and overwrite the files in the directory. Organize your work and process each page systematically. For each page, deliver the modified:
+Directly modify the filesystem layout. Ensure the entire course management ecosystem is tightly integrated with backend endpoints and compiles perfectly with zero TypeScript compiler errors.
 
-- `src/pages/learner/[PageName].tsx`
-- `src/pages/learner/[PageName].css`
-
-Please read the target files in `src/pages/learner/` and apply these precise visual upgrades now.
-
-Please apply the prompt rules to update only the LearnerDashboard files first. Once done, let me know so we can move to the next file.
+Please begin the automated migration, cleanup, and routing refactor now.
