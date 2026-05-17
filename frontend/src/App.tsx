@@ -32,6 +32,7 @@ import MyCoursePage from "./pages/learner/MyCoursePage";
 import MyCertificates from "./pages/learner/MyCertificates";
 import LearningWorkspace from "./pages/learner/LearningWorkspace";
 import AssignmentSubmission from "./pages/learner/AssignmentSubmission";
+import QuizSubmission from "./pages/learner/QuizSubmission";
 import LiveSessionsSchedule from "./pages/learner/LiveSessionsSchedule";
 import ProfileSettings from "./pages/learner/ProfileSettings";
 
@@ -149,10 +150,25 @@ export default function App() {
         <Route path="/learner/my-courses" element={<MyCoursePage />} />
         <Route path="/learner/certificates" element={<MyCertificates />} />
         <Route path="/learner/workspace" element={<LearningWorkspace />} />
-        <Route path="/learner/assignments" element={<AssignmentSubmission />} />
         <Route path="/learner/schedule" element={<LiveSessionsSchedule />} />
         <Route path="/learner/settings" element={<ProfileSettings />} />
       </Route>
+      <Route
+        path="/learner/quizzes"
+        element={
+          <Authentication allowedRoles={["learner", "student"]}>
+            <QuizSubmission />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/learner/assignments"
+        element={
+          <Authentication allowedRoles={["learner", "student"]}>
+            <AssignmentSubmission />
+          </Authentication>
+        }
+      />
       <Route
         path="/learner/quiz/:courseId/:lessonId"
         element={
