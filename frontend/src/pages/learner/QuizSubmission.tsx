@@ -28,6 +28,13 @@ import { getAccessToken } from '../../utils/authStorage';
 import LearnerFab from '../../components/LearnerFab';
 import './QuizSubmission.css';
 
+interface QuizSubmissionProps {
+  inlineMode?: boolean;
+  onClose?: () => void;
+  inlineLessonId?: number;
+  inlineCourseId?: number;
+}
+
 interface QuizQuestion {
   quiz_question_id: number;
   question_text: string;
@@ -101,11 +108,15 @@ const formatTimeRemaining = (seconds: number | null): string => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-const QuizSubmission: React.FC = () => {
+const QuizSubmission: React.FC<QuizSubmissionProps> = ({ inlineMode = false, onClose, inlineLessonId, inlineCourseId }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryLessonId = Number(searchParams.get('lessonId') ?? '');
   const lessonTitleFromQuery = searchParams.get('title') || '';
+
+  // Use inline props if provided, otherwise use URL params
+  const effectiveLessonId = inlineLessonId ?? queryLessonId;
+  const effectiveCourseId = inlineMode ? (inlineCourseId ?? 0) : Number(searchParams.get('courseId') || '0');
 
   const [quiz, setQuiz] = useState<QuizPayload | null>(null);
   const [result, setResult] = useState<SubmitResult | null>(null);
@@ -118,8 +129,18 @@ const QuizSubmission: React.FC = () => {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [timerStarted, setTimerStarted] = useState(false);
 
+  // Reset state when quiz changes
   useEffect(() => {
-    if (!queryLessonId || Number.isNaN(queryLessonId)) {
+    setResult(null);
+    setSelections({});
+    setSubmitOk(null);
+    setSubmitError(null);
+    setTimeRemaining(null);
+    setTimerStarted(false);
+  }, [effectiveLessonId]);
+
+  useEffect(() => {
+    if (!effectiveLessonId || Number.isNaN(effectiveLessonId)) {
       setLoading(false);
       return;
     }
@@ -134,9 +155,8 @@ const QuizSubmission: React.FC = () => {
       setLoading(true);
       setLoadError(null);
       try {
-        const courseId = Number(searchParams.get('courseId') || '0');
         const res = await fetch(
-          `${url}${COURSES_API.learnerQuizTake(courseId, queryLessonId)}`,
+          `${url}${COURSES_API.learnerQuizTake(effectiveCourseId, effectiveLessonId)}`,
           { headers }
         );
         const data = await res.json().catch(() => ({}));
@@ -155,7 +175,7 @@ const QuizSubmission: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [queryLessonId, searchParams]);
+  }, [effectiveLessonId, effectiveCourseId]);
 
   // Timer effect
   useEffect(() => {
@@ -295,10 +315,10 @@ const QuizSubmission: React.FC = () => {
   };
 
   return (
-    <div className="qs-page">
+    <div className={`qs-page${inlineMode ? ' qs-page--inline' : ''}`}>
       <main className="qs-main">
         <header className="qs-page-head">
-          <nav className="qs-crumbs">
+          {/* <nav className="qs-crumbs">
             <span className="qs-crumb">My Courses</span>
             <ChevronRight size={14} strokeWidth={2.2} className="qs-crumb-sep" />
             <span className="qs-crumb">{quiz?.course_title || lessonTitleFromQuery || 'Course'}</span>
@@ -306,13 +326,13 @@ const QuizSubmission: React.FC = () => {
             <span className="qs-crumb">{quiz?.lesson_title || 'Lesson'}</span>
             <ChevronRight size={14} strokeWidth={2.2} className="qs-crumb-sep" />
             <span className="qs-crumb qs-crumb--active">Quiz</span>
-          </nav>
+          </nav> */}
           <h1 className="qs-page-title">
             {quiz?.title || lessonTitleFromQuery || 'Quiz'}
           </h1>
         </header>
 
-        {!queryLessonId && (
+        {!queryLessonId && !inlineMode && (
           <div className="qs-hint-banner">
             Add <code>?lessonId=&lt;id&gt;</code> and <code>?courseId=&lt;id&gt;</code> to the URL to load a specific quiz.
           </div>
@@ -667,7 +687,18 @@ const QuizSubmission: React.FC = () => {
         </div>
       )}
 
-      <LearnerFab onClick={() => navigate('/courses')} />
+      {inlineMode && onClose ? (
+        <button
+          type="button"
+          className="qs-close-btn"
+          onClick={onClose}
+          aria-label="Close quiz"
+        >
+          <X size={20} />
+        </button>
+      ) : (
+        <LearnerFab onClick={() => navigate('/courses')} />
+      )}
     </div>
   );
 };

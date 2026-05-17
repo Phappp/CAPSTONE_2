@@ -136,11 +136,18 @@ const formatTimeRemaining = (seconds: number | null): string => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-const AssignmentSubmission: React.FC = () => {
+const AssignmentSubmission: React.FC<{
+  inlineMode?: boolean;
+  onClose?: () => void;
+  inlineLessonId?: number;
+  inlineCourseId?: number;
+}> = ({ inlineMode = false, onClose, inlineLessonId, inlineCourseId }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const routeParams = useParams();
-  const queryLessonId = Number(
+
+  // Use inline props if provided, otherwise use URL params
+  const effectiveLessonId = inlineLessonId ?? Number(
     routeParams.lessonId ?? searchParams.get('lessonId') ?? ''
   );
   const lessonTitleFromQuery = searchParams.get('title') || '';
@@ -161,7 +168,7 @@ const AssignmentSubmission: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!queryLessonId || Number.isNaN(queryLessonId)) {
+    if (!effectiveLessonId || Number.isNaN(effectiveLessonId)) {
       setLoading(false);
       return;
     }
@@ -177,7 +184,7 @@ const AssignmentSubmission: React.FC = () => {
       setLoadError(null);
       try {
         const res = await fetch(
-          `${url}${ASSIGNMENTS_API.learnerAssignmentForLesson(queryLessonId)}`,
+          `${url}${ASSIGNMENTS_API.learnerAssignmentForLesson(effectiveLessonId)}`,
           { headers }
         );
         const data = await res.json().catch(() => ({}));
@@ -205,7 +212,7 @@ const AssignmentSubmission: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [queryLessonId]);
+  }, [effectiveLessonId]);
 
   const isShortAnswer = assignment?.assignment_kind === 'short_answer';
   const isFilePrompt = assignment?.assignment_kind === 'file_prompt';
@@ -418,7 +425,7 @@ const AssignmentSubmission: React.FC = () => {
     <div className="as-page">
       <main className="as-main">
         <header className="as-page-head">
-          <nav className="as-crumbs">
+          {/* <nav className="as-crumbs">
             <span className="as-crumb">My Courses</span>
             <ChevronRight size={14} strokeWidth={2.2} className="as-crumb-sep" />
             <span className="as-crumb">{assignment?.course_title || lessonTitleFromQuery || 'Course'}</span>
@@ -426,7 +433,7 @@ const AssignmentSubmission: React.FC = () => {
             <span className="as-crumb">{assignment?.lesson_title || 'Lesson'}</span>
             <ChevronRight size={14} strokeWidth={2.2} className="as-crumb-sep" />
             <span className="as-crumb as-crumb--active">Assignments</span>
-          </nav>
+          </nav> */}
           <h1 className="as-page-title">
             {assignment?.title ||
               lessonTitleFromQuery ||
@@ -434,7 +441,7 @@ const AssignmentSubmission: React.FC = () => {
           </h1>
         </header>
 
-        {!queryLessonId && (
+        {!effectiveLessonId && (
           <div className="as-hint-banner">
             Add <code>?lessonId=&lt;id&gt;</code> to the URL to load a specific
             assignment, or open this page from a lesson card to auto-bind.
@@ -532,7 +539,7 @@ const AssignmentSubmission: React.FC = () => {
                         className="as-timer-start-btn"
                         onClick={() => setTimerStarted(true)}
                       >
-                        Start Quiz
+                        Start Answer
                       </button>
                     )}
                   </div>

@@ -423,6 +423,12 @@
   min-width: 0;
 }
 
+.learningPage__inlineQuizContainer {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
 .learningPage__lessonModalHeader {
   display: flex;
   align-items: center;

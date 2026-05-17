@@ -1067,3 +1067,53 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* Inline mode - close button */
+.qs-page .qs-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--qs-surface);
+  border: 1px solid var(--qs-border);
+  border-radius: 8px;
+  color: var(--qs-text-muted);
+  cursor: pointer;
+  transition: var(--qs-ease);
+}
+
+.qs-page .qs-close-btn:hover {
+  background: var(--qs-danger-tint);
+  border-color: var(--qs-danger);
+  color: var(--qs-danger);
+}
+
+/* Inline mode - compact layout */
+.qs-page--inline {
+  padding: 0;
+}
+
+.qs-page--inline .qs-page {
+  padding-left: 0;
+}
+
+.qs-page--inline .qs-main {
+  padding: 24px;
+}
+
+.qs-page--inline .qs-page-head {
+  margin-bottom: 20px;
+}
+
+.qs-page--inline .qs-page-title {
+  font-size: 24px;
+}
+
+.qs-page--inline .qs-quiz-stats {
+  grid-template-columns: repeat(2, 1fr);
+}

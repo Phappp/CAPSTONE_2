@@ -9,6 +9,8 @@ import { ASSIGNMENTS_API } from "../../api/assignments";
 import { useAuth } from "../../contexts/Auth";
 import type { ModuleItem } from "../../components/LearnerCourseContentTree";
 import { isLikelyVideoResource, parseYoutubeVideoId } from "../courseManager/lesson-studio/utils";
+import QuizSubmission from "./QuizSubmission";
+import AssignmentSubmission from "./AssignmentSubmission";
 import "../../components/CourseContentSimpleTree.css";
 import "./LearningPage.css";
 
@@ -186,6 +188,8 @@ export default function LearningPage() {
   const [quizInfoLoading, setQuizInfoLoading] = useState(false);
   const [quizInfoError, setQuizInfoError] = useState<string | null>(null);
   const [quizInfoPreview, setQuizInfoPreview] = useState<QuizInfoPreview | null>(null);
+  const [inlineQuiz, setInlineQuiz] = useState<{ lessonId: number; title: string } | null>(null);
+  const [inlineAssignment, setInlineAssignment] = useState<{ lessonId: number; title: string } | null>(null);
   const [lessonModalResources, setLessonModalResources] = useState<Array<{
     url: string;
     filename: string;
@@ -1399,7 +1403,13 @@ export default function LearningPage() {
   };
 
   const requestStartQuiz = (lessonId: number, lessonTitle: string) => {
-    openLearnerAssessment("quiz", lessonId, lessonTitle);
+    // Use inline quiz mode - show QuizSubmission within LearningPage
+    setInlineQuiz({ lessonId, title: lessonTitle });
+  };
+
+  const requestStartAssignment = (lessonId: number, lessonTitle: string) => {
+    // Use inline assignment mode - show AssignmentSubmission within LearningPage
+    setInlineAssignment({ lessonId, title: lessonTitle });
   };
 
   const openLessonDetail = (moduleId: number, lessonId: number) => {
@@ -1425,7 +1435,7 @@ export default function LearningPage() {
         requestStartQuiz(targetLessonId, le?.title || "");
         setLessonModal(null);
       } else {
-        openLearnerAssessment("assignment", targetLessonId, le?.title || "");
+        requestStartAssignment(targetLessonId, le?.title || "");
         setLessonModal(null);
         void fetchProgress();
       }
@@ -1457,7 +1467,7 @@ export default function LearningPage() {
         requestStartQuiz(targetLessonId, le?.title || "");
         setLessonModal(null);
       } else {
-        openLearnerAssessment("assignment", targetLessonId, le?.title || "");
+        requestStartAssignment(targetLessonId, le?.title || "");
         setLessonModal(null);
         void fetchProgress();
       }
@@ -1814,13 +1824,18 @@ export default function LearningPage() {
                                     onClick={() => {
                                       setLessonModalNavPick(null);
                                       setCurrentLessonId(le.id);
+                                      // Close inline quiz/assignment when clicking on lesson
+                                      if (inlineQuiz || inlineAssignment) {
+                                        setInlineQuiz(null);
+                                        setInlineAssignment(null);
+                                      }
                                       if (le.lesson_type === "quiz") {
                                         requestStartQuiz(le.id, le.title || "");
                                         setLessonModal(null);
                                         return;
                                       }
                                       if (le.lesson_type === "assignment") {
-                                        openLearnerAssessment("assignment", le.id, le.title || "");
+                                        requestStartAssignment(le.id, le.title || "");
                                         setLessonModal(null);
                                         void fetchProgress();
                                         return;
@@ -1855,35 +1870,59 @@ export default function LearningPage() {
 
           {/* Center Pane - Content */}
           <article className="learningPage__contentPane">
-            {/* Header */}
-            <div className="learningPage__lessonModalHeader">
-              {/* <div className="learningPage__lessonModalTitle">
-                {modalLesson?.title || "Chọn một mục từ cây nội dung"}
-              </div> */}
-              <div className="learningPage__lessonModalActions">
-                {(() => {
-                  const kinds = lessonModal ? lessonAssessmentKindsById.get(lessonModal.lessonId) || [] : [];
-                  return kinds.map((k) => (
-                    <button
-                      key={k}
-                      type="button"
-                      className="learningPage__lessonModalActBtn"
-                      onClick={() => {
-                        if (!lessonModal) return;
-                        if (k === "quiz") {
-                          requestStartQuiz(lessonModal.lessonId, modalLesson?.title || "");
-                        } else {
-                          openLearnerAssessment("assignment", lessonModal.lessonId, modalLesson?.title || "");
-                          void fetchProgress();
-                        }
-                      }}
-                    >
-                      {k === "quiz" ? "Quizz" : "Bài tập"}
-                    </button>
-                  ));
-                })()}
+            {/* Inline Quiz Mode */}
+            {inlineQuiz ? (
+              <div className="learningPage__inlineQuizContainer">
+                <QuizSubmission
+                  inlineMode={true}
+                  inlineLessonId={inlineQuiz.lessonId}
+                  inlineCourseId={courseId}
+                  onClose={() => {
+                    setInlineQuiz(null);
+                    void fetchProgress();
+                  }}
+                />
               </div>
-            </div>
+            ) : inlineAssignment ? (
+              <div className="learningPage__inlineQuizContainer">
+                <AssignmentSubmission
+                  inlineMode={true}
+                  inlineLessonId={inlineAssignment.lessonId}
+                  inlineCourseId={courseId}
+                  onClose={() => {
+                    setInlineAssignment(null);
+                    void fetchProgress();
+                  }}
+                />
+              </div>
+            ) : (
+              <>
+                {/* Header */}
+                <div className="learningPage__lessonModalHeader">
+                  <div className="learningPage__lessonModalActions">
+                    {(() => {
+                      const kinds = lessonModal ? lessonAssessmentKindsById.get(lessonModal.lessonId) || [] : [];
+                      return kinds.map((k) => (
+                        <button
+                          key={k}
+                          type="button"
+                          className="learningPage__lessonModalActBtn"
+                          onClick={() => {
+                            if (!lessonModal) return;
+                            if (k === "quiz") {
+                              requestStartQuiz(lessonModal.lessonId, modalLesson?.title || "");
+                            } else {
+                              requestStartAssignment(lessonModal.lessonId, modalLesson?.title || "");
+                              void fetchProgress();
+                            }
+                          }}
+                        >
+                          {k === "quiz" ? "Quizz" : "Bài tập"}
+                        </button>
+                      ));
+                    })()}
+                  </div>
+                </div>
 
             {/* Video Player */}
             {lessonModal && lessonModalResources.some(r => {
@@ -2019,11 +2058,11 @@ export default function LearningPage() {
                         />
                       </div>
                     )}
-                    <div className="learningPage__tags">
+                    {/* <div className="learningPage__tags">
                       <span className="learningPage__tag">
                         {modalLesson?.lesson_type === "video" ? "Video" : "Văn bản"}
                       </span>
-                    </div>
+                    </div> */}
                   </div>
                   {/* <aside className="learningPage__lessonProgressCard">
                     <h4 className="learningPage__lessonProgressTitle">Tiến độ bài học</h4>
@@ -2128,7 +2167,7 @@ export default function LearningPage() {
                         if (opt === "quiz") {
                           requestStartQuiz(lessonModalNavPick.lessonId, lessonById.get(lessonModalNavPick.lessonId)?.title || "");
                         } else {
-                          openLearnerAssessment("assignment", lessonModalNavPick.lessonId, lessonById.get(lessonModalNavPick.lessonId)?.title || "");
+                          requestStartAssignment(lessonModalNavPick.lessonId, lessonById.get(lessonModalNavPick.lessonId)?.title || "");
                         }
                         setLessonModalNavPick(null);
                         if (opt !== "quiz") void fetchProgress();
@@ -2150,37 +2189,43 @@ export default function LearningPage() {
                 <ChevronRight size={18} />
               </button>
             </div>
+            </>
+            )}
           </article>
 
-          {/* Resizer between Content and Summary */}
-          <div
-            className={`learningPage__resizer ${isResizingSummary ? "learningPage__resizer--active" : ""}`}
-            onMouseDown={startResizeSummary}
-          />
+          {/* Resizer between Content and Summary - hidden when inline quiz/assignment */}
+          {!inlineQuiz && !inlineAssignment && (
+            <div
+              className={`learningPage__resizer ${isResizingSummary ? "learningPage__resizer--active" : ""}`}
+              onMouseDown={startResizeSummary}
+            />
+          )}
 
-          {/* Right Pane - AI Summary */}
-          <aside className={`learningPage__aiSummaryPane ${isSummaryCollapsed ? "learningPage__aiSummaryPane--collapsed" : ""}`} style={summaryPaneStyle}>
-            <div className="learningPage__aiSummaryPaneTitle">
-              {!isSummaryCollapsed && (
-                <>
-                  <span className="material-symbols-outlined">auto_awesome</span>
-                  Tóm tắt thông minh
-                </>
-              )}
-              <button
-                className="learningPage__toggleBtn learningPage__toggleBtn--summary"
-                onClick={toggleSummaryCollapse}
-                title={isSummaryCollapsed ? "Mở rộng" : "Thu gọn"}
-              >
-                <span className="material-symbols-outlined">
-                  {isSummaryCollapsed ? "chevron_left" : "chevron_right"}
-                </span>
-              </button>
-            </div>
-            <div className={`learningPage__aiSummaryContent ${isSummaryCollapsed ? "learningPage__aiSummaryContent--collapsed" : ""}`}>
-              {renderAISummary()}
-            </div>
-          </aside>
+          {/* Right Pane - AI Summary - hidden when inline quiz/assignment */}
+          {!inlineQuiz && !inlineAssignment && (
+            <aside className={`learningPage__aiSummaryPane ${isSummaryCollapsed ? "learningPage__aiSummaryPane--collapsed" : ""}`} style={summaryPaneStyle}>
+              <div className="learningPage__aiSummaryPaneTitle">
+                {!isSummaryCollapsed && (
+                  <>
+                    <span className="material-symbols-outlined">auto_awesome</span>
+                    Tóm tắt thông minh
+                  </>
+                )}
+                <button
+                  className="learningPage__toggleBtn learningPage__toggleBtn--summary"
+                  onClick={toggleSummaryCollapse}
+                  title={isSummaryCollapsed ? "Mở rộng" : "Thu gọn"}
+                >
+                  <span className="material-symbols-outlined">
+                    {isSummaryCollapsed ? "chevron_left" : "chevron_right"}
+                  </span>
+                </button>
+              </div>
+              <div className={`learningPage__aiSummaryContent ${isSummaryCollapsed ? "learningPage__aiSummaryContent--collapsed" : ""}`}>
+                {renderAISummary()}
+              </div>
+            </aside>
+          )}
         </section>
       </div>
 
