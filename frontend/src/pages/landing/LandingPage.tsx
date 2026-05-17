@@ -276,6 +276,86 @@ const TESTIMONIALS: Testimonial[] = [
     quote:
       "From total beginner to AWS-certified in six months. The personalized roadmap kept me consistent, and I didn't waste a single hour on content I didn't need.",
   },
+  {
+    id: 5,
+    name: "Aiko Tanaka",
+    initials: "AT",
+    avatarColor: "linear-gradient(135deg, #ec4899, #f472b6)",
+    role: "Product Manager · Lumen Labs",
+    rating: 5,
+    quote:
+      "The case-study modules helped me ship my first PRD with confidence. My mentor's feedback loop was sharper than any bootcamp I had tried — I felt unstuck within the first week.",
+  },
+  {
+    id: 6,
+    name: "Liam O'Connor",
+    initials: "LO",
+    avatarColor: "linear-gradient(135deg, #22c55e, #84cc16)",
+    role: "Backend Developer · Tessera Systems",
+    rating: 5,
+    quote:
+      "The system-design track is gold. I went from anxious about whiteboard interviews to comfortable defending tradeoffs in front of staff engineers. Worth every minute.",
+  },
+  {
+    id: 7,
+    name: "Noor Hassan",
+    initials: "NH",
+    avatarColor: "linear-gradient(135deg, #14b8a6, #0ea5e9)",
+    role: "ML Engineer · Halo AI",
+    rating: 5,
+    quote:
+      "I loved how the AI coach surfaced foundational gaps before pushing me into deep learning. By the time I touched transformers, I actually understood why each layer mattered.",
+  },
+  {
+    id: 8,
+    name: "Elena Costa",
+    initials: "EC",
+    avatarColor: "linear-gradient(135deg, #a855f7, #d946ef)",
+    role: "DevOps Lead · Northwind Cloud",
+    rating: 4.5,
+    quote:
+      "The hands-on labs mirror real production incidents. Our team adopted three of the runbooks I built during the course — it directly raised my impact at work.",
+  },
+  {
+    id: 9,
+    name: "Hiroshi Sato",
+    initials: "HS",
+    avatarColor: "linear-gradient(135deg, #ef4444, #f97316)",
+    role: "iOS Developer · Maple Studios",
+    rating: 5,
+    quote:
+      "Swift concurrency finally clicked thanks to the visual timelines. I shipped a major refactor in two weekends without a single race condition slipping into review.",
+  },
+  {
+    id: 10,
+    name: "Ava Brooks",
+    initials: "AB",
+    avatarColor: "linear-gradient(135deg, #f43f5e, #fb7185)",
+    role: "Growth Marketer · Bright Loop",
+    rating: 5,
+    quote:
+      "The analytics course translated jargon into decisions I could defend in front of leadership. My campaigns now have a clear hypothesis, not just a creative gut feel.",
+  },
+  {
+    id: 11,
+    name: "Kwame Mensah",
+    initials: "KM",
+    avatarColor: "linear-gradient(135deg, #0ea5e9, #6366f1)",
+    role: "Security Engineer · Ironvault",
+    rating: 5,
+    quote:
+      "Red-team labs were intense in the best way. I uncovered two real misconfigurations in our staging environment the same week I finished the OWASP module.",
+  },
+  {
+    id: 12,
+    name: "Sofia Rinaldi",
+    initials: "SR",
+    avatarColor: "linear-gradient(135deg, #fbbf24, #f59e0b)",
+    role: "Full-stack Engineer · Atlas Retail",
+    rating: 5,
+    quote:
+      "I came back to coding after a five-year break. MindBridge respected my prior experience and let me skip what I knew — the only platform that didn't waste my time.",
+  },
 ];
 
 type Stat = {
@@ -868,24 +948,10 @@ function LiveStatistics() {
 }
 
 function TestimonialsSlider() {
-  const [index, setIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
-
-  useEffect(() => {
-    if (paused) return;
-    const t = window.setInterval(
-      () => setIndex((i) => (i + 1) % TESTIMONIALS.length),
-      6000,
-    );
-    return () => window.clearInterval(t);
-  }, [paused]);
+  const marqueeItems = [...TESTIMONIALS, ...TESTIMONIALS];
 
   return (
-    <section
-      className="mb-test"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-    >
+    <section className="mb-test">
       <div className="mb-test__inner">
         <div className="mb-test__head">
           <span className="mb-section-pill">
@@ -899,12 +965,13 @@ function TestimonialsSlider() {
         </div>
 
         <div className="mb-test__viewport">
-          <div
-            className="mb-test__track"
-            style={{ transform: `translateX(-${index * 100}%)` }}
-          >
-            {TESTIMONIALS.map((t) => (
-              <div className="mb-test__slide" key={t.id}>
+          <div className="mb-test__track" aria-label="Student testimonials">
+            {marqueeItems.map((t, i) => (
+              <div
+                className="mb-test__slide"
+                key={`${t.id}-${i}`}
+                aria-hidden={i >= TESTIMONIALS.length}
+              >
                 <article className="mb-test__card">
                   <span
                     className="material-symbols-outlined mb-test__quote-icon"
@@ -931,20 +998,6 @@ function TestimonialsSlider() {
               </div>
             ))}
           </div>
-        </div>
-
-        <div className="mb-test__dots">
-          {TESTIMONIALS.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              aria-label={`Go to testimonial ${i + 1}`}
-              className={`mb-test__dot ${
-                i === index ? "mb-test__dot--active" : ""
-              }`}
-              onClick={() => setIndex(i)}
-            />
-          ))}
         </div>
       </div>
     </section>
