@@ -1,120 +1,66 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/Auth";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import TeacherShell from "../../components/TeacherShell";
+import toast from "react-hot-toast";
 import "./StudentAnalyticsPage.css";
 
 /**
  * StudentAnalyticsPage
  *
  * Teacher console for AI-driven student performance & engagement insights.
- *
- * API binding status:
- * - Course selector → COURSES_API.myList (existing).
- * - Risk roster, progress distribution, engagement heatmap →
- *   no analytics endpoints under backend/executable. Rendered from fixtures
- *   with TODO markers for when the analytics service ships.
+ * 
+ * API Endpoints:
+ * - GET /api/v1/courses/:courseId/analytics/risk?filter=all|at_risk
+ * - GET /api/v1/courses/:courseId/analytics/at-risk-summary
+ * - GET /api/v1/courses/:courseId/analytics/progress-distribution
+ * - GET /api/v1/courses/:courseId/analytics/engagement-heatmap?days=7
  */
 
 type RiskLevel = "high" | "medium" | "low";
 
 type RiskRow = {
   id: string;
+  user_id: number;
   name: string;
-  course: string;
-  avatarUrl?: string;
-  engagementPct: number;
-  quizAvgPct: number;
+  email: string;
+  avatar_url: string | null;
+  course_id: number;
+  course_title: string;
+  engagement_pct: number;
+  quiz_avg_pct: number | null;
+  assignment_avg_pct: number | null;
   risk: RiskLevel;
+  last_activity_at: string | null;
+};
+
+type AtRiskSummary = {
+  high_risk_count: number;
+  medium_risk_count: number;
+  low_risk_count: number;
+  total_enrolled: number;
+  at_risk_pct: number;
 };
 
 type ProgressBucket = {
-  id: string;
   label: string;
-  valuePct: number;
-  tone: "low" | "med" | "high";
+  value_count: number;
+  value_pct: number;
 };
 
 type HeatmapPoint = {
-  day: 0 | 1 | 2 | 3 | 4 | 5 | 6;
-  slot: number; // row index
-  level: 0 | 1 | 2 | 3 | 4;
-  valuePct?: number;
-  tooltip?: string;
+  day: number;
+  hour_slot: number;
+  activity_count: number;
+  level: number;
 };
 
 type CourseOption = { id: number | string; title: string };
-type CourseListResponse = {
-  items?: Array<{ id: number | string; title?: string; name?: string }>;
-  data?: Array<{ id: number | string; title?: string; name?: string }>;
-};
 
 const DAY_HEADERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-const FIXTURE_RISKS: RiskRow[] = [
-  {
-    id: "r-1",
-    name: "Alex Thompson",
-    course: "Computer Science II",
-    engagementPct: 15,
-    quizAvgPct: 42,
-    risk: "high",
-  },
-  {
-    id: "r-2",
-    name: "Sarah Jenkins",
-    course: "Data Ethics 101",
-    engagementPct: 58,
-    quizAvgPct: 68,
-    risk: "medium",
-  },
-  {
-    id: "r-3",
-    name: "Marcus Wright",
-    course: "Modern Architecture",
-    engagementPct: 92,
-    quizAvgPct: 95,
-    risk: "low",
-  },
-];
-
-const FIXTURE_PROGRESS: ProgressBucket[] = [
-  { id: "p-1", label: "Module 1-3", valuePct: 18, tone: "low" },
-  { id: "p-2", label: "Module 4-6", valuePct: 45, tone: "med" },
-  { id: "p-3", label: "Module 7-10", valuePct: 37, tone: "high" },
-];
-
-// 3 rows × 7 days of heat — design source: HTML mockup.
-const FIXTURE_HEATMAP: HeatmapPoint[] = [
-  // Slot 0 — 8AM-12PM
-  { day: 0, slot: 0, level: 3, valuePct: 84, tooltip: "Mon 8AM · Peak Quiz Activity" },
-  { day: 1, slot: 0, level: 1 },
-  { day: 2, slot: 0, level: 2 },
-  { day: 3, slot: 0, level: 4 },
-  { day: 4, slot: 0, level: 3 },
-  { day: 5, slot: 0, level: 0 },
-  { day: 6, slot: 0, level: 0 },
-  // Slot 1 — 12PM-4PM
-  { day: 0, slot: 1, level: 2 },
-  { day: 1, slot: 1, level: 3 },
-  { day: 2, slot: 1, level: 4 },
-  { day: 3, slot: 1, level: 3 },
-  { day: 4, slot: 1, level: 2 },
-  { day: 5, slot: 1, level: 1 },
-  { day: 6, slot: 1, level: 0 },
-  // Slot 2 — 4PM-8PM
-  { day: 0, slot: 2, level: 1 },
-  { day: 1, slot: 2, level: 2 },
-  { day: 2, slot: 2, level: 3 },
-  { day: 3, slot: 2, level: 2 },
-  { day: 4, slot: 2, level: 4 },
-  { day: 5, slot: 2, level: 2 },
-  { day: 6, slot: 2, level: 1 },
-];
-
-const HIGH_RISK_COUNT = 12;
+const TIME_SLOTS = ["0-8h", "8-12h", "12-16h", "16-20h", "20-24h"];
 
 function initialsFrom(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -136,17 +82,33 @@ function engagementLabel(p: number): string {
   return `${p}% Exceptional`;
 }
 
+function progressTone(pct: number): "low" | "med" | "high" {
+  if (pct < 25) return "low";
+  if (pct < 75) return "med";
+  return "high";
+}
+
 const StudentAnalyticsPage: React.FC = () => {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
 
+  // State
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("");
   const [filterMode, setFilterMode] = useState<"all" | "at_risk">("all");
-  const [risks] = useState<RiskRow[]>(FIXTURE_RISKS);
-  const [progress] = useState<ProgressBucket[]>(FIXTURE_PROGRESS);
-  const [heatmap] = useState<HeatmapPoint[]>(FIXTURE_HEATMAP);
+  
+  // Data state
+  const [risks, setRisks] = useState<RiskRow[]>([]);
+  const [atRiskSummary, setAtRiskSummary] = useState<AtRiskSummary | null>(null);
+  const [progress, setProgress] = useState<ProgressBucket[]>([]);
+  const [heatmap, setHeatmap] = useState<HeatmapPoint[]>([]);
+  
+  // Loading state
+  const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // Fetch courses list
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -167,10 +129,10 @@ const StudentAnalyticsPage: React.FC = () => {
             },
           },
         );
-        const data: CourseListResponse = await res.json().catch(() => ({}));
+        const data = await res.json().catch(() => ({}));
         if (!res.ok || cancelled) return;
         const rawList = data?.items ?? data?.data ?? [];
-        const mapped: CourseOption[] = rawList.map((c) => ({
+        const mapped: CourseOption[] = rawList.map((c: any) => ({
           id: c.id,
           title: c.title || c.name || `Course #${c.id}`,
         }));
@@ -189,6 +151,76 @@ const StudentAnalyticsPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
 
+  // Fetch analytics data
+  const fetchAnalyticsData = useCallback(async () => {
+    if (!selectedCourseId || !accessToken) return;
+    
+    const courseId = Number(selectedCourseId);
+    if (isNaN(courseId)) return;
+
+    setDataLoading(true);
+    setError(null);
+
+    try {
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      };
+
+      // Fetch all data in parallel
+      const [riskRes, summaryRes, progressRes, heatmapRes] = await Promise.all([
+        fetch(`${url}/api/v1/courses/${courseId}/analytics/risk?filter=${filterMode}`, { headers }),
+        fetch(`${url}/api/v1/courses/${courseId}/analytics/at-risk-summary`, { headers }),
+        fetch(`${url}/api/v1/courses/${courseId}/analytics/progress-distribution`, { headers }),
+        fetch(`${url}/api/v1/courses/${courseId}/analytics/engagement-heatmap?days=7`, { headers }),
+      ]);
+
+      // Parse risk data
+      if (riskRes.ok) {
+        const riskData = await riskRes.json();
+        if (riskData.success) {
+          setRisks(riskData.data || []);
+        }
+      }
+
+      // Parse summary data
+      if (summaryRes.ok) {
+        const summaryData = await summaryRes.json();
+        if (summaryData.success) {
+          setAtRiskSummary(summaryData.data);
+        }
+      }
+
+      // Parse progress distribution
+      if (progressRes.ok) {
+        const progressData = await progressRes.json();
+        if (progressData.success) {
+          setProgress(progressData.data || []);
+        }
+      }
+
+      // Parse heatmap
+      if (heatmapRes.ok) {
+        const heatmapData = await heatmapRes.json();
+        if (heatmapData.success) {
+          setHeatmap(heatmapData.data || []);
+        }
+      }
+    } catch (err) {
+      console.error("[Analytics] fetch error:", err);
+      setError("Failed to load analytics data");
+    } finally {
+      setDataLoading(false);
+    }
+  }, [selectedCourseId, accessToken, filterMode]);
+
+  // Refetch when course or filter changes
+  useEffect(() => {
+    if (selectedCourseId) {
+      void fetchAnalyticsData();
+    }
+  }, [fetchAnalyticsData]);
+
   const visibleRisks = useMemo(() => {
     if (filterMode === "at_risk") {
       return risks.filter((r) => r.risk !== "low");
@@ -196,35 +228,43 @@ const StudentAnalyticsPage: React.FC = () => {
     return risks;
   }, [risks, filterMode]);
 
-  // TODO(analytics-api): wire to backend when endpoints exist:
-  //   - GET  /api/v1/courses/:courseId/analytics/risk?filter=
-  //   - GET  /api/v1/courses/:courseId/analytics/progress-distribution
-  //   - GET  /api/v1/courses/:courseId/analytics/engagement-heatmap?range=7d
-  //   - POST /api/v1/messages/batch  (Message at-risk group)
-  //   - POST /api/v1/sessions/batch-schedule
+  // Action handlers
   const handleExport = () => {
+    toast.success("Exporting report...");
     console.info("[Analytics] export report", { selectedCourseId });
   };
+
   const handleAiSync = () => {
-    console.info("[Analytics] AI sync", { selectedCourseId });
+    toast.success("Syncing with AI analytics...");
+    void fetchAnalyticsData();
   };
-  const handleMessage = (studentId: string) => {
-    console.info("[Analytics] message student", { studentId });
+
+  const handleMessage = (userId: number) => {
+    toast.success(`Opening message composer for user #${userId}...`);
+    console.info("[Analytics] message student", { userId });
   };
-  const handleScheduleOneOnOne = (studentId: string) => {
-    console.info("[Analytics] schedule 1:1", { studentId });
+
+  const handleScheduleOneOnOne = (userId: number) => {
+    toast.success(`Opening scheduler for user #${userId}...`);
+    console.info("[Analytics] schedule 1:1", { userId });
   };
+
   const handleMessageGroup = () => {
-    console.info("[Analytics] message at-risk group");
+    const atRiskUsers = risks.filter(r => r.risk !== "low");
+    toast.success(`Opening group message composer for ${atRiskUsers.length} at-risk students...`);
+    console.info("[Analytics] message at-risk group", { count: atRiskUsers.length });
   };
+
   const handleBatchSchedule = () => {
-    console.info("[Analytics] batch schedule 1:1s");
+    const atRiskUsers = risks.filter(r => r.risk !== "low");
+    toast.success(`Opening batch scheduler for ${atRiskUsers.length} at-risk students...`);
+    console.info("[Analytics] batch schedule 1:1s", { count: atRiskUsers.length });
   };
+
   const handleViewRoster = () => {
-    console.info("[Analytics] view full roster", { selectedCourseId });
-  };
-  const handleFabCreate = () => {
-    console.info("[Analytics] FAB create");
+    if (selectedCourseId) {
+      navigate(`/teacher/courses/${selectedCourseId}`);
+    }
   };
 
   return (
@@ -275,12 +315,19 @@ const StudentAnalyticsPage: React.FC = () => {
             type="button"
             className="san-btn san-btn--primary san-btn--ai"
             onClick={handleAiSync}
+            disabled={dataLoading}
           >
             <span className="material-symbols-outlined">auto_awesome</span>
             AI Sync
           </button>
         </div>
       </header>
+
+      {error && (
+        <div className="san-error" style={{ padding: "12px 16px", background: "#fef2f2", borderRadius: 8, marginBottom: 16, color: "#dc2626" }}>
+          {error}
+        </div>
+      )}
 
       <div className="san-grid">
         <section className="san-card san-grid__risk" aria-label="Student risk analysis">
@@ -312,10 +359,15 @@ const StudentAnalyticsPage: React.FC = () => {
               </button>
             </div>
           </div>
-          {visibleRisks.length === 0 ? (
+          {dataLoading ? (
+            <div className="san-empty">
+              <span className="material-symbols-outlined" style={{ animation: "spin 1s linear infinite" }}>sync</span>
+              <p>Loading analytics data...</p>
+            </div>
+          ) : visibleRisks.length === 0 ? (
             <div className="san-empty">
               <span className="material-symbols-outlined">groups</span>
-              <p>No data available.</p>
+              <p>No students found.</p>
             </div>
           ) : (
             <table className="san-table">
@@ -333,8 +385,8 @@ const StudentAnalyticsPage: React.FC = () => {
                   <RiskTableRow
                     key={row.id}
                     row={row}
-                    onMessage={handleMessage}
-                    onSchedule={handleScheduleOneOnOne}
+                    onMessage={() => handleMessage(row.user_id)}
+                    onSchedule={() => handleScheduleOneOnOne(row.user_id)}
                   />
                 ))}
               </tbody>
@@ -358,15 +410,36 @@ const StudentAnalyticsPage: React.FC = () => {
                 <span className="material-symbols-outlined">warning</span>
                 <h3>At-Risk Summary</h3>
               </div>
-              <p className="san-risk-summary__body">
-                There are <strong>{HIGH_RISK_COUNT} students</strong> identified
-                as high risk this week. Intervention is recommended.
-              </p>
+              {atRiskSummary ? (
+                <>
+                  <p className="san-risk-summary__body">
+                    There are <strong>{atRiskSummary.high_risk_count + atRiskSummary.medium_risk_count} students</strong> identified
+                    as at-risk ({atRiskSummary.at_risk_pct}% of {atRiskSummary.total_enrolled} enrolled).
+                    {atRiskSummary.high_risk_count > 0 && " High priority intervention recommended."}
+                  </p>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                    <span className="san-risk-badge san-risk-badge--high" style={{ padding: "2px 8px", borderRadius: 4, fontSize: 12 }}>
+                      {atRiskSummary.high_risk_count} High
+                    </span>
+                    <span className="san-risk-badge san-risk-badge--med" style={{ padding: "2px 8px", borderRadius: 4, fontSize: 12 }}>
+                      {atRiskSummary.medium_risk_count} Medium
+                    </span>
+                    <span className="san-risk-badge san-risk-badge--low" style={{ padding: "2px 8px", borderRadius: 4, fontSize: 12 }}>
+                      {atRiskSummary.low_risk_count} Low
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <p className="san-risk-summary__body">
+                  Loading summary data...
+                </p>
+              )}
               <div className="san-risk-summary__actions">
                 <button
                   type="button"
                   className="san-summary-btn san-summary-btn--accent"
                   onClick={handleMessageGroup}
+                  disabled={!atRiskSummary || (atRiskSummary.high_risk_count + atRiskSummary.medium_risk_count) === 0}
                 >
                   <span className="material-symbols-outlined">group</span>
                   Message At-Risk Group
@@ -375,6 +448,7 @@ const StudentAnalyticsPage: React.FC = () => {
                   type="button"
                   className="san-summary-btn san-summary-btn--outline"
                   onClick={handleBatchSchedule}
+                  disabled={!atRiskSummary || (atRiskSummary.high_risk_count + atRiskSummary.medium_risk_count) === 0}
                 >
                   <span className="material-symbols-outlined">schedule</span>
                   Batch Schedule 1:1s
@@ -391,19 +465,25 @@ const StudentAnalyticsPage: React.FC = () => {
               </div>
             </div>
             <div className="san-card__body">
-              <div className="san-dist">
-                {progress.map((bucket) => (
-                  <div key={bucket.id}>
-                    <div className="san-dist__row-head">
-                      <span>{bucket.label}</span>
-                      <span>{bucket.valuePct}%</span>
+              {dataLoading ? (
+                <p style={{ color: "#64748b" }}>Loading...</p>
+              ) : progress.length > 0 ? (
+                <div className="san-dist">
+                  {progress.map((bucket, idx) => (
+                    <div key={idx}>
+                      <div className="san-dist__row-head">
+                        <span>{bucket.label}</span>
+                        <span>{bucket.value_pct}% ({bucket.value_count})</span>
+                      </div>
+                      <div className={`san-dist__bar ${progressTone(bucket.value_pct)}`}>
+                        <span style={{ width: `${bucket.value_pct}%` }} />
+                      </div>
                     </div>
-                    <div className={`san-dist__bar ${bucket.tone}`}>
-                      <span style={{ width: `${bucket.valuePct}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ color: "#64748b" }}>No progress data available.</p>
+              )}
             </div>
           </div>
         </aside>
@@ -416,8 +496,7 @@ const StudentAnalyticsPage: React.FC = () => {
                   Class Engagement Heatmap
                 </p>
                 <p style={{ fontSize: 13, color: "#64748b", margin: 0 }}>
-                  Student activity logged over the past 7 days across all
-                  modules.
+                  Student activity logged over the past 7 days across all modules.
                 </p>
               </div>
               <div className="san-heatmap__legend" aria-hidden>
@@ -458,7 +537,7 @@ const StudentAnalyticsPage: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div className="san-heatmap__grid">
+            <div className="san-heatmap__grid" style={{ gridTemplateColumns: `repeat(7, 1fr)` }}>
               {DAY_HEADERS.map((d) => (
                 <div key={d} className="san-heatmap__dayhead">
                   {d}
@@ -466,17 +545,12 @@ const StudentAnalyticsPage: React.FC = () => {
               ))}
               {heatmap.map((cell) => (
                 <div
-                  key={`${cell.day}-${cell.slot}`}
-                  className={`san-heatmap__cell lvl-${cell.level}${
-                    cell.valuePct ? " show-value" : ""
-                  }`}
-                  title={cell.tooltip ?? ""}
+                  key={`${cell.day}-${cell.hour_slot}`}
+                  className={`san-heatmap__cell lvl-${cell.level}`}
+                  title={`${DAY_HEADERS[cell.day]} ${TIME_SLOTS[cell.hour_slot]}: ${cell.activity_count} activities`}
                 >
-                  {cell.valuePct ? `${cell.valuePct}%` : null}
-                  {cell.tooltip && (
-                    <span className="san-heatmap__cell-tooltip">
-                      {cell.tooltip}
-                    </span>
+                  {cell.activity_count > 0 && (
+                    <span style={{ fontSize: 10 }}>{cell.activity_count}</span>
                   )}
                 </div>
               ))}
@@ -484,15 +558,6 @@ const StudentAnalyticsPage: React.FC = () => {
           </div>
         </section>
       </div>
-
-      <button
-        type="button"
-        className="san-fab"
-        aria-label="Create new"
-        onClick={handleFabCreate}
-      >
-        <span className="material-symbols-outlined">add</span>
-      </button>
     </div>
     </TeacherShell>
   );
@@ -500,10 +565,10 @@ const StudentAnalyticsPage: React.FC = () => {
 
 const RiskTableRow: React.FC<{
   row: RiskRow;
-  onMessage: (id: string) => void;
-  onSchedule: (id: string) => void;
+  onMessage: () => void;
+  onSchedule: () => void;
 }> = ({ row, onMessage, onSchedule }) => {
-  const tone = engagementTone(row.engagementPct);
+  const tone = engagementTone(row.engagement_pct);
   const riskBadge =
     row.risk === "high"
       ? "san-risk-badge--high"
@@ -522,28 +587,28 @@ const RiskTableRow: React.FC<{
       <td>
         <div className="san-table__student">
           <div className="san-avatar" aria-hidden>
-            {row.avatarUrl ? (
-              <img src={row.avatarUrl} alt="" />
+            {row.avatar_url ? (
+              <img src={row.avatar_url} alt="" />
             ) : (
               initialsFrom(row.name)
             )}
           </div>
           <div>
             <div className="san-table__name">{row.name}</div>
-            <div className="san-table__course">{row.course}</div>
+            <div className="san-table__course">{row.email}</div>
           </div>
         </div>
       </td>
       <td>
         <div className={`san-progress san-progress--${tone}`}>
-          <span style={{ width: `${row.engagementPct}%` }} />
+          <span style={{ width: `${row.engagement_pct}%` }} />
         </div>
         <span className={`san-engagement-label ${tone}`}>
-          {engagementLabel(row.engagementPct)}
+          {engagementLabel(row.engagement_pct)}
         </span>
       </td>
       <td style={{ fontSize: "0.875rem", fontWeight: 600, color: "#334155" }}>
-        {row.quizAvgPct}%
+        {row.quiz_avg_pct !== null ? `${row.quiz_avg_pct.toFixed(1)}%` : "—"}
       </td>
       <td>
         <span className={`san-risk-badge ${riskBadge}`}>{riskLabel}</span>
@@ -554,7 +619,7 @@ const RiskTableRow: React.FC<{
             type="button"
             className="san-icon-btn teal"
             aria-label="Message"
-            onClick={() => onMessage(row.id)}
+            onClick={onMessage}
           >
             <span className="material-symbols-outlined">mail</span>
           </button>
@@ -562,7 +627,7 @@ const RiskTableRow: React.FC<{
             type="button"
             className="san-icon-btn dark"
             aria-label="Schedule 1:1"
-            onClick={() => onSchedule(row.id)}
+            onClick={onSchedule}
           >
             <span className="material-symbols-outlined">calendar_today</span>
           </button>

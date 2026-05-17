@@ -35,7 +35,7 @@ function RejectReasonButton({ reason }: { reason?: string | null }) {
   return (
     <button
       type="button"
-      className="reject-reason-trigger"
+      className="ls-reject-trigger"
       title="Xem lý do từ chối"
       onClick={() => window.alert(`Lý do từ chối:\n\n${text}`)}
     >
@@ -84,23 +84,23 @@ export function LessonInfoCard({
   readOnly = false,
 }: LessonInfoCardProps) {
   return (
-    <div className="studio-card">
-      <div className="studio-card-header">
-        <div className="studio-card-title">
+    <div className="ls-studio-card">
+      <div className="ls-studio-card__head">
+        <div className="ls-studio-card__title">
           <Edit3 size={18} />
           <h2>Thông tin bài học</h2>
         </div>
-        <button type="button" className="btn-primary" onClick={saveLessonMeta} disabled={readOnly || saving || loading}>
+        <button type="button" className="ls-btn--primary" onClick={saveLessonMeta} disabled={readOnly || saving || loading}>
           <Save size={16} />
           Lưu
         </button>
       </div>
-      <div className="studio-card-content">
-        <div className="form-group">
-          <label className="form-label">Chương</label>
+      <div className="ls-studio-card__body">
+        <div className="ls-form-group">
+          <label className="ls-form-label">Chương</label>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <select
-              className="form-input"
+              className="ls-form-input"
               value={selectedModuleId ?? ""}
               onChange={(e) => setSelectedModuleId(Number(e.target.value))}
               disabled={readOnly || saving || loading || !moduleOptions.length}
@@ -113,7 +113,7 @@ export function LessonInfoCard({
             </select>
             <button
               type="button"
-              className="btn-secondary"
+              className="ls-btn--secondary"
               style={{ width: "auto", padding: "0.45rem" }}
               onClick={() => void createModuleFromStudio()}
               disabled={readOnly || saving || loading}
@@ -125,7 +125,7 @@ export function LessonInfoCard({
           {showNewModuleInput && (
             <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
               <input
-                className="form-input"
+                className="ls-form-input"
                 placeholder="Nhập tên chương mới (sẽ tạo khi bấm Lưu thông tin)"
                 value={pendingNewModuleTitle}
                 onChange={(e) => setPendingNewModuleTitle(e.target.value)}
@@ -133,7 +133,7 @@ export function LessonInfoCard({
               />
               <button
                 type="button"
-                className="btn-secondary"
+                className="ls-btn--secondary"
                 style={{ width: "auto", padding: "0.45rem" }}
                 onClick={() => {
                   setShowNewModuleInput(false);
@@ -147,12 +147,12 @@ export function LessonInfoCard({
             </div>
           )}
         </div>
-        <div className="form-group">
-          <label className="form-label">
+        <div className="ls-form-group">
+          <label className="ls-form-label">
             {activeSection === "quiz" ? "Quizz" : activeSection === "assignment" ? "Bài tập" : "Bài học"}
           </label>
           <input
-            className="form-input"
+            className="ls-form-input"
             placeholder={
               activeSection === "quiz"
                 ? "Nhập tên Quizz"
@@ -165,10 +165,10 @@ export function LessonInfoCard({
             disabled={readOnly || saving || loading}
           />
         </div>
-        <div className="form-group">
-          <label className="form-label">Mô tả ngắn (tùy chọn)</label>
+        <div className="ls-form-group">
+          <label className="ls-form-label">Mô tả ngắn (tùy chọn)</label>
           <textarea
-            className="form-input"
+            className="ls-form-input"
             rows={3}
             placeholder="Mô tả nội dung bài học..."
             value={lessonDescription}
@@ -242,13 +242,13 @@ export function ContentEditorSection({
 
   return (
     <>
-      <div className="studio-card">
-        <div className="studio-card-header">
-          <div className="studio-card-title">
+      <div className="ls-studio-card">
+        <div className="ls-studio-card__head">
+          <div className="ls-studio-card__title">
             <Video size={18} />
             <h2>Video / Tài nguyên</h2>
             {videoReviewBadge && (
-              <span className={`resource-review-badge ${videoReviewBadge.className}`}>
+              <span className={`ls-review-badge ls-review-badge--${videoReviewBadge.className.replace("review-", "")}`}>
                 {videoReviewBadge.text}
               </span>
             )}
@@ -256,18 +256,18 @@ export function ContentEditorSection({
               <RejectReasonButton reason={currentVideoResource.review_reason} />
             )}
             {currentVideoResource?.review_status === "pending" && currentVideoResource.review_decision === "delete" && (
-              <span className="resource-review-badge review-delete-pending">Đang chờ xóa</span>
+              <span className="ls-review-badge ls-review-badge--review-delete-pending">Đang chờ xóa</span>
             )}
             {currentVideoResource?.review_status === "pending" && currentVideoResource.is_resubmitted && (
-              <span className="resource-review-badge review-pending">Đã gửi lại chờ duyệt</span>
+              <span className="ls-review-badge ls-review-badge--review-pending">Đã gửi lại chờ duyệt</span>
             )}
           </div>
         </div>
-        <div className="studio-card-content">
+        <div className="ls-studio-card__body">
           <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
             <button
               type="button"
-              className={videoInputMode === "file" ? "btn-primary" : "btn-secondary"}
+              className={videoInputMode === "file" ? "ls-btn--primary" : "ls-btn--secondary"}
               onClick={() => setVideoInputMode("file")}
               disabled={readOnly || saving || loading}
               style={{ width: "auto" }}
@@ -277,7 +277,7 @@ export function ContentEditorSection({
             </button>
             <button
               type="button"
-              className={videoInputMode === "youtube" ? "btn-primary" : "btn-secondary"}
+              className={videoInputMode === "youtube" ? "ls-btn--primary" : "ls-btn--secondary"}
               onClick={() => setVideoInputMode("youtube")}
               disabled={readOnly || saving || loading}
               style={{ width: "auto" }}
@@ -287,9 +287,9 @@ export function ContentEditorSection({
             </button>
           </div>
           {videoInputMode === "file" ? (
-            <div className="upload-section">
-              <div className="upload-row">
-                <label className="btn-secondary" style={{ cursor: "pointer" }}>
+            <div className="ls-upload">
+              <div className="ls-upload__row">
+                <label className="ls-btn--secondary" style={{ cursor: "pointer" }}>
                   <Upload size={16} />
                   Chọn file
                   <input
@@ -300,10 +300,10 @@ export function ContentEditorSection({
                     accept="video/*,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   />
                 </label>
-                <span className="file-name">{pendingFile ? pendingFile.name : "Chưa chọn file"}</span>
+                <span className="ls-file-name">{pendingFile ? pendingFile.name : "Chưa chọn file"}</span>
                 <button
                   type="button"
-                  className="btn-primary"
+                  className="ls-btn--primary"
                   onClick={() => void uploadFile()}
                   disabled={readOnly || saving || loading || !pendingFile}
                 >
@@ -311,17 +311,17 @@ export function ContentEditorSection({
                 </button>
               </div>
               {uploadProgress !== null && uploadProgress > 0 && uploadProgress < 100 && (
-                <div className="progress-bar">
-                  <div className="progress-fill" style={{ width: `${uploadProgress}%` }} />
+                <div className="ls-progress">
+                  <div className="ls-progress__fill" style={{ width: `${uploadProgress}%` }} />
                 </div>
               )}
             </div>
           ) : (
-            <div className="youtube-section">
-              <div className="youtube-row">
-                <Youtube size={18} className="youtube-icon" />
+            <div className="ls-youtube">
+              <div className="ls-youtube__row">
+                <Youtube size={18} className="ls-youtube-icon" />
                 <input
-                  className="form-input"
+                  className="ls-form-input"
                   placeholder="Dán link YouTube để thêm video..."
                   value={youtubeUrl}
                   onChange={(e) => setYoutubeUrl(e.target.value)}
@@ -329,7 +329,7 @@ export function ContentEditorSection({
                 />
                 <button
                   type="button"
-                  className="btn-secondary"
+                  className="ls-btn--secondary"
                   onClick={() => void addYoutube()}
                   disabled={readOnly || saving || loading || !youtubeUrl.trim()}
                 >
@@ -339,13 +339,13 @@ export function ContentEditorSection({
               </div>
             </div>
           )}
-          <div className="current-video-section">
-            <div className="section-label">Video hiện tại</div>
+          <div className="ls-video-section">
+            <div className="ls-section-label">Video hiện tại</div>
             {currentVideoResource ? (
-              <div className="current-video-item">
-                <div className="video-info">
+              <div className="ls-video-item">
+                <div className="ls-video-item__info">
                   {currentYoutubeId ? <Youtube size={16} /> : <Video size={16} />}
-                  <span className="video-name" title={currentVideoResource.filename || currentVideoResource.url || "Video"}>
+                  <span className="ls-video-item__name" title={currentVideoResource.filename || currentVideoResource.url || "Video"}>
                     {(currentVideoResource.filename || currentVideoResource.url || "Video").length > 40
                       ? (currentVideoResource.filename || currentVideoResource.url || "Video").slice(0, 40) + "..."
                       : currentVideoResource.filename || currentVideoResource.url || "Video"}
@@ -354,18 +354,18 @@ export function ContentEditorSection({
                     <RejectReasonButton reason={currentVideoResource.review_reason} />
                   ) : null}
                   {currentVideoResource.review_status === "pending" && currentVideoResource.review_decision === "delete" ? (
-                    <span className="resource-review-badge review-delete-pending">Đang chờ xóa</span>
+                    <span className="ls-review-badge ls-review-badge--review-delete-pending">Đang chờ xóa</span>
                   ) : null}
                   {currentVideoResource.review_status === "pending" && currentVideoResource.is_resubmitted ? (
-                    <span className="resource-review-badge review-pending">Đã gửi lại chờ duyệt</span>
+                    <span className="ls-review-badge ls-review-badge--review-pending">Đã gửi lại chờ duyệt</span>
                   ) : null}
                   {currentVideoResource.size_bytes && (
-                    <span className="video-size">{formatFileSize(currentVideoResource.size_bytes)}</span>
+                    <span className="ls-video-item__size">{formatFileSize(currentVideoResource.size_bytes)}</span>
                   )}
                 </div>
                 <button
                   type="button"
-                  className="btn-icon-danger"
+                  className="ls-btn--danger"
                   onClick={() => void removeResource(currentVideoResource.id, currentVideoResource.filename || "video")}
                   disabled={readOnly || saving || !canDeleteResource(currentVideoResource)}
                   title={
@@ -378,37 +378,37 @@ export function ContentEditorSection({
                 </button>
               </div>
             ) : (
-              <div className="empty-state">
+              <div className="ls-empty-state">
                 <Video size={32} />
                 <p>Chưa có video. Hãy upload file hoặc thêm link YouTube.</p>
               </div>
             )}
           </div>
           {otherResources.length > 0 && (
-            <div className="other-resources-section">
-              <div className="section-label">Tài nguyên khác</div>
+            <div className="ls-other-resources-section">
+              <div className="ls-section-label">Tài nguyên khác</div>
               {otherResources.map((r) => (
-                <div key={r.id} className="resource-item">
-                  <div className="resource-info">
+                <div key={r.id} className="ls-resource-item">
+                  <div className="ls-resource-item__info">
                     <FileText size={16} />
-                    <span className="resource-name" title={r.filename || "Tài nguyên"}>
+                    <span className="ls-resource-item__name" title={r.filename || "Tài nguyên"}>
                     {(r.filename || "Tài nguyên").length > 40 ? (r.filename || "Tài nguyên").slice(0, 40) + "..." : r.filename || "Tài nguyên"}
                   </span>
-                    <span className={`resource-review-badge ${getReviewStatusLabel(r.review_status, r.review_decision).className}`}>
+                    <span className={`ls-review-badge ls-review-badge--${getReviewStatusLabel(r.review_status, r.review_decision).className.replace("review-", "")}`}>
                       {getReviewStatusLabel(r.review_status, r.review_decision).text}
                     </span>
                     {r.review_status === "rejected" ? <RejectReasonButton reason={r.review_reason} /> : null}
                     {r.review_status === "pending" && r.review_decision === "delete" ? (
-                      <span className="resource-review-badge review-delete-pending">Đang chờ xóa</span>
+                      <span className="ls-review-badge ls-review-badge--review-delete-pending">Đang chờ xóa</span>
                     ) : null}
                     {r.review_status === "pending" && r.is_resubmitted ? (
-                      <span className="resource-review-badge review-pending">Đã gửi lại</span>
+                      <span className="ls-review-badge ls-review-badge--review-pending">Đã gửi lại</span>
                     ) : null}
-                    {r.size_bytes && <span className="resource-size">{formatFileSize(r.size_bytes)}</span>}
+                    {r.size_bytes && <span className="ls-resource-item__size">{formatFileSize(r.size_bytes)}</span>}
                   </div>
                   <button
                     type="button"
-                    className="btn-icon-danger"
+                    className="ls-btn--danger"
                     onClick={() => void removeResource(r.id, r.filename || "tài nguyên")}
                     disabled={saving || !canDeleteResource(r)}
                     title={
@@ -425,14 +425,14 @@ export function ContentEditorSection({
           )}
         </div>
       </div>
-      <div className="studio-card">
-        <div className="studio-card-header">
-          <div className="studio-card-title">
+      <div className="ls-studio-card">
+        <div className="ls-studio-card__head">
+          <div className="ls-studio-card__title">
             <FileText size={18} />
             <h2>Nội dung phụ</h2>
             {contentHtmlResource ? (
               <>
-                <span className={`resource-review-badge ${getReviewStatusLabel(contentHtmlResource.review_status, contentHtmlResource.review_decision).className}`}>
+                <span className={`ls-review-badge ls-review-badge--${getReviewStatusLabel(contentHtmlResource.review_status, contentHtmlResource.review_decision).className.replace("review-", "")}`}>
                   {getReviewStatusLabel(contentHtmlResource.review_status, contentHtmlResource.review_decision).text}
                 </span>
                 {contentHtmlResource.review_status === "rejected" ? (
@@ -443,7 +443,7 @@ export function ContentEditorSection({
           </div>
           <button
             type="button"
-            className={isRejectedContext ? "btn-resubmit-warning" : "btn-primary"}
+            className={isRejectedContext ? "ls-btn--resubmit" : "ls-btn--primary"}
             onClick={() => void saveStudio()}
             disabled={readOnly || saving || loading}
           >
@@ -451,9 +451,9 @@ export function ContentEditorSection({
             {isRejectedContext ? "Gửi lại" : "Lưu"}
           </button>
         </div>
-        <div className="studio-card-content">
+        <div className="ls-studio-card__body">
           <LessonRichTextEditor value={richHtml} onChange={setRichHtml} disabled={readOnly || saving || loading} />
-          <div className="editor-hint">
+          <div className="ls-editor-hint">
             <Info size={14} />
             <span>Hỗ trợ định dạng văn bản, hình ảnh, video nhúng. Nội dung sẽ được lưu dưới dạng HTML.</span>
           </div>
@@ -517,14 +517,14 @@ export function QuizEditorSection({
   if (activeSection !== "quiz") return null;
   return (
     <>
-      <div className="studio-card">
-        <div className="studio-card-header">
-          <div className="studio-card-title">
+      <div className="ls-studio-card">
+        <div className="ls-studio-card__head">
+          <div className="ls-studio-card__title">
             <FileText size={18} />
             <h2>Quizz</h2>
             {quizReviewResource ? (
               <>
-                <span className={`resource-review-badge ${getReviewStatusLabel(quizReviewResource.review_status, quizReviewResource.review_decision).className}`}>
+                <span className={`ls-review-badge ls-review-badge--${getReviewStatusLabel(quizReviewResource.review_status, quizReviewResource.review_decision).className.replace("review-", "")}`}>
                   {getReviewStatusLabel(quizReviewResource.review_status, quizReviewResource.review_decision).text}
                 </span>
                 {quizReviewResource.review_status === "rejected" ? (
@@ -535,15 +535,15 @@ export function QuizEditorSection({
           </div>
           <button
             type="button"
-            className={isRejectedContext ? "btn-resubmit-warning" : "btn-primary"}
+            className={isRejectedContext ? "ls-btn--resubmit" : "ls-btn--primary"}
             onClick={() => setQuizSaveSignal((prev) => prev + 1)}
             disabled={readOnly || loading || saving}
           >
             <Save size={16} />
-            {isRejectedContext ? "Gửi lại" : "Luu"}
+            {isRejectedContext ? "Gửi lại" : "Lưu"}
           </button>
         </div>
-        <div className="studio-card-content" style={{ paddingTop: "0.85rem" }}>
+        <div className="ls-studio-card__body" style={{ paddingTop: "0.85rem" }}>
           <ManualQuizEditor
             courses={fixedCourses}
             token={token}
@@ -562,30 +562,30 @@ export function QuizEditorSection({
           />
         </div>
       </div>
-      <div className="studio-card">
-        <div className="studio-card-header">
-          <div className="studio-card-title">
+      <div className="ls-studio-card">
+        <div className="ls-studio-card__head">
+          <div className="ls-studio-card__title">
             <FileText size={18} />
-            <h2>Danh sach cau hoi</h2>
+            <h2>Danh sách câu hỏi</h2>
           </div>
           {!!quizQuestionsDraft.length && (
             <div style={{ display: "flex", gap: 8 }}>
               <button
                 type="button"
-                className={isRejectedContext ? "btn-resubmit-warning" : "btn-primary"}
+                className={isRejectedContext ? "ls-btn--resubmit" : "ls-btn--primary"}
                 style={{ width: "auto", padding: "6px 10px" }}
-                title="Luu thay doi danh sach cau hoi"
+                title="Lưu thay đổi danh sách câu hỏi"
                 onClick={() => setQuizSaveSignal((prev) => prev + 1)}
                 disabled={readOnly || loading || saving}
               >
                 <Save size={16} />
-                {isRejectedContext ? "Gửi lại" : "Luu"}
+                {isRejectedContext ? "Gửi lại" : "Lưu"}
               </button>
               <button
                 type="button"
-                className="btn-secondary"
+                className="ls-btn--secondary"
                 style={{ width: "auto", padding: "6px 8px" }}
-                title="Mo rong tat ca"
+                title="Mở rộng tất cả"
                 onClick={() => setExpandedSavedQuestions(quizQuestionsDraft.map((_, idx) => idx))}
                 disabled={readOnly}
               >
@@ -593,9 +593,9 @@ export function QuizEditorSection({
               </button>
               <button
                 type="button"
-                className="btn-secondary"
+                className="ls-btn--secondary"
                 style={{ width: "auto", padding: "6px 8px" }}
-                title="Thu gon tat ca"
+                title="Thu gọn tất cả"
                 onClick={() => setExpandedSavedQuestions([])}
                 disabled={readOnly}
               >
@@ -604,15 +604,15 @@ export function QuizEditorSection({
             </div>
           )}
         </div>
-        <div className="studio-card-content" style={{ paddingTop: "0.85rem" }}>
+        <div className="ls-studio-card__body" style={{ paddingTop: "0.85rem" }}>
           {!quizQuestionsDraft.length ? (
             <p style={{ margin: 0, color: "#64748b" }}>
-              Chua co cau hoi da luu. Nhap thu cong trong khoi Quizz va bam Luu Quizz de cap nhat danh sach.
+              Chưa có câu hỏi đã lưu. Nhập thủ công trong khối Quizz và bấm Lưu Quizz để cập nhật danh sách.
             </p>
           ) : (
             <div style={{ display: "grid", gap: 8 }}>
               {quizQuestionsDraft.map((item, idx) => {
-                const correct = item.options.find((o) => o.is_correct)?.option_text || "(chua co)";
+                const correct = item.options.find((o) => o.is_correct)?.option_text || "(chưa có)";
                 const expanded = expandedSavedQuestions.includes(idx);
                 return (
                   <div
@@ -620,15 +620,15 @@ export function QuizEditorSection({
                     style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 10px", background: "#f8fafc" }}
                   >
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-                      Cau {idx + 1}: {item.question_text || "(trong)"}
+                      Câu {idx + 1}: {item.question_text || "(trống)"}
                     </div>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <div style={{ fontSize: 12, color: "#475569", flex: 1 }}>Dap an dung: {correct}</div>
+                      <div style={{ fontSize: 12, color: "#475569", flex: 1 }}>Đáp án đúng: {correct}</div>
                       <button
                         type="button"
-                        className="btn-secondary"
+                        className="ls-btn--secondary"
                         style={{ width: "auto", padding: "4px 8px" }}
-                        title={editingSavedQuestions.includes(idx) ? "Tat chinh sua" : "Bat chinh sua"}
+                        title={editingSavedQuestions.includes(idx) ? "Tắt chỉnh sửa" : "Bật chỉnh sửa"}
                         onClick={() => {
                           if (readOnly) return;
                           const isEditing = editingSavedQuestions.includes(idx);
@@ -648,9 +648,9 @@ export function QuizEditorSection({
                       </button>
                       <button
                         type="button"
-                        className="btn-secondary"
+                        className="ls-btn--danger"
                         style={{ width: "auto", padding: "4px 8px" }}
-                        title="Xoa cau"
+                        title="Xóa câu"
                         onClick={() => setQuizQuestionsDraft((prev) => prev.filter((_, qIdx) => qIdx !== idx))}
                         disabled={readOnly}
                       >
@@ -658,9 +658,9 @@ export function QuizEditorSection({
                       </button>
                       <button
                         type="button"
-                        className="btn-secondary"
+                        className="ls-btn--secondary"
                         style={{ width: "auto", padding: "4px 8px" }}
-                        title={expanded ? "Thu gon" : "Xem chi tiet"}
+                        title={expanded ? "Thu gọn" : "Xem chi tiết"}
                         onClick={() =>
                           setExpandedSavedQuestions((prev) =>
                             prev.includes(idx) ? prev.filter((x) => x !== idx) : [...prev, idx]
@@ -749,25 +749,25 @@ export function AssignmentEditorSection({
   if (activeSection !== "assignment") return null;
   return (
     <>
-      <div className="studio-card">
-        <div className="studio-card-header">
-          <div className="studio-card-title">
+      <div className="ls-studio-card">
+        <div className="ls-studio-card__head">
+          <div className="ls-studio-card__title">
             <FileText size={18} />
-            <h2>Bai tap</h2>
+            <h2>Bài tập</h2>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button
               type="button"
-              className={isRejectedContext ? "btn-resubmit-warning" : "btn-primary"}
+              className={isRejectedContext ? "ls-btn--resubmit" : "ls-btn--primary"}
               onClick={() => setAssignmentSaveSignal((prev) => prev + 1)}
               disabled={readOnly || saving || loading}
             >
               <Save size={16} />
-              {isRejectedContext ? "Gửi lại" : "Luu"}
+              {isRejectedContext ? "Gửi lại" : "Lưu"}
             </button>
             <button
               type="button"
-              className="btn-secondary"
+              className="ls-btn--secondary"
               onClick={() => {
                 if (assignmentEditing) {
                   setAssignmentLocked(true);
@@ -782,11 +782,11 @@ export function AssignmentEditorSection({
               disabled={readOnly || saving || loading || !assignmentPreview}
             >
               <Pencil size={16} />
-              {assignmentEditing ? "Huy chinh sua" : "Chinh sua"}
+              {assignmentEditing ? "Hủy chỉnh sửa" : "Chỉnh sửa"}
             </button>
           </div>
         </div>
-        <div className="studio-card-content" style={{ paddingTop: "0.85rem" }}>
+        <div className="ls-studio-card__body" style={{ paddingTop: "0.85rem" }}>
           <AssignmentEditor
             courses={fixedCourses}
             token={token}
@@ -813,19 +813,19 @@ export function AssignmentEditorSection({
           />
         </div>
       </div>
-      <div className="studio-card">
-        <div className="studio-card-header">
-          <div className="studio-card-title">
+      <div className="ls-studio-card">
+        <div className="ls-studio-card__head">
+          <div className="ls-studio-card__title">
             <FileText size={18} />
-            <h2>{currentAssignmentKind === "short_answer" ? "Danh sach cau tra loi ngan" : "Danh sach file dinh kem"}</h2>
+            <h2>{currentAssignmentKind === "short_answer" ? "Danh sách câu trả lời ngắn" : "Danh sách file đính kèm"}</h2>
           </div>
         </div>
-        <div className="studio-card-content" style={{ paddingTop: "0.85rem" }}>
+        <div className="ls-studio-card__body" style={{ paddingTop: "0.85rem" }}>
           {assignmentPreview ? (
             <div style={{ display: "grid", gap: 8 }}>
               {currentAssignmentKind === "short_answer" ? (
                 !assignmentShortQuestions.length ? (
-                  <p style={{ margin: 0, color: "#64748b" }}>Chua co cau hoi tra loi ngan.</p>
+                  <p style={{ margin: 0, color: "#64748b" }}>Chưa có câu hỏi trả lời ngắn.</p>
                 ) : (
                   assignmentShortQuestions
                     .slice()
@@ -842,7 +842,7 @@ export function AssignmentEditorSection({
                           color: "#334155",
                         }}
                       >
-                        <strong style={{ color: "#0f172a" }}>Cau {idx + 1}:</strong> {item.question_text || "(trong)"}
+                        <strong style={{ color: "#0f172a" }}>Câu {idx + 1}:</strong> {item.question_text || "(trống)"}
                       </div>
                     ))
                 )
@@ -851,7 +851,7 @@ export function AssignmentEditorSection({
                   <div
                     style={{
                       border: "1px dashed #cbd5e1",
-                      borderRadius: 10,
+                      borderRadius: "0.6rem",
                       padding: "10px",
                       background: "#f8fafc",
                       display: "grid",
@@ -866,18 +866,18 @@ export function AssignmentEditorSection({
                     />
                     <div style={{ fontSize: 12, color: "#64748b" }}>
                       {pendingAssignmentFiles.length
-                        ? `Da chon ${pendingAssignmentFiles.length} file de chen them.`
-                        : "Chua chon file moi."}
+                        ? `Đã chọn ${pendingAssignmentFiles.length} file để thêm vào.`
+                        : "Chưa chọn file mới."}
                     </div>
                     <button
                       type="button"
-                      className="btn-primary"
+                      className="ls-btn--primary"
                       style={{ width: "fit-content" }}
                       onClick={() => void appendAssignmentAttachments()}
                       disabled={readOnly || saving || loading || !pendingAssignmentFiles.length}
                     >
                       <Upload size={15} />
-                      Them file vao danh sach
+                      Thêm file vào danh sách
                     </button>
                   </div>
                   {assignmentPreview.attachments?.length ? (
@@ -904,22 +904,22 @@ export function AssignmentEditorSection({
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
                           }}
-                          title={attachment.file_name || "Tep dinh kem"}
+                          title={attachment.file_name || "Tệp đính kèm"}
                         >
-                          {attachment.file_name || "Tep dinh kem"}
+                          {attachment.file_name || "Tệp đính kèm"}
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <a href={attachment.signed_url} target="_blank" rel="noreferrer" className="attachment-link">
+                          <a href={attachment.signed_url} target="_blank" rel="noreferrer" className="ls-attachment-link">
                             <LinkIcon size={14} />
-                            Mo
+                            Mở
                           </a>
                           <button
                             type="button"
-                            className="btn-secondary"
-                            style={{ width: "auto", padding: "0.35rem 0.55rem" }}
+                            className="ls-btn--danger"
+                            style={{ width: "auto", padding: "0.3rem 0.4rem" }}
                             onClick={() => void removeAssignmentAttachment(attachment.file_path)}
                             disabled={readOnly || saving || loading}
-                            title="Xoa file dinh kem"
+                            title="Xóa file đính kèm"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -927,13 +927,13 @@ export function AssignmentEditorSection({
                       </div>
                     ))
                   ) : (
-                    <div style={{ fontSize: 13, color: "#64748b" }}>Chua co file dinh kem.</div>
+                    <div style={{ fontSize: 13, color: "#64748b" }}>Chưa có file đính kèm.</div>
                   )}
                 </>
               )}
             </div>
           ) : (
-            <p style={{ margin: 0, color: "#64748b" }}>Chua co bai tap da luu de hien thi thong tin.</p>
+            <p style={{ margin: 0, color: "#64748b" }}>Chưa có bài tập đã lưu để hiển thị thông tin.</p>
           )}
         </div>
       </div>

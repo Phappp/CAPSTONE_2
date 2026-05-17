@@ -941,14 +941,14 @@ export default function TeacherDashboard() {
       <div className="teacher-dashboard td-shell">
         <div className="dashboard-container">
           {/* Welcome Hero — matches CourseManagerDashboard.html */}
-          <header className="td-hero">
+          {/* <header className="td-hero">
             <h1 className="td-hero__title">
               Welcome back, {firstName}
             </h1>
             <p className="td-hero__subtitle">
               Here is your courses' status today.
             </p>
-          </header>
+          </header> */}
 
           {/* Section Tabs */}
           <div className="section-tabs">

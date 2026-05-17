@@ -52,6 +52,14 @@ import TeacherLiveSessionPage from "./pages/courseManager/LiveSessionPage";
 import DiscussionBoardManagementPage from "./pages/courseManager/DiscussionBoardManagementPage";
 import StudentAnalyticsPage from "./pages/courseManager/StudentAnalyticsPage";
 
+// New React TSX pages (converted from HTML)
+import CourseManagerPage from "./pages/courseManager/CourseManagerPage";
+import GradingFeedbackStationPage from "./pages/courseManager/GradingFeedbackStationPage";
+import AssignmentBuilderPage from "./pages/courseManager/AssignmentBuilderPage";
+import CourseManagerDashboardPage from "./pages/courseManager/CourseManagerDashboardPage";
+import CourseBuilderPage from "./pages/courseManager/CourseBuilderPage";
+import ExampleMarketplacePage from "./pages/landing/ExampleMarketplacePage";
+
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminCourseContentReviewPage from "./pages/admin/AdminCourseContentReviewPage";
 
@@ -289,6 +297,50 @@ export default function App() {
           </Authentication>
         }
       />
+      {/* New TSX converted pages */}
+      <Route
+        path="/teacher/course-manager"
+        element={
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <CourseManagerPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/grading-station"
+        element={
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <GradingFeedbackStationPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/assignment-builder"
+        element={
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <AssignmentBuilderPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/instructor-dashboard"
+        element={
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <CourseManagerDashboardPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/course-builder"
+        element={
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <CourseBuilderPage />
+          </Authentication>
+        }
+      />
+      <Route path="/marketplace" element={<ExampleMarketplacePage />} />
+      {/* Test route without authentication */}
+      <Route path="/test-course-builder" element={<CourseBuilderPage />} />
       <Route
         path="/live-sessions"
         element={
