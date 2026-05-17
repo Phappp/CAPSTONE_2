@@ -1185,17 +1185,18 @@
 
 .mb-landing-page .mb-test {
   background: linear-gradient(180deg, #f1f5f9 0%, #ffffff 100%);
-  padding: 5rem 1.5rem;
+  padding: 5rem 0;
 }
 
 .mb-landing-page .mb-test__inner {
-  max-width: 64rem;
+  max-width: none;
   margin: 0 auto;
 }
 
 .mb-landing-page .mb-test__head {
   text-align: center;
   margin-bottom: 2.5rem;
+  padding: 0 1.5rem;
 }
 
 .mb-landing-page .mb-test__head .mb-section-lead {
@@ -1205,18 +1206,50 @@
 
 .mb-landing-page .mb-test__viewport {
   overflow: hidden;
-  border-radius: 1.5rem;
+  position: relative;
+  width: 100%;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 8%,
+    #000 92%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 8%,
+    #000 92%,
+    transparent 100%
+  );
+}
+
+@keyframes mb-test-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 .mb-landing-page .mb-test__track {
   display: flex;
-  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  gap: 1.5rem;
+  width: max-content;
+  padding: 1rem 0.75rem;
+  animation: mb-test-marquee 80s linear infinite;
   will-change: transform;
 }
 
+.mb-landing-page .mb-test__viewport:hover .mb-test__track {
+  animation-play-state: paused;
+}
+
 .mb-landing-page .mb-test__slide {
-  flex: 0 0 100%;
-  padding: 0.5rem;
+  flex: 0 0 22rem;
+  max-width: 22rem;
+  display: flex;
 }
 
 .mb-landing-page .mb-test__card {
@@ -1229,6 +1262,8 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  width: 100%;
+  min-height: 100%;
 }
 
 .mb-landing-page .mb-test__quote-icon {
@@ -1281,27 +1316,10 @@
   color: #64748b;
 }
 
-.mb-landing-page .mb-test__dots {
-  display: flex;
-  justify-content: center;
-  gap: 0.4rem;
-  margin-top: 1.75rem;
-}
-
-.mb-landing-page .mb-test__dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 9999px;
-  background: #cbd5e1;
-  border: 0;
-  cursor: pointer;
-  transition: background 0.2s ease, width 0.25s ease;
-  padding: 0;
-}
-
-.mb-landing-page .mb-test__dot--active {
-  width: 1.5rem;
-  background: var(--mb-secondary);
+@media (prefers-reduced-motion: reduce) {
+  .mb-landing-page .mb-test__track {
+    animation-duration: 240s;
+  }
 }
 
 /* ==========================================================================
