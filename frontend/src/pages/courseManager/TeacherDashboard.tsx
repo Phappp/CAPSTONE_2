@@ -1,11 +1,13 @@
 // TeacherDashboard.tsx
-import AvatarMenu from "../../components/AvatarMenu";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { useAuth } from "../../contexts/Auth";
 import CommonModal from "../../components/CommonModal";
+import TeacherShell, {
+  TeacherShellTopKey,
+} from "../../components/TeacherShell";
 import TeacherLiveSessionPage from "./LiveSessionPage";
 import "./TeacherDashboard.css";
 import { Video } from "lucide-react";
@@ -140,12 +142,12 @@ export default function TeacherDashboard() {
   const ensureVerifiedForCourseActions = (): boolean => {
     if (!managerBlocked) return true;
     const note = user?.manager_verification?.review_note
-      ? `\n\nGhi chú từ quản trị viên: ${user.manager_verification.review_note}`
+      ? `\n\nNote from administrator: ${user.manager_verification.review_note}`
       : "";
     setModalState({
       open: true,
-      title: "Cần cấp phép giảng viên",
-      message: `Tính năng này yêu cầu tài khoản giảng viên đã được xác minh.${note}\n\nBạn sẽ được chuyển đến trang hồ sơ để xem trạng thái xác minh.`,
+      title: "Instructor verification required",
+      message: `This feature requires a verified instructor account.${note}\n\nYou will be redirected to your profile to check verification status.`,
       onConfirm: () => {
         setModalState({ open: false, title: "", message: "" });
         navigate("/profile");
@@ -213,7 +215,7 @@ export default function TeacherDashboard() {
       },
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.message || "Không thể tải thống kê.");
+    if (!res.ok) throw new Error(data?.message || "Failed to load statistics.");
     setStats(data);
   };
 
@@ -235,9 +237,9 @@ export default function TeacherDashboard() {
       },
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.message || "Không thể tải danh sách khóa học.");
+    if (!res.ok) throw new Error(data?.message || "Failed to load course list.");
     setResult(data);
-  };
+    };
 
   const fetchRevenue = async () => {
     setFinanceLoading(true);
@@ -269,9 +271,9 @@ export default function TeacherDashboard() {
       const summaryJson = await summaryRes.json().catch(() => ({}));
       const trendJson = await trendRes.json().catch(() => ({}));
       const txJson = await txRes.json().catch(() => ({}));
-      if (!summaryRes.ok) throw new Error(summaryJson?.message || "Không thể tải tổng quan doanh thu.");
-      if (!trendRes.ok) throw new Error(trendJson?.message || "Không thể tải xu hướng doanh thu.");
-      if (!txRes.ok) throw new Error(txJson?.message || "Không thể tải giao dịch doanh thu.");
+      if (!summaryRes.ok) throw new Error(summaryJson?.message || "Failed to load revenue summary.");
+      if (!trendRes.ok) throw new Error(trendJson?.message || "Failed to load revenue trend.");
+      if (!txRes.ok) throw new Error(txJson?.message || "Failed to load revenue transactions.");
 
       setRevenueSummary(summaryJson as any);
       setRevenueTrend(Array.isArray((trendJson as any)?.points) ? (trendJson as any).points : []);
@@ -287,7 +289,7 @@ export default function TeacherDashboard() {
     try {
       await Promise.all([fetchStats(), fetchList(), fetchRevenue()]);
     } catch (e: any) {
-      setError(e?.message || "Đã xảy ra lỗi.");
+      setError(e?.message || "An error occurred.");
     } finally {
       setLoading(false);
     }
@@ -345,7 +347,7 @@ export default function TeacherDashboard() {
         try {
           await Promise.all([fetchStats(), fetchList({ nextPage: 1 }), fetchRevenue()]);
         } catch (e: any) {
-          setError(e?.message || "Đã xảy ra lỗi.");
+          setError(e?.message || "An error occurred.");
         } finally {
           setLoading(false);
         }
@@ -380,11 +382,11 @@ export default function TeacherDashboard() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message || "Không thể cập nhật trạng thái.");
+        throw new Error(data?.message || "Failed to update course status.");
       }
       await refetch();
     } catch (e: any) {
-      setError(e?.message || "Đã xảy ra lỗi.");
+      setError(e?.message || "An error occurred.");
     } finally {
       setLoading(false);
     }
@@ -392,14 +394,14 @@ export default function TeacherDashboard() {
 
   const handleUnpublish = async (courseId: number) => {
     const ok = window.confirm(
-      "Bỏ xuất bản khóa học này?\n\nKhóa học sẽ không còn hiển thị cho học viên."
+      "Unpublish this course?\n\nThe course will no longer be visible to students."
     );
     if (!ok) return;
     await handleSetStatus(courseId, "draft");
   };
 
   const handleDelete = async (courseId: number) => {
-    if (!window.confirm("Xóa khóa học? Thao tác sẽ đưa khóa học vào thùng rác (soft delete).")) {
+    if (!window.confirm("Delete course? This action will move the course to the trash (soft delete).")) {
       return;
     }
     setLoading(true);
@@ -413,20 +415,20 @@ export default function TeacherDashboard() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message || "Không thể xóa khóa học.");
+        throw new Error(data?.message || "Failed to delete course.");
       }
       await refetch();
     } catch (e: any) {
-      setError(e?.message || "Đã xảy ra lỗi.");
+      setError(e?.message || "An error occurred.");
     } finally {
       setLoading(false);
     }
   };
 
   const sections: { key: TeacherSection; label: string }[] = [
-    { key: "dashboard", label: "Tổng quan" },
-    { key: "course", label: "Quản lý khóa học" },
-    { key: "live", label: "Buổi Live" },
+    { key: "dashboard", label: "Overview" },
+    { key: "course", label: "Course Management" },
+    { key: "live", label: "Live Session" },
   ];
 
   const filteredStatus = useMemo(() => {
@@ -458,10 +460,10 @@ export default function TeacherDashboard() {
     }
 
     return [
-      { label: "Cơ bản", value: counts.beginner, color: "#10b981" },
-      { label: "Trung cấp", value: counts.intermediate, color: "#f59e0b" },
-      { label: "Nâng cao", value: counts.advanced, color: "#ef4444" },
-      { label: "Khác", value: counts.other, color: "#8b5cf6" },
+      { label: "Beginner", value: counts.beginner, color: "#10b981" },
+      { label: "Intermediate", value: counts.intermediate, color: "#f59e0b" },
+      { label: "Advanced", value: counts.advanced, color: "#ef4444" },
+      { label: "Other", value: counts.other, color: "#8b5cf6" },
     ].filter((d) => d.value > 0);
   }, [filteredCourses]);
 
@@ -518,67 +520,123 @@ export default function TeacherDashboard() {
 
   const BarChart = ({ data }: { data: { label: string; value: number; color: string }[] }) => {
     const w = 500;
-    const h = 200;
+    const h = 220;
     const max = Math.max(1, ...data.map((d) => d.value));
-    const barW = w / data.length * 0.6;
+    const barW = (w / data.length) * 0.55;
     const startX = (w / data.length - barW) / 2;
-    
+    const baseY = h - 28;
+
     return (
       <div className="chart-container">
-        <svg className="chart-svg chart-svg--bar" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet">
-          {data.map((d, i) => {
-            const barHeight = (d.value / max) * (h - 40);
-            const x = i * (w / data.length) + startX;
-            const y = h - barHeight - 20;
+        <svg
+          className="chart-svg chart-svg--bar"
+          viewBox={`0 0 ${w} ${h}`}
+          preserveAspectRatio="xMidYMid meet"
+        >
+          <defs>
+            {data.map((d, i) => (
+              <linearGradient
+                key={`bg-${i}`}
+                id={`mb-bar-${i}`}
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="1"
+              >
+                <stop offset="0%" stopColor={d.color} stopOpacity="0.95" />
+                <stop offset="100%" stopColor={d.color} stopOpacity="0.55" />
+              </linearGradient>
+            ))}
+          </defs>
+          {/* Horizontal gridlines */}
+          {[0.25, 0.5, 0.75, 1].map((ratio) => {
+            const y = baseY - (baseY - 20) * ratio;
             return (
-              <g key={d.label}>
+              <line
+                key={ratio}
+                x1="0"
+                y1={y}
+                x2={w}
+                y2={y}
+                stroke="#eef2f7"
+                strokeWidth="1"
+                strokeDasharray="3 5"
+              />
+            );
+          })}
+          {data.map((d, i) => {
+            const barHeight = (d.value / max) * (baseY - 24);
+            const x = i * (w / data.length) + startX;
+            const y = baseY - barHeight;
+            return (
+              <g key={d.label} className="mb-bar-group">
                 <rect
-                  className="chart-bar"
+                  className="mb-bar-rect"
                   x={x}
                   y={y}
                   width={barW}
                   height={barHeight}
-                  fill={d.color}
+                  fill={`url(#mb-bar-${i})`}
                   rx="8"
-                />
+                  style={{
+                    transformOrigin: `${x + barW / 2}px ${baseY}px`,
+                    transform: "scaleY(0)",
+                    animation: `mb-bar-rise 0.7s ${0.05 * i}s cubic-bezier(0.34, 1.32, 0.64, 1) forwards`,
+                  }}
+                >
+                  <title>{`${d.label}: ${d.value}`}</title>
+                </rect>
                 <text
                   x={x + barW / 2}
                   y={h - 8}
                   textAnchor="middle"
                   fontSize="11"
-                  fill="#94a3b8"
+                  fontWeight="600"
+                  fill="#475569"
                 >
                   {d.label}
                 </text>
                 <text
+                  className="mb-bar-value"
                   x={x + barW / 2}
-                  y={y - 6}
+                  y={y - 8}
                   textAnchor="middle"
-                  fontSize="12"
-                  fill="#334155"
-                  fontWeight="600"
+                  fontSize="13"
+                  fill="#0f172a"
+                  fontWeight="700"
+                  style={{
+                    opacity: 0,
+                    animation: `mb-bar-value-in 0.5s ${0.3 + 0.05 * i}s ease forwards`,
+                  }}
                 >
                   {d.value}
                 </text>
               </g>
             );
           })}
-          <line x1="0" y1={h - 20} x2={w} y2={h - 20} stroke="#e2e8f0" strokeWidth="1" />
+          <line
+            x1="0"
+            y1={baseY}
+            x2={w}
+            y2={baseY}
+            stroke="#cbd5e1"
+            strokeWidth="1.5"
+          />
         </svg>
       </div>
     );
   };
 
   const PieChart = ({ data }: { data: { label: string; value: number; color: string }[] }) => {
-    const size = 200;
+    const size = 220;
     const cx = size / 2;
     const cy = size / 2;
-    const r = 72;
-    const innerR = 40;
+    const r = 84;
+    const innerR = 48;
     const sum = data.reduce((s, d) => s + d.value, 0);
     const total = sum <= 0 ? 0 : sum;
     let startAngle = -90;
-    
+
     const describeArc = (start: number, end: number) => {
       const toRad = (a: number) => (a * Math.PI) / 180;
       const startRad = toRad(start);
@@ -590,47 +648,86 @@ export default function TeacherDashboard() {
       const largeArc = end - start <= 180 ? 0 : 1;
       return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
     };
-    
+
     return (
       <div className="pie-container">
-        <svg className="chart-svg chart-svg--pie" viewBox={`0 0 ${size} ${size}`} preserveAspectRatio="xMidYMid meet">
-          {total === 0 ? (
-            <>
-              <circle cx={cx} cy={cy} r={r} fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="2" />
-              <circle cx={cx} cy={cy} r={innerR} fill="#ffffff" />
-            </>
-          ) : (
-            <>
-              {data.map((d) => {
-                const angle = (d.value / total) * 360;
-                const endAngle = startAngle + angle;
-                const path = describeArc(startAngle, endAngle);
-                const element = (
-                  <path
-                    key={d.label}
-                    d={path}
-                    fill={d.color}
-                    stroke="#ffffff"
-                    strokeWidth="2"
-                  />
-                );
-                startAngle = endAngle;
-                return element;
-              })}
-              <circle cx={cx} cy={cy} r={innerR} fill="#ffffff" stroke="#ffffff" strokeWidth="2" />
-              <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e2e8f0" strokeWidth="2" />
-            </>
-          )}
-          <text x={cx} y={cy - 4} textAnchor="middle" fontSize="20" fontWeight="700" fill="#0f172a">
+        <svg
+          className="chart-svg chart-svg--pie"
+          viewBox={`0 0 ${size} ${size}`}
+          preserveAspectRatio="xMidYMid meet"
+          style={{ overflow: "visible" }}
+        >
+          <defs>
+            <filter id="mb-pie-shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" floodColor="#0f172a" floodOpacity="0.12" />
+            </filter>
+            {data.map((d, i) => (
+              <radialGradient key={`pg-${i}`} id={`mb-pie-${i}`}>
+                <stop offset="0%" stopColor={d.color} stopOpacity="1" />
+                <stop offset="100%" stopColor={d.color} stopOpacity="0.78" />
+              </radialGradient>
+            ))}
+          </defs>
+          <g filter="url(#mb-pie-shadow)" className="mb-pie-rotate">
+            {total === 0 ? (
+              <>
+                <circle cx={cx} cy={cy} r={r} fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="2" />
+                <circle cx={cx} cy={cy} r={innerR} fill="#ffffff" />
+              </>
+            ) : (
+              <>
+                {data.map((d, i) => {
+                  const angle = (d.value / total) * 360;
+                  const endAngle = startAngle + angle;
+                  const path = describeArc(startAngle, endAngle);
+                  const element = (
+                    <path
+                      key={d.label}
+                      d={path}
+                      fill={`url(#mb-pie-${i})`}
+                      stroke="#ffffff"
+                      strokeWidth="2.5"
+                      className="mb-pie-slice"
+                      style={{
+                        transformOrigin: `${cx}px ${cy}px`,
+                        opacity: 0,
+                        animation: `mb-pie-in 0.6s ${0.06 * i}s cubic-bezier(0.34, 1.32, 0.64, 1) forwards`,
+                      }}
+                    >
+                      <title>{`${d.label}: ${d.value} (${((d.value / total) * 100).toFixed(1)}%)`}</title>
+                    </path>
+                  );
+                  startAngle = endAngle;
+                  return element;
+                })}
+                <circle cx={cx} cy={cy} r={innerR} fill="#ffffff" stroke="#ffffff" strokeWidth="2" />
+              </>
+            )}
+          </g>
+          <text x={cx} y={cy - 2} textAnchor="middle" fontSize="22" fontWeight="800" fill="#0f172a">
             {total}
           </text>
-          <text x={cx} y={cy + 14} textAnchor="middle" fontSize="10" fill="#64748b">
-            tổng số
+          <text
+            x={cx}
+            y={cy + 16}
+            textAnchor="middle"
+            fontSize="10"
+            fill="#64748b"
+            letterSpacing="1.5"
+          >
+            TOTAL
           </text>
         </svg>
         <div className="pie-legend">
-          {data.map((d) => (
-            <div key={d.label} className="pie-legend-item">
+          {data.map((d, i) => (
+            <div
+              key={d.label}
+              className="pie-legend-item"
+              style={{
+                opacity: 0,
+                animation: `mb-pie-legend-in 0.45s ${0.4 + 0.08 * i}s ease forwards`,
+              }}
+            >
               <div className="pie-legend-color" style={{ background: d.color }} />
               <span>{d.label}</span>
               <span className="pie-legend-value">{d.value}</span>
@@ -643,23 +740,65 @@ export default function TeacherDashboard() {
 
   const LineChart = ({ labels, values }: { labels: string[]; values: number[] }) => {
     const w = 500;
-    const h = 180;
+    const h = 200;
     const max = Math.max(1, ...values);
-    const padding = { top: 20, right: 20, bottom: 30, left: 35 };
+    const padding = { top: 22, right: 22, bottom: 30, left: 40 };
     const innerW = w - padding.left - padding.right;
     const innerH = h - padding.top - padding.bottom;
-    
+
     const points = values.map((v, i) => ({
       x: padding.left + (innerW * i) / Math.max(1, values.length - 1),
       y: padding.top + innerH - (v / max) * innerH,
       v,
     }));
-    
-    const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-    
+
+    // Smooth bezier path through points (Catmull-Rom inspired)
+    const smoothPath = (() => {
+      if (points.length === 0) return "";
+      if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+      const parts: string[] = [`M ${points[0].x} ${points[0].y}`];
+      for (let i = 1; i < points.length; i++) {
+        const prev = points[i - 1];
+        const curr = points[i];
+        const cpx = (prev.x + curr.x) / 2;
+        parts.push(`C ${cpx} ${prev.y} ${cpx} ${curr.y} ${curr.x} ${curr.y}`);
+      }
+      return parts.join(" ");
+    })();
+
+    const areaPath = (() => {
+      if (!points.length) return "";
+      const baseY = padding.top + innerH;
+      return `${smoothPath} L ${points[points.length - 1].x} ${baseY} L ${points[0].x} ${baseY} Z`;
+    })();
+
     return (
       <div className="chart-container">
-        <svg className="chart-svg chart-svg--line" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet">
+        <svg
+          className="chart-svg chart-svg--line"
+          viewBox={`0 0 ${w} ${h}`}
+          preserveAspectRatio="xMidYMid meet"
+          style={{ overflow: "visible" }}
+        >
+          <defs>
+            <linearGradient id="mb-line-area" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="#14b8a6" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id="mb-line-stroke" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#0d9488" />
+              <stop offset="100%" stopColor="#14b8a6" />
+            </linearGradient>
+            <filter id="mb-line-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="2" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          {/* Gridlines */}
           {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
             const y = padding.top + innerH * (1 - ratio);
             return (
@@ -671,35 +810,84 @@ export default function TeacherDashboard() {
                   y2={y}
                   stroke="#e2e8f0"
                   strokeWidth="1"
-                  strokeDasharray="4 4"
+                  strokeDasharray="4 5"
                 />
-                <text x={padding.left - 8} y={y + 3} fontSize="10" fill="#94a3b8">
+                <text
+                  x={padding.left - 10}
+                  y={y + 3}
+                  fontSize="10"
+                  fill="#94a3b8"
+                  textAnchor="end"
+                  fontWeight="600"
+                >
                   {Math.round(max * ratio)}
                 </text>
               </g>
             );
           })}
-          
+
+          {/* Area fill */}
           <path
-            d={linePath}
-            fill="none"
-            stroke="#3b82f6"
-            strokeWidth="3"
-            className="chart-line"
+            d={areaPath}
+            fill="url(#mb-line-area)"
+            style={{
+              opacity: 0,
+              animation: "mb-line-area-in 0.85s 0.3s ease forwards",
+            }}
           />
-          
+
+          {/* Stroke (animated draw-in) */}
+          <path
+            d={smoothPath}
+            fill="none"
+            stroke="url(#mb-line-stroke)"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            filter="url(#mb-line-glow)"
+            pathLength={1}
+            strokeDasharray="1 1"
+            strokeDashoffset="1"
+            style={{ animation: "mb-line-draw 1s 0.1s ease-out forwards" }}
+          />
+
+          {/* Dots + value labels */}
           {points.map((p, i) => (
-            <g key={i}>
-              <circle cx={p.x} cy={p.y} r="5" fill="#3b82f6" stroke="white" strokeWidth="2.5" />
-              <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize="11" fill="#334155" fontWeight="500">
+            <g
+              key={i}
+              style={{
+                opacity: 0,
+                animation: `mb-line-dot-in 0.4s ${0.9 + 0.06 * i}s ease forwards`,
+              }}
+            >
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r="5"
+                fill="#ffffff"
+                stroke="#0d9488"
+                strokeWidth="2.5"
+                className="mb-line-dot"
+              >
+                <title>{`${labels[i] ?? ""}: ${p.v}`}</title>
+              </circle>
+              <text
+                x={p.x}
+                y={p.y - 10}
+                textAnchor="middle"
+                fontSize="11"
+                fill="#0f172a"
+                fontWeight="700"
+              >
                 {p.v}
               </text>
               <text
                 x={p.x}
-                y={h - 6}
+                y={h - 8}
                 textAnchor="middle"
                 fontSize="10"
                 fill="#94a3b8"
+                fontWeight="600"
               >
                 {labels[i]}
               </text>
@@ -730,30 +918,50 @@ export default function TeacherDashboard() {
   });
   const revenueNetValues = revenueTrend.map((p) => Number(p.net_revenue || 0));
 
-  return (
-    <div className="teacher-dashboard">
-      <div className="dashboard-container">
-        {/* Header */}
-        <div className="dashboard-header">
-          <div className="header-title-section">
-            <h1 className="dashboard-title">DASHBOARD</h1>
-            <p className="dashboard-subtitle">Quản lý khóa học và theo dõi hiệu suất giảng dạy</p>
-          </div>
-          <AvatarMenu />
-        </div>
+  const firstName = (user?.full_name || user?.email || "Instructor")
+    .split(/[ @]/)[0];
+  const activeTopNav: TeacherShellTopKey =
+    section === "course"
+      ? "courses"
+      : section === "live"
+      ? "live"
+      : "dashboard";
 
-        {/* Section Tabs */}
-        <div className="section-tabs">
-          {sections.map((s) => (
-            <button
-              key={s.key}
-              className={`section-tab ${s.key === section ? "active" : ""}`}
-              onClick={() => setSection(s.key)}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
+  return (
+    <TeacherShell
+      activeNav="overview"
+      activeTopNav={activeTopNav}
+      showFab={section === "dashboard"}
+      fabLabel="New Course"
+      onFabClick={() => {
+        if (!ensureVerifiedForCourseActions()) return;
+        navigate("/teacher/courses/new");
+      }}
+    >
+      <div className="teacher-dashboard td-shell">
+        <div className="dashboard-container">
+          {/* Welcome Hero — matches CourseManagerDashboard.html */}
+          <header className="td-hero">
+            <h1 className="td-hero__title">
+              Welcome back, {firstName}
+            </h1>
+            <p className="td-hero__subtitle">
+              Here is your courses' status today.
+            </p>
+          </header>
+
+          {/* Section Tabs */}
+          <div className="section-tabs">
+            {sections.map((s) => (
+              <button
+                key={s.key}
+                className={`section-tab ${s.key === section ? "active" : ""}`}
+                onClick={() => setSection(s.key)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
 
         {/* Dashboard Section */}
         {section === "dashboard" && (
@@ -776,7 +984,7 @@ export default function TeacherDashboard() {
                     }}
                   />
                   <span className="material-symbols-outlined">schedule</span>
-                  <span>Lọc theo thời gian</span>
+                  <span>Filter by date</span>
                 </label>
 
                 <div className="date-range-group">
@@ -808,7 +1016,7 @@ export default function TeacherDashboard() {
                     disabled={!timeFilterEnabled && !timeFrom && !timeTo}
                   >
                     <span className="material-symbols-outlined">refresh</span>
-                    Đặt lại
+                    Reset
                   </button>
                 </div>
               </div>
@@ -817,11 +1025,11 @@ export default function TeacherDashboard() {
             {/* Stats Grid */}
             <div className="stats-grid">
               {[
-                { label: "Tổng số", value: filteredStatus.total, key: "total", icon: "dashboard", color: "#3b82f6" },
-                { label: "Đã xuất bản", value: filteredStatus.published, key: "published", icon: "check_circle", color: "#10b981" },
-                { label: "Bản nháp", value: filteredStatus.draft, key: "draft", icon: "edit_note", color: "#f59e0b" },
-                { label: "Chờ duyệt", value: filteredStatus.pending_review, key: "pending_review", icon: "hourglass_top", color: "#06b6d4" },
-                { label: "Đã lưu trữ", value: filteredStatus.archived, key: "archived", icon: "archive", color: "#8b5cf6" },
+                { label: "Total", value: filteredStatus.total, key: "total", icon: "dashboard", color: "#3b82f6" },
+                { label: "Published", value: filteredStatus.published, key: "published", icon: "check_circle", color: "#10b981" },
+                { label: "Draft", value: filteredStatus.draft, key: "draft", icon: "edit_note", color: "#f59e0b" },
+                { label: "Pending review", value: filteredStatus.pending_review, key: "pending_review", icon: "hourglass_top", color: "#06b6d4" },
+                { label: "Archived", value: filteredStatus.archived, key: "archived", icon: "archive", color: "#8b5cf6" },
               ].map((c) => (
                 <div key={c.key} className="stat-card">
                   <div className="stat-card-icon" style={{ background: `${c.color}10`, color: c.color }}>
@@ -838,25 +1046,25 @@ export default function TeacherDashboard() {
             <div className="stats-grid revenue-stats-grid">
               {[
                 {
-                  label: "Doanh thu gộp",
+                  label: "Gross revenue",
                   value: formatVnd(Number(revenueSummary?.gross_revenue ?? stats?.finance?.gross_revenue ?? 0)),
                   icon: "payments",
                   color: "#16a34a",
                 },
                 {
-                  label: "Phí nền tảng",
+                  label: "Platform fee",
                   value: formatVnd(Number(revenueSummary?.platform_fee_total ?? stats?.finance?.platform_fee_total ?? 0)),
                   icon: "account_balance",
                   color: "#f59e0b",
                 },
                 {
-                  label: "Doanh thu ròng",
+                  label: "Net revenue",
                   value: formatVnd(Number(revenueSummary?.net_revenue ?? stats?.finance?.net_revenue ?? 0)),
                   icon: "account_balance_wallet",
                   color: "#2563eb",
                 },
                 {
-                  label: "Đơn đã thanh toán",
+                  label: "Paid orders",
                   value: String(Number(revenueSummary?.paid_orders ?? stats?.finance?.paid_orders ?? 0)),
                   icon: "receipt_long",
                   color: "#8b5cf6",
@@ -879,14 +1087,14 @@ export default function TeacherDashboard() {
               <div className="chart-card">
                 <div className="chart-card-header">
                   <span className="chart-card-icon material-symbols-outlined">bar_chart</span>
-                  <h3 className="chart-card-title">Phân bố trạng thái</h3>
+                  <h3 className="chart-card-title">Status distribution</h3>
                 </div>
                 <BarChart
                   data={[
-                    { label: "Đã xuất bản", value: filteredStatus.published ?? 0, color: "#10b981" },
-                    { label: "Bản nháp", value: filteredStatus.draft ?? 0, color: "#f59e0b" },
-                    { label: "Chờ duyệt", value: filteredStatus.pending_review ?? 0, color: "#06b6d4" },
-                    { label: "Đã lưu trữ", value: filteredStatus.archived ?? 0, color: "#8b5cf6" },
+                    { label: "Published", value: filteredStatus.published ?? 0, color: "#10b981" },
+                    { label: "Draft", value: filteredStatus.draft ?? 0, color: "#f59e0b" },
+                    { label: "Pending review", value: filteredStatus.pending_review ?? 0, color: "#06b6d4" },
+                    { label: "Archived", value: filteredStatus.archived ?? 0, color: "#8b5cf6" },
                   ]}
                 />
               </div>
@@ -894,13 +1102,13 @@ export default function TeacherDashboard() {
               <div className="chart-card">
                 <div className="chart-card-header">
                   <span className="chart-card-icon material-symbols-outlined">pie_chart</span>
-                  <h3 className="chart-card-title">Phân bố theo cấp độ</h3>
+                  <h3 className="chart-card-title">Level distribution</h3>
                 </div>
                 <PieChart
                   data={
                     levelPieData.length
                       ? levelPieData
-                      : [{ label: "Chưa có dữ liệu", value: 0, color: "#e2e8f0" }]
+                      : [{ label: "No data yet", value: 0, color: "#e2e8f0" }]
                   }
                 />
               </div>
@@ -911,7 +1119,7 @@ export default function TeacherDashboard() {
               <div className="chart-card">
                 <div className="chart-card-header">
                   <span className="chart-card-icon material-symbols-outlined">trending_up</span>
-                  <h3 className="chart-card-title">Xu hướng tạo khóa học</h3>
+                  <h3 className="chart-card-title">Course creation trend</h3>
                 </div>
                 <LineChart
                   labels={createdSeries.labels}
@@ -922,7 +1130,7 @@ export default function TeacherDashboard() {
               <div className="chart-card">
                 <div className="chart-card-header">
                   <span className="chart-card-icon material-symbols-outlined">monitoring</span>
-                  <h3 className="chart-card-title">Xu hướng doanh thu ròng</h3>
+                  <h3 className="chart-card-title">Net revenue trend</h3>
                 </div>
                 <LineChart
                   labels={revenueLabels.length ? revenueLabels : learnersSeries.labels}
@@ -937,28 +1145,28 @@ export default function TeacherDashboard() {
                 <div className="quick-stat-icon material-symbols-outlined">menu_book</div>
                 <div className="quick-stat-content">
                   <div className="quick-stat-value">{filteredStatus.total}</div>
-                  <div className="quick-stat-label">Tổng khóa học</div>
+                  <div className="quick-stat-label">Total Courses</div>
                 </div>
               </div>
               <div className="quick-stat-card">
                 <div className="quick-stat-icon material-symbols-outlined">group</div>
                 <div className="quick-stat-content">
                   <div className="quick-stat-value">{totalLearners.toLocaleString()}</div>
-                  <div className="quick-stat-label">Học viên</div>
+                  <div className="quick-stat-label">Students</div>
                 </div>
               </div>
               <div className="quick-stat-card">
                 <div className="quick-stat-icon material-symbols-outlined">verified</div>
                 <div className="quick-stat-content">
                   <div className="quick-stat-value">{completionRate}%</div>
-                  <div className="quick-stat-label">Tỷ lệ xuất bản</div>
+                  <div className="quick-stat-label">Publish rate</div>
                 </div>
               </div>
               <div className="quick-stat-card">
                 <div className="quick-stat-icon material-symbols-outlined">star</div>
                 <div className="quick-stat-content">
                   <div className="quick-stat-value">—</div>
-                  <div className="quick-stat-label">Đánh giá TB</div>
+                  <div className="quick-stat-label">Avg. rating</div>
                 </div>
               </div>
             </div>
@@ -966,18 +1174,18 @@ export default function TeacherDashboard() {
             <div className="transactions-card">
               <div className="chart-card-header">
                 <span className="chart-card-icon material-symbols-outlined">receipt_long</span>
-                <h3 className="chart-card-title">Giao dịch doanh thu gần đây</h3>
+                <h3 className="chart-card-title">Recent revenue transactions</h3>
               </div>
               <div className="transactions-table-wrap">
                 <table className="transactions-table">
                   <thead>
                     <tr>
-                      <th>Mã đơn</th>
-                      <th>Ngày ghi nhận</th>
-                      <th>Doanh thu gộp</th>
-                      <th>Phí nền tảng</th>
-                      <th>Doanh thu ròng</th>
-                      <th>Trạng thái</th>
+                      <th>Order ID</th>
+                      <th>Recognized at</th>
+                      <th>Gross revenue</th>
+                      <th>Platform fee</th>
+                      <th>Net revenue</th>
+                      <th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -991,7 +1199,7 @@ export default function TeacherDashboard() {
                           <td>{formatVnd(Number(t.net_amount || 0))}</td>
                           <td>
                             <span className={`tx-status ${t.status === "recognized" ? "ok" : "warn"}`}>
-                              {t.status === "recognized" ? "Đã ghi nhận" : "Đảo bút toán"}
+                              {t.status === "recognized" ? "Recognized" : "Reversed"}
                             </span>
                           </td>
                         </tr>
@@ -999,7 +1207,7 @@ export default function TeacherDashboard() {
                     ) : (
                       <tr>
                         <td colSpan={6} className="tx-empty">
-                          Chưa có giao dịch doanh thu trong khoảng thời gian đã chọn.
+                          No revenue transactions in the selected period.
                         </td>
                       </tr>
                     )}
@@ -1015,8 +1223,8 @@ export default function TeacherDashboard() {
           <div className="course-management">
             <div className="course-header">
               <div>
-                <h2 className="section-title">Khóa học của tôi</h2>
-                <p className="section-subtitle">Quản lý, xuất bản và theo dõi tất cả khóa học</p>
+                <h2 className="section-title">My courses</h2>
+                <p className="section-subtitle">Manage, publish, and monitor all your courses</p>
               </div>
               <button
                 className="btn-primary"
@@ -1026,18 +1234,18 @@ export default function TeacherDashboard() {
                 }}
               >
                 <span className="material-symbols-outlined">add</span>
-                Tạo khóa học mới
+                Create new course
               </button>
             </div>
 
             {/* Course Tabs */}
             <div className="course-tabs">
               {[
-                { key: "all", label: "Tất cả", count: stats?.total, icon: "apps" },
-                { key: "published", label: "Đã xuất bản", count: stats?.published, icon: "check_circle" },
-                { key: "draft", label: "Bản nháp", count: stats?.draft, icon: "edit" },
-                { key: "pending_review", label: "Chờ duyệt", count: stats?.pending_review ?? 0, icon: "hourglass_top" },
-                { key: "archived", label: "Đã lưu trữ", count: stats?.archived, icon: "inventory" },
+                { key: "all", label: "All", count: stats?.total, icon: "apps" },
+                { key: "published", label: "Published", count: stats?.published, icon: "check_circle" },
+                { key: "draft", label: "Draft", count: stats?.draft, icon: "edit" },
+                { key: "pending_review", label: "Pending review", count: stats?.pending_review ?? 0, icon: "hourglass_top" },
+                { key: "archived", label: "Archived", count: stats?.archived, icon: "inventory" },
               ].map((t) => (
                 <button
                   key={t.key}
@@ -1059,7 +1267,7 @@ export default function TeacherDashboard() {
                 <input
                   type="text"
                   className="search-input"
-                  placeholder="Tìm kiếm khóa học..."
+                  placeholder="Search courses..."
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   disabled={loading}
@@ -1077,38 +1285,38 @@ export default function TeacherDashboard() {
                   disabled={loading}
                 >
                   <option value="updated_at:desc">
-                    <span className="material-symbols-outlined">update</span> Mới cập nhật
+                    <span className="material-symbols-outlined">Recently updated</span>
                   </option>
-                  <option value="updated_at:asc">Cũ nhất</option>
-                  <option value="created_at:desc">Mới tạo</option>
-                  <option value="created_at:asc">Tạo sớm nhất</option>
-                  <option value="title:asc">Tên A → Z</option>
-                  <option value="title:desc">Tên Z → A</option>
-                  <option value="learners_count:desc">Học viên nhiều nhất</option>
-                  <option value="learners_count:asc">Học viên ít nhất</option>
+                  <option value="updated_at:asc">Oldest</option>
+                  <option value="created_at:desc">Newly created</option>
+                  <option value="created_at:asc">Earliest</option>
+                  <option value="title:asc">Name A → Z</option>
+                  <option value="title:desc">Name Z → A</option>
+                  <option value="learners_count:desc">Most students</option>
+                  <option value="learners_count:asc">Fewest students</option>
                 </select>
               </div>
 
               <div className="view-toggle">
-                <span className="view-toggle-label">Hiển thị:</span>
+                <span className="view-toggle-label">View:</span>
                 <button
                   className={`view-btn ${courseView === "list" ? "active" : ""}`}
                   onClick={() => setCourseView("list")}
-                  title="Danh sách"
+                  title="List"
                 >
                   <span className="material-symbols-outlined">view_list</span>
                 </button>
                 <button
                   className={`view-btn ${courseView === "grid" ? "active" : ""}`}
                   onClick={() => setCourseView("grid")}
-                  title="Lưới"
+                  title="Grid"
                 >
                   <span className="material-symbols-outlined">grid_view</span>
                 </button>
                 <button
                   className={`view-btn ${courseView === "compact" ? "active" : ""}`}
                   onClick={() => setCourseView("compact")}
-                  title="Gọn"
+                  title="Compact"
                 >
                   <span className="material-symbols-outlined">view_compact</span>
                 </button>
@@ -1141,29 +1349,29 @@ export default function TeacherDashboard() {
                         <h6 className="course-title">{c.title}</h6>
                         <span className={`status-badge status-badge--${c.status}`}>
                           {c.status === "published"
-                            ? "Đã xuất bản"
+                            ? "Published"
                             : c.status === "draft"
-                              ? "Bản nháp"
+                              ? "Draft"
                               : c.status === "pending_review"
-                                ? "Chờ quản trị viên duyệt"
-                                : "Đã lưu trữ"}
+                                ? "Waiting for admin approval"
+                                : "Archived"}
                         </span>
                       </div>
                       <p className="course-description">
-                        {c.short_description || "Chưa có mô tả"}
+                        {c.short_description || "No description."}
                       </p>
                       <div className="course-meta">
                         <span className="meta-item">
                           <span className="material-symbols-outlined meta-icon">group</span>
-                          {c.learners_count ?? 0} học viên
+                          {c.learners_count ?? 0} students
                         </span>
                         <span className="meta-item">
                           <span className="material-symbols-outlined meta-icon">library_books</span>
-                          {c.modules_count ?? 0} chương
+                          {c.modules_count ?? 0} chapters
                         </span>
                         <span className="meta-item">
                           <span className="material-symbols-outlined meta-icon">menu_book</span>
-                          {c.lessons_count ?? 0} bài học
+                          {c.lessons_count ?? 0} lessons
                         </span>
                       </div>
                       <div style={{ marginTop: 6 }}>
@@ -1174,7 +1382,7 @@ export default function TeacherDashboard() {
                             style={{ color: "#b45309", fontSize: 12, fontWeight: 700 }}
                             title={(c.quality_gate?.issues || []).join("\n")}
                           >
-                            Quality gate: Chưa đạt
+                            Quality gate: Not yet achieved
                           </span>
                         )}
                       </div>
@@ -1204,7 +1412,7 @@ export default function TeacherDashboard() {
                                 await handleSetStatus(c.id, "published");
                               }} disabled={loading}>
                                 <span className="material-symbols-outlined">publish</span>
-                                Xuất bản
+                                Publish
                               </button>
                             ) : (
                               <button className="danger" onClick={async (e) => {
@@ -1214,7 +1422,7 @@ export default function TeacherDashboard() {
                                 await handleUnpublish(c.id);
                               }} disabled={loading}>
                                 <span className="material-symbols-outlined">unpublish</span>
-                                Bỏ xuất bản
+                                Unpublish
                               </button>
                             )
                           )}
@@ -1227,7 +1435,7 @@ export default function TeacherDashboard() {
                               await handleSetStatus(c.id, "archived");
                             }} disabled={loading}>
                               <span className="material-symbols-outlined">archive</span>
-                              Lưu trữ
+                              Archive
                             </button>
                           ) : (
                             <button onClick={async (e) => {
@@ -1237,7 +1445,7 @@ export default function TeacherDashboard() {
                               await handleSetStatus(c.id, "draft");
                             }} disabled={loading}>
                               <span className="material-symbols-outlined">unarchive</span>
-                              Khôi phục
+                              Restore
                             </button>
                           )}
                           
@@ -1250,7 +1458,7 @@ export default function TeacherDashboard() {
                             await handleDelete(c.id);
                           }} disabled={loading}>
                             <span className="material-symbols-outlined">delete</span>
-                            Xóa
+                            Delete
                           </button>
                         </div>
                       )}
@@ -1265,10 +1473,10 @@ export default function TeacherDashboard() {
                 <div className="empty-state-icon">
                   <span className="material-symbols-outlined">inbox</span>
                 </div>
-                <p className="empty-state-text">Chưa có khóa học nào</p>
+                <p className="empty-state-text">No courses available.</p>
                 {/* <button className="btn-primary btn-sm" onClick={() => navigate("/teacher/courses/new")}>
                   <span className="material-symbols-outlined">add</span>
-                  Tạo khóa học đầu tiên
+                  Create course đầu tiên
                 </button> */}
               </div>
             )}
@@ -1276,7 +1484,7 @@ export default function TeacherDashboard() {
             {/* Pagination */}
             <div className="pagination">
               <div className="pagination-info">
-                {loading ? "Đang tải..." : `Hiển thị ${result?.items?.length ?? 0} / ${result?.total ?? 0} khóa học`}
+                {loading ? "Loading..." : `Showing ${result?.items?.length ?? 0} / ${result?.total ?? 0} courses`}
               </div>
               <div className="pagination-controls">
                 <button
@@ -1286,7 +1494,7 @@ export default function TeacherDashboard() {
                     setPage(next);
                     setLoading(true);
                     fetchList({ nextPage: next })
-                      .catch((e: any) => setError(e?.message || "Đã xảy ra lỗi."))
+                      .catch((e: any) => setError(e?.message || "An error occurred."))
                       .finally(() => setLoading(false));
                   }}
                   disabled={loading || page <= 1}
@@ -1303,12 +1511,12 @@ export default function TeacherDashboard() {
                     setPage(next);
                     setLoading(true);
                     fetchList({ nextPage: next })
-                      .catch((e: any) => setError(e?.message || "Đã xảy ra lỗi."))
+                      .catch((e: any) => setError(e?.message || "An error occurred."))
                       .finally(() => setLoading(false));
                   }}
                   disabled={loading || page >= Math.max(1, Math.ceil((result?.total ?? 0) / pageSize))}
                 >
-                  Sau
+                  Next
                   <span className="material-symbols-outlined">chevron_right</span>
                 </button>
               </div>
@@ -1320,6 +1528,7 @@ export default function TeacherDashboard() {
         {section === "live" && (
           <TeacherLiveSessionPage />
         )}
+        </div>
       </div>
       <CommonModal
         open={modalState.open}
@@ -1334,6 +1543,6 @@ export default function TeacherDashboard() {
           setModalState({ open: false, title: "", message: "" });
         }}
       />
-    </div>
+    </TeacherShell>
   );
 }

@@ -36,18 +36,18 @@ type CourseOption = {
 
 const CATEGORY_TAXONOMY: Array<{ group: string; majors: string[] }> = [
   { group: "Công nghệ thông tin (IT)", majors: ["Lập trình viên (Web, Mobile, Game)", "Kỹ sư phần mềm", "An ninh mạng", "Trí tuệ nhân tạo (AI)", "Khoa học dữ liệu (Data Analyst, Data Scientist)", "Quản trị hệ thống, Cloud"] },
-  { group: "Kinh doanh - Quản trị", majors: ["Quản trị doanh nghiệp", "Quản lý dự án", "Khởi nghiệp", "Điều hành doanh nghiệp", "Phát triển kinh doanh (Business Development)"] },
-  { group: "Tài chính - Kế toán - Ngân hàng", majors: ["Kế toán doanh nghiệp", "Kiểm toán", "Tài chính đầu tư", "Ngân hàng", "Chứng khoán", "Thuế"] },
+  { group: "Kinh doanh - Quản trị", majors: ["Quản trị doanh nghiệp", "Quản lý dự án", "Khati nghiệp", "Điều hành doanh nghiệp", "Phát triển kinh doanh (Business Development)"] },
+  { group: "Tài chính - Kế toán - Threenk", majors: ["Kế toán doanh nghiệp", "Kiểm toán", "Tài chính đầu tư", "Threenk", "Chứng khoán", "Thuế"] },
   { group: "Marketing - Truyền thông", majors: ["Digital Marketing", "Content Marketing", "SEO", "Quảng cáo", "Quan hệ công chúng (PR)", "Thiết kế thương hiệu"] },
   { group: "Y tế - Sức khỏe", majors: ["Bác sĩ", "Điều dưỡng", "Dược sĩ", "Kỹ thuật xét nghiệm", "Vật lý trị liệu", "Tâm lý học"] },
-  { group: "Giáo dục - Đào tạo", majors: ["Giáo viên", "Giảng viên", "Trainer doanh nghiệp", "Giáo dục mầm non", "Ngoại ngữ"] },
+  { group: "Priceo dục - Đào tạo", majors: ["Priceo viên", "Instructor", "Trainer doanh nghiệp", "Priceo dục mầm non", "Ngoại ngữ"] },
   { group: "Kỹ thuật - Xây dựng", majors: ["Cơ khí", "Điện - điện tử", "Tự động hóa", "Xây dựng dân dụng", "Kiến trúc", "Kỹ sư công trình"] },
   { group: "Luật - Hành chính", majors: ["Luật sư", "Công chứng", "Nhân sự hành chính", "Quản lý nhà nước"] },
-  { group: "Logistics - Xuất nhập khẩu", majors: ["Chuỗi cung ứng", "Kho vận", "Hải quan", "Vận tải quốc tế", "Mua hàng"] },
+  { group: "Logistics - Xuất nhập khẩu", majors: ["Chuỗi cung ứng", "Kho vận", "Hải quan", "Vận tải quốc tế", "Buy hàng"] },
   { group: "Du lịch - Nhà hàng - Khách sạn", majors: ["Quản trị khách sạn", "Hướng dẫn viên", "Nhà hàng", "Sự kiện", "Chăm sóc khách hàng"] },
   { group: "Nghệ thuật - Thiết kế", majors: ["Thiết kế đồ họa", "UI/UX Design", "Nhiếp ảnh", "Làm phim", "Âm nhạc", "Thời trang"] },
   { group: "Nông nghiệp - Môi trường", majors: ["Công nghệ thực phẩm", "Nông nghiệp công nghệ cao", "Thú y", "Bảo vệ môi trường"] },
-  { group: "Lao động tay nghề - Dịch vụ", majors: ["Điện lạnh", "Sửa chữa ô tô, xe máy", "Làm tóc", "Spa", "Đầu bếp", "Thợ kỹ thuật"] },
+  { group: "Lao động tay nghề - Dịch vụ", majors: ["Điện lạnh", "Edit chữa ô tô, xe máy", "Làm tóc", "Spa", "Đầu bếp", "Thợ kỹ thuật"] },
   { group: "Khác", majors: [] },
 ];
 
@@ -70,12 +70,12 @@ const DEFAULT_PAYLOAD: CreateCoursePayload = {
 
 const mapValidationMessage = (message: string): string => {
   const lower = message.toLowerCase();
-  if (lower.includes("title must be longer than or equal to 1")) return "Vui lòng nhập tên khóa học.";
-  if (lower.includes("short_description")) return "Vui lòng nhập mô tả ngắn hợp lệ (tối đa 200 ký tự).";
-  if (lower.includes("full_description")) return "Mô tả chi tiết chưa hợp lệ.";
-  if (lower.includes("level")) return "Cấp độ khóa học không hợp lệ.";
-  if (lower.includes("language")) return "Ngôn ngữ khóa học không hợp lệ.";
-  if (lower.includes("category")) return "Danh mục khóa học không hợp lệ.";
+  if (lower.includes("title must be longer than or equal to 1")) return "Please enter a valid course name.";
+  if (lower.includes("short_description")) return "Please enter a valid short description (maximum 200 characters).";
+  if (lower.includes("full_description")) return "Please enter a valid full description.";
+  if (lower.includes("level")) return "Please select a valid course level.";
+  if (lower.includes("language")) return "Please select a valid course language.";
+  if (lower.includes("category")) return "Please select a valid course category.";
   return message;
 };
 
@@ -127,12 +127,12 @@ export default function CreateCoursePage() {
   const ensureVerifiedForCourseActions = (): boolean => {
     if (!managerBlocked) return true;
     const note = user?.manager_verification?.review_note
-      ? `\n\nGhi chú từ quản trị viên: ${user.manager_verification.review_note}`
+      ? `\n\nNote from administrator: ${user.manager_verification.review_note}`
       : "";
     setModalState({
       open: true,
-      title: "Cần cấp phép giảng viên",
-      message: `Tính năng này yêu cầu tài khoản giảng viên đã được xác minh.${note}\n\nBạn sẽ được chuyển đến trang hồ sơ để xem trạng thái xác minh.`,
+      title: "Instructor verification required",
+      message: `This feature requires a verified instructor account.${note}\n\nYou will be redirected to your profile to check verification status.`,
       onConfirm: () => {
         setModalState({ open: false, title: "", message: "" });
         navigate("/profile");
@@ -162,7 +162,7 @@ export default function CreateCoursePage() {
     setSelectedCategoryMajor((prev) => (categoryMajors.includes(prev) ? prev : categoryMajors[0] || ""));
   }, [selectedCategoryGroup, categoryMajors]);
 
-  const handleBasicChange = (field: keyof CreateCoursePayload, value: any) => {
+  const handleThreesicChange = (field: keyof CreateCoursePayload, value: any) => {
     setPayload((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -196,10 +196,10 @@ export default function CreateCoursePage() {
   const applyCategorySelection = () => {
     const major = selectedCategoryGroup === "Khác" ? customCategoryMajor.trim() : selectedCategoryMajor.trim();
     if (!major) {
-      setError("Vui lòng chọn hoặc nhập chuyên ngành cho danh mục.");
+      setError("Please choose or enter a major for the category.");
       return;
     }
-    handleBasicChange("category", `${selectedCategoryGroup}: ${major}`);
+    handleThreesicChange("category", `${selectedCategoryGroup}: ${major}`);
     setError(null);
   };
 
@@ -244,7 +244,7 @@ export default function CreateCoursePage() {
   const handleImageChange = async (file: File | null) => {
     if (!file) {
       setImagePreview(null);
-      handleBasicChange("thumbnail_url", null);
+      handleThreesicChange("thumbnail_url", null);
       return;
     }
 
@@ -261,16 +261,16 @@ export default function CreateCoursePage() {
         body: formData,
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || "Upload ảnh thất bại.");
+      if (!res.ok) throw new Error(data?.message || "Failed to upload image.");
 
       const imageUrl = data?.url as string | undefined;
       if (imageUrl) {
         const absoluteUrl = toAbsoluteThumbnailUrl(imageUrl);
         setImagePreview(absoluteUrl);
-        handleBasicChange("thumbnail_url", absoluteUrl);
+        handleThreesicChange("thumbnail_url", absoluteUrl);
       }
     } catch (e: any) {
-      setError(e?.message || "Upload ảnh thất bại.");
+      setError(e?.message || "Failed to upload image.");
     }
   };
 
@@ -314,19 +314,19 @@ export default function CreateCoursePage() {
       });
 
       if (!res.ok) {
-        const friendlyMessage = await parseFriendlyApiError(res, "Không thể lưu khóa học. Vui lòng kiểm tra lại thông tin.");
+        const friendlyMessage = await parseFriendlyApiError(res, "Failed to save course. Please check your information.");
         throw new Error(friendlyMessage);
       }
 
       const data = await res.json().catch(() => ({}));
       const courseId = data?.id;
       if (!courseId) {
-        throw new Error("Không thể tạo khóa học: thiếu course id trả về từ server.");
+        throw new Error("Failed to create course: missing course id from server.");
       }
 
       navigate(`/teacher/courses/${courseId}`);
     } catch (e: any) {
-      setError(e.message || "Đã xảy ra lỗi.");
+      setError(e.message || "An error occurred.");
     } finally {
       setIsSubmitting(false);
     }
@@ -335,7 +335,7 @@ export default function CreateCoursePage() {
   const handleCancel = () => {
     if (
       window.confirm(
-        "Bạn có chắc muốn hủy tạo khóa học? Mọi thay đổi chưa lưu sẽ bị mất."
+        "You are sure you want to cancel creating the course? All unsaved changes will be lost."
       )
     ) {
       navigate("/teacher/dashboard");
@@ -344,10 +344,10 @@ export default function CreateCoursePage() {
 
   const renderStepIndicator = () => {
     const steps = [
-      "Thông tin cơ bản",
-      "Mô tả chi tiết",
-      "Hình ảnh",
-      "Cài đặt",
+      "Basic Information",
+      "Full Description",
+      "Image",
+      "Settings",
     ];
 
     return (
@@ -375,27 +375,27 @@ export default function CreateCoursePage() {
     <>
       <div className="form-group">
         <label className="form-label">
-          Tên khóa học <span className="required-star">*</span>
+          Course Name <span className="required-star">*</span>
         </label>
         <input
           className="form-input"
-          placeholder="Ví dụ: Lập trình Python cho người mới bắt đầu"
+          placeholder="e.g., Python Programming for Beginners"
           value={payload.title}
-          onChange={(e) => handleBasicChange("title", e.target.value)}
+          onChange={(e) => handleThreesicChange("title", e.target.value)}
         />
       </div>
 
       <div className="form-group">
         <label className="form-label">
-          Mô tả ngắn <span className="required-star">*</span>
+          Short description <span className="required-star">*</span>
         </label>
         <textarea
           className="form-input"
           rows={3}
           maxLength={200}
-          placeholder="Mô tả ngắn gọn về khóa học (tối đa 200 ký tự)"
+          placeholder="Short description of the course (maximum 200 characters)"
           value={payload.short_description}
-          onChange={(e) => handleBasicChange("short_description", e.target.value)}
+          onChange={(e) => handleThreesicChange("short_description", e.target.value)}
         />
         <div className="character-counter">
           {payload.short_description.length}/200
@@ -403,7 +403,7 @@ export default function CreateCoursePage() {
       </div>
 
       <div className="form-group">
-        <label className="form-label">Danh mục</label>
+        <label className="form-label">Category</label>
         <div className="category-picker">
           <select className="form-input" value={selectedCategoryGroup} onChange={(e) => setSelectedCategoryGroup(e.target.value)}>
             {CATEGORY_TAXONOMY.map((item) => (
@@ -412,10 +412,10 @@ export default function CreateCoursePage() {
               </option>
             ))}
           </select>
-          {selectedCategoryGroup === "Khác" ? (
+          {selectedCategoryGroup === "Other" ? (
             <input
               className="form-input"
-              placeholder="Nhập chuyên ngành..."
+              placeholder="Enter major..."
               value={customCategoryMajor}
               onChange={(e) => setCustomCategoryMajor(e.target.value)}
             />
@@ -429,38 +429,38 @@ export default function CreateCoursePage() {
             </select>
           )}
           <button type="button" className="secondary-button" onClick={applyCategorySelection}>
-            Chọn danh mục
+            Select Category
           </button>
         </div>
         <div className="category-selected-preview">
-          Danh mục đã chọn: <strong>{payload.category || "Chưa chọn"}</strong>
+          Category selected: <strong>{payload.category || "Not selected"}</strong>
         </div>
       </div>
 
       <div className="two-column-grid">
         <div className="form-group">
-          <label className="form-label">Cấp độ</label>
+          <label className="form-label">Level</label>
           <select
             className="form-input"
             value={payload.level}
-            onChange={(e) => handleBasicChange("level", e.target.value as Level)}
+            onChange={(e) => handleThreesicChange("level", e.target.value as Level)}
           >
-            <option value="beginner">Cơ bản</option>
-            <option value="intermediate">Trung cấp</option>
-            <option value="advanced">Nâng cao</option>
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced">Advanced</option>
           </select>
         </div>
 
         <div className="form-group">
-          <label className="form-label">Ngôn ngữ</label>
+          <label className="form-label">Language</label>
           <select
             className="form-input"
             value={payload.language}
             onChange={(e) =>
-              handleBasicChange("language", e.target.value as Language)
+              handleThreesicChange("language", e.target.value as Language)
             }
           >
-            <option value="vi">Tiếng Việt</option>
+            <option value="vi">Vietnamese</option>
             <option value="en">English</option>
           </select>
         </div>
@@ -471,23 +471,23 @@ export default function CreateCoursePage() {
   const renderStep2 = () => (
     <>
       <div className="form-group">
-        <label className="form-label">Mô tả đầy đủ</label>
+        <label className="form-label">Full Description</label>
         <textarea
           className="form-input"
           rows={8}
-          placeholder="Mô tả chi tiết khóa học. Có thể dán nội dung rich text từ trình soạn thảo."
+          placeholder="Full description of the course. You can paste rich text content from the editor."
           value={payload.full_description}
-          onChange={(e) => handleBasicChange("full_description", e.target.value)}
+          onChange={(e) => handleThreesicChange("full_description", e.target.value)}
         />
       </div>
 
       <div className="form-group">
-        <label className="form-label">Mục tiêu học tập</label>
+        <label className="form-label">Learning objectives</label>
         {payload.learning_objectives.map((item, idx) => (
           <div key={idx} className="array-item">
             <input
               className="form-input"
-              placeholder="Ví dụ: Hiểu cú pháp Python cơ bản"
+              placeholder="e.g., Understand basic Python syntax"
               value={item}
               onChange={(e) =>
                 handleArrayChange("learning_objectives", idx, e.target.value)
@@ -498,7 +498,7 @@ export default function CreateCoursePage() {
               className="link-button"
               onClick={() => handleRemoveArrayItem("learning_objectives", idx)}
             >
-              Xóa
+              Delete
             </button>
           </div>
         ))}
@@ -507,13 +507,13 @@ export default function CreateCoursePage() {
           className="link-button"
           onClick={() => handleAddArrayItem("learning_objectives")}
         >
-          + Thêm mục tiêu
+          + Add objective
         </button>
       </div>
 
       <div className="form-group">
-        <label className="form-label">Yêu cầu tiên quyết</label>
-        <p className="form-hint">Chọn các khóa học cần hoàn tất trước khi được đăng ký khóa này.</p>
+        <label className="form-label">Prerequisite Courses</label>
+        <p className="form-hint">Select the courses that must be completed before enrolling in this course.</p>
         <div style={{ display: "grid", gap: "0.5rem", maxHeight: 220, overflow: "auto", border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }}>
           {prerequisiteOptions.length ? (
             prerequisiteOptions.map((c) => {
@@ -523,6 +523,7 @@ export default function CreateCoursePage() {
                   <input
                     type="checkbox"
                     checked={checked}
+                    style={{ width: 16, height: 16 }}
                     onChange={(e) => {
                       setPayload((prev) => {
                         const set = new Set(
@@ -536,12 +537,12 @@ export default function CreateCoursePage() {
                       });
                     }}
                   />
-                  <span style={{ fontWeight: 700 }}>{c.title}</span>
+                  <span style={{ fontWeight: 400 }}>{c.title}</span>
                 </label>
               );
             })
           ) : (
-            <div style={{ color: "#6b7280" }}>Chưa có khóa học để chọn.</div>
+            <div style={{ color: "#6b7280" }}>No courses available to select.</div>
           )}
         </div>
       </div>
@@ -551,9 +552,9 @@ export default function CreateCoursePage() {
   const renderStep3 = () => (
     <>
       <div className="form-group">
-        <label className="form-label">Ảnh bìa khóa học</label>
+        <label className="form-label">Course Cover Image</label>
         <p className="form-hint">
-          Khuyến nghị kích thước 1280x720, dung lượng &lt; 2MB.
+          Recommended size 1280x720, file size &lt; 2MB.
         </p>
         <input
           type="file"
@@ -564,7 +565,7 @@ export default function CreateCoursePage() {
 
       {imagePreview && (
         <div className="form-group">
-          <label className="form-label">Preview ảnh</label>
+          <label className="form-label">Image Preview</label>
           <div className="course-image-preview-wrapper">
             <img
               src={imagePreview}
@@ -581,15 +582,15 @@ export default function CreateCoursePage() {
     <>
       <div className="three-column-grid">
         <div className="form-group">
-          <label className="form-label">Giá khóa học (VNĐ)</label>
+          <label className="form-label">Price Course (VNĐ)</label>
           <input
             className="form-input"
             type="number"
             min={0}
-            placeholder="Để trống nếu miễn phí"
+            placeholder="Leave blank if free"
             value={payload.price ?? ""}
             onChange={(e) =>
-              handleBasicChange(
+              handleThreesicChange(
                 "price",
                 e.target.value === "" ? null : Number(e.target.value)
               )
@@ -598,29 +599,29 @@ export default function CreateCoursePage() {
         </div>
 
         <div className="form-group">
-          <label className="form-label">Có chứng chỉ hoàn thành</label>
+          <label className="form-label">Has Certificate</label>
           <select
             className="form-input"
             value={payload.has_certificate ? "yes" : "no"}
             onChange={(e) =>
-              handleBasicChange("has_certificate", e.target.value === "yes")
+              handleThreesicChange("has_certificate", e.target.value === "yes")
             }
           >
-            <option value="no">Không</option>
-            <option value="yes">Có</option>
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
           </select>
         </div>
 
         <div className="form-group">
-          <label className="form-label">Thời gian dự kiến (giờ)</label>
+          <label className="form-label">Estimated Time (hours)</label>
           <input
             className="form-input"
             type="number"
             min={0}
-            placeholder="Ví dụ: 25"
+            placeholder="e.g., 25"
             value={payload.estimated_hours ?? ""}
             onChange={(e) =>
-              handleBasicChange(
+              handleThreesicChange(
                 "estimated_hours",
                 e.target.value === "" ? null : Number(e.target.value)
               )
@@ -629,12 +630,12 @@ export default function CreateCoursePage() {
         </div>
 
         <div className="form-group">
-          <label className="form-label">Xuất bản tự động lúc (tùy chọn)</label>
+          <label className="form-label">Publish automatically at (optional)</label>
           <input
             className="form-input"
             type="datetime-local"
             value={payload.publish_scheduled_at ?? ""}
-            onChange={(e) => handleBasicChange("publish_scheduled_at", e.target.value || null)}
+            onChange={(e) => handleThreesicChange("publish_scheduled_at", e.target.value || null)}
           />
         </div>
       </div>
@@ -643,10 +644,10 @@ export default function CreateCoursePage() {
         <label className="form-label">Tags</label>
         <input
           className="form-input"
-          placeholder='Nhập các tag, phân cách bằng dấu phẩy. VD: "python, programming, lập trình"'
+          placeholder='Enter tags, separated by commas. E.g., "python, programming, lập trình"'
           value={payload.tags.join(", ")}
           onChange={(e) =>
-            handleBasicChange(
+            handleThreesicChange(
               "tags",
               e.target.value
                 .split(",")
@@ -678,9 +679,9 @@ export default function CreateCoursePage() {
     <div className="dashboard-page">
       <div className="page-header">
         <div>
-          <h1 className="dashboard-title">Tạo khóa học mới</h1>
+          <h1 className="dashboard-title">Create new course</h1>
           <p className="dashboard-subtitle">
-            Điền thông tin theo từng bước. Bạn có thể lưu tạm bất kỳ lúc nào.
+            Fill in the information step by step. You can save draft at any time.
           </p>
         </div>
         <AvatarMenu />
@@ -701,7 +702,7 @@ export default function CreateCoursePage() {
               onClick={handleCancel}
               disabled={isSubmitting}
             >
-              Hủy
+              Cancel
             </button>
             <button
               type="button"
@@ -709,7 +710,7 @@ export default function CreateCoursePage() {
               onClick={() => handleSave(false)}
               disabled={isSubmitting}
             >
-              Lưu tạm
+              Save Draft
             </button>
           </div>
 
@@ -721,7 +722,7 @@ export default function CreateCoursePage() {
                 onClick={() => setStep((s) => Math.max(1, s - 1))}
                 disabled={isSubmitting}
               >
-                Quay lại
+                Back
               </button>
             )}
 
@@ -732,7 +733,7 @@ export default function CreateCoursePage() {
                 onClick={() => setStep((s) => Math.min(maxStep, s + 1))}
                 disabled={isSubmitting || (step === 1 && !canGoNextFromStep1)}
               >
-                Tiếp tục
+                Continue
               </button>
             )}
 
@@ -743,7 +744,7 @@ export default function CreateCoursePage() {
                 onClick={() => handleSave(true)}
                 disabled={isSubmitting || !canGoNextFromStep1}
               >
-                Tạo khóa học
+                Create course
               </button>
             )}
           </div>

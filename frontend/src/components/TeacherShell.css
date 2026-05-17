@@ -1,0 +1,434 @@
+/* =============================================================
+   TeacherShell.css
+   Shared sidebar + top navigation chrome for the Teacher area.
+   Visual tokens come from the HTML mockups (slate / teal / Manrope).
+   ============================================================= */
+
+.tshell {
+  --ts-primary: #091426;
+  --ts-primary-container: #1e293b;
+  --ts-on-surface-variant: #45474c;
+  --ts-secondary: #006b5f;
+  --ts-secondary-container: #6df5e1;
+  --ts-on-secondary-container: #006f64;
+  --ts-surface: #f7f9fb;
+  --ts-surface-lowest: #ffffff;
+  --ts-surface-container: #eceef0;
+  --ts-outline: #c5c6cd;
+  --ts-slate-50: #f8fafc;
+  --ts-slate-100: #f1f5f9;
+  --ts-slate-200: #e2e8f0;
+  --ts-slate-300: #cbd5e1;
+  --ts-slate-400: #94a3b8;
+  --ts-slate-500: #64748b;
+  --ts-slate-600: #475569;
+  --ts-slate-700: #334155;
+  --ts-slate-900: #0f172a;
+  --ts-teal-50: #f0fdfa;
+  --ts-teal-100: #ccfbf1;
+  --ts-teal-400: #2dd4bf;
+  --ts-teal-500: #14b8a6;
+  --ts-teal-600: #0d9488;
+  --ts-teal-700: #0f766e;
+
+  --ts-shell-sidebar-w: 16rem;
+  --ts-shell-topnav-h: 4rem;
+  --ts-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ts-ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  min-height: 100vh;
+  background: var(--ts-surface);
+  color: var(--ts-slate-900);
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+.tshell * {
+  box-sizing: border-box;
+}
+
+.tshell h1,
+.tshell h2,
+.tshell h3,
+.tshell .tshell-headline {
+  font-family: "Manrope", "Inter", sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* ---------- Utility floater (notification + profile) ---------- */
+.tshell-utility {
+  position: fixed;
+  top: 1rem;
+  right: 1.5rem;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid var(--ts-slate-200);
+  border-radius: 999px;
+  box-shadow: 0 10px 30px -12px rgba(15, 23, 42, 0.18),
+    0 2px 6px -2px rgba(15, 23, 42, 0.08);
+  animation: ts-utility-in 0.5s var(--ts-ease-pop);
+}
+
+@keyframes ts-utility-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.tshell-iconbtn {
+  position: relative;
+  background: transparent;
+  border: 0;
+  padding: 0.5rem;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--ts-slate-500);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease, background-color 0.2s ease,
+    transform 0.18s var(--ts-ease-pop);
+}
+
+.tshell-iconbtn:hover {
+  color: var(--ts-teal-500);
+  background: var(--ts-slate-100);
+  transform: translateY(-1px);
+}
+
+.tshell-iconbtn:active {
+  transform: scale(0.95);
+}
+
+.tshell-iconbtn__dot {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--ts-teal-500);
+  box-shadow: 0 0 0 2px var(--ts-slate-50);
+}
+
+/* ---------- Sidebar ---------- */
+.tshell-sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--ts-shell-sidebar-w);
+  padding: 1.5rem 1rem 1.25rem;
+  background: var(--ts-slate-50);
+  border-right: 1px solid var(--ts-slate-200);
+  display: flex;
+  flex-direction: column;
+  z-index: 40;
+  overflow-y: auto;
+}
+
+.tshell-sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 0.5rem 1.5rem;
+  border-bottom: 1px solid var(--ts-slate-200);
+  margin-bottom: 1rem;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 0.5rem;
+  transition: transform 0.25s var(--ts-ease-pop), opacity 0.2s ease;
+}
+
+.tshell-sidebar__brand:hover {
+  opacity: 0.92;
+}
+
+.tshell-sidebar__brand:hover .tshell-sidebar__logo {
+  transform: scale(1.06) rotate(-3deg);
+}
+
+.tshell-sidebar__brand:active {
+  transform: scale(0.98);
+}
+
+.tshell-sidebar__logo {
+  width: 2.6rem;
+  height: 2.6rem;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 0.6rem;
+  background: var(--ts-primary-container);
+  padding: 0.25rem;
+  box-shadow: 0 6px 16px -6px rgba(15, 23, 42, 0.35);
+  transition: transform 0.3s var(--ts-ease-pop), box-shadow 0.25s ease;
+}
+
+.tshell-sidebar__brand-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tshell-sidebar__brand-title {
+  font-family: "Manrope", "Inter", sans-serif;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--ts-slate-900);
+  margin: 0;
+  line-height: 1.1;
+}
+
+.tshell-sidebar__brand-sub {
+  font-size: 0.7rem;
+  color: var(--ts-slate-500);
+  margin: 0.15rem 0 0;
+  letter-spacing: 0.02em;
+}
+
+.tshell-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.tshell-navitem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  font: 500 0.875rem "Inter", sans-serif;
+  color: var(--ts-slate-600);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+  transition: background-color 0.2s ease, color 0.2s ease,
+    transform 0.18s var(--ts-ease-pop);
+}
+
+.tshell-navitem:hover {
+  background: var(--ts-slate-100);
+  color: var(--ts-slate-900);
+  transform: translateX(2px);
+}
+
+.tshell-navitem.is-active {
+  background: var(--ts-teal-50);
+  color: var(--ts-teal-700);
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 0 var(--ts-teal-500);
+}
+
+.tshell-navitem.is-active .material-symbols-outlined {
+  font-variation-settings: "FILL" 1, "wght" 600;
+  animation: ts-icon-pop 0.45s var(--ts-ease-pop);
+}
+
+@keyframes ts-icon-pop {
+  0% {
+    transform: scale(0.8);
+  }
+  60% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Stagger animation for sidebar items on initial mount */
+.tshell-sidebar__nav .tshell-navitem {
+  opacity: 0;
+  animation: ts-nav-in 0.4s var(--ts-ease-out) forwards;
+}
+
+.tshell-sidebar__nav .tshell-navitem:nth-child(1) { animation-delay: 0.06s; }
+.tshell-sidebar__nav .tshell-navitem:nth-child(2) { animation-delay: 0.12s; }
+.tshell-sidebar__nav .tshell-navitem:nth-child(3) { animation-delay: 0.18s; }
+.tshell-sidebar__nav .tshell-navitem:nth-child(4) { animation-delay: 0.24s; }
+.tshell-sidebar__nav .tshell-navitem:nth-child(5) { animation-delay: 0.30s; }
+.tshell-sidebar__nav .tshell-navitem:nth-child(6) { animation-delay: 0.36s; }
+
+@keyframes ts-nav-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Notification dot pulse */
+.tshell-iconbtn__dot {
+  animation: ts-dot-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes ts-dot-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.7),
+      0 0 0 2px var(--ts-slate-50);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(20, 184, 166, 0),
+      0 0 0 2px var(--ts-slate-50);
+  }
+}
+
+.tshell-navitem__icon {
+  font-size: 1.2rem !important;
+}
+
+.tshell-sidebar__footer {
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--ts-slate-200);
+}
+
+.tshell-cta {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  border-radius: 0.65rem;
+  font: 800 0.85rem "Manrope", "Inter", sans-serif;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--ts-teal-500), var(--ts-secondary));
+  border: 0;
+  cursor: pointer;
+  box-shadow: 0 10px 22px -8px rgba(0, 107, 95, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  margin-bottom: 1rem;
+  transition: transform 0.2s var(--ts-ease-pop), box-shadow 0.25s ease;
+}
+
+.tshell-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 30px -10px rgba(0, 107, 95, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.tshell-cta:active {
+  transform: scale(0.97);
+}
+
+.tshell-cta .material-symbols-outlined {
+  font-size: 1rem !important;
+}
+
+.tshell-sidebar__sub-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.tshell-sidebar__sub-nav .tshell-navitem {
+  font-size: 0.82rem;
+  color: var(--ts-slate-500);
+}
+
+/* ---------- Main ---------- */
+.tshell-main {
+  margin-left: var(--ts-shell-sidebar-w);
+  padding: 5.25rem 2rem 3rem; /* top room reserves space for the utility floater */
+  min-height: 100vh;
+}
+
+/* ---------- FAB ---------- */
+.tshell-fab {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: var(--ts-primary-container);
+  color: var(--ts-secondary-container);
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 20px 40px -12px rgba(15, 23, 42, 0.45),
+    0 6px 14px -6px rgba(15, 23, 42, 0.2);
+  transition: transform 0.2s var(--ts-ease-pop),
+    box-shadow 0.25s ease;
+  z-index: 30;
+}
+
+.tshell-fab:hover {
+  transform: scale(1.06);
+  box-shadow: 0 24px 48px -12px rgba(13, 148, 136, 0.45),
+    0 8px 18px -6px rgba(15, 23, 42, 0.22);
+}
+
+.tshell-fab:active {
+  transform: scale(0.95);
+}
+
+.tshell-fab .material-symbols-outlined {
+  font-size: 1.65rem !important;
+  font-variation-settings: "FILL" 1, "wght" 600;
+}
+
+.tshell-fab__label {
+  position: absolute;
+  right: calc(100% + 0.75rem);
+  background: var(--ts-primary-container);
+  color: #ffffff;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.45rem;
+  font: 800 0.7rem "Inter", sans-serif;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(0.5rem);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.tshell-fab:hover .tshell-fab__label {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ---------- Mobile responsive: stack ---------- */
+@media (max-width: 1023px) {
+  .tshell-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s var(--ts-ease-out);
+  }
+  .tshell.is-mobile-open .tshell-sidebar {
+    transform: translateX(0);
+  }
+  .tshell-main {
+    margin-left: 0;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .tshell *,
+  .tshell *::before,
+  .tshell *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

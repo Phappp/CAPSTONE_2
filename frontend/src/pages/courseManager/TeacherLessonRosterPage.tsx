@@ -15,7 +15,7 @@ export default function TeacherLessonRosterPage() {
   const lid = Number(lessonId);
   if (!courseId || Number.isNaN(courseId) || !lid || Number.isNaN(lid)) return null;
 
-  const title = search.get("title") || `Bài ${lid}`;
+  const title = search.get("title") || `Lesson ${lid}`;
   const hasQuiz = search.get("hasQuiz") === "1";
   const hasAssignment = search.get("hasAssignment") === "1";
 
@@ -36,7 +36,7 @@ export default function TeacherLessonRosterPage() {
     };
   }, []);
 
-  if (!ready) return <main className="minimal-page-loading">Đang tải...</main>;
+  if (!ready) return <main className="minimal-page-loading">Loading...</main>;
 
   return (
     <TeacherLessonRosterModal

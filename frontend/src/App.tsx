@@ -49,6 +49,8 @@ import TeacherAssignmentEditorPage from "./pages/courseManager/TeacherAssignment
 import TeacherLessonStudioPage from "./pages/courseManager/TeacherLessonStudioPage";
 import TeacherLessonRosterPage from "./pages/courseManager/TeacherLessonRosterPage";
 import TeacherLiveSessionPage from "./pages/courseManager/LiveSessionPage";
+import DiscussionBoardManagementPage from "./pages/courseManager/DiscussionBoardManagementPage";
+import StudentAnalyticsPage from "./pages/courseManager/StudentAnalyticsPage";
 
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminCourseContentReviewPage from "./pages/admin/AdminCourseContentReviewPage";
@@ -61,6 +63,11 @@ import ContactUsPage from "./pages/landing/ContactUsPage";
 import LearnerSidebarLayout from "./layouts/LearnerSidebarLayout";
 import MarketingSidebarLayout from "./layouts/MarketingSidebarLayout";
 import SystemStatusOrb from "./components/SystemStatusOrb";
+
+// Shared visual-tokens overlay for the big teacher pages
+// (Dashboard, ContentBuilder, CourseDetail, GradingCenter).
+// Additive only — refines hover/focus/transitions without changing layout.
+import "./pages/courseManager/teacher-design-polish.css";
 // import TeacherLiveSessionPage from "./pages/teacher/LiveSessionPage";
 // import LiveSessionViewer from "./pages/leaner/LiveSessionViewer";
 
@@ -247,6 +254,38 @@ export default function App() {
         element={
           <Authentication allowedRoles={["course_manager", "teacher"]}>
             <TeacherLiveSessionPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/discussions"
+        element={
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <DiscussionBoardManagementPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/courses/:courseId/discussions"
+        element={
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <DiscussionBoardManagementPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/analytics"
+        element={
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <StudentAnalyticsPage />
+          </Authentication>
+        }
+      />
+      <Route
+        path="/teacher/courses/:courseId/analytics"
+        element={
+          <Authentication allowedRoles={["course_manager", "teacher"]}>
+            <StudentAnalyticsPage />
           </Authentication>
         }
       />

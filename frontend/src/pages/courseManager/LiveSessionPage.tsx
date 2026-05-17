@@ -59,7 +59,7 @@ export default function TeacherLiveSessionPage() {
       );
       setSessions(result.items);
     } catch (err: any) {
-      setError(err.message || "Không thể tải danh sách buổi live");
+      setError(err.message || "Failed to load Live Sessions list");
     } finally {
       setLoading(false);
     }
@@ -119,7 +119,7 @@ export default function TeacherLiveSessionPage() {
       setFormScheduledAt("");
       fetchSessions();
     } catch (err: any) {
-      alert(err.message || "Không thể tạo buổi live");
+      alert(err.message || "Failed to create live session");
     } finally {
       setFormSubmitting(false);
     }
@@ -135,7 +135,7 @@ export default function TeacherLiveSessionPage() {
       setSessionToDelete(null);
       fetchSessions();
     } catch (err: any) {
-      alert(err.message || "Không thể xóa buổi live");
+      alert(err.message || "Failed to delete live session");
     }
   };
 
@@ -148,7 +148,7 @@ export default function TeacherLiveSessionPage() {
       fetchSessions();
       setActiveRoom({ session: updated, isHost: true });
     } catch (err: any) {
-      alert(err.message || "Không thể bắt đầu buổi live");
+      alert(err.message || "Failed to start live session");
     }
   };
 
@@ -161,12 +161,12 @@ export default function TeacherLiveSessionPage() {
       fetchSessions();
       setActiveRoom(null);
     } catch (err: any) {
-      alert(err.message || "Không thể kết thúc buổi live");
+      alert(err.message || "Failed to end live session");
     }
   };
 
   const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return "Chưa có lịch";
+    if (!dateStr) return "No schedule";
     const date = new Date(dateStr);
     return date.toLocaleString("vi-VN", {
       day: "2-digit",
@@ -177,14 +177,14 @@ export default function TeacherLiveSessionPage() {
     });
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusThreedge = (status: string) => {
     switch (status) {
       case "live":
-        return <span className="live-badge">Đang live</span>;
+        return <span className="live-badge">On Stream</span>;
       case "ended":
-        return <span className="ended-badge">Đã kết thúc</span>;
+        return <span className="ended-badge">Ended</span>;
       default:
-        return <span className="scheduled-badge">Sắp tới</span>;
+        return <span className="scheduled-badge">Scheduled</span>;
     }
   };
 
@@ -193,7 +193,7 @@ export default function TeacherLiveSessionPage() {
     return (
       <JitsiRoom
         roomName={activeRoom.session.jitsiRoomName}
-        userName={user?.full_name || "Giảng viên"}
+        userName={user?.full_name || "Instructor"}
         isHost={activeRoom.isHost}
         onClose={() => {
           setActiveRoom(null);
@@ -208,30 +208,30 @@ export default function TeacherLiveSessionPage() {
       <div className="live-session-page__header">
         <div className="live-session-page__title-row">
           <Video size={28} />
-          <h1>Quản lý Buổi Live</h1>
+          <h1>Manage Live Sessions</h1>
         </div>
         <button
           className="btn-create"
           onClick={() => setShowCreateModal(true)}
         >
           <Plus size={20} />
-          Tạo buổi Live mới
+          Create first live session
         </button>
       </div>
 
       {error && <div className="error-message">{error}</div>}
 
       {loading ? (
-        <div className="loading-state">Đang tải...</div>
+        <div className="loading-state">Loading...</div>
       ) : sessions.length === 0 ? (
         <div className="empty-state">
           <Video size={64} strokeWidth={1} />
-          <p>Chưa có buổi live nào</p>
+          <p>No live sessions available.</p>
           <button
             className="btn-create"
             onClick={() => setShowCreateModal(true)}
           >
-            Tạo buổi Live đầu tiên
+            Create first live session
           </button>
         </div>
       ) : (
@@ -251,7 +251,7 @@ export default function TeacherLiveSessionPage() {
                     <Calendar size={14} />
                     {formatDate(session.scheduledAt)}
                   </span>
-                  {getStatusBadge(session.status)}
+                  {getStatusThreedge(session.status)}
                 </div>
               </div>
               <div className="session-card__actions">
@@ -261,7 +261,7 @@ export default function TeacherLiveSessionPage() {
                     onClick={() => handleStartSession(session)}
                   >
                     <Play size={16} />
-                    Bắt đầu Live
+                    Start Live
                   </button>
                 )}
                 {session.status === "live" && (
@@ -270,7 +270,7 @@ export default function TeacherLiveSessionPage() {
                     onClick={() => handleEndSession(session)}
                   >
                     <StopCircle size={16} />
-                    Kết thúc
+                    End
                   </button>
                 )}
                 {session.status === "scheduled" && (
@@ -294,11 +294,11 @@ export default function TeacherLiveSessionPage() {
       <CommonModal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        title="Tạo Buổi Live mới"
+        title="Create New Live Session"
       >
         <div className="create-form">
           <div className="form-group">
-            <label>Khóa học</label>
+            <label>Course</label>
             <select
               value={formCourseId || ""}
               onChange={(e) => setFormCourseId(Number(e.target.value))}
@@ -312,26 +312,26 @@ export default function TeacherLiveSessionPage() {
             </select>
           </div>
           <div className="form-group">
-            <label>Tiêu đề buổi live *</label>
+            <label>Title *</label>
             <input
               type="text"
               value={formTitle}
               onChange={(e) => setFormTitle(e.target.value)}
-              placeholder="VD: Buổi học tuần 5 - React Hooks"
+              placeholder="VD: Session week 5 - React Hooks"
               maxLength={255}
             />
           </div>
           <div className="form-group">
-            <label>Mô tả</label>
+            <label>Description</label>
             <textarea
               value={formDescription}
               onChange={(e) => setFormDescription(e.target.value)}
-              placeholder="Mô tả nội dung buổi học..."
+              placeholder="Description of the live session..."
               rows={3}
             />
           </div>
           <div className="form-group">
-            <label>Lên lịch (tùy chọn)</label>
+            <label>Schedule (Optional)</label>
             <input
               type="datetime-local"
               value={formScheduledAt}
@@ -343,14 +343,14 @@ export default function TeacherLiveSessionPage() {
               className="btn-cancel"
               onClick={() => setShowCreateModal(false)}
             >
-              Hủy
+              Cancel
             </button>
             <button
               className="btn-submit"
               onClick={handleCreateSession}
               disabled={!formTitle.trim() || !formCourseId || formSubmitting}
             >
-              {formSubmitting ? "Đang tạo..." : "Tạo Buổi Live"}
+              {formSubmitting ? "Creating..." : "Create Live Session"}
             </button>
           </div>
         </div>
@@ -360,8 +360,8 @@ export default function TeacherLiveSessionPage() {
       <CommonModal
         open={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
-        title="Xác nhận xóa"
-        message={`Bạn có chắc muốn xóa buổi live "${sessionToDelete?.title}" không? Hành động này không thể hoàn tác.`}
+        title="Confirm Delete"
+        message={`Are you sure you want to delete the live session "${sessionToDelete?.title}"? This action cannot be undone.`}
         showCancel={true}
         destructive={true}
         onConfirm={handleDeleteSession}

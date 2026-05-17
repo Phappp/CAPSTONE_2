@@ -1,20 +1,21 @@
 /* TeacherDashboard.css */
 
 /* Import Google Material Icons */
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0,1&display=swap');
-
+@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0,1&display=swap");
 
 /* CSS Variables */
 :root {
   --primary: #00a8cc;
   --primary-dark: #006b8f;
   --primary-light: #38c4e0;
-  --heading-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --heading-font:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
   --purple: #8b5cf6;
-  
+
   --gray-50: #f8fafc;
   --gray-100: #f1f5f9;
   --gray-200: #e2e8f0;
@@ -25,13 +26,16 @@
   --gray-700: #334155;
   --gray-800: #1e293b;
   --gray-900: #0f172a;
-  
+
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  
+  --shadow-md:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -47,8 +51,17 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background: radial-gradient(circle at 15% 5%, #ddf6ff 0%, transparent 32%),
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  background:
+    radial-gradient(circle at 15% 5%, #ddf6ff 0%, transparent 32%),
     linear-gradient(135deg, var(--gray-50) 0%, #ffffff 100%);
   color: var(--gray-800);
   line-height: 1.5;
@@ -89,7 +102,12 @@ body {
   font-family: var(--heading-font);
   font-size: 2rem;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--gray-900) 0%, var(--primary-dark) 45%, var(--primary) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--gray-900) 0%,
+    var(--primary-dark) 45%,
+    var(--primary) 100%
+  );
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -131,7 +149,7 @@ body {
 }
 
 .section-tab.active::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: -1px;
   left: 0;
@@ -172,6 +190,7 @@ body {
   width: 18px;
   height: 18px;
   accent-color: var(--primary);
+  border: 1px solid var(--gray-300);
   cursor: pointer;
 }
 
@@ -215,6 +234,398 @@ body {
   grid-template-columns: repeat(4, 1fr);
   gap: 20px;
   margin-bottom: 32px;
+}
+
+/* =============================================================
+   TeacherShell overlay (when wrapped in <TeacherShell>)
+   Style tokens align with CourseManagerDashboard.html mockup.
+   ============================================================= */
+
+.td-shell {
+  padding: 0;
+  background: transparent;
+}
+
+.td-shell .dashboard-container {
+  max-width: none;
+  padding: 0;
+  background: transparent;
+}
+
+/* Welcome hero */
+.td-hero {
+  margin-bottom: 1.75rem;
+}
+
+.td-hero__title {
+  font-family: "Manrope", "Inter", sans-serif;
+  font-size: 1.875rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #091426;
+  margin: 0 0 0.4rem;
+  animation: td-hero-in 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.td-hero__subtitle {
+  font-size: 0.95rem;
+  color: #45474c;
+  margin: 0;
+}
+
+@keyframes td-hero-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Polished stat cards (HTML token look) */
+.td-shell .stat-card {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 0.85rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  padding: 1.25rem;
+  gap: 1rem;
+  transition:
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.td-shell .stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 18px 36px -22px rgba(15, 23, 42, 0.32),
+    0 4px 12px -6px rgba(15, 23, 42, 0.1);
+  border-color: rgba(20, 184, 166, 0.25);
+}
+
+.td-shell .stat-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 0.6rem;
+  background: #f1f5f9 !important;
+  color: #091426 !important;
+  flex-shrink: 0;
+}
+
+.td-shell .stat-card-icon .material-symbols-outlined {
+  font-size: 1.5rem !important;
+}
+
+.td-shell .stat-card-value {
+  font-family: "Manrope", "Inter", sans-serif;
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.td-shell .stat-card-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-top: 0.2rem;
+}
+
+.td-shell .stat-card-value--money {
+  font-size: 1.05rem;
+}
+
+/* Section tabs: teal underline on active */
+.td-shell .section-tabs {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0;
+  margin-bottom: 1.5rem;
+  gap: 0.25rem;
+}
+
+.td-shell .section-tab {
+  background: transparent;
+  border: 0;
+  padding: 0.7rem 1.1rem;
+  font:
+    600 0.9rem "Inter",
+    sans-serif;
+  color: #64748b;
+  border-radius: 0.5rem 0.5rem 0 0;
+  cursor: pointer;
+  position: relative;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.td-shell .section-tab:hover {
+  color: #14b8a6;
+  background: rgba(20, 184, 166, 0.06);
+}
+
+.td-shell .section-tab.active {
+  color: #0d9488;
+  background: transparent;
+  font-weight: 700;
+}
+
+.td-shell .section-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 0.6rem;
+  right: 0.6rem;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, #14b8a6, #0d9488);
+  border-radius: 2px;
+}
+
+/* Chart card polish */
+.td-shell .chart-card {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 0.85rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  transition:
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s ease;
+}
+
+.td-shell .chart-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 36px -22px rgba(15, 23, 42, 0.28);
+}
+
+.td-shell .chart-card-title {
+  font-family: "Manrope", "Inter", sans-serif;
+  font-weight: 700;
+  color: #091426;
+}
+
+.td-shell .chart-card-icon {
+  color: #0d9488 !important;
+}
+
+/* Transactions card polish */
+.td-shell .transactions-card {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 0.85rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.td-shell .transactions-table th {
+  background: #f8fafc;
+  color: #94a3b8;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.td-shell .transactions-table tbody tr {
+  transition: background-color 0.18s ease;
+}
+
+.td-shell .transactions-table tbody tr:hover {
+  background: rgba(241, 245, 249, 0.6);
+}
+
+/* Course list inherit polish — keep existing controls,
+   just give the toolbar / cards a refreshed surface. */
+.td-shell .course-header {
+  margin-bottom: 1.25rem;
+}
+
+.td-shell .course-header h2.section-title {
+  font-family: "Manrope", "Inter", sans-serif;
+  color: #091426;
+  letter-spacing: -0.015em;
+}
+
+.td-shell .course-toolbar {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 0.85rem;
+  padding: 0.85rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.td-shell .btn-primary {
+  background: linear-gradient(135deg, #14b8a6, #006b5f);
+  color: #ffffff;
+  border-radius: 0.65rem;
+  box-shadow: 0 8px 20px -10px rgba(0, 107, 95, 0.55);
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.22s ease;
+}
+
+.td-shell .btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px -10px rgba(0, 107, 95, 0.6);
+}
+
+/* Filter card polish */
+.td-shell .filter-card {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 0.85rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+/* =============================================================
+   Chart animations & polish (BarChart / PieChart / LineChart)
+   ============================================================= */
+
+@keyframes mb-bar-rise {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes mb-bar-value-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mb-bar-rect {
+  transition: filter 0.25s ease;
+  cursor: pointer;
+}
+
+.mb-bar-group:hover .mb-bar-rect {
+  filter: brightness(1.08) drop-shadow(0 6px 14px rgba(15, 23, 42, 0.18));
+}
+
+.mb-bar-group:hover .mb-bar-value {
+  fill: #0d9488 !important;
+}
+
+@keyframes mb-pie-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6) rotate(-20deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes mb-pie-legend-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.mb-pie-rotate {
+  animation: mb-pie-rotate 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes mb-pie-rotate {
+  from {
+    transform: rotate(-12deg);
+    opacity: 0.6;
+  }
+  to {
+    transform: rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.mb-pie-slice {
+  transition:
+    transform 0.3s cubic-bezier(0.34, 1.32, 0.64, 1),
+    filter 0.25s ease;
+  cursor: pointer;
+}
+
+.mb-pie-slice:hover {
+  transform: scale(1.05) translateZ(0);
+  filter: brightness(1.08) drop-shadow(0 6px 14px rgba(15, 23, 42, 0.2));
+}
+
+@keyframes mb-line-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes mb-line-area-in {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mb-line-dot-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.mb-line-dot {
+  transition:
+    r 0.2s cubic-bezier(0.34, 1.32, 0.64, 1),
+    stroke 0.2s ease;
+  cursor: pointer;
+}
+
+.mb-line-dot:hover {
+  r: 7;
+  stroke: #14b8a6;
+}
+
+/* Chart container container hover effect */
+.td-shell .chart-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.td-shell .chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .td-shell *,
+  .td-shell *::before,
+  .td-shell *::after,
+  .mb-bar-rect,
+  .mb-pie-slice,
+  .mb-line-dot {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+    stroke-dashoffset: 0 !important;
+  }
 }
 
 .stat-card {
@@ -481,7 +892,7 @@ body {
 }
 
 .quick-stat-card::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -645,7 +1056,7 @@ body {
 }
 
 .course-tab.active::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: -1px;
   left: 0;
@@ -1156,7 +1567,7 @@ body {
   .quick-stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .charts-row {
     grid-template-columns: 1fr;
   }
@@ -1166,53 +1577,53 @@ body {
   .teacher-dashboard {
     padding: 20px 16px;
   }
-  
+
   .dashboard-header {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .stats-grid,
   .quick-stats-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .course-toolbar {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .search-wrapper,
   .sort-wrapper {
     width: 100%;
   }
-  
+
   .view-toggle {
     align-self: flex-start;
   }
-  
+
   .course-card-content {
     flex-direction: column;
   }
-  
+
   .course-thumbnail {
     width: 100%;
     height: 140px;
   }
-  
+
   .course-list--grid {
     grid-template-columns: 1fr;
   }
-  
+
   .filter-card-content {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .date-range-group {
     width: 100%;
   }
-  
+
   .date-input {
     flex: 1;
   }
@@ -1223,30 +1634,30 @@ body {
     padding: 8px 16px;
     font-size: 0.8rem;
   }
-  
+
   .stat-card-value {
     font-size: 1.25rem;
   }
-  
+
   .quick-stat-value {
     font-size: 1.2rem;
   }
-  
+
   .course-title-row {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .pagination {
     flex-direction: column;
     gap: 12px;
   }
-  
+
   .course-tab {
     padding: 6px 12px;
     font-size: 0.75rem;
   }
-  
+
   .course-tab .material-icons-outlined {
     font-size: 14px;
   }

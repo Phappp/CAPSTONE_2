@@ -1,0 +1,272 @@
+/* =============================================================
+   teacher-design-polish.css
+   Shared visual-tokens overlay for the four big teacher pages
+   (Dashboard, CourseContentBuilder, CourseDetail, GradingCenter).
+
+   Strategy: additive only — no overrides of layout / spacing,
+   only refines micro-interactions, focus states, and accent tones
+   so the existing TSX stays untouched.
+
+   Scope roots:
+   - .teacher-dashboard         → Dashboard, ContentBuilder, GradingCenter
+   - .dashboard-page            → CourseDetail
+   ============================================================= */
+
+.teacher-dashboard,
+.dashboard-page {
+  --tdp-teal: #14b8a6;
+  --tdp-teal-strong: #0d9488;
+  --tdp-teal-soft: rgba(20, 184, 166, 0.12);
+  --tdp-teal-ring: rgba(20, 184, 166, 0.28);
+  --tdp-slate-100: #f1f5f9;
+  --tdp-slate-200: #e2e8f0;
+  --tdp-slate-900: #0f172a;
+  --tdp-shadow-card:
+    0 1px 3px rgba(255, 255, 255, 0.05), 0 6px 20px -12px rgba(15, 23, 42, 0.16);
+  --tdp-shadow-card-hover:
+    0 18px 36px -20px rgba(15, 23, 42, 0.32),
+    0 4px 12px -6px rgba(15, 23, 42, 0.1);
+  --tdp-shadow-btn: 0 6px 14px -8px rgba(15, 23, 42, 0.25);
+  --tdp-ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --tdp-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+.teacher-dashboard h1,
+.teacher-dashboard h2,
+.teacher-dashboard h3,
+.dashboard-page h1,
+.dashboard-page h2,
+.dashboard-page h3 {
+  font-family: "Manrope", "Inter", sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* ---------- Card hover lift (broad but safe) ---------- */
+.teacher-dashboard .stat-card,
+.teacher-dashboard .filter-card,
+.teacher-dashboard .section-card,
+.teacher-dashboard .course-card,
+.dashboard-page .course-detail-main-card {
+  transition:
+    transform 0.28s var(--tdp-ease-out),
+    box-shadow 0.28s var(--tdp-ease-out),
+    border-color 0.25s ease;
+  will-change: transform;
+}
+
+.stat-card {
+  background: #ffffff;
+}
+
+.teacher-dashboard .stat-card:hover,
+.teacher-dashboard .filter-card:hover,
+.teacher-dashboard .section-card:hover,
+.teacher-dashboard .course-card:hover,
+.dashboard-page .course-detail-main-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--tdp-shadow-card-hover);
+}
+
+/* ---------- Section tabs polish ---------- */
+.teacher-dashboard .section-tabs {
+  gap: 0.4rem;
+}
+
+.teacher-dashboard .section-tab {
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.25s ease,
+    transform 0.18s var(--tdp-ease-pop);
+  position: relative;
+}
+
+.teacher-dashboard .section-tab:hover {
+  transform: translateY(-1px);
+}
+
+.teacher-dashboard .section-tab.active {
+  box-shadow: inset 0 -2px 0 0 var(--tdp-teal);
+}
+
+/* ---------- Buttons & icon buttons ---------- */
+.teacher-dashboard button,
+.dashboard-page button {
+  transition:
+    transform 0.18s var(--tdp-ease-pop),
+    background-color 0.22s ease,
+    color 0.2s ease,
+    box-shadow 0.25s ease,
+    border-color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.teacher-dashboard button:active:not(:disabled),
+.dashboard-page button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.teacher-dashboard button:focus-visible,
+.dashboard-page button:focus-visible,
+.teacher-dashboard a:focus-visible,
+.dashboard-page a:focus-visible,
+.teacher-dashboard input:focus-visible,
+.dashboard-page input:focus-visible,
+.teacher-dashboard select:focus-visible,
+.dashboard-page select:focus-visible,
+.teacher-dashboard textarea:focus-visible,
+.dashboard-page textarea:focus-visible {
+  outline: 2px solid var(--tdp-teal);
+  outline-offset: 2px;
+}
+
+/* Lift on primary action buttons */
+.teacher-dashboard .btn-primary,
+.teacher-dashboard .primary-btn,
+.teacher-dashboard .create-course-btn,
+.teacher-dashboard .save-btn,
+.dashboard-page .btn-primary,
+.dashboard-page .primary-btn,
+.dashboard-page .save-btn {
+  box-shadow: var(--tdp-shadow-btn);
+}
+
+.teacher-dashboard .btn-primary:hover:not(:disabled),
+.teacher-dashboard .primary-btn:hover:not(:disabled),
+.teacher-dashboard .create-course-btn:hover:not(:disabled),
+.teacher-dashboard .save-btn:hover:not(:disabled),
+.dashboard-page .btn-primary:hover:not(:disabled),
+.dashboard-page .primary-btn:hover:not(:disabled),
+.dashboard-page .save-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    0 12px 24px -10px rgba(13, 148, 136, 0.4),
+    var(--tdp-shadow-btn);
+}
+
+/* ---------- Inputs (gentle focus halo) ---------- */
+.teacher-dashboard input:focus,
+.teacher-dashboard select:focus,
+.teacher-dashboard textarea:focus,
+.dashboard-page input:focus,
+.dashboard-page select:focus,
+.dashboard-page textarea:focus {
+  box-shadow: 0 0 0 3px var(--tdp-teal-ring);
+}
+
+/* ---------- Smooth scrollbar inside teacher area ---------- */
+.teacher-dashboard ::-webkit-scrollbar,
+.dashboard-page ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.teacher-dashboard ::-webkit-scrollbar-thumb,
+.dashboard-page ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #cbd5e1, #94a3b8);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.teacher-dashboard ::-webkit-scrollbar-thumb:hover,
+.dashboard-page ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--tdp-teal), var(--tdp-teal-strong));
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+/* ---------- Status badges & chips: gentle pop ---------- */
+.teacher-dashboard .course-status-badge,
+.dashboard-page .course-status-badge,
+.teacher-dashboard .badge,
+.dashboard-page .badge,
+.teacher-dashboard .chip,
+.dashboard-page .chip {
+  transition:
+    transform 0.2s var(--tdp-ease-pop),
+    box-shadow 0.2s ease;
+}
+
+.teacher-dashboard .course-status-badge:hover,
+.dashboard-page .course-status-badge:hover {
+  transform: translateY(-1px);
+}
+
+/* ---------- Section card titles get the Manrope treatment ---------- */
+.teacher-dashboard .section-card-title,
+.teacher-dashboard .dashboard-title,
+.teacher-dashboard .section-title,
+.dashboard-page .course-detail-title {
+  font-family: "Manrope", "Inter", sans-serif;
+  letter-spacing: -0.015em;
+}
+
+/* ---------- AI / accent highlights ---------- */
+.teacher-dashboard [data-accent="teal"],
+.dashboard-page [data-accent="teal"] {
+  color: var(--tdp-teal-strong);
+}
+
+/* ---------- Color normalization (light bg → dark text) ---------- */
+.tshell .teacher-dashboard,
+.tshell .dashboard-page {
+  background: transparent;
+  color: var(--tdp-slate-900);
+}
+
+/* Base text colors inside the shell — make sure low-contrast greys are
+   only used for *secondary* meta text, not primary content. */
+.tshell .teacher-dashboard p,
+.tshell .dashboard-page p {
+  color: #334155;
+}
+
+.tshell .teacher-dashboard h1,
+.tshell .teacher-dashboard h2,
+.tshell .teacher-dashboard h3,
+.tshell .teacher-dashboard h4,
+.tshell .dashboard-page h1,
+.tshell .dashboard-page h2,
+.tshell .dashboard-page h3,
+.tshell .dashboard-page h4 {
+  color: var(--tdp-slate-900);
+}
+
+/* Override any inherited dark bg on the page wrappers — the shell
+   surface (#f7f9fb) already provides the canvas. */
+.tshell .teacher-dashboard,
+.tshell .dashboard-page {
+  padding-top: 0;
+}
+
+/* Status badges: ensure foreground readable against background fill */
+.tshell .status-badge,
+.tshell .course-status-badge {
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+/* Inputs / selects: dark text on white */
+.tshell input,
+.tshell select,
+.tshell textarea {
+  color: var(--tdp-slate-900);
+  background: #ffffff;
+}
+
+.tshell input::placeholder,
+.tshell textarea::placeholder {
+  color: #94a3b8;
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .teacher-dashboard *,
+  .dashboard-page * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
