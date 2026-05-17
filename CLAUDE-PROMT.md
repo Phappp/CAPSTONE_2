@@ -34,7 +34,7 @@ Target Conversion & Replacement Mapping:
 4. MASTER ROUTING SYNCHRONIZATION (`App.tsx`):
    - Refactor `src/App.tsx` to clear out broken imports of deleted files and attach the updated components.
    - Ensure these teacher-facing screens are securely wrapped under the proper `<Authentication allowedRoles={["course_manager", "teacher"]}>` middleware blocks.
-
+---------------------------------------------------------------------------------------------
 [OUTPUT EXPECTED]
 Directly edit and overwrite the files in the directory. Organize your work and process each page systematically. For each page, deliver the modified:
 
@@ -44,3 +44,4 @@ Directly edit and overwrite the files in the directory. Organize your work and p
 Please read the target files in `src/pages/learner/` and apply these precise visual upgrades now.
 
 Please begin the automated migration, cleanup, and routing refactor now.
+----------------------------------------------------------------------------------
