@@ -1,14 +1,18 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { House, Lock, Save, Shield } from "lucide-react";
-import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { PROFILE_API } from "../../api/profile";
 import { useAuth } from "../../contexts/Auth";
 import { getAccessToken } from "../../utils/authStorage";
 import "./ProfilePage.css";
 
-export default function ProfileSecurityPage() {
+interface ProfileSecurityPageProps {
+  hideHeader?: boolean;
+  onCancel?: () => void;
+}
+
+export default function ProfileSecurityPage({ hideHeader = false, onCancel }: ProfileSecurityPageProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [currentPassword, setCurrentPassword] = useState("");
@@ -23,6 +27,10 @@ export default function ProfileSecurityPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const goToDashboard = () => {
+    if (onCancel) {
+      onCancel();
+      return;
+    }
     const roleSet = new Set((user?.roles || []).map((r) => r.toLowerCase()));
     if (roleSet.has("admin")) return navigate("/admin");
     if (roleSet.has("teacher") || roleSet.has("course_manager")) return navigate("/teacher/dashboard");
@@ -105,70 +113,71 @@ export default function ProfileSecurityPage() {
   };
 
   return (
-    <div className="dashboard-page profile-page-shell">
-      <div className="profile-page-header">
-        <div>
-          <div className="profile-page-kicker">Security center</div>
-          <h1 className="dashboard-title profile-page-title">Bảo mật tài khoản</h1>
-          <p className="dashboard-subtitle profile-page-subtitle">
-            Quản lý mật khẩu và các thiết lập an toàn cho tài khoản của bạn.
-          </p>
+    <div className="pp-page">
+      {!hideHeader && (
+        <div className="pp-header">
+          <div>
+            <div className="pp-kicker">Security center</div>
+            <h1 className="pp-title">Bảo mật tài khoản</h1>
+            <p className="pp-subtitle">
+              Quản lý mật khẩu và các thiết lập an toàn cho tài khoản của bạn.
+            </p>
+          </div>
+          <div className="pp-top-actions">
+            <button type="button" className="pp-btn pp-btn-secondary" onClick={goToDashboard}>
+              <House size={16} />
+              Dashboard
+            </button>
+          </div>
         </div>
-        <div className="profile-top-actions">
-          <button type="button" className="secondary-button" onClick={goToDashboard}>
-            <House size={16} />
-            Dashboard
-          </button>
-          <AvatarMenu />
-        </div>
-      </div>
+      )}
 
-      <div className="profile-main-card">
-        <div className="profile-security-grid">
-          <div className="profile-glass-card">
-            <div className="profile-stats-title">
+      <div className="pp-card">
+        <div className="pp-security-grid">
+          <div className="pp-info-card">
+            <div className="pp-security-title">
               <Lock size={16} />
               Đổi mật khẩu
             </div>
-            <div className="form-group">
-              <label className="form-label">Mật khẩu hiện tại</label>
-              <input className="form-input" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+            <div className="pp-form-group">
+              <label className="pp-form-label">Mật khẩu hiện tại</label>
+              <input className="pp-form-input" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
             </div>
-            <div className="form-group">
-              <label className="form-label">Mật khẩu mới</label>
-              <input className="form-input" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            <div className="pp-form-group">
+              <label className="pp-form-label">Mật khẩu mới</label>
+              <input className="pp-form-input" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
             </div>
-            <div className="form-group">
-              <label className="form-label">Xác nhận mật khẩu mới</label>
-              <input className="form-input" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+            <div className="pp-form-group">
+              <label className="pp-form-label">Xác nhận mật khẩu mới</label>
+              <input className="pp-form-input" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
             </div>
-            <div className="profile-manager-submit">
-              <button type="button" className="primary-button" onClick={changePassword} disabled={savingPassword}>
+            <div className="pp-submit-row">
+              <button type="button" className="pp-btn pp-btn-primary" onClick={changePassword} disabled={savingPassword}>
                 <Save size={16} />
                 {savingPassword ? "Đang lưu..." : "Đổi mật khẩu"}
               </button>
             </div>
           </div>
 
-          <div className="profile-glass-card">
-            <div className="profile-stats-title">
+          <div className="pp-info-card">
+            <div className="pp-security-title">
               <Shield size={16} />
               Cài đặt bảo mật
             </div>
-            <div className="profile-security-item">
-              <span className="profile-info-label">Xác thực hai lớp (2FA)</span>
+            <div className="pp-security-item">
+              <span className="pp-info-label">Xác thực hai lớp (2FA)</span>
               <input type="checkbox" checked={twoFactorEnabled} onChange={(e) => setTwoFactorEnabled(e.target.checked)} />
             </div>
-            <div className="profile-security-item">
-              <span className="profile-info-label">Thông báo đăng nhập mới</span>
+            <div className="pp-security-item">
+              <span className="pp-info-label">Thông báo đăng nhập mới</span>
               <input type="checkbox" checked={loginNotification} onChange={(e) => setLoginNotification(e.target.checked)} />
             </div>
-            <div className="profile-security-item">
-              <span className="profile-info-label">Tin cậy thiết bị hiện tại</span>
+            <div className="pp-security-item">
+              <span className="pp-info-label">Tin cậy thiết bị hiện tại</span>
               <input type="checkbox" checked={deviceTrust} onChange={(e) => setDeviceTrust(e.target.checked)} />
             </div>
-            <div className="profile-manager-submit">
-              <button type="button" className="primary-button" onClick={saveSecurity} disabled={savingSecurity}>
+            <div className="pp-submit-row">
+              <button type="button" className="pp-btn pp-btn-primary" onClick={saveSecurity} disabled={savingSecurity}>
                 <Save size={16} />
                 {savingSecurity ? "Đang lưu..." : "Lưu cài đặt"}
               </button>
@@ -176,8 +185,8 @@ export default function ProfileSecurityPage() {
           </div>
         </div>
 
-        {errorMessage ? <div className="error-box">{errorMessage}</div> : null}
-        {successMessage ? <div className="profile-success-message">{successMessage}</div> : null}
+        {errorMessage ? <div className="pp-error-box">{errorMessage}</div> : null}
+        {successMessage ? <div className="pp-success">{successMessage}</div> : null}
       </div>
     </div>
   );

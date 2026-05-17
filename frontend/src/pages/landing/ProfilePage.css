@@ -596,4 +596,62 @@
     width: 100%;
     justify-content: center;
   }
+
+  .pp-security-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Security Page ---------- */
+.pp-security-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .pp-security-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pp-security-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--pp-slate-900);
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--pp-slate-200);
+}
+
+.pp-security-title svg {
+  color: var(--pp-teal-600);
+}
+
+.pp-security-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px dashed var(--pp-slate-200);
+  gap: 1rem;
+}
+
+.pp-security-item:last-of-type {
+  border-bottom: none;
+  margin-bottom: 1rem;
+}
+
+.pp-security-item .pp-info-label {
+  flex: 1;
+}
+
+.pp-security-item input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--pp-teal-600);
+  cursor: pointer;
 }

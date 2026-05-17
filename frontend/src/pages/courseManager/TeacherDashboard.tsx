@@ -11,6 +11,7 @@ import TeacherShell, {
 import TeacherLiveSessionPage from "./LiveSessionPage";
 import CreateCoursePage from "./CreateCoursePage";
 import ProfilePage from "../landing/ProfilePage";
+import ProfileSecurityPage from "../landing/ProfileSecurityPage";
 import "./TeacherDashboard.css";
 import { Video } from "lucide-react";
 import { DEFAULT_COURSE_THUMB } from "../../utils/imageFallback";
@@ -160,13 +161,14 @@ export default function TeacherDashboard() {
     return false;
   };
 
-  type TeacherSection = "dashboard" | "course" | "live" | "create" | "profile";
+  type TeacherSection = "dashboard" | "course" | "live" | "create" | "profile" | "security";
 
   const parseTeacherSection = (raw: string | null): TeacherSection => {
     if (raw === "course") return "course";
     if (raw === "live") return "live";
     if (raw === "create") return "create";
     if (raw === "profile") return "profile";
+    if (raw === "security") return "security";
     if (raw === "activities" || raw === "quizz" || raw === "assignment") return "course";
     return "dashboard";
   };
@@ -1623,6 +1625,25 @@ export default function TeacherDashboard() {
               </button>
             </div>
             <ProfilePage
+              hideHeader={true}
+              onCancel={() => setSection("dashboard")}
+            />
+          </div>
+        )}
+
+        {/* Security Section */}
+        {section === "security" && (
+          <div className="create-course-section">
+            <div className="create-course-header">
+              <button
+                className="back-button"
+                onClick={() => setSection("dashboard")}
+              >
+                <span className="material-symbols-outlined">arrow_back</span>
+                Back to Overview
+              </button>
+            </div>
+            <ProfileSecurityPage
               hideHeader={true}
               onCancel={() => setSection("dashboard")}
             />
