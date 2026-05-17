@@ -42,3 +42,7 @@ Directly edit and overwrite the files in the directory. Organize your work and p
 Please read the target files in `src/pages/learner/` and apply these precise visual upgrades now.
 
 Please apply the prompt rules to update only the LearnerDashboard files first. Once done, let me know so we can move to the next file.
+
+Please apply the prompt rules to update only the LearnerDashboard files first. Once done, let me know so we can move to the next file.
+
+Please apply the prompt rules to update only the LearnerDashboard files first. Once done, let me know so we can move to the next file.
