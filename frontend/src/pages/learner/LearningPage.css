@@ -428,7 +428,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 24px 14px;
+  /* padding: 18px 24px 14px; */
   border-bottom: 1px solid var(--lp-border);
   background: var(--lp-surface);
   flex-shrink: 0;

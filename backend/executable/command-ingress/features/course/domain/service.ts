@@ -436,9 +436,27 @@ async function ensureCourseWorkflowSchema(): Promise<void> {
     `
   );
 
+  // Helper to retry a query on deadlock (MySQL error 1213)
+  const retryOnDeadlock = async <T>(fn: () => Promise<T>, retries = 3): Promise<T> => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        return await fn();
+      } catch (err: any) {
+        if (err?.code === 'ER_LOCK_DEADLOCK' && attempt < retries) {
+          // Wait a bit before retrying
+          await new Promise((resolve) => setTimeout(resolve, 50 * attempt));
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new Error('Max retries exceeded');
+  };
+
   // Backfill marker review-items for structured content (quiz/assignment)
   // so admin moderation can handle them through the same lesson_resources flow.
-  await AppDataSource.query(
+  await retryOnDeadlock(async () =>
+    AppDataSource.query(
     `
     INSERT INTO lesson_resources
       (lesson_id, resource_type, url, filename, mime_type, preview_url, size_bytes, resource_kind, review_status, review_reason, reviewed_by, reviewed_at)
@@ -461,9 +479,11 @@ async function ensureCourseWorkflowSchema(): Promise<void> {
      AND lr.url = CONCAT('internal://lesson/', q.lesson_id, '/quiz')
     WHERE lr.id IS NULL
     `
+    )
   );
 
-  await AppDataSource.query(
+  await retryOnDeadlock(async () =>
+    AppDataSource.query(
     `
     INSERT INTO lesson_resources
       (lesson_id, resource_type, url, filename, mime_type, preview_url, size_bytes, resource_kind, review_status, review_reason, reviewed_by, reviewed_at)
@@ -491,6 +511,7 @@ async function ensureCourseWorkflowSchema(): Promise<void> {
      AND lr.url = CONCAT('internal://lesson/', a.lesson_id, '/assignment')
     WHERE lr.id IS NULL
     `
+    )
   );
 
   // Backfill granular assignment review markers (description + attachment/{idx})
@@ -6094,6 +6115,8 @@ export class CourseServiceImpl implements CourseService {
       const pct = maxPts > 0 ? Math.round((earned / maxPts) * 10000) / 100 : 0;
       const passThreshold = (quiz as any).passing_score != null ? Number((quiz as any).passing_score) : null;
       const isPassed = passThreshold == null ? true : pct + 1e-9 >= passThreshold;
+      const maxAttempts = Number((quiz as any).max_attempts ?? 1);
+      const isLastAttempt = nextNum >= maxAttempts;
 
       await attRepo.update(
         { id: attemptId } as any,
@@ -6104,7 +6127,8 @@ export class CourseServiceImpl implements CourseService {
         } as any
       );
 
-      if (isPassed) {
+      // Complete lesson if passed OR this is the last attempt (exhausted all tries)
+      if (isPassed || isLastAttempt) {
         const { orderedLessons } = await this.loadOrderedLessonsForCourse(courseId);
         const idx = orderedLessons.findIndex((l) => Number((l as any).id) === Number(lessonId));
         if (idx >= 0) {
@@ -6127,10 +6151,12 @@ export class CourseServiceImpl implements CourseService {
           );
           await progressRepo.save(entity as any);
         }
+        // Auto-complete the quiz lesson when passed or last attempt - do NOT ignore errors
         try {
           await this.completeLesson(subjectUserId, courseId, lessonId);
-        } catch {
-          // ignore
+        } catch (err) {
+          // Log error for debugging but still consider quiz as completed
+          console.error('[Quiz Complete] Failed to auto-complete lesson:', err);
         }
       }
 

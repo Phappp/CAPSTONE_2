@@ -239,6 +239,28 @@ export default function LearningPage() {
   const [isResizingTree, setIsResizingTree] = useState(false);
   const [isResizingSummary, setIsResizingSummary] = useState(false);
   const [activeTab, setActiveTab] = useState("content");
+  const [currentLessonType, setCurrentLessonType] = useState<string | null>(null);
+
+  // Track lesson type when modal opens
+  useEffect(() => {
+    if (!lessonModal || !course?.modules) {
+      setCurrentLessonType(null);
+      return;
+    }
+    const lesson = course.modules
+      .flatMap((m) => m.lessons || [])
+      .find((l) => l.id === lessonModal.lessonId);
+    setCurrentLessonType(lesson?.lesson_type || null);
+  }, [lessonModal, course]);
+
+  // Reset activeTab when lesson type changes (Quiz/Assignment have no content tab)
+  useEffect(() => {
+    if (currentLessonType === "quiz" || currentLessonType === "assignment") {
+      setActiveTab("resources");
+    } else if (currentLessonType === "video" || currentLessonType === "text") {
+      setActiveTab("content");
+    }
+  }, [currentLessonType]);
 
   // ============================================
   // ALL useRef declarations
@@ -292,11 +314,17 @@ export default function LearningPage() {
     };
   }, [summaryWidth, isSummaryCollapsed]);
 
-  const tabs: TabItem[] = useMemo(() => [
-    { key: "content", label: "Lesson Content" },
-    {key: "resources",label: `Resources (${Math.max(0, lessonModalResources.length - 1)})`},
-    { key: "discussion", label: "Discussion" },
-  ], [lessonModalResources.length]);
+  const tabs: TabItem[] = useMemo(() => {
+    const items: TabItem[] = [];
+    // Only show tabs for video/text lessons
+    if (currentLessonType === "video" || currentLessonType === "text") {
+      items.push({ key: "content", label: "Lesson Content" });
+      items.push({ key: "resources", label: `Resources (${Math.max(0, lessonModalResources.length - 1)})` });
+      items.push({ key: "discussion", label: "Discussion" });
+    }
+    // Quiz/Assignment - no tabs (content opens in new tab)
+    return items;
+  }, [currentLessonType, lessonModalResources.length]);
 
   // ============================================
   // ALL useCallback hooks
@@ -525,6 +553,15 @@ export default function LearningPage() {
     void fetchLearning();
     void fetchProgress();
   }, [fetchLearning, fetchProgress]);
+
+  // Refresh progress when user returns from other tabs (e.g., after completing Quiz/Assignment)
+  useEffect(() => {
+    const handleFocus = () => {
+      void fetchProgress();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [fetchProgress]);
 
   // Auto-select the first unlocked lesson on initial load
   useEffect(() => {
@@ -1156,7 +1193,7 @@ export default function LearningPage() {
             <ArrowLeft size={16} />
             <span>Quay lại</span>
           </button>
-          <AvatarMenu />
+          {/* <AvatarMenu /> */}
         </div>
         <div className="learningPage__loading">Đang tải bản đồ lộ trình...</div>
       </div>
@@ -1171,7 +1208,7 @@ export default function LearningPage() {
             <ArrowLeft size={16} />
             <span>Quay lại</span>
           </button>
-          <AvatarMenu />
+          {/* <AvatarMenu /> */}
         </div>
         <div className="learningPage__errorBox">
           <div className="learningPage__errorTitle">Không thể mở trang học</div>
@@ -1704,7 +1741,7 @@ export default function LearningPage() {
             <div className="learningPage__progressFill" style={{ width: `${Math.max(0, Math.min(100, progressPercent))}%` }} />
           </div>
         </div>
-        <AvatarMenu />
+        {/* <AvatarMenu /> */}
       </div>
 
       <div className="learningPage__body">
@@ -1820,9 +1857,9 @@ export default function LearningPage() {
           <article className="learningPage__contentPane">
             {/* Header */}
             <div className="learningPage__lessonModalHeader">
-              <div className="learningPage__lessonModalTitle">
-                {/* {modalLesson?.title || "Chọn một mục từ cây nội dung"} */}
-              </div>
+              {/* <div className="learningPage__lessonModalTitle">
+                {modalLesson?.title || "Chọn một mục từ cây nội dung"}
+              </div> */}
               <div className="learningPage__lessonModalActions">
                 {(() => {
                   const kinds = lessonModal ? lessonAssessmentKindsById.get(lessonModal.lessonId) || [] : [];
@@ -1958,7 +1995,7 @@ export default function LearningPage() {
               )}
 
               {/* Lesson Content tab */}
-              {activeTab === "content" && (
+              {activeTab === "content" && currentLessonType && (currentLessonType === "video" || currentLessonType === "text") && (
                 <div className="learningPage__lessonContentGrid">
                   <div className="learningPage__lesson">
                     <h1 className="learningPage__lessonTitle">{modalLesson?.title}</h1>
@@ -1984,7 +2021,7 @@ export default function LearningPage() {
                     )}
                     <div className="learningPage__tags">
                       <span className="learningPage__tag">
-                        {modalLesson?.lesson_type === "video" ? "Video" : modalLesson?.lesson_type === "text" ? "Văn bản" : "Bài học"}
+                        {modalLesson?.lesson_type === "video" ? "Video" : "Văn bản"}
                       </span>
                     </div>
                   </div>
