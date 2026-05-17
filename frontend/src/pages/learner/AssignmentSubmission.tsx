@@ -22,12 +22,20 @@ import {
   Send,
   X,
   Loader2,
+  FileQuestion,
+  Clock,
 } from 'lucide-react';
 import { url } from '../../baseUrl';
 import { ASSIGNMENTS_API } from '../../api/assignments';
 import { getAccessToken } from '../../utils/authStorage';
 import LearnerFab from '../../components/LearnerFab';
 import './AssignmentSubmission.css';
+
+interface ShortAnswerQuestion {
+  id: string;
+  question_text: string;
+  order_index: number;
+}
 
 interface ResourceItem {
   key: string;
@@ -63,8 +71,12 @@ interface AssignmentPayload {
   allowed_formats: string[];
   attachments: { file_name: string; file_path: string; signed_url: string; file_size?: number }[];
   assignment_kind: 'file_prompt' | 'short_answer';
-  short_answer_questions: { id: string; question_text: string; order_index: number }[];
+  short_answer_questions: ShortAnswerQuestion[];
   time_limit_minutes: number | null;
+  instructor_name?: string;
+  course_title?: string;
+  lesson_title?: string;
+  instructor_avatar?: string;
 }
 
 interface GradeRow {
@@ -117,6 +129,13 @@ const formatDueLabel = (iso: string | null): { label: string; pill: string | nul
   return { label, pill: null, isPast: false };
 };
 
+const formatTimeRemaining = (seconds: number | null): string => {
+  if (seconds === null) return '';
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
 const AssignmentSubmission: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -128,6 +147,7 @@ const AssignmentSubmission: React.FC = () => {
 
   const [reflection, setReflection] = useState<string>('');
   const [files, setFiles] = useState<File[]>([]);
+  const [shortAnswers, setShortAnswers] = useState<Record<string, string>>({});
   const [assignment, setAssignment] = useState<AssignmentPayload | null>(null);
   const [grade, setGrade] = useState<GradeRow | null>(null);
   const [loading, setLoading] = useState(false);
@@ -135,6 +155,8 @@ const AssignmentSubmission: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitOk, setSubmitOk] = useState<string | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [timerStarted, setTimerStarted] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -185,6 +207,33 @@ const AssignmentSubmission: React.FC = () => {
     };
   }, [queryLessonId]);
 
+  const isShortAnswer = assignment?.assignment_kind === 'short_answer';
+  const isFilePrompt = assignment?.assignment_kind === 'file_prompt';
+
+  // Timer effect for short answer assignments
+  useEffect(() => {
+    if (!isShortAnswer || !assignment?.time_limit_minutes || !timerStarted) return;
+
+    const totalSeconds = assignment.time_limit_minutes * 60;
+    setTimeRemaining(totalSeconds);
+
+    const interval = setInterval(() => {
+      setTimeRemaining((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(interval);
+          // Auto-submit when time runs out
+          if (!submitting) {
+            handleSubmit();
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isShortAnswer, assignment?.time_limit_minutes, timerStarted]);
+
   const instructions = useMemo(() => {
     if (!assignment?.description) return fallbackInstructions.map((t, i) => ({ key: `i${i}`, text: t }));
     return assignment.description
@@ -193,6 +242,11 @@ const AssignmentSubmission: React.FC = () => {
       .filter(Boolean)
       .slice(0, 6)
       .map((t, i) => ({ key: `i${i}`, text: t }));
+  }, [assignment]);
+
+  const sortedQuestions = useMemo(() => {
+    if (!assignment?.short_answer_questions) return [];
+    return [...assignment.short_answer_questions].sort((a, b) => a.order_index - b.order_index);
   }, [assignment]);
 
   const resources: ResourceItem[] = useMemo(() => {
@@ -258,17 +312,12 @@ const AssignmentSubmission: React.FC = () => {
     }
     items.push({
       key: 'g-draft',
-      title: reflection.length > 0 || files.length > 0 ? 'New Submission' : 'No draft yet',
+      title: 'No draft yet',
       status: 'pending',
-      meta:
-        reflection.length > 0 || files.length > 0
-          ? `Draft prepared (${reflection.length} chars, ${files.length} file${
-              files.length === 1 ? '' : 's'
-            })`
-          : 'Type your reflection or attach files to begin.',
+      meta: 'Type your answers or attach files to begin.',
     });
     return items;
-  }, [grade, reflection, files, assignment]);
+  }, [grade, assignment]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -278,6 +327,10 @@ const AssignmentSubmission: React.FC = () => {
 
   const handleRemoveFile = (idx: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleShortAnswerChange = (questionId: string, value: string) => {
+    setShortAnswers((prev) => ({ ...prev, [questionId]: value }));
   };
 
   const handleSubmit = async () => {
@@ -291,22 +344,43 @@ const AssignmentSubmission: React.FC = () => {
       );
       return;
     }
+
     const hasText = reflection.trim().length > 0;
     const hasFiles = files.length > 0;
-    if (!hasText && !hasFiles) {
-      setSubmitError('Please add a reflection or attach at least one file.');
-      return;
+    const hasShortAnswers = sortedQuestions.length > 0 && sortedQuestions.every(
+      (q) => (shortAnswers[q.id] || '').trim().length > 0
+    );
+
+    // Validate based on assignment kind
+    if (assignment.assignment_kind === 'short_answer') {
+      if (!hasShortAnswers) {
+        setSubmitError('Please answer all questions before submitting.');
+        return;
+      }
+    } else {
+      if (!hasText && !hasFiles) {
+        setSubmitError('Please add a reflection or attach at least one file.');
+        return;
+      }
     }
 
     setSubmitting(true);
     try {
       const token = getAccessToken();
+      const form = new FormData();
+
+      if (assignment.assignment_kind === 'short_answer') {
+        // Submit short answer format
+        form.append('answers_json', JSON.stringify(shortAnswers));
+      } else {
+        // Submit file prompt format
+        if (hasText) form.append('text_submission', reflection.trim());
+        for (const f of files) form.append('files', f);
+      }
+
       const headers: HeadersInit = token
         ? { Authorization: `Bearer ${token}` }
         : {};
-      const form = new FormData();
-      if (hasText) form.append('text_submission', reflection.trim());
-      for (const f of files) form.append('files', f);
 
       const res = await fetch(
         `${url}${ASSIGNMENTS_API.submitAssignment(assignment.assignment_id)}`,
@@ -322,6 +396,8 @@ const AssignmentSubmission: React.FC = () => {
       }
       setSubmitOk(String((data as any)?.message || 'Assignment submitted successfully.'));
       setFiles([]);
+      setReflection('');
+      setShortAnswers({});
     } catch (err: any) {
       setSubmitError(err?.message || 'Failed to submit assignment.');
     } finally {
@@ -332,6 +408,7 @@ const AssignmentSubmission: React.FC = () => {
   const handleDiscard = () => {
     setReflection('');
     setFiles([]);
+    setShortAnswers({});
     if (fileInputRef.current) fileInputRef.current.value = '';
     setSubmitOk(null);
     setSubmitError(null);
@@ -344,7 +421,9 @@ const AssignmentSubmission: React.FC = () => {
           <nav className="as-crumbs">
             <span className="as-crumb">My Courses</span>
             <ChevronRight size={14} strokeWidth={2.2} className="as-crumb-sep" />
-            <span className="as-crumb">UI/UX Design Masterclass</span>
+            <span className="as-crumb">{assignment?.course_title || lessonTitleFromQuery || 'Course'}</span>
+            <ChevronRight size={14} strokeWidth={2.2} className="as-crumb-sep" />
+            <span className="as-crumb">{assignment?.lesson_title || 'Lesson'}</span>
             <ChevronRight size={14} strokeWidth={2.2} className="as-crumb-sep" />
             <span className="as-crumb as-crumb--active">Assignments</span>
           </nav>
@@ -365,170 +444,269 @@ const AssignmentSubmission: React.FC = () => {
 
         <div className="as-grid">
           <div className="as-col-main">
-            <section className="as-card as-overview">
-              <h2 className="as-section-title">
-                <span className="as-section-icon as-section-icon--teal">
-                  <FileText size={18} strokeWidth={2.2} />
-                </span>
-                Assignment Overview
-              </h2>
-              <p className="as-overview-body">
-                {assignment?.description ||
-                  'In this final project, you are tasked with redesigning a complex financial dashboard with a primary focus on WCAG 2.1 Level AA compliance. You must consider color contrast, screen reader compatibility, and keyboard navigation.'}
-              </p>
+            {!isShortAnswer && (
+              <section className="as-card as-overview">
+                <h2 className="as-section-title">
+                  <span className="as-section-icon as-section-icon--teal">
+                    <FileText size={18} strokeWidth={2.2} />
+                  </span>
+                  Assignment Overview
+                </h2>
+                <p className="as-overview-body">
+                  {assignment?.description ||
+                    'In this final project, you are tasked with redesigning a complex financial dashboard with a primary focus on WCAG 2.1 Level AA compliance. You must consider color contrast, screen reader compatibility, and keyboard navigation.'}
+                </p>
 
-              <h3 className="as-overview-sub">Detailed Instructions</h3>
-              <ul className="as-instructions">
-                {instructions.map((inst) => (
-                  <li key={inst.key} className="as-instruction">
-                    <span className="as-check-icon">
-                      <CheckCircle2 size={18} strokeWidth={2.2} />
-                    </span>
-                    <span className="as-instruction-text">{inst.text}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
+                <h3 className="as-overview-sub">Detailed Instructions</h3>
+                <ul className="as-instructions">
+                  {instructions.map((inst) => (
+                    <li key={inst.key} className="as-instruction">
+                      <span className="as-check-icon">
+                        <CheckCircle2 size={18} strokeWidth={2.2} />
+                      </span>
+                      <span className="as-instruction-text">{inst.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
-            <section className="as-resources">
-              <div className="as-resources-glow" />
-              <h2 className="as-section-title as-section-title--dark">
-                <span className="as-section-icon as-section-icon--dark">
-                  <FolderArchive size={18} strokeWidth={2.2} />
-                </span>
-                Learning Resources
-              </h2>
+            {!isShortAnswer && (
+              <section className="as-resources">
+                <div className="as-resources-glow" />
+                <h2 className="as-section-title as-section-title--dark">
+                  <span className="as-section-icon as-section-icon--dark">
+                    <FolderArchive size={18} strokeWidth={2.2} />
+                  </span>
+                  Learning Resources
+                </h2>
 
-              <div className="as-resources-grid">
-                {resources.map((r) => (
-                  <a
-                    key={r.key}
-                    href={r.href || '#'}
-                    target={r.href ? '_blank' : undefined}
-                    rel={r.href ? 'noreferrer' : undefined}
-                    className="as-resource"
-                  >
-                    <span className="as-resource-icon">{r.icon}</span>
-                    <div className="as-resource-info">
-                      <div className="as-resource-name">{r.name}</div>
-                      <div className="as-resource-meta">
-                        {r.size} • {r.type}
+                <div className="as-resources-grid">
+                  {resources.map((r) => (
+                    <a
+                      key={r.key}
+                      href={r.href || '#'}
+                      target={r.href ? '_blank' : undefined}
+                      rel={r.href ? 'noreferrer' : undefined}
+                      className="as-resource"
+                    >
+                      <span className="as-resource-icon">{r.icon}</span>
+                      <div className="as-resource-info">
+                        <div className="as-resource-name">{r.name}</div>
+                        <div className="as-resource-meta">
+                          {r.size} • {r.type}
+                        </div>
                       </div>
-                    </div>
-                    <span className="as-resource-download">
-                      <Download size={18} strokeWidth={2.2} />
-                    </span>
-                  </a>
-                ))}
-              </div>
-            </section>
+                      <span className="as-resource-download">
+                        <Download size={18} strokeWidth={2.2} />
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <section className="as-card as-submission">
-              <h2 className="as-section-title">Your Submission</h2>
-
-              <div className="as-field">
-                <label className="as-label" htmlFor="as-reflection">
-                  Written Reflection
-                </label>
-                <div className="as-editor">
-                  <div className="as-editor-toolbar">
-                    <button type="button" className="as-tool" aria-label="Bold">
-                      <Bold size={15} strokeWidth={2.2} />
-                    </button>
-                    <button type="button" className="as-tool" aria-label="Italic">
-                      <Italic size={15} strokeWidth={2.2} />
-                    </button>
-                    <button type="button" className="as-tool" aria-label="List">
-                      <List size={15} strokeWidth={2.2} />
-                    </button>
-                    <span className="as-tool-divider" />
-                    <button type="button" className="as-tool" aria-label="Link">
-                      <Link2 size={15} strokeWidth={2.2} />
-                    </button>
-                    <span className="as-editor-counter">
-                      {reflection.trim().length} chars
-                    </span>
+              <div className="as-timer-bar">
+                {isShortAnswer && assignment?.time_limit_minutes && (
+                  <div className="as-timer">
+                    <Clock size={18} strokeWidth={2.2} />
+                    <div className="as-timer-info">
+                      <span className="as-timer-meta">
+                        {sortedQuestions.length} question{sortedQuestions.length !== 1 ? 's' : ''} • {assignment.time_limit_minutes} min{assignment.time_limit_minutes !== 1 ? 's' : ''}
+                      </span>
+                      {timerStarted ? (
+                        <>
+                          <span className="as-timer-label">Time Remaining:</span>
+                          <span className={`as-timer-value ${timeRemaining !== null && timeRemaining <= 300 ? 'as-timer-warning' : ''}`}>
+                            {formatTimeRemaining(timeRemaining)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="as-timer-label">Time limit quiz — begin when ready</span>
+                      )}
+                    </div>
+                    {!timerStarted && (
+                      <button
+                        type="button"
+                        className="as-timer-start-btn"
+                        onClick={() => setTimerStarted(true)}
+                      >
+                        Start Quiz
+                      </button>
+                    )}
                   </div>
-                  <textarea
-                    id="as-reflection"
-                    className="as-textarea"
-                    placeholder="Type your reflection here..."
-                    rows={6}
-                    value={reflection}
-                    onChange={(e) => setReflection(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="as-field">
-                <label className="as-label">Upload Project Files</label>
-                <label className="as-dropzone">
-                  <span className="as-drop-icon">
-                    <UploadCloud size={28} strokeWidth={2} />
-                  </span>
-                  <span className="as-drop-title">
-                    Click to upload or drag and drop
-                  </span>
-                  <span className="as-drop-sub">
-                    {assignment?.allowed_formats?.length
-                      ? `Allowed: ${assignment.allowed_formats.join(', ')}`
-                      : 'Figma Link, PDF, or ZIP (max. 100MB)'}
-                  </span>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="as-drop-input"
-                    multiple
-                    onChange={handleFileChange}
-                  />
-                </label>
-
-                {files.length > 0 && (
-                  <ul className="as-file-list">
-                    {files.map((f, idx) => (
-                      <li key={`${f.name}-${idx}`} className="as-file-row">
-                        <span className="as-file-name">{f.name}</span>
-                        <span className="as-file-size">{formatBytes(f.size)}</span>
-                        <button
-                          type="button"
-                          className="as-file-remove"
-                          onClick={() => handleRemoveFile(idx)}
-                          aria-label={`Remove ${f.name}`}
-                        >
-                          <X size={14} strokeWidth={2.4} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
                 )}
               </div>
+
+              {isShortAnswer && timerStarted && (
+                <h2 className="as-section-title">Answer the Questions</h2>
+              )}
+
+              {/* SHORT ANSWER FORMAT */}
+              {isShortAnswer && timerStarted && (
+                <div className="as-short-answer-section">
+                  {sortedQuestions.length > 0 ? (
+                    sortedQuestions.map((q, idx) => (
+                      <div key={q.id} className="as-field">
+                        <label className="as-label" htmlFor={`sa-${q.id}`}>
+                          Question {idx + 1}
+                          {q.question_text && (
+                            <span className="as-question-text">{q.question_text}</span>
+                          )}
+                        </label>
+                        <textarea
+                          id={`sa-${q.id}`}
+                          className="as-textarea as-short-answer-textarea"
+                          placeholder="Type your answer here..."
+                          rows={4}
+                          value={shortAnswers[q.id] || ''}
+                          onChange={(e) => handleShortAnswerChange(q.id, e.target.value)}
+                        />
+                      </div>
+                    ))
+                  ) : (
+                    instructions.length > 0 ? (
+                      instructions.map((inst) => (
+                        <div key={inst.key} className="as-field">
+                          <label className="as-label">
+                            {inst.text}
+                          </label>
+                          <textarea
+                            className="as-textarea as-short-answer-textarea"
+                            placeholder="Type your answer here..."
+                            rows={4}
+                            value={shortAnswers[inst.key] || ''}
+                            onChange={(e) => handleShortAnswerChange(inst.key, e.target.value)}
+                          />
+                        </div>
+                      ))
+                    ) : (
+                      <div className="as-field">
+                        <label className="as-label">Your Answer</label>
+                        <textarea
+                          className="as-textarea as-short-answer-textarea"
+                          placeholder="Type your answer here..."
+                          rows={6}
+                          value={shortAnswers['default'] || ''}
+                          onChange={(e) => handleShortAnswerChange('default', e.target.value)}
+                        />
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+
+              {/* FILE PROMPT FORMAT */}
+              {!isShortAnswer && (
+                <>
+                  <div className="as-field">
+                    <label className="as-label" htmlFor="as-reflection">
+                      Written Reflection
+                    </label>
+                    <div className="as-editor">
+                      <div className="as-editor-toolbar">
+                        <button type="button" className="as-tool" aria-label="Bold">
+                          <Bold size={15} strokeWidth={2.2} />
+                        </button>
+                        <button type="button" className="as-tool" aria-label="Italic">
+                          <Italic size={15} strokeWidth={2.2} />
+                        </button>
+                        <button type="button" className="as-tool" aria-label="List">
+                          <List size={15} strokeWidth={2.2} />
+                        </button>
+                        <span className="as-tool-divider" />
+                        <button type="button" className="as-tool" aria-label="Link">
+                          <Link2 size={15} strokeWidth={2.2} />
+                        </button>
+                        <span className="as-editor-counter">
+                          {reflection.trim().length} chars
+                        </span>
+                      </div>
+                      <textarea
+                        id="as-reflection"
+                        className="as-textarea"
+                        placeholder="Type your reflection here..."
+                        rows={6}
+                        value={reflection}
+                        onChange={(e) => setReflection(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="as-field">
+                    <label className="as-label">Upload Project Files</label>
+                    <label className="as-dropzone">
+                      <span className="as-drop-icon">
+                        <UploadCloud size={28} strokeWidth={2} />
+                      </span>
+                      <span className="as-drop-title">
+                        Click to upload or drag and drop
+                      </span>
+                      <span className="as-drop-sub">
+                        {assignment?.allowed_formats?.length
+                          ? `Allowed: ${assignment.allowed_formats.join(', ')}`
+                          : 'Figma Link, PDF, or ZIP (max. 100MB)'}
+                      </span>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="as-drop-input"
+                        multiple
+                        onChange={handleFileChange}
+                      />
+                    </label>
+
+                    {files.length > 0 && (
+                      <ul className="as-file-list">
+                        {files.map((f, idx) => (
+                          <li key={`${f.name}-${idx}`} className="as-file-row">
+                            <span className="as-file-name">{f.name}</span>
+                            <span className="as-file-size">{formatBytes(f.size)}</span>
+                            <button
+                              type="button"
+                              className="as-file-remove"
+                              onClick={() => handleRemoveFile(idx)}
+                              aria-label={`Remove ${f.name}`}
+                            >
+                              <X size={14} strokeWidth={2.4} />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </>
+              )}
 
               {submitError && <div className="as-error-banner">{submitError}</div>}
               {submitOk && <div className="as-success-banner">{submitOk}</div>}
 
-              <div className="as-submit-row">
-                <button
-                  type="button"
-                  className="as-cancel-btn-inline"
-                  onClick={handleDiscard}
-                  disabled={submitting}
-                >
-                  Discard
-                </button>
-                <button
-                  type="button"
-                  className="as-submit-btn"
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                >
-                  {submitting ? (
-                    <Loader2 size={16} className="as-spin" />
-                  ) : (
-                    <Send size={16} strokeWidth={2.4} />
-                  )}
-                  {submitting ? 'Submitting…' : 'Submit Assignment'}
-                </button>
-              </div>
+              {(!isShortAnswer || timerStarted) && (
+                <div className="as-submit-row">
+                  <button
+                    type="button"
+                    className="as-cancel-btn-inline"
+                    onClick={handleDiscard}
+                    disabled={submitting}
+                  >
+                    Discard
+                  </button>
+                  <button
+                    type="button"
+                    className="as-submit-btn"
+                    onClick={handleSubmit}
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <Loader2 size={16} className="as-spin" />
+                    ) : (
+                      <Send size={16} strokeWidth={2.4} />
+                    )}
+                    {submitting ? 'Submitting…' : 'Submit Assignment'}
+                  </button>
+                </div>
+              )}
             </section>
           </div>
 
@@ -620,13 +798,13 @@ const AssignmentSubmission: React.FC = () => {
               <div className="as-instructor-row">
                 <div className="as-instructor-avatar">
                   <img
-                    alt="Instructor"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDEDCmFmnsc0cnPX0wd-rl2xzTgoGGEfgMyJj1qzK_D9m-gAu_yxGC7CEDwmfGPugR6Wkr1z4OQz4gkH_CXBfyjVc2-OzDfls3QQo3pMz_O_g5N3OiOPPWkZ3XcZD7Za1FI0D5Kq8HIJNLe3PTVspLF_EMQwlVYxyeI0--N25CNGSJPYMifb0VA6gZDvp70HPudehlsBRtLw18Di3f7FaUBqL0UWQ92MiYEzR4KSX6AdJ1xpjf5oIRiiwG1QBqxENWiI26_Xt6eiQ"
+                    alt={assignment?.instructor_name || 'Instructor'}
+                    src={assignment?.instructor_avatar || 'https://ui-avatars.com/api/?name=Instructor&background=0D8ABC&color=fff'}
                   />
                 </div>
                 <div className="as-instructor-info">
-                  <div className="as-instructor-name">Sarah Jenkins</div>
-                  <div className="as-instructor-role">Senior UX Architect</div>
+                  <div className="as-instructor-name">{assignment?.instructor_name || 'Course Instructor'}</div>
+                  <div className="as-instructor-role">Instructor</div>
                 </div>
               </div>
               <button type="button" className="as-ask-btn">
@@ -669,7 +847,7 @@ const AssignmentSubmission: React.FC = () => {
         </div>
       )}
 
-      <LearnerFab onClick={() => navigate('/my-courses')} />
+      <LearnerFab onClick={() => navigate('/courses')} />
     </div>
   );
 };

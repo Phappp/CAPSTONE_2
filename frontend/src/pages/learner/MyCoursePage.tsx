@@ -116,7 +116,10 @@ const MyCoursePage: React.FC = () => {
     };
   }, [currentTab.status, debouncedSearch]);
 
-  const visibleCourses = useMemo(() => courses, [courses]);
+  const visibleCourses = useMemo(
+    () => [...courses].sort((a, b) => b.progress_percent - a.progress_percent),
+    [courses]
+  );
 
   const openCourse = (c: EnrolledCourse) => {
     navigate(`/my-courses/${c.course_id}/${c.course_slug}`);
@@ -257,7 +260,7 @@ const MyCoursePage: React.FC = () => {
         </div>
       </main>
 
-      <LearnerFab onClick={() => navigate('/my-courses')} />
+      <LearnerFab onClick={() => navigate('/courses')} />
     </div>
   );
 };

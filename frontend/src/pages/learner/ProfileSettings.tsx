@@ -629,7 +629,7 @@ const ProfileSettings: React.FC = () => {
         </div>
       </main>
 
-      <LearnerFab onClick={() => navigate('/my-courses')} />
+      <LearnerFab onClick={() => navigate('/courses')} />
     </div>
   );
 };

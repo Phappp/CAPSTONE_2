@@ -480,7 +480,7 @@ const LearningWorkspace: React.FC = () => {
         </aside>
       </main>
 
-      <LearnerFab onClick={() => navigate('/my-courses')} />
+      <LearnerFab onClick={() => navigate('/courses')} />
     </div>
   );
 };

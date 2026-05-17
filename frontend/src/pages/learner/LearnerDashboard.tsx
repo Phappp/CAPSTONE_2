@@ -14,6 +14,7 @@ import { COURSES_API } from '../../api/courses';
 import { getAccessToken } from '../../utils/authStorage';
 import { useAuth } from '../../contexts/Auth';
 import { DEFAULT_COURSE_THUMB } from '../../utils/imageFallback';
+import LearnerFab from '../../components/LearnerFab';
 import './LearnerDashboard.css';
 
 interface MetricCard {
@@ -244,7 +245,7 @@ const LearnerDashboard: React.FC = () => {
 
   const courseCards: CourseCardItem[] = useMemo(
     () =>
-      courses.slice(0, 8).map((c) => {
+      [...courses].sort((a, b) => b.progress_percent - a.progress_percent).slice(0, 8).map((c) => {
         const modules = c.modules_count || 10;
         const currentModule = Math.max(
           1,
@@ -465,14 +466,7 @@ const LearnerDashboard: React.FC = () => {
         </div>
       </main>
 
-      <button
-        type="button"
-        className="ld-fab"
-        aria-label="Khóa học của tôi"
-        onClick={() => navigate('/my-courses')}
-      >
-        <BookOpen size={22} strokeWidth={2.6} />
-      </button>
+      <LearnerFab onClick={() => navigate('/courses')} />
     </div>
   );
 };

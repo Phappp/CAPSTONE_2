@@ -1387,14 +1387,14 @@ export default function LearningPage() {
     }
   }
 
-  const openLearnerAssessmentInNewTab = (kind: "quiz" | "assignment", lessonId: number, lessonTitle: string) => {
+  const openLearnerAssessment = (kind: "quiz" | "assignment", lessonId: number, lessonTitle: string) => {
     const params = new URLSearchParams({ title: lessonTitle || "" });
     if (slug) params.set("slug", slug);
     if (kind === "quiz") {
       window.open(`/learner/quiz/${courseId}/${lessonId}?${params.toString()}`, "_blank", "noopener,noreferrer");
     } else {
       params.set("courseId", String(courseId));
-      window.open(`/learner/assignment/${lessonId}?${params.toString()}`, "_blank", "noopener,noreferrer");
+      navigate(`/learner/assignment/${lessonId}?${params.toString()}`);
     }
   };
 
@@ -1425,7 +1425,7 @@ export default function LearningPage() {
         requestStartQuiz(targetLessonId, le?.title || "");
         setLessonModal(null);
       } else {
-        openLearnerAssessmentInNewTab("assignment", targetLessonId, le?.title || "");
+        openLearnerAssessment("assignment", targetLessonId, le?.title || "");
         setLessonModal(null);
         void fetchProgress();
       }
@@ -1457,7 +1457,7 @@ export default function LearningPage() {
         requestStartQuiz(targetLessonId, le?.title || "");
         setLessonModal(null);
       } else {
-        openLearnerAssessmentInNewTab("assignment", targetLessonId, le?.title || "");
+        openLearnerAssessment("assignment", targetLessonId, le?.title || "");
         setLessonModal(null);
         void fetchProgress();
       }
@@ -1820,7 +1820,7 @@ export default function LearningPage() {
                                         return;
                                       }
                                       if (le.lesson_type === "assignment") {
-                                        openLearnerAssessmentInNewTab("assignment", le.id, le.title || "");
+                                        openLearnerAssessment("assignment", le.id, le.title || "");
                                         setLessonModal(null);
                                         void fetchProgress();
                                         return;
@@ -1873,7 +1873,7 @@ export default function LearningPage() {
                         if (k === "quiz") {
                           requestStartQuiz(lessonModal.lessonId, modalLesson?.title || "");
                         } else {
-                          openLearnerAssessmentInNewTab("assignment", lessonModal.lessonId, modalLesson?.title || "");
+                          openLearnerAssessment("assignment", lessonModal.lessonId, modalLesson?.title || "");
                           void fetchProgress();
                         }
                       }}
@@ -1981,7 +1981,7 @@ export default function LearningPage() {
                           type="button"
                           className="learningPage__lessonModalActBtn learningPage__lessonModalActBtn--primary"
                           onClick={() => {
-                            openLearnerAssessmentInNewTab("quiz", quizInfoPreview.lessonId, quizInfoPreview.title || "");
+                            openLearnerAssessment("quiz", quizInfoPreview.lessonId, quizInfoPreview.title || "");
                             setQuizStartConfirm(null);
                             void fetchProgress();
                           }}
@@ -2128,7 +2128,7 @@ export default function LearningPage() {
                         if (opt === "quiz") {
                           requestStartQuiz(lessonModalNavPick.lessonId, lessonById.get(lessonModalNavPick.lessonId)?.title || "");
                         } else {
-                          openLearnerAssessmentInNewTab("assignment", lessonModalNavPick.lessonId, lessonById.get(lessonModalNavPick.lessonId)?.title || "");
+                          openLearnerAssessment("assignment", lessonModalNavPick.lessonId, lessonById.get(lessonModalNavPick.lessonId)?.title || "");
                         }
                         setLessonModalNavPick(null);
                         if (opt !== "quiz") void fetchProgress();
