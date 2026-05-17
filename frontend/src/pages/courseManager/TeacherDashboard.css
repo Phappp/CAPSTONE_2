@@ -1,20 +1,21 @@
 /* TeacherDashboard.css */
 
 /* Import Google Material Icons */
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0,1&display=swap');
-
+@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0,1&display=swap");
 
 /* CSS Variables */
 :root {
   --primary: #00a8cc;
   --primary-dark: #006b8f;
   --primary-light: #38c4e0;
-  --heading-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --heading-font:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
   --purple: #8b5cf6;
-  
+
   --gray-50: #f8fafc;
   --gray-100: #f1f5f9;
   --gray-200: #e2e8f0;
@@ -25,13 +26,16 @@
   --gray-700: #334155;
   --gray-800: #1e293b;
   --gray-900: #0f172a;
-  
+
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  
+  --shadow-md:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -47,8 +51,17 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background: radial-gradient(circle at 15% 5%, #ddf6ff 0%, transparent 32%),
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  background:
+    radial-gradient(circle at 15% 5%, #ddf6ff 0%, transparent 32%),
     linear-gradient(135deg, var(--gray-50) 0%, #ffffff 100%);
   color: var(--gray-800);
   line-height: 1.5;
@@ -89,7 +102,12 @@ body {
   font-family: var(--heading-font);
   font-size: 2rem;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--gray-900) 0%, var(--primary-dark) 45%, var(--primary) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--gray-900) 0%,
+    var(--primary-dark) 45%,
+    var(--primary) 100%
+  );
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -131,7 +149,7 @@ body {
 }
 
 .section-tab.active::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: -1px;
   left: 0;
@@ -172,6 +190,7 @@ body {
   width: 18px;
   height: 18px;
   accent-color: var(--primary);
+  border: 1px solid var(--gray-300);
   cursor: pointer;
 }
 
@@ -273,13 +292,16 @@ body {
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
   padding: 1.25rem;
   gap: 1rem;
-  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.25s ease, border-color 0.25s ease;
+  transition:
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
 }
 
 .td-shell .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 18px 36px -22px rgba(15, 23, 42, 0.32),
+  box-shadow:
+    0 18px 36px -22px rgba(15, 23, 42, 0.32),
     0 4px 12px -6px rgba(15, 23, 42, 0.1);
   border-color: rgba(20, 184, 166, 0.25);
 }
@@ -330,12 +352,16 @@ body {
   background: transparent;
   border: 0;
   padding: 0.7rem 1.1rem;
-  font: 600 0.9rem "Inter", sans-serif;
+  font:
+    600 0.9rem "Inter",
+    sans-serif;
   color: #64748b;
   border-radius: 0.5rem 0.5rem 0 0;
   cursor: pointer;
   position: relative;
-  transition: color 0.2s ease, background-color 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .td-shell .section-tab:hover {
@@ -366,7 +392,8 @@ body {
   border: 1px solid #f1f5f9;
   border-radius: 0.85rem;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
-  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+  transition:
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 0.25s ease;
 }
 
@@ -435,7 +462,8 @@ body {
   color: #ffffff;
   border-radius: 0.65rem;
   box-shadow: 0 8px 20px -10px rgba(0, 107, 95, 0.55);
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.22s ease;
 }
 
@@ -527,7 +555,8 @@ body {
 }
 
 .mb-pie-slice {
-  transition: transform 0.3s cubic-bezier(0.34, 1.32, 0.64, 1),
+  transition:
+    transform 0.3s cubic-bezier(0.34, 1.32, 0.64, 1),
     filter 0.25s ease;
   cursor: pointer;
 }
@@ -561,7 +590,9 @@ body {
 }
 
 .mb-line-dot {
-  transition: r 0.2s cubic-bezier(0.34, 1.32, 0.64, 1), stroke 0.2s ease;
+  transition:
+    r 0.2s cubic-bezier(0.34, 1.32, 0.64, 1),
+    stroke 0.2s ease;
   cursor: pointer;
 }
 
@@ -861,7 +892,7 @@ body {
 }
 
 .quick-stat-card::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -1025,7 +1056,7 @@ body {
 }
 
 .course-tab.active::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: -1px;
   left: 0;
@@ -1536,7 +1567,7 @@ body {
   .quick-stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .charts-row {
     grid-template-columns: 1fr;
   }
@@ -1546,53 +1577,53 @@ body {
   .teacher-dashboard {
     padding: 20px 16px;
   }
-  
+
   .dashboard-header {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .stats-grid,
   .quick-stats-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .course-toolbar {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .search-wrapper,
   .sort-wrapper {
     width: 100%;
   }
-  
+
   .view-toggle {
     align-self: flex-start;
   }
-  
+
   .course-card-content {
     flex-direction: column;
   }
-  
+
   .course-thumbnail {
     width: 100%;
     height: 140px;
   }
-  
+
   .course-list--grid {
     grid-template-columns: 1fr;
   }
-  
+
   .filter-card-content {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .date-range-group {
     width: 100%;
   }
-  
+
   .date-input {
     flex: 1;
   }
@@ -1603,30 +1634,30 @@ body {
     padding: 8px 16px;
     font-size: 0.8rem;
   }
-  
+
   .stat-card-value {
     font-size: 1.25rem;
   }
-  
+
   .quick-stat-value {
     font-size: 1.2rem;
   }
-  
+
   .course-title-row {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .pagination {
     flex-direction: column;
     gap: 12px;
   }
-  
+
   .course-tab {
     padding: 6px 12px;
     font-size: 0.75rem;
   }
-  
+
   .course-tab .material-icons-outlined {
     font-size: 14px;
   }

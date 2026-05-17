@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Discussion Management | MindBridge Instructor Suite</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&amp;family=Inter:wght@300;400;500;600&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-bright": "#f7f9fb",
+                        "outline": "#75777d",
+                        "on-background": "#191c1e",
+                        "on-secondary-fixed": "#00201c",
+                        "error": "#ba1a1a",
+                        "on-tertiary-fixed-variant": "#004c69",
+                        "primary-container": "#1e293b",
+                        "on-surface-variant": "#45474c",
+                        "tertiary-container": "#002c3e",
+                        "primary-fixed": "#d8e3fb",
+                        "on-surface": "#191c1e",
+                        "secondary": "#006b5f",
+                        "outline-variant": "#c5c6cd",
+                        "inverse-primary": "#bcc7de",
+                        "inverse-surface": "#2d3133",
+                        "surface-container-high": "#e6e8ea",
+                        "tertiary-fixed": "#c4e7ff",
+                        "tertiary": "#001622",
+                        "surface-tint": "#545f73",
+                        "on-secondary-container": "#006f64",
+                        "on-primary-fixed": "#111c2d",
+                        "inverse-on-surface": "#eff1f3",
+                        "on-tertiary-container": "#009acf",
+                        "error-container": "#ffdad6",
+                        "surface-container-low": "#f2f4f6",
+                        "secondary-fixed-dim": "#4fdbc8",
+                        "secondary-container": "#6df5e1",
+                        "surface-container": "#eceef0",
+                        "on-secondary-fixed-variant": "#005048",
+                        "tertiary-fixed-dim": "#7bd0ff",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed": "#71f8e4",
+                        "surface-container-lowest": "#ffffff",
+                        "surface": "#f7f9fb",
+                        "surface-dim": "#d8dadc",
+                        "on-error-container": "#93000a",
+                        "surface-container-highest": "#e0e3e5",
+                        "on-error": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed-dim": "#bcc7de",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-container": "#8590a6",
+                        "on-tertiary-fixed": "#001e2c",
+                        "on-primary-fixed-variant": "#3c475a",
+                        "background": "#f7f9fb",
+                        "surface-variant": "#e0e3e5",
+                        "primary": "#091426"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+                },
+            },
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        h1,
+        h2,
+        h3,
+        .font-headline {
+            font-family: 'Manrope', sans-serif;
+        }
+
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+
+<body class="bg-surface text-on-surface">
+    <!-- SideNavBar (Shared Component) -->
+    <aside
+        class="fixed left-0 top-0 h-screen w-64 flex flex-col z-50 bg-slate-900 dark:bg-black border-r border-slate-800 shadow-xl font-manrope text-sm">
+        <div class="p-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded bg-teal-500 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-white" data-icon="school">school</span>
+                </div>
+                <div>
+                    <h2 class="text-lg font-black text-white leading-tight">Instructor Suite</h2>
+                    <p class="text-[10px] uppercase tracking-wider text-teal-400 font-bold">Professional Portal</p>
+                </div>
+            </div>
+        </div>
+        <nav class="flex-1 mt-4">
+            <a class="flex items-center gap-3 text-slate-400 py-3 px-6 hover:text-slate-100 hover:bg-slate-800/50 transition-all active:scale-95 duration-150"
+                href="#">
+                <span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                <span>My Courses</span>
+            </a>
+            <a class="flex items-center gap-3 text-slate-400 py-3 px-6 hover:text-slate-100 hover:bg-slate-800/50 transition-all active:scale-95 duration-150"
+                href="#">
+                <span class="material-symbols-outlined" data-icon="query_stats">query_stats</span>
+                <span>Student Progress</span>
+            </a>
+            <a class="flex items-center gap-3 text-slate-400 py-3 px-6 hover:text-slate-100 hover:bg-slate-800/50 transition-all active:scale-95 duration-150"
+                href="#">
+                <span class="material-symbols-outlined" data-icon="folder_open">folder_open</span>
+                <span>Resource Library</span>
+            </a>
+            <a class="flex items-center gap-3 text-slate-400 py-3 px-6 hover:text-slate-100 hover:bg-slate-800/50 transition-all active:scale-95 duration-150"
+                href="#">
+                <span class="material-symbols-outlined" data-icon="event">event</span>
+                <span>Schedule</span>
+            </a>
+            <a class="flex items-center gap-3 bg-teal-500/10 text-teal-400 border-r-4 border-teal-400 py-3 px-6 transition-all active:scale-95 duration-150"
+                href="#">
+                <span class="material-symbols-outlined" data-icon="forum">forum</span>
+                <span>Discussions</span>
+            </a>
+            <a class="flex items-center gap-3 text-slate-400 py-3 px-6 hover:text-slate-100 hover:bg-slate-800/50 transition-all active:scale-95 duration-150"
+                href="#">
+                <span class="material-symbols-outlined" data-icon="settings">settings</span>
+                <span>Settings</span>
+            </a>
+        </nav>
+        <div class="p-6">
+            <button
+                class="w-full py-3 bg-teal-500 text-slate-900 font-bold rounded hover:bg-teal-400 transition-colors active:scale-95 flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+                Create New Course
+            </button>
+        </div>
+        <div class="border-t border-slate-800 py-4">
+            <a class="flex items-center gap-3 text-slate-400 py-2 px-6 hover:text-slate-100 transition-all" href="#">
+                <span class="material-symbols-outlined" data-icon="contact_support">contact_support</span>
+                <span>Support</span>
+            </a>
+            <a class="flex items-center gap-3 text-slate-400 py-2 px-6 hover:text-slate-100 transition-all" href="#">
+                <span class="material-symbols-outlined" data-icon="logout">logout</span>
+                <span>Logout</span>
+            </a>
+        </div>
+    </aside>
+    <!-- TopNavBar (Shared Component) -->
+    <header
+        class="fixed top-0 right-0 left-64 h-16 flex items-center justify-between px-8 z-40 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+        <div class="flex items-center gap-8">
+            <nav class="flex items-center gap-6 font-manrope text-sm font-medium">
+                <a class="text-slate-500 dark:text-slate-400 hover:text-teal-500 transition-colors"
+                    href="#">Dashboard</a>
+                <a class="text-slate-500 dark:text-slate-400 hover:text-teal-500 transition-colors"
+                    href="#">Analytics</a>
+                <a class="text-slate-500 dark:text-slate-400 hover:text-teal-500 transition-colors" href="#">Courses</a>
+                <a class="text-slate-500 dark:text-slate-400 hover:text-teal-500 transition-colors" href="#">Live
+                    Sessions</a>
+            </nav>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="relative">
+                <span class="material-symbols-outlined text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 text-lg"
+                    data-icon="search">search</span>
+                <input
+                    class="pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border-none rounded-full text-sm w-64 focus:ring-2 focus:ring-teal-500/20"
+                    placeholder="Search discussions..." type="text" />
+            </div>
+            <button class="p-2 text-slate-500 hover:bg-slate-50 rounded-full transition-colors relative">
+                <span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+                <span class="absolute top-2 right-2 w-2 h-2 bg-teal-500 rounded-full border-2 border-white"></span>
+            </button>
+            <button class="p-2 text-slate-500 hover:bg-slate-50 rounded-full transition-colors">
+                <span class="material-symbols-outlined" data-icon="help">help</span>
+            </button>
+            <div class="h-8 w-8 rounded-full bg-slate-200 overflow-hidden border border-slate-300">
+                <img alt="Instructor Profile" class="w-full h-full object-cover"
+                    data-alt="professional portrait of a confident male instructor in a modern office setting"
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuBfVzR_f60hna_gEHSdDYHpmcSDkln3woqRfK7QcgX2LPZl6Ufd8KCtcT3ICvqGk0NrMsh9LAiCb6qTb6Agn8AhP2RBrL25-cLDHo1N-8k96g6zUpKhrZHGLJLJaa_zHniHRKpmVjtVMApWtTUL8PaLwZSTIt5zHatxePCdpwGfw3bbqavB1SZPgEb12EkobxvvD0cDSQ5mS86LWFEb4Lnupdhx_Ks6f81DJdM1-htQOhKV4JPbwRBO12OuNn6zeiemX560l6lolg" />
+            </div>
+        </div>
+    </header>
+    <!-- Main Content Area -->
+    <main class="ml-64 pt-16 min-h-screen bg-surface-container-lowest">
+        <div class="p-8 max-w-7xl mx-auto">
+            <!-- Header Section -->
+            <div class="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+                <div>
+                    <h1 class="text-3xl font-extrabold text-primary mb-2">Discussion Management</h1>
+                    <p class="text-on-surface-variant">Monitor, engage, and facilitate student conversations with AI
+                        assistance.</p>
+                </div>
+                <div class="flex gap-3">
+                    <div class="relative">
+                        <select
+                            class="appearance-none pl-4 pr-10 py-2.5 bg-white border border-outline-variant rounded-lg text-sm font-medium focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer">
+                            <option>Advanced Typography 201</option>
+                            <option>UI Design Fundamentals</option>
+                            <option>Interaction Lab</option>
+                        </select>
+                        <span
+                            class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"
+                            data-icon="expand_more">expand_more</span>
+                    </div>
+                    <button
+                        class="flex items-center gap-2 px-4 py-2.5 bg-white border border-outline-variant rounded-lg text-sm font-medium hover:bg-surface-container transition-colors">
+                        <span class="material-symbols-outlined text-lg" data-icon="filter_list">filter_list</span>
+                        Filter
+                    </button>
+                </div>
+            </div>
+            <!-- Dashboard Layout -->
+            <div class="grid grid-cols-12 gap-8">
+                <!-- Discussion List (Left Column) -->
+                <div class="col-span-12 lg:col-span-8 space-y-6">
+                    <!-- Card 1: Unanswered -->
+                    <div
+                        class="bg-white rounded-xl border border-outline-variant shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                        <div class="p-6 border-b border-surface-container">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-3">
+                                    <img alt="Student" class="w-10 h-10 rounded-full object-cover"
+                                        data-alt="close-up of a young male student with dark hair looking thoughtfully into the camera"
+                                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuDZwE4KqedJau9Ux1SI8aiAHK3Fn6Gp4GaZ_7oz8jk3zrCVlky-in2o5YmvEJa5G52nLpMfpV9z1jYQOeQvGeEAo-lZYTW89jMq_d0QlA1oJZLCLrgIakTZomBoVODfu9ypn4z7pwW9QcG7H_f61LijJlqAakZhGFMtXmaZrlbLWXcHHolIq-0XfgkhT-DFzQfxal6LKVZKMxWmEFU9YL2Uu2V8IT1bskyNgPY26xUqhmTKm-T2fiQbzn-1-vjUODfiXjjbpAJOvw" />
+                                    <div>
+                                        <h4 class="font-bold text-primary">Marcus Sterling</h4>
+                                        <p class="text-xs text-on-surface-variant">Posted 2 hours ago in <span
+                                                class="text-teal-600 font-medium">Unit 4: Variable Fonts</span></p>
+                                    </div>
+                                </div>
+                                <span
+                                    class="px-3 py-1 bg-error-container text-on-error-container text-[10px] font-bold uppercase tracking-widest rounded-full">Unanswered</span>
+                            </div>
+                            <h3 class="text-lg font-bold text-primary mb-3">Implementing Variable Fonts in CSS</h3>
+                            <p class="text-on-surface-variant text-sm leading-relaxed mb-4">
+                                I'm having trouble with the 'font-variation-settings' property. Does it always override
+                                specific weight declarations, or can they coexist? Specifically looking at how axes
+                                transition during animations.
+                            </p>
+                        </div>
+                        <div class="bg-surface-bright px-6 py-4 flex items-center justify-between">
+                            <div class="flex gap-4">
+                                <button
+                                    class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-slate-800 transition-colors">
+                                    <span class="material-symbols-outlined text-sm" data-icon="reply">reply</span>
+                                    Reply
+                                </button>
+                                <button
+                                    class="flex items-center gap-2 px-4 py-2 bg-teal-50 text-teal-700 border border-teal-200 rounded-lg text-sm font-semibold hover:bg-teal-100 transition-colors group">
+                                    <span
+                                        class="material-symbols-outlined text-sm text-teal-500 group-hover:scale-110 transition-transform"
+                                        data-icon="auto_awesome">auto_awesome</span>
+                                    Generate AI Response
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-2 text-on-surface-variant">
+                                <span class="material-symbols-outlined text-lg" data-icon="visibility">visibility</span>
+                                <span class="text-xs">14 Views</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Card 2: AI Answered -->
+                    <div
+                        class="bg-white rounded-xl border border-outline-variant shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                        <div class="p-6 border-b border-surface-container">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-3">
+                                    <img alt="Student" class="w-10 h-10 rounded-full object-cover"
+                                        data-alt="professional portrait of a young east asian man smiling slightly with blurred city background"
+                                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuCrSGYeWbA2-kMawObaaJqoxopJXrce_LM2IHE4DqfSE0EiPQfDcbxSH_SZ-WDvyEoTTrKbEChLVQJVCa0mPtSrpvtmM0xTnf6UW3a7I2odKKDdeRNPRnLPgf5snc40eZ5vBRMIawV9EnFsy-bsfNI9Mzn_rTOVtNF1LfcNjULCe0rF7_mNbfeIkA1mYCedWDmKiJDb1nUKt7weQVT7Z1KNMjbj-4i_P-LeimNgRLtRGMNYzqvs_8kCCeD1bjRMMksFq-4NXsLxnA" />
+                                    <div>
+                                        <h4 class="font-bold text-primary">Julian Park</h4>
+                                        <p class="text-xs text-on-surface-variant">Posted 5 hours ago in <span
+                                                class="text-teal-600 font-medium">Unit 1: Color Theory</span></p>
+                                    </div>
+                                </div>
+                                <span
+                                    class="px-3 py-1 bg-secondary-container text-on-secondary-container text-[10px] font-bold uppercase tracking-widest rounded-full">AI
+                                    Answer Generated</span>
+                            </div>
+                            <h3 class="text-lg font-bold text-primary mb-3">CMYK vs Spot Color for Brand Guides</h3>
+                            <p class="text-on-surface-variant text-sm leading-relaxed mb-4">
+                                When creating a brand identity for a client, should I prioritize CMYK values or defined
+                                Pantone colors? I'm worried about color shifting across different print shops.
+                            </p>
+                        </div>
+                        <!-- AI Suggestion Content -->
+                        <div
+                            class="mx-6 my-4 p-5 bg-teal-50/40 border border-teal-100 rounded-lg relative overflow-hidden">
+                            <div class="absolute top-0 right-0 p-2">
+                                <span class="material-symbols-outlined text-teal-200 text-6xl opacity-20 select-none"
+                                    data-icon="smart_toy" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+                            </div>
+                            <div class="flex items-center gap-2 mb-3">
+                                <span class="material-symbols-outlined text-teal-600 text-sm" data-icon="auto_awesome"
+                                    style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+                                <span class="text-xs font-bold text-teal-800 uppercase tracking-tighter">AI-Suggested
+                                    Answer</span>
+                            </div>
+                            <p class="text-sm text-slate-700 italic leading-relaxed relative z-10">
+                                "The best practice is to define both. Use Pantone for critical brand consistency (like
+                                logos) and provide CMYK equivalents for general collateral. Pantone 'Spot' colors ensure
+                                identical results regardless of the printer, while CMYK is more cost-effective for
+                                large-run digital prints..."
+                            </p>
+                        </div>
+                        <div class="bg-surface-bright px-6 py-4 flex items-center justify-between">
+                            <div class="flex gap-3">
+                                <button
+                                    class="flex items-center gap-2 px-5 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 transition-colors">
+                                    Review &amp; Post
+                                </button>
+                                <button
+                                    class="flex items-center gap-2 px-4 py-2 bg-white border border-outline-variant rounded-lg text-sm font-semibold hover:bg-surface-container transition-colors">
+                                    <span class="material-symbols-outlined text-sm" data-icon="edit">edit</span>
+                                    Edit
+                                </button>
+                            </div>
+                            <button class="text-on-surface-variant hover:text-error transition-colors p-2">
+                                <span class="material-symbols-outlined" data-icon="delete">delete</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Right Sidebar (Analytics & Insights) -->
+                <div class="col-span-12 lg:col-span-4 space-y-6">
+                    <!-- Response Stats -->
+                    <div class="bg-primary-container p-6 rounded-xl text-white">
+                        <h3 class="font-headline font-bold text-teal-400 mb-6 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-xl" data-icon="monitoring">monitoring</span>
+                            Response Stats
+                        </h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-3 bg-white/5 rounded-lg">
+                                <p class="text-[10px] text-teal-200/60 uppercase font-bold tracking-widest mb-1">Avg
+                                    Response</p>
+                                <p class="text-2xl font-black">4.2h</p>
+                                <p class="text-[10px] text-teal-400 mt-1 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[10px]"
+                                        data-icon="arrow_upward">arrow_upward</span>
+                                    12% faster
+                                </p>
+                            </div>
+                            <div class="p-3 bg-white/5 rounded-lg">
+                                <p class="text-[10px] text-teal-200/60 uppercase font-bold tracking-widest mb-1">
+                                    Resolution</p>
+                                <p class="text-2xl font-black">94%</p>
+                                <p class="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[10px]"
+                                        data-icon="horizontal_rule">horizontal_rule</span>
+                                    Stable
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Trending Topics -->
+                    <div class="bg-white p-6 rounded-xl border border-outline-variant shadow-sm">
+                        <h3 class="font-headline font-bold text-primary mb-4 flex items-center justify-between">
+                            Trending Topics
+                            <span class="text-[10px] text-on-surface-variant font-normal">Last 7 Days</span>
+                        </h3>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between group cursor-pointer">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
+                                    <span
+                                        class="text-sm font-medium text-slate-700 group-hover:text-teal-600 transition-colors">Agile
+                                        UX Workflow</span>
+                                </div>
+                                <span
+                                    class="text-xs text-on-surface-variant bg-surface-container px-2 py-0.5 rounded">24
+                                    posts</span>
+                            </div>
+                            <div class="flex items-center justify-between group cursor-pointer">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                    <span
+                                        class="text-sm font-medium text-slate-700 group-hover:text-teal-600 transition-colors">Figma
+                                        Auto-Layout v5</span>
+                                </div>
+                                <span
+                                    class="text-xs text-on-surface-variant bg-surface-container px-2 py-0.5 rounded">18
+                                    posts</span>
+                            </div>
+                            <div class="flex items-center justify-between group cursor-pointer">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                                    <span
+                                        class="text-sm font-medium text-slate-700 group-hover:text-teal-600 transition-colors">Accessible
+                                        Color Palettes</span>
+                                </div>
+                                <span
+                                    class="text-xs text-on-surface-variant bg-surface-container px-2 py-0.5 rounded">12
+                                    posts</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Instructor Tip -->
+                    <div
+                        class="bg-tertiary-fixed border border-tertiary-container/10 p-6 rounded-xl relative overflow-hidden">
+                        <div class="absolute -right-4 -bottom-4">
+                            <span class="material-symbols-outlined text-tertiary-container/5 text-8xl"
+                                data-icon="tips_and_updates">tips_and_updates</span>
+                        </div>
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="material-symbols-outlined text-on-tertiary-fixed-variant"
+                                data-icon="lightbulb">lightbulb</span>
+                            <h3 class="font-bold text-on-tertiary-fixed uppercase text-[10px] tracking-widest">
+                                Instructor Tip</h3>
+                        </div>
+                        <p class="text-sm text-on-tertiary-fixed-variant leading-relaxed font-medium relative z-10">
+                            For complex technical questions, try using <span
+                                class="underline decoration-on-tertiary-container/30">Guided Socratic Responses</span>.
+                            Instead of direct answers, ask leading questions to help students discover the solution
+                            independently.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <!-- Floating Action Button (FAB) Suppressed as per context rules for Management screens -->
+</body>
+
+</html>
