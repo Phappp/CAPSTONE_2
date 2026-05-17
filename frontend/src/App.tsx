@@ -72,6 +72,7 @@ import ContactUsPage from "./pages/landing/ContactUsPage";
 import LearnerSidebarLayout from "./layouts/LearnerSidebarLayout";
 import MarketingSidebarLayout from "./layouts/MarketingSidebarLayout";
 import SystemStatusOrb from "./components/SystemStatusOrb";
+import { ChatbotProvider } from "./contexts/ChatbotContext";
 
 // Shared visual-tokens overlay for the big teacher pages
 // (Dashboard, ContentBuilder, CourseDetail, GradingCenter).
@@ -82,7 +83,7 @@ import "./pages/courseManager/teacher-design-polish.css";
 
 export default function App() {
   return (
-    <>
+    <ChatbotProvider>
       <ScrollToTop />
       <Routes>
         <Route path="/" element={<LandingPage />} />
@@ -391,6 +392,6 @@ export default function App() {
       />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </>
+    </ChatbotProvider>
   );
 }

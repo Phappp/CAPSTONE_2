@@ -30,7 +30,9 @@ export class ChatbotController extends BaseController {
                 userId,
                 body.message,
                 body.conversationHistory,
-                body.enrolledCourseIds
+                body.enrolledCourseIds,
+                body.learningContext,
+                body.chatMode
             );
 
             console.log('[Chatbot Debug] conversationHistory received:', JSON.stringify(body.conversationHistory?.slice(-4)));

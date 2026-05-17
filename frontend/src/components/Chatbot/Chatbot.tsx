@@ -1,15 +1,41 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChatMessage } from './ChatMessage';
-import { ChatInput } from './ChatInput';
+import { ChatInput, ChatInputHandles } from './ChatInput';
 import { QuickReplies } from './QuickReplies';
 import { CourseCardInline } from './CourseCardInline';
 import { PaymentInline } from './PaymentInline';
 import { RoadmapInline } from './RoadmapInline';
 import { url } from '../../baseUrl';
 import { useAuth } from '../../contexts/Auth';
-import { MessageSquare, X, Bot, Loader2, Trash2, Maximize2, Minimize2 } from 'lucide-react';
+import { useChatbotContext } from '../../contexts/ChatbotContext';
+import { MessageSquare, X, Bot, Loader2, Trash2, Maximize2, Minimize2, Upload, FileText, GraduationCap, MessageCircle, Info } from 'lucide-react';
 import './Chatbot.css';
+
+// Chat mode types
+export type ChatMode = 'consult' | 'learning';
+
+interface ChatModeOption {
+    id: ChatMode;
+    label: string;
+    icon: React.ReactNode;
+    description: string;
+}
+
+const CHAT_MODES: ChatModeOption[] = [
+    {
+        id: 'consult',
+        label: 'Tư vấn',
+        icon: <MessageCircle size={14} />,
+        description: 'Hỗ trợ tìm kiếm và đăng ký khóa học'
+    },
+    {
+        id: 'learning',
+        label: 'Học tập',
+        icon: <GraduationCap size={14} />,
+        description: 'Hỗ trợ giải thích bài học'
+    }
+];
 
 type ChatbotAction =
     | { type: 'enroll'; courseId: number; courseTitle: string }
@@ -84,13 +110,23 @@ export default function Chatbot() {
         const saved = localStorage.getItem('chatbot_is_expanded');
         return saved === 'true';
     });
+    const [chatMode, setChatMode] = useState<ChatMode>(() => {
+        const saved = localStorage.getItem('chatbot_mode');
+        return (saved as ChatMode) || 'consult';
+    });
+    const [showModeSelector, setShowModeSelector] = useState(false);
+    const [showCourseInfo, setShowCourseInfo] = useState(false);
     const [messages, setMessages] = useState<ChatMessageData[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [showPayment, setShowPayment] = useState(false);
     const [currentPaymentAction, setCurrentPaymentAction] = useState<ChatbotAction>(null);
     const [lastUserMessage, setLastUserMessage] = useState<string | null>(null);
+    const [isDragOver, setIsDragOver] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const chatInputRef = useRef<ChatInputHandles>(null);
+    const prevCourseIdRef = useRef<number | null>(null);
     const { user, accessToken } = useAuth();
+    const { learningContext, setDroppedNode } = useChatbotContext();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -114,20 +150,169 @@ export default function Chatbot() {
     }, [isExpanded]);
 
     useEffect(() => {
+        localStorage.setItem('chatbot_mode', chatMode);
+    }, [chatMode]);
+
+    useEffect(() => {
         if (isOpen && messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
     }, [messages, isOpen]);
 
+    // Auto-switch mode only on course enter/exit (not on manual switch)
+    useEffect(() => {
+        const wasInCourse = prevCourseIdRef.current !== null;
+        const isInCourse = learningContext?.courseId !== null;
+
+        // Enter course: null → has value
+        if (learningContext?.courseId && !wasInCourse) {
+            setChatMode('learning');
+        }
+        // Exit course: has value → null
+        else if (!learningContext?.courseId && wasInCourse) {
+            setChatMode('consult');
+        }
+
+        // Update previous courseId
+        prevCourseIdRef.current = learningContext?.courseId || null;
+    }, [learningContext?.courseId]);
+
+    // Auto-hide course info after 3s
+    useEffect(() => {
+        if (showCourseInfo) {
+            const timer = setTimeout(() => {
+                setShowCourseInfo(false);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [showCourseInfo]);
+
+    const handleShowCourseInfo = useCallback(() => {
+        setShowCourseInfo(prev => !prev);
+    }, []);
+
+    // ====== DRAG & DROP HANDLERS ======
+    const handleDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(true);
+    }, []);
+
+    const handleDragLeave = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+    }, []);
+
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+
+        // Check for dropped node data (from course tree)
+        const nodeData = e.dataTransfer.getData('application/json');
+        if (nodeData) {
+            try {
+                const node = JSON.parse(nodeData);
+                if (node.type && node.id && node.title) {
+                    setDroppedNode(node);
+                    
+                    // Auto-send message based on node type
+                    const messages = {
+                        module: `cho tôi biết về chương: ${node.title}`,
+                        lesson: `giải thích bài: ${node.title}`,
+                        quiz: `hướng dẫn làm quiz: ${node.title}`,
+                        assignment: `yêu cầu bài tập: ${node.title}`,
+                    };
+                    const autoMessage = messages[node.type as keyof typeof messages] || `hỏi về: ${node.title}`;
+                    handleSendMessage(autoMessage);
+                    return;
+                }
+            } catch (err) {
+                console.error('Failed to parse dropped node:', err);
+            }
+        }
+
+        // Check for files
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+            handleFileUpload(files[0]);
+        }
+    }, [setDroppedNode]);
+
+    const handleFileUpload = useCallback(async (file: File) => {
+        try {
+            // Read file content
+            const content = await readFileContent(file);
+            const mimeType = file.type || 'application/octet-stream';
+            
+            // Detect content type
+            let contentType: 'file' | 'image' | 'code' | 'text' = 'file';
+            if (mimeType.startsWith('image/')) {
+                contentType = 'image';
+            } else if (mimeType.includes('text') || 
+                       file.name.endsWith('.txt') || 
+                       file.name.endsWith('.md') ||
+                       file.name.endsWith('.json')) {
+                contentType = 'text';
+            } else if (file.name.endsWith('.js') || 
+                       file.name.endsWith('.ts') || 
+                       file.name.endsWith('.py') ||
+                       file.name.endsWith('.java') ||
+                       file.name.endsWith('.cpp') ||
+                       file.name.endsWith('.c') ||
+                       file.name.endsWith('.cs')) {
+                contentType = 'code';
+            }
+
+            // Send message with attached content
+            handleSendMessage(`Phân tích file: ${file.name}`, {
+                attachedContent: {
+                    type: contentType,
+                    content: content,
+                    filename: file.name,
+                    mimeType: mimeType,
+                }
+            });
+        } catch (err) {
+            console.error('Failed to upload file:', err);
+        }
+    }, []);
+
+    const readFileContent = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const result = reader.result;
+                if (typeof result === 'string') {
+                    resolve(result.substring(0, 10000)); // Limit to 10k chars
+                } else {
+                    // For binary files, return base64
+                    const base64 = btoa(String.fromCharCode(...new Uint8Array(result)));
+                    resolve(base64);
+                }
+            };
+            reader.onerror = reject;
+            reader.readAsText(file);
+        });
+    };
+
     const getWelcomeMessage = (): ChatMessageData => ({
         id: createMessageId(),
         role: 'assistant',
-        content: 'Xin chào! 👋 Mình là trợ lý tư vấn khóa học của e-Learning. Bạn cần mình giúp gì hôm nay?',
-        quickReplies: [
-            { text: 'Tìm khóa học', value: 'tìm khóa học' },
-            { text: 'Có khóa miễn phí không?', value: 'có khóa miễn phí không' },
-            { text: 'Gợi ý khóa cho tôi', value: 'gợi ý khóa học' },
-        ],
+        content: chatMode === 'learning'
+            ? 'Xin chào! Mình là trợ lý hỗ trợ học tập. Bạn đang học bài nào? Hãy hỏi mình nhé!'
+            : 'Xin chào! Mình là trợ lý tư vấn khóa học. Bạn cần mình giúp gì hôm nay?',
+        quickReplies: chatMode === 'learning'
+            ? [
+                { text: 'Giải thích bài này', value: 'Giải thích bài học hiện tại' },
+                { text: 'Hướng dẫn làm bài', value: 'Hướng dẫn tôi làm bài tập' },
+            ]
+            : [
+                { text: 'Tìm khóa học', value: 'tìm khóa học' },
+                { text: 'Có khóa miễn phí không?', value: 'có khóa miễn phí không' },
+                { text: 'Gợi ý khóa cho tôi', value: 'gợi ý khóa học' },
+            ],
     });
 
     const getContextualQuickReplies = (lastMessage?: string): Array<{ text: string; value: string }> => {
@@ -156,7 +341,7 @@ export default function Chatbot() {
         ];
     };
 
-    const handleSendMessage = async (text: string) => {
+    const handleSendMessage = async (text: string, options?: { attachedContent?: any }) => {
         if (!text.trim() || isLoading) return;
 
         // Lưu câu hỏi của user để phục vụ retry
@@ -177,16 +362,51 @@ export default function Chatbot() {
                 content: m.content,
             }));
 
+            // Build request payload
+            const payload: any = {
+                message: text.trim(),
+                conversationHistory: history,
+                chatMode: chatMode,
+            };
+
+            // Add learning context if available
+            if (learningContext) {
+                payload.learningContext = {
+                    courseId: learningContext.courseId,
+                    courseTitle: learningContext.courseTitle,
+                    courseSlug: learningContext.courseSlug,
+                    progressPercent: learningContext.progressPercent,
+                    totalLessons: learningContext.totalLessons,
+                    completedLessons: learningContext.completedLessons,
+                    currentLessonId: learningContext.currentLessonId,
+                    currentLessonTitle: learningContext.currentLessonTitle,
+                    currentLessonType: learningContext.currentLessonType,
+                    currentModuleId: learningContext.currentModuleId,
+                    currentModuleTitle: learningContext.currentModuleTitle,
+                    modules: learningContext.modules,
+                    droppedNode: learningContext.droppedNode,
+                    attachedContent: options?.attachedContent || learningContext.attachedContent,
+                };
+            } else if (options?.attachedContent) {
+                // If no learning context but has attached content, still send it
+                payload.learningContext = {
+                    courseId: 0,
+                    courseTitle: '',
+                    courseSlug: '',
+                    progressPercent: 0,
+                    totalLessons: 0,
+                    completedLessons: 0,
+                    attachedContent: options.attachedContent,
+                };
+            }
+
             const response = await fetch(`${url}/api/v1/chatbot/message`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${accessToken || ''}`,
                 },
-                body: JSON.stringify({
-                    message: text.trim(),
-                    conversationHistory: history,
-                }),
+                body: JSON.stringify(payload),
             });
 
             if (!response.ok) {
@@ -229,6 +449,20 @@ export default function Chatbot() {
     };
 
     const handleQuickReply = (value: string) => {
+        // Check for mode switch
+        if (value === '__switch_to_consult__') {
+            setChatMode('consult');
+            handleSendMessage('Chuyển sang chế độ tư vấn');
+            return;
+        }
+
+        // Check for mode switch to learning
+        if (value === '__switch_to_learning__') {
+            setChatMode('learning');
+            handleSendMessage('Chuyển sang chế độ hỗ trợ học tập');
+            return;
+        }
+
         // Kiểm tra nếu là retry
         const retryKeywords = ['hỏi lại', 'retry', '__retry__', 'thử lại'];
         const isRetry = retryKeywords.some(kw => value.toLowerCase().includes(kw.toLowerCase()));
@@ -292,23 +526,91 @@ export default function Chatbot() {
 
     if (!user) return null;
 
+    // Dynamic header content based on mode
+    const headerTitle = chatMode === 'learning' ? 'Trợ Lý Học Tập' : 'Trợ Lý Tư Vấn';
+    const headerSubtitle = chatMode === 'learning' ? 'Learning Assistant' : 'AI Assistant';
+
     return (
         <>
-            <button className="chatbot-fab" onClick={() => setIsOpen(!isOpen)} aria-label="Chat với trợ lý">
+            <button
+                className={`chatbot-fab ${chatMode === 'learning' ? 'chatbot-mode-learning' : ''}`}
+                onClick={() => setIsOpen(!isOpen)}
+                aria-label="Chat với trợ lý"
+            >
                 {isOpen ? <X size={24} /> : <MessageSquare size={24} />}
             </button>
 
             {isOpen && (
-                <div className={`chatbot-modal ${isExpanded ? 'chatbot-expanded' : ''}`}>
+                    <div className={`chatbot-modal ${isExpanded ? 'chatbot-expanded' : ''} ${isDragOver ? 'chatbot-drop-zone-active' : ''} ${chatMode === 'learning' ? 'chatbot-mode-learning' : ''}`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                >
+                    {isDragOver && (
+                        <div className="chatbot-drop-overlay">
+                            <FileText size={48} />
+                            <span>Thả vào đây để hỏi về nội dung</span>
+                        </div>
+                    )}
+                    
                     <div className="chatbot-header">
                         <div className="chatbot-header-info">
                             <Bot size={24} className="chatbot-header-icon" />
                             <div>
-                                <h3>Trợ Lý Tư Vấn</h3>
-                                <span>AI Assistant</span>
+                                <h3>{headerTitle}</h3>
+                                <span>{headerSubtitle}</span>
+                                {chatMode === 'learning' && learningContext?.courseTitle && (
+                                    <>
+                                        <button
+                                            className="chatbot-course-info-btn"
+                                            onClick={handleShowCourseInfo}
+                                            title="Xem thông tin khóa học"
+                                        >
+                                            <Info size={16} />
+                                        </button>
+                                        {showCourseInfo && (
+                                            <span className="chatbot-course-badge">
+                                                {learningContext.courseTitle}
+                                            </span>
+                                        )}
+                                    </>
+                                )}
                             </div>
                         </div>
                         <div className="chatbot-header-actions">
+                            <div className="chatbot-mode-selector">
+                                <button
+                                    className="chatbot-mode-btn"
+                                    onClick={() => setShowModeSelector(!showModeSelector)}
+                                    title="Chuyển chế độ"
+                                >
+                                    {chatMode === 'consult' ? (
+                                        <MessageCircle size={16} />
+                                    ) : (
+                                        <GraduationCap size={16} />
+                                    )}
+                                </button>
+                                {showModeSelector && (
+                                    <div className="chatbot-mode-dropdown">
+                                        {CHAT_MODES.map((mode) => (
+                                            <button
+                                                key={mode.id}
+                                                className={`chatbot-mode-option ${chatMode === mode.id ? 'active' : ''}`}
+                                                onClick={() => {
+                                                    setChatMode(mode.id);
+                                                    setShowModeSelector(false);
+                                                }}
+                                            >
+                                                {mode.icon}
+                                                <div className="chatbot-mode-option-text">
+                                                    <span className="chatbot-mode-option-label">{mode.label}</span>
+                                                    <span className="chatbot-mode-option-desc">{mode.description}</span>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                             <button
                                 className="chatbot-action-btn"
                                 onClick={() => setIsExpanded(!isExpanded)}
@@ -398,7 +700,12 @@ export default function Chatbot() {
                         <div ref={messagesEndRef} />
                     </div>
 
-                    <ChatInput onSend={handleSendMessage} isLoading={isLoading} />
+                    <ChatInput 
+                        ref={chatInputRef}
+                        onSend={handleSendMessage} 
+                        onFileUpload={handleFileUpload}
+                        isLoading={isLoading} 
+                    />
                 </div>
             )}
         </>

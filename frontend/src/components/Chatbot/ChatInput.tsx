@@ -1,48 +1,138 @@
-import { useState } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import { useState, useRef, useImperativeHandle, forwardRef } from 'react';
+import { Send, Loader2, Upload, X, Paperclip } from 'lucide-react';
+import './ChatInput.css';
+
+export type ChatInputHandles = {
+    triggerFileUpload: () => void;
+};
 
 type ChatInputProps = {
     onSend: (message: string) => void;
+    onFileUpload?: (file: File) => void;
     isLoading?: boolean;
 };
 
-export function ChatInput({ onSend, isLoading }: ChatInputProps) {
-    const [input, setInput] = useState('');
+export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
+    function ChatInput({ onSend, onFileUpload, isLoading }, ref) {
+        const [input, setInput] = useState('');
+        const [attachedFile, setAttachedFile] = useState<File | null>(null);
+        const fileInputRef = useRef<HTMLInputElement>(null);
+        const hiddenFileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (input.trim() && !isLoading) {
-            onSend(input.trim());
-            setInput('');
-        }
-    };
+        // Expose methods to parent via ref
+        useImperativeHandle(ref, () => ({
+            triggerFileUpload: () => {
+                hiddenFileInputRef.current?.click();
+            }
+        }));
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        const handleSubmit = (e: React.FormEvent) => {
             e.preventDefault();
-            handleSubmit(e);
-        }
-    };
+            if (input.trim() && !isLoading) {
+                onSend(input.trim());
+                setInput('');
+            }
+        };
 
-    return (
-        <form className="chatbot-input-form" onSubmit={handleSubmit}>
-            <input
-                type="text"
-                className="chatbot-input"
-                placeholder="Nhap tin nhan..."
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={isLoading}
-                maxLength={2000}
-            />
-            <button
-                type="submit"
-                className="chatbot-send-btn"
-                disabled={!input.trim() || isLoading}
+        const handleKeyDown = (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e);
+            }
+        };
+
+        const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                setAttachedFile(file);
+                if (onFileUpload) {
+                    onFileUpload(file);
+                }
+            }
+            // Reset input
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        };
+
+        const handleRemoveFile = () => {
+            setAttachedFile(null);
+        };
+
+        const handleDragOver = (e: React.DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+        };
+
+        const handleDrop = (e: React.DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const file = e.dataTransfer.files?.[0];
+            if (file) {
+                setAttachedFile(file);
+                if (onFileUpload) {
+                    onFileUpload(file);
+                }
+            }
+        };
+
+        return (
+            <form 
+                className="chatbot-input-form" 
+                onSubmit={handleSubmit}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
             >
-                {isLoading ? <Loader2 size={20} className="chatbot-spinner" /> : <Send size={20} />}
-            </button>
-        </form>
-    );
-}
+                {attachedFile && (
+                    <div className="chatbot-attached-file">
+                        <Paperclip size={14} />
+                        <span className="chatbot-attached-filename">
+                            {attachedFile.name.length > 20 
+                                ? attachedFile.name.substring(0, 17) + '...' 
+                                : attachedFile.name}
+                        </span>
+                        <button 
+                            type="button" 
+                            className="chatbot-attached-remove"
+                            onClick={handleRemoveFile}
+                        >
+                            <X size={12} />
+                        </button>
+                    </div>
+                )}
+                <input
+                    type="text"
+                    className="chatbot-input"
+                    placeholder="Nhập tin nhắn..."
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={isLoading}
+                    maxLength={2000}
+                />
+                <input
+                    ref={hiddenFileInputRef}
+                    type="file"
+                    className="chatbot-file-input-hidden"
+                    onChange={handleFileSelect}
+                    accept=".txt,.md,.pdf,.doc,.docx,.js,.ts,.py,.java,.cpp,.c,.cs"
+                />
+                <button
+                    type="button"
+                    className="chatbot-upload-btn"
+                    onClick={() => hiddenFileInputRef.current?.click()}
+                    title="Đính kèm file"
+                >
+                    <Upload size={18} />
+                </button>
+                <button
+                    type="submit"
+                    className="chatbot-send-btn"
+                    disabled={!input.trim() || isLoading}
+                >
+                    {isLoading ? <Loader2 size={20} className="chatbot-spinner" /> : <Send size={20} />}
+                </button>
+            </form>
+        );
+    }
+);

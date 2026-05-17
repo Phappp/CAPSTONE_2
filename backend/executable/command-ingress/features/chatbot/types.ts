@@ -63,11 +63,59 @@ export type ChatbotResponse = {
     roadmap?: RoadmapResponse;
 };
 
+export type ChatMode = 'consult' | 'learning';
+
 export interface ChatbotService {
     processMessage(
         userId: number,
         message: string,
         conversationHistory?: ChatMessage[],
-        enrolledCourseIds?: number[]
+        enrolledCourseIds?: number[],
+        learningContext?: LearningContext,
+        chatMode?: ChatMode
     ): Promise<ChatbotResponse>;
 }
+
+// ====== Learning Context Types ======
+export type LessonType = 'video' | 'text' | 'quiz' | 'assignment';
+
+export type DroppedNode = {
+    type: 'module' | 'lesson' | 'quiz' | 'assignment';
+    id: number;
+    title: string;
+};
+
+export type AttachedContent = {
+    type: 'file' | 'image' | 'code' | 'text';
+    content: string;
+    filename?: string;
+    mimeType?: string;
+};
+
+export type ModuleInfo = {
+    id: number;
+    title: string;
+    lessons: Array<{
+        id: number;
+        title: string;
+        type: LessonType;
+        completed: boolean;
+    }>;
+};
+
+export type LearningContext = {
+    courseId: number;
+    courseTitle: string;
+    courseSlug: string;
+    progressPercent: number;
+    totalLessons: number;
+    completedLessons: number;
+    currentLessonId?: number;
+    currentLessonTitle?: string;
+    currentLessonType?: LessonType;
+    currentModuleId?: number;
+    currentModuleTitle?: string;
+    modules?: ModuleInfo[];
+    droppedNode?: DroppedNode;
+    attachedContent?: AttachedContent;
+};

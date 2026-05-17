@@ -7,6 +7,7 @@ import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { ASSIGNMENTS_API } from "../../api/assignments";
 import { useAuth } from "../../contexts/Auth";
+import { useChatbotContext } from "../../contexts/ChatbotContext";
 import type { ModuleItem } from "../../components/LearnerCourseContentTree";
 import { isLikelyVideoResource, parseYoutubeVideoId } from "../courseManager/lesson-studio/utils";
 import QuizSubmission from "./QuizSubmission";
@@ -155,6 +156,7 @@ export default function LearningPage() {
   const slug = String(params.slug || "");
 
   const { accessToken: token } = useAuth();
+  const { setLearningContext, clearAll } = useChatbotContext();
 
   // ============================================
   // ALL useState declarations
@@ -557,6 +559,59 @@ export default function LearningPage() {
     void fetchLearning();
     void fetchProgress();
   }, [fetchLearning, fetchProgress]);
+
+  // Update chatbot learning context when course/progress changes
+  useEffect(() => {
+    if (!course || !progress) return;
+
+    const modulesInfo = course.modules?.map(mod => ({
+      id: mod.id,
+      title: mod.title,
+      lessons: (mod.lessons || []).map(lesson => ({
+        id: lesson.id,
+        title: lesson.title || '',
+        type: lesson.lesson_type as 'video' | 'text' | 'quiz' | 'assignment',
+        completed: progress.completed_lesson_ids.includes(lesson.id),
+      })),
+    })) || [];
+
+    // Find current lesson info
+    let currentLessonTitle: string | undefined;
+    let currentLessonType: 'video' | 'text' | 'quiz' | 'assignment' | undefined;
+    let currentModuleTitle: string | undefined;
+
+    if (lessonModal && course.modules) {
+      const module = course.modules.find(m => m.id === lessonModal.moduleId);
+      const lesson = module?.lessons?.find(l => l.id === lessonModal.lessonId);
+      if (lesson) {
+        currentLessonTitle = lesson.title || undefined;
+        currentLessonType = lesson.lesson_type as 'video' | 'text' | 'quiz' | 'assignment';
+        currentModuleTitle = module?.title;
+      }
+    }
+
+    setLearningContext({
+      courseId: course.id,
+      courseTitle: course.title || '',
+      courseSlug: course.slug || slug,
+      progressPercent: progress.progress_percent || 0,
+      totalLessons: progress.total_lessons || 0,
+      completedLessons: progress.completed_lessons || 0,
+      currentLessonId: lessonModal?.lessonId,
+      currentLessonTitle,
+      currentLessonType,
+      currentModuleId: lessonModal?.moduleId,
+      currentModuleTitle,
+      modules: modulesInfo,
+    });
+  }, [course, progress, lessonModal, slug, setLearningContext]);
+
+  // Clear learning context on unmount
+  useEffect(() => {
+    return () => {
+      clearAll();
+    };
+  }, [clearAll]);
 
   // Refresh progress when user returns from other tabs (e.g., after completing Quiz/Assignment)
   useEffect(() => {
