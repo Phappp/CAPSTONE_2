@@ -12,6 +12,7 @@ import { OpenRouterClient } from './llm-client';
 import { findFAQByMessage, FAQItem } from './faq-knowledge';
 import { findRoadmapByTopic, Roadmap } from './roadmap-data';
 import { findCareerByKeyword, formatCareerInfo, CareerPath } from './career-data';
+import { getLanguageProvider, Locale, LanguageProvider } from './languages';
 
 // ====== Types for Comparison Feature ======
 type TopicKnowledge = {
@@ -396,6 +397,11 @@ export class ChatbotServiceImpl implements ChatbotService {
         conversationHistory?: ChatMessage[],
         enrolledCourseIds?: number[]
     ): Promise<ChatbotResponse> {
+        // ========== LANGUAGE DETECTION ==========
+        // Detect language and get appropriate provider
+        const langProvider = getLanguageProvider(message);
+        console.log('[Chatbot Debug] Detected language:', langProvider.locale);
+
         // Check if this is a payment quick reply (format: "pay_{courseId}")
         const payMatch = String(message).match(/^pay_(\d+)$/i);
         if (payMatch) {
@@ -406,12 +412,9 @@ export class ChatbotServiceImpl implements ChatbotService {
         // Check if user wants to cancel
         if (['hủy', 'cancel', 'không', 'no'].includes(String(message).toLowerCase().trim())) {
             return {
-                reply: 'Đã hủy thao tác. Bạn cần mình hỗ trợ gì khác không?',
+                reply: langProvider.responses.cancel,
                 references: [],
-                quickReplies: [
-                    { text: 'Tìm khóa học', value: 'tìm khóa học' },
-                    { text: 'Khóa học của tôi', value: 'khóa học của tôi' },
-                ],
+                quickReplies: langProvider.quickReplies.courseSearch,
                 action: null,
             };
         }
@@ -442,13 +445,9 @@ export class ChatbotServiceImpl implements ChatbotService {
         if (this.isOutOfDomain(message)) {
             console.log('[Chatbot Debug] Out-of-domain message detected');
             return {
-                reply: 'Oops, mình chỉ hỗ trợ về khóa học thôi nha 😅 Bạn cần mình tư vấn khóa học gì không?',
+                reply: langProvider.responses.outOfDomain,
                 references: [],
-                quickReplies: [
-                    { text: 'Tìm khóa học', value: 'gợi ý khóa học' },
-                    { text: 'Khóa miễn phí', value: 'khóa miễn phí' },
-                    { text: 'Lộ trình học', value: 'lộ trình học backend' },
-                ],
+                quickReplies: langProvider.quickReplies.outOfDomain,
                 action: null,
             };
         }
@@ -529,7 +528,7 @@ Bạn quan tâm đến nghề nào nhất?`,
         if (isVagueRequest) {
             // Flow A: Return clarifying response (don't search DB)
             console.log('[Chatbot Debug] Vague request detected - returning clarify response');
-            return this.getClarifyTopicResponse();
+            return this.getClarifyTopicResponse(langProvider);
         }
 
         // Step 2: Extract specific topics — ALSO resolve from conversation history
@@ -602,11 +601,11 @@ Bạn quan tâm đến nghề nào nhất?`,
         }
 
         const activeTopic = topics.length > 0 ? topics[0] : null;
-        const contextInfo = this.buildContextInfo(courses, enrolledCourses, enrolledCourseIds || [], userProfile, recentCourseContext, activeTopic);
+        const contextInfo = this.buildContextInfo(courses, enrolledCourses, enrolledCourseIds || [], userProfile, recentCourseContext, activeTopic, langProvider);
         const conversationContext = this.buildConversationContext(conversationHistory || []);
 
         const messages = [
-            { role: 'system' as const, content: SYSTEM_PROMPT },
+            { role: 'system' as const, content: langProvider.systemPrompt },
             { role: 'system' as const, content: contextInfo },
             ...conversationContext,
             { role: 'user' as const, content: message },
@@ -993,7 +992,8 @@ Bạn quan tâm đến nghề nào nhất?`,
         excludeCourseIds: number[],
         userProfile: any,
         recentCourseContext?: any,
-        activeTopic?: string | null
+        activeTopic?: string | null,
+        langProvider?: LanguageProvider
     ): string {
         const enrolledCourseIds = enrolledCourses.map((e) => e.id);
         const allExcludeIds = [...new Set([...enrolledCourseIds, ...excludeCourseIds])];
@@ -1002,15 +1002,19 @@ Bạn quan tâm đến nghề nào nhất?`,
             .filter((c) => !allExcludeIds.includes(c.id))
             .slice(0, 50);
 
+        const isEnglish = langProvider?.locale === 'en';
+
         const enrolledList =
             enrolledCourses.length > 0
                 ? enrolledCourses
                       .map((e) => {
-                          const cert = e.has_certificate ? 'Có cấp chứng chỉ' : 'Không cấp chứng chỉ';
+                          const cert = e.has_certificate 
+                              ? (isEnglish ? 'Has certificate' : 'Có cấp chứng chỉ')
+                              : (isEnglish ? 'No certificate' : 'Không cấp chứng chỉ');
                           return `[ENROLLED_COURSE] id=${e.id}|slug=${e.slug}|title=${e.title}|progress=${e.progress_percent}%|status=${e.status}|cert=${e.has_certificate}`;
                       })
                       .join('\n')
-                : 'Chưa đăng ký khóa học nào';
+                : (isEnglish ? 'No courses enrolled yet' : 'Chưa đăng ký khóa học nào');
 
         const availableList =
             availableCourses.length > 0
@@ -1020,7 +1024,7 @@ Bạn quan tâm đến nghề nào nhất?`,
                               `[AVAILABLE_COURSE] id=${c.id}|slug=${c.slug}|title=${c.title}|level=${c.level}|price=${c.price}|cert=${c.has_certificate}`
                       )
                       .join('\n')
-                : 'Không có khóa học phù hợp';
+                : (isEnglish ? 'No suitable courses' : 'Không có khóa học phù hợp');
 
         // Add recent course context if available
         let recentCourseInfo = '';
@@ -1034,15 +1038,17 @@ Bạn quan tâm đến nghề nào nhất?`,
                         const lessonTitles = lessons.map((l: any) => l.title).join(', ');
                         return `- Module ${idx + 1}: ${mod.title} (${lessons.length} bài: ${lessonTitles})`;
                     }).join('\n')
-                : 'Chưa có nội dung';
+                : (isEnglish ? 'No content yet' : 'Chưa có nội dung');
 
             recentCourseInfo = `
-KHÓA HỌC ĐANG ĐƯỢC NHẮC ĐẾN (dùng khi user hỏi về khóa này):
-- Tên: ${recentCourseContext.title}
-- Level: ${recentCourseContext.level || 'Không xác định'}
-- Giá: ${recentCourseContext.price === 0 ? 'Miễn phí' : recentCourseContext.price?.toLocaleString('vi-VN') + ' VNĐ'}
-- Chứng chỉ: ${recentCourseContext.has_certificate ? 'Có' : 'Không'}
-- Nội dung chi tiết:
+${isEnglish ? 'CURRENTLY MENTIONED COURSE' : 'KHÓA HỌC ĐANG ĐƯỢC NHẮC ĐẾN'} (${isEnglish ? 'use when user asks about this course' : 'dùng khi user hỏi về khóa này'}):
+- ${isEnglish ? 'Name' : 'Tên'}: ${recentCourseContext.title}
+- Level: ${recentCourseContext.level || (isEnglish ? 'Not specified' : 'Không xác định')}
+- ${isEnglish ? 'Price' : 'Giá'}: ${recentCourseContext.price === 0 
+    ? (isEnglish ? 'Free' : 'Miễn phí') 
+    : recentCourseContext.price?.toLocaleString('vi-VN') + ' VNĐ'}
+- ${isEnglish ? 'Certificate' : 'Chứng chỉ'}: ${recentCourseContext.has_certificate ? (isEnglish ? 'Yes' : 'Có') : (isEnglish ? 'No' : 'Không')}
+- ${isEnglish ? 'Detailed content' : 'Nội dung chi tiết'}:
 ${moduleSummary}
 `;
         }
@@ -1056,41 +1062,91 @@ ${moduleSummary}
             );
             const enrolledInTopicList = enrolledInTopic.length > 0
                 ? enrolledInTopic.map((e) => `${e.title} (${e.progress_percent}%)`).join(', ')
-                : 'Không có khóa nào';
+                : (isEnglish ? 'No courses yet' : 'Không có khóa nào');
             activeTopicInfo = `
-CHỦ ĐỀ ĐANG ĐƯỢC NHẮC ĐẾN TRONG CUỘC TRÒ CHUYỆN: ${activeTopic.toUpperCase()}
-→ User đang quan tâm đến chủ đề "${activeTopic}"
-→ Khóa đã học về "${activeTopic}": ${enrolledInTopicList}
-→ Khi user hỏi "khóa liên quan", "khóa tiếp theo", "nên học gì" → GỢI Ý khóa liên quan đến "${activeTopic}"
+${isEnglish ? 'CURRENTLY MENTIONED TOPIC IN CONVERSATION' : 'CHỦ ĐỀ ĐANG ĐƯỢC NHẮC ĐẾN TRONG CUỘC TRÒ CHUYỆN'}: ${activeTopic.toUpperCase()}
+→ ${isEnglish ? 'User is interested in' : 'User đang quan tâm đến chủ đề'} "${activeTopic}"
+→ ${isEnglish ? 'Completed courses on' : 'Khóa đã học về'} "${activeTopic}": ${enrolledInTopicList}
+→ ${isEnglish ? 'When user asks "related courses", "next course", "what to learn" → SUGGEST courses related to' : 'Khi user hỏi "khóa liên quan", "khóa tiếp theo", "nên học gì" → GỢI Ý khóa liên quan đến'} "${activeTopic}"
 `;
         }
 
-        return `THÔNG TIN NGƯỜI DÙNG:
+        // Localization for context instructions
+        const userInfoLabel = isEnglish ? 'USER INFORMATION' : 'THÔNG TIN NGƯỜI DÙNG';
+        const enrolledCountLabel = isEnglish ? 'Courses enrolled' : 'Đã đăng ký';
+        const enrolledListLabel = isEnglish 
+            ? 'ENROLLED COURSES (FOR REFERENCE ONLY - DO NOT SUGGEST THESE)'
+            : 'DANH SÁCH KHÓA HỌC ĐÃ ĐĂNG KÝ (CHỈ ĐỂ THAM KHẢO - KHÔNG GỢI Ý NHỮNG KHÓA NÀY)';
+        const availableListLabel = isEnglish
+            ? 'AVAILABLE COURSES (PRIORITY FOR SUGGESTIONS)'
+            : 'DANH SÁCH KHÓA HỌC CÓ SẴN (ƯU TIÊN GỢI Ý NHỮNG KHÓA NÀY)';
+        const ragRulesLabel = isEnglish ? 'IMPORTANT RULES FOR COURSE SUGGESTIONS (RAG PATTERN)' : 'QUY TẮC QUAN TRỌNG KHI GỢI Ý KHÓA HỌC (RAG PATTERN)';
+        const rule1 = isEnglish 
+            ? 'ALWAYS prioritize suggesting courses from AVAILABLE_COURSE list'
+            : 'LUÔN ƯU TIÊN gợi ý khóa học từ DANH SÁCH KHÓA HỌC CÓ SẴN (AVAILABLE_COURSE)';
+        const rule2 = isEnglish
+            ? 'DO NOT suggest courses from ENROLLED COURSES list'
+            : 'KHÔNG gợi ý khóa từ DANH SÁCH KHÓA HỌC ĐÃ ĐĂNG KÝ';
+        const rule3 = isEnglish
+            ? 'If AVAILABLE_COURSE is empty → notify and suggest other topics'
+            : 'Nếu AVAILABLE_COURSE trống → thông báo và gợi ý chủ đề khác';
+        const rule4 = isEnglish
+            ? 'When user asks for suggestions → return at least 1 course from AVAILABLE_COURSE'
+            : 'Khi user hỏi "gợi ý khóa học" → trả về ít nhất 1 khóa từ AVAILABLE_COURSE';
+        const rule5 = activeTopic 
+            ? (isEnglish 
+                ? `5. When user asks "related courses", "next course" → prioritize courses RELATED to "${activeTopic}"`
+                : `5. Khi user hỏi "khóa liên quan", "khóa tiếp theo" → ưu tiên gợi ý khóa LIÊN QUAN đến "${activeTopic}"`)
+            : '';
+        const responseLabel = isEnglish ? 'WHEN RESPONDING' : 'KHI TRẢ LỜI';
+        const responseTip1 = isEnglish
+            ? 'reply can naturally contain course information (price, level, content...)'
+            : 'reply có thể chứa thông tin khóa học tự nhiên (giá, level, nội dung...)';
+        const responseTip2 = isEnglish
+            ? 'references are used to display course cards below reply'
+            : 'references dùng để hiển thị thẻ khóa học bên dưới reply';
+        const responseTip3 = isEnglish
+            ? 'When user wants to enroll in FREE course: action = {"type": "enroll", "courseId": X, "courseTitle": "..."}'
+            : 'Khi user muốn đăng ký khóa học MIỄN PHÍ: action = {"type": "enroll", "courseId": X, "courseTitle": "..."}';
+        const responseTip4 = isEnglish
+            ? 'When user wants to enroll in PAID course: quickReply = {"text": "Pay now", "value": "pay_X"}'
+            : 'Khi user muốn đăng ký khóa học CÓ PHÍ: quickReply = {"text": "Thanh toán ngay", "value": "pay_X"}';
+        const responseTip5 = isEnglish
+            ? 'When asking for suggestions/finding courses: ALWAYS prioritize from AVAILABLE_COURSE (not enrolled), return at least 1 course from this list'
+            : 'Khi user hỏi gợi ý/tìm khóa học: LUÔN ƯU TIÊN gợi ý từ DANH SÁCH KHÓA HỌC CÓ SẴN (chưa đăng ký), trả về ÍT NHẤT 1 khóa từ phần này';
+        const responseTip6 = isEnglish
+            ? 'DO NOT suggest courses that are already in ENROLLED COURSES list'
+            : 'KHÔNG gợi ý các khóa đã có trong DANH SÁCH KHÓA HỌC ĐÃ ĐĂNG KÝ';
+        const responseTip7 = isEnglish
+            ? 'Respond naturally like chatting with a friend, no need to be too formal'
+            : 'Trả lời tự nhiên như đang chat với bạn, không cần quá formal';
+
+        return `${userInfoLabel}:
 ${activeTopicInfo}
-- Họ tên: ${userProfile.full_name}
-- Đã đăng ký: ${enrolledCourses.length} khóa học
+- ${isEnglish ? 'Full name' : 'Họ tên'}: ${userProfile.full_name}
+- ${enrolledCountLabel}: ${enrolledCourses.length} ${isEnglish ? 'courses' : 'khóa học'}
 ${recentCourseInfo}
-DANH SÁCH KHÓA HỌC ĐÃ ĐĂNG KÝ (CHỈ ĐỂ THAM KHẢO - KHÔNG GỢI Ý NHỮNG KHÓA NÀY):
+${enrolledListLabel}:
 ${enrolledList}
 
-DANH SÁCH KHÓA HỌC CÓ SẴN (ƯU TIÊN GỢI Ý NHỮNG KHÓA NÀY):
+${availableListLabel}:
 ${availableList}
 
-QUY TẮC QUAN TRỌNG KHI GỢI Ý KHÓA HỌC (RAG PATTERN):
-1. LUÔN ƯU TIÊN gợi ý khóa học từ DANH SÁCH KHÓA HỌC CÓ SẴN (AVAILABLE_COURSE)
-2. KHÔNG gợi ý khóa từ DANH SÁCH KHÓA HỌC ĐÃ ĐĂNG KÝ
-3. Nếu AVAILABLE_COURSE trống → thông báo và gợi ý chủ đề khác
-4. Khi user hỏi "gợi ý khóa học" → trả về ít nhất 1 khóa từ AVAILABLE_COURSE
-${activeTopic ? `5. Khi user hỏi "khóa liên quan", "khóa tiếp theo" → ưu tiên gợi ý khóa LIÊN QUAN đến "${activeTopic}"` : ''}
+${ragRulesLabel}:
+1. ${rule1}
+2. ${rule2}
+3. ${rule3}
+4. ${rule4}
+${rule5 ? '\n' + rule5 : ''}
 
-KHI TRẢ LỜI:
-- reply có thể chứa thông tin khóa học tự nhiên (giá, level, nội dung...)
-- references dùng để hiển thị thẻ khóa học bên dưới reply
-- Khi user muốn đăng ký khóa học MIỄN PHÍ: action = {"type": "enroll", "courseId": X, "courseTitle": "..."}
-- Khi user muốn đăng ký khóa học CÓ PHÍ: quickReply = {"text": "Thanh toán ngay", "value": "pay_X"}
-- Khi user hỏi gợi ý/tìm khóa học: LUÔN ƯU TIÊN gợi ý từ DANH SÁCH KHÓA HỌC CÓ SẴN (chưa đăng ký), trả về ÍT NHẤT 1 khóa từ phần này
-- KHÔNG gợi ý các khóa đã có trong DANH SÁCH KHÓA HỌC ĐÃ ĐĂNG KÝ
-- Trả lời tự nhiên như đang chat với bạn, không cần quá formal`;
+${responseLabel}:
+- ${responseTip1}
+- ${responseTip2}
+- ${responseTip3}
+- ${responseTip4}
+- ${responseTip5}
+- ${responseTip6}
+- ${responseTip7}`;
     }
 
     private buildConversationContext(history: ChatMessage[]): Array<{ role: 'user' | 'assistant'; content: string }> {
@@ -1722,18 +1778,31 @@ Bạn có muốn đăng ký khóa học này không?`,
     }
 
     // NEW: Get clarifying response for vague requests (RAG Pattern Flow A)
-    private getClarifyTopicResponse(): ChatbotResponse {
+    private getClarifyTopicResponse(langProvider?: LanguageProvider): ChatbotResponse {
+        const isEnglish = langProvider?.locale === 'en';
+        
         return {
-            reply: "Bạn muốn học về lĩnh vực nào? Mình gợi ý vài chủ đề phổ biến nhé!",
+            reply: isEnglish 
+                ? "What field are you interested in? Let me suggest some popular topics!" 
+                : "Bạn muốn học về lĩnh vực nào? Mình gợi ý vài chủ đề phổ biến nhé!",
             references: [],
-            quickReplies: [
-                { text: "Lập trình", value: "học lập trình" },
-                { text: "AI & Data", value: "học AI" },
-                { text: "Thiết kế", value: "học design" },
-                { text: "Marketing", value: "học marketing" },
-                { text: "Ngoại ngữ", value: "học tiếng anh" },
-                { text: "Kinh doanh", value: "học kinh doanh" },
-            ],
+            quickReplies: isEnglish 
+                ? [
+                    { text: "Programming", value: "programming courses" },
+                    { text: "AI & Data", value: "AI courses" },
+                    { text: "Design", value: "design courses" },
+                    { text: "Marketing", value: "marketing courses" },
+                    { text: "Languages", value: "language courses" },
+                    { text: "Business", value: "business courses" },
+                ]
+                : [
+                    { text: "Lập trình", value: "học lập trình" },
+                    { text: "AI & Data", value: "học AI" },
+                    { text: "Thiết kế", value: "học design" },
+                    { text: "Marketing", value: "học marketing" },
+                    { text: "Ngoại ngữ", value: "học tiếng anh" },
+                    { text: "Kinh doanh", value: "học kinh doanh" },
+                ],
             action: null,
         };
     }
