@@ -97,7 +97,12 @@ const parseFriendlyApiError = async (res: Response, fallback: string): Promise<s
   }
 };
 
-export default function CreateCoursePage() {
+interface CreateCoursePageProps {
+  onCancel?: () => void;
+  hideHeader?: boolean;
+}
+
+export default function CreateCoursePage({ onCancel, hideHeader = false }: CreateCoursePageProps) {
   const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -338,7 +343,11 @@ export default function CreateCoursePage() {
         "You are sure you want to cancel creating the course? All unsaved changes will be lost."
       )
     ) {
-      navigate("/teacher/dashboard");
+      if (onCancel) {
+        onCancel();
+      } else {
+        navigate("/teacher/dashboard");
+      }
     }
   };
 
@@ -677,15 +686,17 @@ export default function CreateCoursePage() {
 
   return (
     <div className="dashboard-page">
-      <div className="page-header">
-        <div>
-          <h1 className="dashboard-title">Create new course</h1>
-          <p className="dashboard-subtitle">
-            Fill in the information step by step. You can save draft at any time.
-          </p>
+      {!hideHeader && (
+        <div className="page-header">
+          <div>
+            <h1 className="dashboard-title">Create new course</h1>
+            <p className="dashboard-subtitle">
+              Fill in the information step by step. You can save draft at any time.
+            </p>
+          </div>
+          <AvatarMenu />
         </div>
-        <AvatarMenu />
-      </div>
+      )}
 
       <div className="wizard-card" style={{ maxWidth: 1600 }}>
         {renderStepIndicator()}

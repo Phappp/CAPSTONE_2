@@ -1591,6 +1591,43 @@ body {
   font-size: 0.85rem;
 }
 
+/* Create Course Section */
+.create-course-section {
+  background: white;
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  border: 1px solid var(--gray-200);
+  box-shadow: var(--shadow-sm);
+}
+
+.create-course-header {
+  margin-bottom: 20px;
+}
+
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--gray-100);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--gray-700);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.back-button:hover {
+  background: var(--gray-200);
+  color: var(--gray-800);
+}
+
+.back-button .material-symbols-outlined {
+  font-size: 18px;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .stats-grid,

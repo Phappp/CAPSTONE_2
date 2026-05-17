@@ -9,6 +9,7 @@ import TeacherShell, {
   TeacherShellTopKey,
 } from "../../components/TeacherShell";
 import TeacherLiveSessionPage from "./LiveSessionPage";
+import CreateCoursePage from "./CreateCoursePage";
 import "./TeacherDashboard.css";
 import { Video } from "lucide-react";
 import { DEFAULT_COURSE_THUMB } from "../../utils/imageFallback";
@@ -158,11 +159,12 @@ export default function TeacherDashboard() {
     return false;
   };
 
-  type TeacherSection = "dashboard" | "course" | "live";
+  type TeacherSection = "dashboard" | "course" | "live" | "create";
 
   const parseTeacherSection = (raw: string | null): TeacherSection => {
     if (raw === "course") return "course";
     if (raw === "live") return "live";
+    if (raw === "create") return "create";
     if (raw === "activities" || raw === "quizz" || raw === "assignment") return "course";
     return "dashboard";
   };
@@ -983,7 +985,7 @@ export default function TeacherDashboard() {
       fabLabel="New Course"
       onFabClick={() => {
         if (!ensureVerifiedForCourseActions()) return;
-        navigate("/teacher/courses/new");
+        setSection("create");
       }}
     >
       <div className="teacher-dashboard td-shell">
@@ -1278,7 +1280,7 @@ export default function TeacherDashboard() {
                 className="btn-primary"
                 onClick={() => {
                   if (!ensureVerifiedForCourseActions()) return;
-                  navigate("/teacher/courses/new");
+                  setSection("create");
                 }}
               >
                 <span className="material-symbols-outlined">add</span>
@@ -1584,6 +1586,25 @@ export default function TeacherDashboard() {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Create Course Section */}
+        {section === "create" && (
+          <div className="create-course-section">
+            <div className="create-course-header">
+              <button
+                className="back-button"
+                onClick={() => setSection("course")}
+              >
+                <span className="material-symbols-outlined">arrow_back</span>
+                Back to My Courses
+              </button>
+            </div>
+            <CreateCoursePage
+              onCancel={() => setSection("course")}
+              hideHeader={true}
+            />
           </div>
         )}
 
