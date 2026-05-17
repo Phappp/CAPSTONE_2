@@ -1389,17 +1389,17 @@ export default function LearningPage() {
 
   const openLearnerAssessment = (kind: "quiz" | "assignment", lessonId: number, lessonTitle: string) => {
     const params = new URLSearchParams({ title: lessonTitle || "" });
+    params.set("courseId", String(courseId));
     if (slug) params.set("slug", slug);
     if (kind === "quiz") {
-      window.open(`/learner/quiz/${courseId}/${lessonId}?${params.toString()}`, "_blank", "noopener,noreferrer");
+      navigate(`/learner/quizzes?lessonId=${lessonId}&${params.toString()}`);
     } else {
-      params.set("courseId", String(courseId));
       navigate(`/learner/assignment/${lessonId}?${params.toString()}`);
     }
   };
 
   const requestStartQuiz = (lessonId: number, lessonTitle: string) => {
-    setQuizStartConfirm({ lessonId, title: lessonTitle || "" });
+    openLearnerAssessment("quiz", lessonId, lessonTitle);
   };
 
   const openLessonDetail = (moduleId: number, lessonId: number) => {
