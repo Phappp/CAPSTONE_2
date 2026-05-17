@@ -10,6 +10,7 @@ import TeacherShell, {
 } from "../../components/TeacherShell";
 import TeacherLiveSessionPage from "./LiveSessionPage";
 import CreateCoursePage from "./CreateCoursePage";
+import ProfilePage from "../landing/ProfilePage";
 import "./TeacherDashboard.css";
 import { Video } from "lucide-react";
 import { DEFAULT_COURSE_THUMB } from "../../utils/imageFallback";
@@ -153,18 +154,19 @@ export default function TeacherDashboard() {
       message: `This feature requires a verified instructor account.${note}\n\nYou will be redirected to your profile to check verification status.`,
       onConfirm: () => {
         setModalState({ open: false, title: "", message: "" });
-        navigate("/profile");
+        setSection("profile");
       },
     });
     return false;
   };
 
-  type TeacherSection = "dashboard" | "course" | "live" | "create";
+  type TeacherSection = "dashboard" | "course" | "live" | "create" | "profile";
 
   const parseTeacherSection = (raw: string | null): TeacherSection => {
     if (raw === "course") return "course";
     if (raw === "live") return "live";
     if (raw === "create") return "create";
+    if (raw === "profile") return "profile";
     if (raw === "activities" || raw === "quizz" || raw === "assignment") return "course";
     return "dashboard";
   };
@@ -1604,6 +1606,25 @@ export default function TeacherDashboard() {
             <CreateCoursePage
               onCancel={() => setSection("course")}
               hideHeader={true}
+            />
+          </div>
+        )}
+
+        {/* Profile Section */}
+        {section === "profile" && (
+          <div className="create-course-section">
+            <div className="create-course-header">
+              <button
+                className="back-button"
+                onClick={() => setSection("dashboard")}
+              >
+                <span className="material-symbols-outlined">arrow_back</span>
+                Back to Overview
+              </button>
+            </div>
+            <ProfilePage
+              hideHeader={true}
+              onCancel={() => setSection("dashboard")}
             />
           </div>
         )}

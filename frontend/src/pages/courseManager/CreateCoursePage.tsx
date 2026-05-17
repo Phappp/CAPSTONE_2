@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { getAccessToken } from "../../utils/authStorage";
@@ -36,18 +35,18 @@ type CourseOption = {
 
 const CATEGORY_TAXONOMY: Array<{ group: string; majors: string[] }> = [
   { group: "Công nghệ thông tin (IT)", majors: ["Lập trình viên (Web, Mobile, Game)", "Kỹ sư phần mềm", "An ninh mạng", "Trí tuệ nhân tạo (AI)", "Khoa học dữ liệu (Data Analyst, Data Scientist)", "Quản trị hệ thống, Cloud"] },
-  { group: "Kinh doanh - Quản trị", majors: ["Quản trị doanh nghiệp", "Quản lý dự án", "Khati nghiệp", "Điều hành doanh nghiệp", "Phát triển kinh doanh (Business Development)"] },
-  { group: "Tài chính - Kế toán - Threenk", majors: ["Kế toán doanh nghiệp", "Kiểm toán", "Tài chính đầu tư", "Threenk", "Chứng khoán", "Thuế"] },
+  { group: "Kinh doanh - Quản trị", majors: ["Quản trị doanh nghiệp", "Quản lý dự án", "Khởi nghiệp", "Điều hành doanh nghiệp", "Phát triển kinh doanh (Business Development)"] },
+  { group: "Tài chính - Kế toán", majors: ["Kế toán doanh nghiệp", "Kiểm toán", "Tài chính đầu tư", "Chứng khoán", "Thuế"] },
   { group: "Marketing - Truyền thông", majors: ["Digital Marketing", "Content Marketing", "SEO", "Quảng cáo", "Quan hệ công chúng (PR)", "Thiết kế thương hiệu"] },
   { group: "Y tế - Sức khỏe", majors: ["Bác sĩ", "Điều dưỡng", "Dược sĩ", "Kỹ thuật xét nghiệm", "Vật lý trị liệu", "Tâm lý học"] },
-  { group: "Priceo dục - Đào tạo", majors: ["Priceo viên", "Instructor", "Trainer doanh nghiệp", "Priceo dục mầm non", "Ngoại ngữ"] },
+  { group: "Giáo dục - Đào tạo", majors: ["Giáo viên", "Instructor", "Trainer doanh nghiệp", "Giáo dục mầm non", "Ngoại ngữ"] },
   { group: "Kỹ thuật - Xây dựng", majors: ["Cơ khí", "Điện - điện tử", "Tự động hóa", "Xây dựng dân dụng", "Kiến trúc", "Kỹ sư công trình"] },
   { group: "Luật - Hành chính", majors: ["Luật sư", "Công chứng", "Nhân sự hành chính", "Quản lý nhà nước"] },
-  { group: "Logistics - Xuất nhập khẩu", majors: ["Chuỗi cung ứng", "Kho vận", "Hải quan", "Vận tải quốc tế", "Buy hàng"] },
+  { group: "Logistics - Xuất nhập khẩu", majors: ["Chuỗi cung ứng", "Kho vận", "Hải quan", "Vận tải quốc tế"] },
   { group: "Du lịch - Nhà hàng - Khách sạn", majors: ["Quản trị khách sạn", "Hướng dẫn viên", "Nhà hàng", "Sự kiện", "Chăm sóc khách hàng"] },
   { group: "Nghệ thuật - Thiết kế", majors: ["Thiết kế đồ họa", "UI/UX Design", "Nhiếp ảnh", "Làm phim", "Âm nhạc", "Thời trang"] },
   { group: "Nông nghiệp - Môi trường", majors: ["Công nghệ thực phẩm", "Nông nghiệp công nghệ cao", "Thú y", "Bảo vệ môi trường"] },
-  { group: "Lao động tay nghề - Dịch vụ", majors: ["Điện lạnh", "Edit chữa ô tô, xe máy", "Làm tóc", "Spa", "Đầu bếp", "Thợ kỹ thuật"] },
+  { group: "Lao động tay nghề - Dịch vụ", majors: ["Điện lạnh", "Sửa chữa ô tô, xe máy", "Làm tóc", "Spa", "Đầu bếp"] },
   { group: "Khác", majors: [] },
 ];
 
@@ -167,6 +166,14 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
     setSelectedCategoryMajor((prev) => (categoryMajors.includes(prev) ? prev : categoryMajors[0] || ""));
   }, [selectedCategoryGroup, categoryMajors]);
 
+  // Auto-apply category when selection changes
+  useEffect(() => {
+    const major = selectedCategoryGroup === "Khác" ? customCategoryMajor.trim() : selectedCategoryMajor.trim();
+    if (major) {
+      handleThreesicChange("category", `${selectedCategoryGroup}: ${major}`);
+    }
+  }, [selectedCategoryGroup, selectedCategoryMajor, customCategoryMajor]);
+
   const handleThreesicChange = (field: keyof CreateCoursePayload, value: any) => {
     setPayload((prev) => ({ ...prev, [field]: value }));
   };
@@ -196,16 +203,6 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
       copy.splice(index, 1);
       return { ...prev, [field]: copy.length ? copy : [""] };
     });
-  };
-
-  const applyCategorySelection = () => {
-    const major = selectedCategoryGroup === "Khác" ? customCategoryMajor.trim() : selectedCategoryMajor.trim();
-    if (!major) {
-      setError("Please choose or enter a major for the category.");
-      return;
-    }
-    handleThreesicChange("category", `${selectedCategoryGroup}: ${major}`);
-    setError(null);
   };
 
   const canGoNextFromStep1 =
@@ -360,7 +357,7 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
     ];
 
     return (
-      <div className="wizard-steps">
+      <div className="cc-steps">
         {steps.map((label, index) => {
           const current = index + 1;
           const isActive = current === step;
@@ -368,11 +365,10 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
           return (
             <div
               key={label}
-              className={`wizard-step ${isActive ? "active" : ""} ${isDone ? "done" : ""
-                }`}
+              className={`cc-step ${isActive ? "active" : ""} ${isDone ? "done" : ""}`}
             >
-              <div className="wizard-step-circle">{current}</div>
-              <div className="wizard-step-label">{label}</div>
+              <div className="cc-step-circle">{current}</div>
+              <div className="cc-step-label">{label}</div>
             </div>
           );
         })}
@@ -381,55 +377,63 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
   };
 
   const renderStep1 = () => (
-    <>
-      <div className="form-group">
-        <label className="form-label">
-          Course Name <span className="required-star">*</span>
+    <div className="cc-form-body">
+      <div className="cc-form-group">
+        <label className="cc-form-label">
+          Course Name <span className="cc-required-star">*</span>
         </label>
         <input
-          className="form-input"
+          className="cc-form-input"
           placeholder="e.g., Python Programming for Beginners"
           value={payload.title}
           onChange={(e) => handleThreesicChange("title", e.target.value)}
         />
       </div>
 
-      <div className="form-group">
-        <label className="form-label">
-          Short description <span className="required-star">*</span>
+      <div className="cc-form-group">
+        <label className="cc-form-label">
+          Short description <span className="cc-required-star">*</span>
         </label>
         <textarea
-          className="form-input"
+          className="cc-form-textarea"
           rows={3}
           maxLength={200}
           placeholder="Short description of the course (maximum 200 characters)"
           value={payload.short_description}
           onChange={(e) => handleThreesicChange("short_description", e.target.value)}
         />
-        <div className="character-counter">
+        <div className={`cc-char-counter ${payload.short_description.length > 180 ? "error" : ""}`}>
           {payload.short_description.length}/200
         </div>
       </div>
 
-      <div className="form-group">
-        <label className="form-label">Category</label>
-        <div className="category-picker">
-          <select className="form-input" value={selectedCategoryGroup} onChange={(e) => setSelectedCategoryGroup(e.target.value)}>
+      <div className="cc-form-group">
+        <label className="cc-form-label">Category</label>
+        <div className="cc-category-grid">
+          <select
+            className="cc-form-select"
+            value={selectedCategoryGroup}
+            onChange={(e) => setSelectedCategoryGroup(e.target.value)}
+          >
             {CATEGORY_TAXONOMY.map((item) => (
               <option key={item.group} value={item.group}>
                 {item.group}
               </option>
             ))}
           </select>
-          {selectedCategoryGroup === "Other" ? (
+          {selectedCategoryGroup === "Khác" ? (
             <input
-              className="form-input"
+              className="cc-form-input"
               placeholder="Enter major..."
               value={customCategoryMajor}
               onChange={(e) => setCustomCategoryMajor(e.target.value)}
             />
           ) : (
-            <select className="form-input" value={selectedCategoryMajor} onChange={(e) => setSelectedCategoryMajor(e.target.value)}>
+            <select
+              className="cc-form-select"
+              value={selectedCategoryMajor}
+              onChange={(e) => setSelectedCategoryMajor(e.target.value)}
+            >
               {categoryMajors.map((major) => (
                 <option key={major} value={major}>
                   {major}
@@ -437,20 +441,18 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
               ))}
             </select>
           )}
-          <button type="button" className="secondary-button" onClick={applyCategorySelection}>
-            Select Category
-          </button>
         </div>
-        <div className="category-selected-preview">
-          Category selected: <strong>{payload.category || "Not selected"}</strong>
+        <div className="cc-category-preview">
+          <span className="material-symbols-outlined">category</span>
+          <span>Selected: <strong>{payload.category || "None"}</strong></span>
         </div>
       </div>
 
-      <div className="two-column-grid">
-        <div className="form-group">
-          <label className="form-label">Level</label>
+      <div className="cc-two-col">
+        <div className="cc-form-group">
+          <label className="cc-form-label">Level</label>
           <select
-            className="form-input"
+            className="cc-form-select"
             value={payload.level}
             onChange={(e) => handleThreesicChange("level", e.target.value as Level)}
           >
@@ -460,10 +462,10 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
           </select>
         </div>
 
-        <div className="form-group">
-          <label className="form-label">Language</label>
+        <div className="cc-form-group">
+          <label className="cc-form-label">Language</label>
           <select
-            className="form-input"
+            className="cc-form-select"
             value={payload.language}
             onChange={(e) =>
               handleThreesicChange("language", e.target.value as Language)
@@ -474,28 +476,29 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
           </select>
         </div>
       </div>
-    </>
+    </div>
   );
 
   const renderStep2 = () => (
-    <>
-      <div className="form-group">
-        <label className="form-label">Full Description</label>
+    <div className="cc-form-body">
+      <div className="cc-form-group">
+        <label className="cc-form-label">Full Description</label>
         <textarea
-          className="form-input"
+          className="cc-form-textarea"
           rows={8}
           placeholder="Full description of the course. You can paste rich text content from the editor."
           value={payload.full_description}
           onChange={(e) => handleThreesicChange("full_description", e.target.value)}
+          style={{ minHeight: 200 }}
         />
       </div>
 
-      <div className="form-group">
-        <label className="form-label">Learning objectives</label>
+      <div className="cc-form-group">
+        <label className="cc-form-label">Learning objectives</label>
         {payload.learning_objectives.map((item, idx) => (
-          <div key={idx} className="array-item">
+          <div key={idx} className="cc-array-item">
             <input
-              className="form-input"
+              className="cc-form-input"
               placeholder="e.g., Understand basic Python syntax"
               value={item}
               onChange={(e) =>
@@ -504,35 +507,36 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
             />
             <button
               type="button"
-              className="link-button"
+              className="cc-link-btn danger"
               onClick={() => handleRemoveArrayItem("learning_objectives", idx)}
             >
-              Delete
+              <span className="material-symbols-outlined">delete</span>
             </button>
           </div>
         ))}
         <button
           type="button"
-          className="link-button"
+          className="cc-link-btn"
           onClick={() => handleAddArrayItem("learning_objectives")}
         >
-          + Add objective
+          <span className="material-symbols-outlined">add</span>
+          Add objective
         </button>
       </div>
 
-      <div className="form-group">
-        <label className="form-label">Prerequisite Courses</label>
-        <p className="form-hint">Select the courses that must be completed before enrolling in this course.</p>
-        <div style={{ display: "grid", gap: "0.5rem", maxHeight: 220, overflow: "auto", border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }}>
+      <div className="cc-form-group">
+        <label className="cc-form-label">Prerequisite Courses</label>
+        <p className="cc-form-hint">Select the courses that must be completed before enrolling in this course.</p>
+        <div className="cc-prereq-list">
           {prerequisiteOptions.length ? (
             prerequisiteOptions.map((c) => {
               const checked = selectedPrerequisiteIds.has(c.id);
               return (
-                <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <label key={c.id} className="cc-prereq-item">
                   <input
                     type="checkbox"
+                    className="cc-prereq-checkbox"
                     checked={checked}
-                    style={{ width: 16, height: 16 }}
                     onChange={(e) => {
                       setPayload((prev) => {
                         const set = new Set(
@@ -546,54 +550,58 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
                       });
                     }}
                   />
-                  <span style={{ fontWeight: 400 }}>{c.title}</span>
+                  <span className="cc-prereq-title">{c.title}</span>
                 </label>
               );
             })
           ) : (
-            <div style={{ color: "#6b7280" }}>No courses available to select.</div>
+            <div className="cc-prereq-empty">No courses available to select.</div>
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 
   const renderStep3 = () => (
-    <>
-      <div className="form-group">
-        <label className="form-label">Course Cover Image</label>
-        <p className="form-hint">
-          Recommended size 1280x720, file size &lt; 2MB.
-        </p>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => handleImageChange(e.target.files?.[0] ?? null)}
-        />
+    <div className="cc-form-body">
+      <div className="cc-form-group">
+        <label className="cc-form-label">Course Cover Image</label>
+        <p className="cc-form-hint">Recommended size 1280x720, file size &lt; 2MB.</p>
+        <label className="cc-image-upload">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => handleImageChange(e.target.files?.[0] ?? null)}
+          />
+          <span className="material-symbols-outlined cc-image-upload-icon">add_photo_alternate</span>
+          <span className="cc-image-upload-text">
+            <strong>Click to upload</strong> or drag and drop
+          </span>
+        </label>
       </div>
 
       {imagePreview && (
-        <div className="form-group">
-          <label className="form-label">Image Preview</label>
-          <div className="course-image-preview-wrapper">
+        <div className="cc-form-group">
+          <label className="cc-form-label">Image Preview</label>
+          <div className="cc-image-preview-wrapper">
             <img
               src={imagePreview}
               alt="Preview thumbnail"
-              className="course-image-preview"
+              className="cc-image-preview"
             />
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 
   const renderStep4 = () => (
-    <>
-      <div className="three-column-grid">
-        <div className="form-group">
-          <label className="form-label">Price Course (VNĐ)</label>
+    <div className="cc-form-body">
+      <div className="cc-three-col">
+        <div className="cc-form-group">
+          <label className="cc-form-label">Price (VND)</label>
           <input
-            className="form-input"
+            className="cc-form-input"
             type="number"
             min={0}
             placeholder="Leave blank if free"
@@ -607,10 +615,10 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
           />
         </div>
 
-        <div className="form-group">
-          <label className="form-label">Has Certificate</label>
+        <div className="cc-form-group">
+          <label className="cc-form-label">Certificate</label>
           <select
-            className="form-input"
+            className="cc-form-select"
             value={payload.has_certificate ? "yes" : "no"}
             onChange={(e) =>
               handleThreesicChange("has_certificate", e.target.value === "yes")
@@ -621,10 +629,10 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
           </select>
         </div>
 
-        <div className="form-group">
-          <label className="form-label">Estimated Time (hours)</label>
+        <div className="cc-form-group">
+          <label className="cc-form-label">Est. Hours</label>
           <input
-            className="form-input"
+            className="cc-form-input"
             type="number"
             min={0}
             placeholder="e.g., 25"
@@ -638,10 +646,10 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
           />
         </div>
 
-        <div className="form-group">
-          <label className="form-label">Publish automatically at (optional)</label>
+        <div className="cc-form-group">
+          <label className="cc-form-label">Schedule Publish</label>
           <input
-            className="form-input"
+            className="cc-form-input"
             type="datetime-local"
             value={payload.publish_scheduled_at ?? ""}
             onChange={(e) => handleThreesicChange("publish_scheduled_at", e.target.value || null)}
@@ -649,11 +657,11 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
         </div>
       </div>
 
-      <div className="form-group">
-        <label className="form-label">Tags</label>
+      <div className="cc-form-group">
+        <label className="cc-form-label">Tags</label>
         <input
-          className="form-input"
-          placeholder='Enter tags, separated by commas. E.g., "python, programming, lập trình"'
+          className="cc-form-input"
+          placeholder='python, programming, lập trình'
           value={payload.tags.join(", ")}
           onChange={(e) =>
             handleThreesicChange(
@@ -665,8 +673,9 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
             )
           }
         />
+        <p className="cc-form-hint">Separate tags with commas.</p>
       </div>
-    </>
+    </div>
   );
 
   const renderStepContent = () => {
@@ -685,31 +694,35 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
   };
 
   return (
-    <div className="dashboard-page">
+    <div className="cc-page">
       {!hideHeader && (
-        <div className="page-header">
-          <div>
-            <h1 className="dashboard-title">Create new course</h1>
-            <p className="dashboard-subtitle">
-              Fill in the information step by step. You can save draft at any time.
+        <header className="cc-header">
+          <div className="cc-header-left">
+            <h1 className="cc-title">Create new course</h1>
+            <p className="cc-subtitle">
+              Fill in the information step by step. You can save as draft at any time.
             </p>
           </div>
-          <AvatarMenu />
-        </div>
+        </header>
       )}
 
-      <div className="wizard-card" style={{ maxWidth: 1600 }}>
+      <div className="cc-wizard-card">
         {renderStepIndicator()}
 
-        <div className="wizard-body">{renderStepContent()}</div>
+        <div className="cc-form-body">{renderStepContent()}</div>
 
-        {error && <div className="error-box">{error}</div>}
+        {error && (
+          <div className="cc-error-box">
+            <span className="material-symbols-outlined">error</span>
+            <span>{error}</span>
+          </div>
+        )}
 
-        <div className="wizard-footer">
-          <div className="wizard-footer-left">
+        <div className="cc-footer">
+          <div className="cc-footer-left">
             <button
               type="button"
-              className="secondary-button"
+              className="cc-btn cc-btn-secondary danger"
               onClick={handleCancel}
               disabled={isSubmitting}
             >
@@ -717,22 +730,24 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
             </button>
             <button
               type="button"
-              className="secondary-button"
+              className="cc-btn cc-btn-secondary"
               onClick={() => handleSave(false)}
               disabled={isSubmitting}
             >
+              <span className="material-symbols-outlined">save</span>
               Save Draft
             </button>
           </div>
 
-          <div className="wizard-footer-right">
+          <div className="cc-footer-right">
             {step > 1 && (
               <button
                 type="button"
-                className="secondary-button"
+                className="cc-btn cc-btn-secondary"
                 onClick={() => setStep((s) => Math.max(1, s - 1))}
                 disabled={isSubmitting}
               >
+                <span className="material-symbols-outlined">chevron_left</span>
                 Back
               </button>
             )}
@@ -740,21 +755,23 @@ export default function CreateCoursePage({ onCancel, hideHeader = false }: Creat
             {step < maxStep && (
               <button
                 type="button"
-                className="primary-button"
+                className="cc-btn cc-btn-primary"
                 onClick={() => setStep((s) => Math.min(maxStep, s + 1))}
                 disabled={isSubmitting || (step === 1 && !canGoNextFromStep1)}
               >
                 Continue
+                <span className="material-symbols-outlined">chevron_right</span>
               </button>
             )}
 
             {step === maxStep && (
               <button
                 type="button"
-                className="primary-button"
+                className="cc-btn cc-btn-primary"
                 onClick={() => handleSave(true)}
                 disabled={isSubmitting || !canGoNextFromStep1}
               >
+                <span className="material-symbols-outlined">check</span>
                 Create course
               </button>
             )}

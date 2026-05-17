@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Camera, CheckCircle2, Copy, House, Trash2, TriangleAlert, Upload } from "lucide-react";
-import AvatarMenu from "../../components/AvatarMenu";
 import CommonModal from "../../components/CommonModal";
 import { url } from "../../baseUrl";
 import { PROFILE_API } from "../../api/profile";
@@ -76,7 +75,12 @@ const parseExpertiseAreas = (value: string | null | undefined): string[] =>
     .map((item) => item.trim())
     .filter(Boolean);
 
-export default function ProfilePage() {
+interface ProfilePageProps {
+  hideHeader?: boolean;
+  onCancel?: () => void;
+}
+
+export default function ProfilePage({ hideHeader = false, onCancel }: ProfilePageProps) {
   const navigate = useNavigate();
   const { updateUser } = useAuth();
 
@@ -244,6 +248,10 @@ export default function ProfilePage() {
   }, [selectedExpertiseGroup, expertiseMajors]);
 
   const goToDashboard = () => {
+    if (onCancel) {
+      onCancel();
+      return;
+    }
     const roleSet = new Set((profile?.roles || []).map((r) => r.toLowerCase()));
     if (roleSet.has("admin")) return navigate("/admin");
     if (roleSet.has("teacher") || roleSet.has("course_manager")) return navigate("/teacher/dashboard");
@@ -478,43 +486,44 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="dashboard-page profile-page-shell">
-        <div className="profile-main-card">Đang tải thông tin hồ sơ...</div>
+      <div className="pp-page">
+        <div className="pp-loading">Đang tải thông tin hồ sơ...</div>
       </div>
     );
   }
 
   return (
-    <div className="dashboard-page profile-page-shell">
-      <div className="profile-page-header">
-        <div>
-          <div className="profile-page-kicker">Account center</div>
-          <h1 className="dashboard-title profile-page-title">Hồ sơ cá nhân</h1>
-          <p className="dashboard-subtitle profile-page-subtitle">Quản lý thông tin tài khoản và hồ sơ cấp phép course manager.</p>
-        </div>
-        <div className="profile-top-actions">
-          <button type="button" className="secondary-button" onClick={goToDashboard}>
-            <House size={16} />
-            Dashboard
-          </button>
-          <AvatarMenu />
-        </div>
-      </div>
-
-      <div className="profile-main-card">
-        <div className="profile-avatar-container">
-          <div className="profile-avatar-wrapper">
-            {avatarPreview ? <img src={avatarPreview} alt="Avatar" className="profile-avatar-img" /> : (profile?.full_name?.[0] || "U").toUpperCase()}
+    <div className="pp-page">
+      {!hideHeader && (
+        <div className="pp-header">
+          <div>
+            <div className="pp-kicker">Account center</div>
+            <h1 className="pp-title">Hồ sơ cá nhân</h1>
+            <p className="pp-subtitle">Quản lý thông tin tài khoản và hồ sơ cấp phép course manager.</p>
           </div>
-          <div className="profile-avatar-info">
-            <div className="profile-avatar-label">Ảnh đại diện</div>
-            <div className="profile-avatar-actions">
-              <label className="secondary-button profile-avatar-upload-btn">
+          <div className="pp-top-actions">
+            <button type="button" className="pp-btn pp-btn-secondary" onClick={goToDashboard}>
+              <House size={16} />
+              Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="pp-card">
+        <div className="pp-avatar-container">
+          <div className="pp-avatar-wrapper">
+            {avatarPreview ? <img src={avatarPreview} alt="Avatar" className="pp-avatar-img" /> : (profile?.full_name?.[0] || "U").toUpperCase()}
+          </div>
+          <div className="pp-avatar-info">
+            <div className="pp-avatar-label">Ảnh đại diện</div>
+            <div className="pp-avatar-actions">
+              <label className="pp-btn pp-btn-secondary pp-avatar-upload-btn">
                 <Camera size={16} />
                 {avatarUploading ? "Đang tải..." : "Tải ảnh"}
                 <input type="file" style={{ display: "none" }} accept="image/jpeg,image/png,image/gif,image/webp" onChange={(e) => handleAvatarFileChange(e.target.files?.[0] ?? null)} />
               </label>
-              <button type="button" className="secondary-button" onClick={deleteAvatar} disabled={avatarDeleting || !avatarPreview}>
+              <button type="button" className="pp-btn pp-btn-secondary pp-btn-danger" onClick={deleteAvatar} disabled={avatarDeleting || !avatarPreview}>
                 <Trash2 size={16} />
                 Xóa
               </button>
@@ -522,32 +531,32 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="profile-two-column">
-          <div className="profile-form-column">
-            <div className="profile-name-row">
-              <div className="form-group">
-                <label className="form-label">Họ</label>
-                <input className="form-input" value={form.first_name} onChange={(e) => setForm((p) => ({ ...p, first_name: e.target.value }))} />
+        <div className="pp-two-col">
+          <div className="pp-form-col">
+            <div className="pp-name-row">
+              <div className="pp-form-group">
+                <label className="pp-form-label">Họ</label>
+                <input className="pp-form-input" value={form.first_name} onChange={(e) => setForm((p) => ({ ...p, first_name: e.target.value }))} />
               </div>
-              <div className="form-group">
-                <label className="form-label">Tên</label>
-                <input className="form-input" value={form.last_name} onChange={(e) => setForm((p) => ({ ...p, last_name: e.target.value }))} />
+              <div className="pp-form-group">
+                <label className="pp-form-label">Tên</label>
+                <input className="pp-form-input" value={form.last_name} onChange={(e) => setForm((p) => ({ ...p, last_name: e.target.value }))} />
               </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">Số điện thoại</label>
-              <input className="form-input" value={form.phone_number} onChange={(e) => setForm((p) => ({ ...p, phone_number: e.target.value }))} />
+            <div className="pp-form-group">
+              <label className="pp-form-label">Số điện thoại</label>
+              <input className="pp-form-input" value={form.phone_number} onChange={(e) => setForm((p) => ({ ...p, phone_number: e.target.value }))} />
             </div>
-            <div className="form-group">
-              <label className="form-label">Bio</label>
-              <textarea className="form-input" rows={4} value={form.bio} onChange={(e) => setForm((p) => ({ ...p, bio: e.target.value }))} />
+            <div className="pp-form-group">
+              <label className="pp-form-label">Bio</label>
+              <textarea className="pp-form-input" rows={4} value={form.bio} onChange={(e) => setForm((p) => ({ ...p, bio: e.target.value }))} />
             </div>
             {isCourseManager ? (
               <>
-                <div className="form-group">
-                  <label className="form-label">Lĩnh vực chuyên môn</label>
-                  <div className="profile-expertise-picker">
-                    <select className="form-input" value={selectedExpertiseGroup} onChange={(e) => setSelectedExpertiseGroup(e.target.value)}>
+                <div className="pp-form-group">
+                  <label className="pp-form-label">Lĩnh vực chuyên môn</label>
+                  <div className="pp-expertise-grid">
+                    <select className="pp-form-select" value={selectedExpertiseGroup} onChange={(e) => setSelectedExpertiseGroup(e.target.value)}>
                       {EXPERTISE_TAXONOMY.map((item) => (
                         <option key={item.group} value={item.group}>
                           {item.group}
@@ -556,13 +565,13 @@ export default function ProfilePage() {
                     </select>
                     {selectedExpertiseGroup === "Khác" ? (
                       <input
-                        className="form-input"
+                        className="pp-form-input"
                         value={customExpertiseMajor}
                         onChange={(e) => setCustomExpertiseMajor(e.target.value)}
                         placeholder="Nhập chuyên ngành khác..."
                       />
                     ) : (
-                      <select className="form-input" value={selectedExpertiseMajor} onChange={(e) => setSelectedExpertiseMajor(e.target.value)}>
+                      <select className="pp-form-select" value={selectedExpertiseMajor} onChange={(e) => setSelectedExpertiseMajor(e.target.value)}>
                         {expertiseMajors.map((major) => (
                           <option key={major} value={major}>
                             {major}
@@ -570,121 +579,119 @@ export default function ProfilePage() {
                         ))}
                       </select>
                     )}
-                    <button type="button" className="secondary-button" onClick={addExpertiseArea}>
-                      Thêm chuyên ngành
+                    <button type="button" className="pp-btn pp-btn-secondary" onClick={addExpertiseArea}>
+                      Thêm
                     </button>
                   </div>
-                  <div className="profile-expertise-chip-list">
+                  <div className="pp-chip-list">
                     {selectedExpertiseAreas.map((item) => (
-                      <div key={item} className="profile-expertise-chip">
-                        <span className="profile-expertise-chip-text">{item}</span>
-                        <button type="button" className="profile-evidence-chip-btn profile-evidence-chip-btn-danger" onClick={() => removeExpertiseArea(item)}>
+                      <div key={item} className="pp-chip">
+                        <span className="pp-chip-text">{item}</span>
+                        <button type="button" className="pp-chip-btn pp-chip-btn-danger" onClick={() => removeExpertiseArea(item)}>
                           <Trash2 size={13} />
                         </button>
                       </div>
                     ))}
                   </div>
-                  <div className="profile-field-hint">Bạn có thể thêm nhiều chuyên ngành để admin đánh giá đúng năng lực thực tế.</div>
+                  <div className="pp-hint">Bạn có thể thêm nhiều chuyên ngành để admin đánh giá đúng năng lực thực tế.</div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Số năm kinh nghiệm</label>
-                  <input className="form-input" type="number" min={0} value={applicationForm.years_experience} onChange={(e) => setApplicationForm((p) => ({ ...p, years_experience: e.target.value }))} />
+                <div className="pp-form-group">
+                  <label className="pp-form-label">Số năm kinh nghiệm</label>
+                  <input className="pp-form-input" type="number" min={0} value={applicationForm.years_experience} onChange={(e) => setApplicationForm((p) => ({ ...p, years_experience: e.target.value }))} />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Đơn vị công tác</label>
-                  <input className="form-input" value={applicationForm.organization_name} onChange={(e) => setApplicationForm((p) => ({ ...p, organization_name: e.target.value }))} />
+                <div className="pp-form-group">
+                  <label className="pp-form-label">Đơn vị công tác</label>
+                  <input className="pp-form-input" value={applicationForm.organization_name} onChange={(e) => setApplicationForm((p) => ({ ...p, organization_name: e.target.value }))} />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Portfolio</label>
-                  <input className="form-input" value={applicationForm.portfolio_url} onChange={(e) => setApplicationForm((p) => ({ ...p, portfolio_url: e.target.value }))} />
+                <div className="pp-form-group">
+                  <label className="pp-form-label">Portfolio</label>
+                  <input className="pp-form-input" value={applicationForm.portfolio_url} onChange={(e) => setApplicationForm((p) => ({ ...p, portfolio_url: e.target.value }))} />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Minh chứng năng lực</label>
-                  <div className="profile-evidence-input-row">
-                    <input className="form-input" value={newEvidenceLink} onChange={(e) => setNewEvidenceLink(e.target.value)} placeholder="Dán link minh chứng..." />
-                    <button type="button" className="secondary-button" onClick={addEvidenceLink}>Thêm</button>
-                    <label className="secondary-button">
+                <div className="pp-form-group">
+                  <label className="pp-form-label">Minh chứng năng lực</label>
+                  <div className="pp-evidence-row">
+                    <input className="pp-form-input" value={newEvidenceLink} onChange={(e) => setNewEvidenceLink(e.target.value)} placeholder="Dán link minh chứng..." />
+                    <button type="button" className="pp-btn pp-btn-secondary" onClick={addEvidenceLink}>Thêm</button>
+                    <label className="pp-btn pp-btn-secondary">
                       <Upload size={14} />
                       {uploadingEvidence ? "Đang upload..." : "Upload"}
                       <input type="file" style={{ display: "none" }} accept=".pdf,image/jpeg,image/png,image/webp" onChange={(e) => uploadManagerEvidence(e.target.files?.[0] ?? null)} />
                     </label>
                   </div>
-                  <div className="profile-evidence-chip-list">
+                  <div className="pp-chip-list">
                     {evidenceLinks.map((link) => (
-                      <div key={link} className="profile-evidence-chip">
-                        <span className="profile-evidence-chip-text">{link}</span>
-                        <button type="button" className="profile-evidence-chip-btn" onClick={() => copyEvidenceLink(link)}>
+                      <div key={link} className="pp-chip pp-chip-evidence">
+                        <span className="pp-chip-text">{link}</span>
+                        <button type="button" className="pp-chip-btn" onClick={() => copyEvidenceLink(link)}>
                           <Copy size={13} />
                         </button>
-                        <button type="button" className="profile-evidence-chip-btn profile-evidence-chip-btn-danger" onClick={() => removeEvidenceLink(link)}>
+                        <button type="button" className="pp-chip-btn pp-chip-btn-danger" onClick={() => removeEvidenceLink(link)}>
                           <Trash2 size={13} />
                         </button>
                       </div>
                     ))}
                   </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Cam kết chất lượng đào tạo</label>
-                  <textarea className="form-input" rows={3} value={applicationForm.teaching_statement} onChange={(e) => setApplicationForm((p) => ({ ...p, teaching_statement: e.target.value }))} />
+                <div className="pp-form-group">
+                  <label className="pp-form-label">Cam kết chất lượng đào tạo</label>
+                  <textarea className="pp-form-input" rows={3} value={applicationForm.teaching_statement} onChange={(e) => setApplicationForm((p) => ({ ...p, teaching_statement: e.target.value }))} />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Thông tin bổ sung</label>
-                  <textarea className="form-input" rows={3} value={applicationForm.application_note} onChange={(e) => setApplicationForm((p) => ({ ...p, application_note: e.target.value }))} />
+                <div className="pp-form-group">
+                  <label className="pp-form-label">Thông tin bổ sung</label>
+                  <textarea className="pp-form-input" rows={3} value={applicationForm.application_note} onChange={(e) => setApplicationForm((p) => ({ ...p, application_note: e.target.value }))} />
                 </div>
               </>
             ) : null}
-            <div className="profile-manager-submit">
-              <button type="button" className="secondary-button" onClick={() => setForm(originalForm)} disabled={!hasUnsavedChanges}>Hủy</button>
-              <button type="button" className="primary-button" onClick={saveProfile} disabled={!hasUnsavedChanges || saving}>{saving ? "Đang lưu..." : "Lưu thay đổi"}</button>
+            <div className="pp-submit-row">
+              <button type="button" className="pp-btn pp-btn-secondary" onClick={() => setForm(originalForm)} disabled={!hasUnsavedChanges}>Hủy</button>
+              <button type="button" className="pp-btn pp-btn-primary" onClick={saveProfile} disabled={!hasUnsavedChanges || saving}>{saving ? "Đang lưu..." : "Lưu thay đổi"}</button>
             </div>
           </div>
 
-          <div className="profile-side-column">
-            <div className="profile-glass-card">
-              <div className="profile-info-card-title">Thông tin tài khoản</div>
-              <div className="profile-info-row"><span className="profile-info-label">Email</span><span className="profile-info-value">{profile?.email || "-"}</span></div>
-              <div className="profile-info-row"><span className="profile-info-label">Ngày tham gia</span><span className="profile-info-value">{formattedJoinedAt}</span></div>
-              <div className="profile-info-row"><span className="profile-info-label">Vai trò</span><span className="profile-info-value">{profile?.roles?.join(", ") || "-"}</span></div>
+          <div className="pp-side-col">
+            <div className="pp-info-card">
+              <div className="pp-info-card-title">Thông tin tài khoản</div>
+              <div className="pp-info-row"><span className="pp-info-label">Email</span><span className="pp-info-value">{profile?.email || "-"}</span></div>
+              <div className="pp-info-row"><span className="pp-info-label">Ngày tham gia</span><span className="pp-info-value">{formattedJoinedAt}</span></div>
+              <div className="pp-info-row"><span className="pp-info-label">Vai trò</span><span className="pp-info-value">{profile?.roles?.join(", ") || "-"}</span></div>
             </div>
 
             {isCourseManager ? (
-              <>
-                <div className="profile-glass-card">
-                  <div className="profile-info-card-title">Checklist cấp phép</div>
-                  {managerReadinessLoading ? <div className="profile-info-card-subtitle">Đang tải checklist...</div> : null}
-                  {managerReadinessError ? <div className="error-box">{managerReadinessError}</div> : null}
-                  {!managerReadinessLoading && managerReadiness ? (
-                    <div className="profile-manager-checklist">
-                      {managerReadiness.checklist.map((item) => (
-                        <div key={item.key} className="profile-info-row profile-checklist-row">
-                          <span className="profile-info-label">{item.label}</span>
-                          <span className="profile-info-value" title={item.ok ? "Đủ" : item.hint}>
-                            {item.ok ? <CheckCircle2 size={15} color="#15803d" /> : <TriangleAlert size={15} color="#b45309" />}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </>
+              <div className="pp-info-card">
+                <div className="pp-info-card-title">Checklist cấp phép</div>
+                {managerReadinessLoading ? <div className="pp-info-card-subtitle">Đang tải checklist...</div> : null}
+                {managerReadinessError ? <div className="pp-error-box">{managerReadinessError}</div> : null}
+                {!managerReadinessLoading && managerReadiness ? (
+                  <div className="pp-checklist">
+                    {managerReadiness.checklist.map((item) => (
+                      <div key={item.key} className="pp-checklist-row">
+                        <span className="pp-info-label">{item.label}</span>
+                        <span className="pp-info-value" title={item.ok ? "Đủ" : item.hint}>
+                          {item.ok ? <CheckCircle2 size={15} color="#15803d" /> : <TriangleAlert size={15} color="#b45309" />}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
           </div>
         </div>
 
-        {errorMessage ? <div className="error-box">{errorMessage}</div> : null}
-        {successMessage ? <div className="profile-success-message">{successMessage}</div> : null}
+        {errorMessage ? <div className="pp-error-box">{errorMessage}</div> : null}
+        {successMessage ? <div className="pp-success">{successMessage}</div> : null}
       </div>
 
       {showCropper ? (
-        <div className="profile-cropper-modal-overlay" onClick={() => setShowCropper(false)}>
-          <div className="profile-cropper-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="profile-cropper-title">Xác nhận ảnh đại diện</div>
-            <div className="profile-cropper-preview">
+        <div className="pp-cropper-overlay" onClick={() => setShowCropper(false)}>
+          <div className="pp-cropper-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="pp-cropper-title">Xác nhận ảnh đại diện</div>
+            <div className="pp-cropper-preview">
               <img src={avatarPreview || ""} alt="Avatar preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
-            <div className="profile-cropper-actions">
-              <button type="button" className="secondary-button" onClick={() => setShowCropper(false)}>Hủy</button>
-              <button type="button" className="primary-button" onClick={confirmCropAndUpload}>Lưu</button>
+            <div className="pp-cropper-actions">
+              <button type="button" className="pp-btn pp-btn-secondary" onClick={() => setShowCropper(false)}>Hủy</button>
+              <button type="button" className="pp-btn pp-btn-primary" onClick={confirmCropAndUpload}>Lưu</button>
             </div>
           </div>
         </div>
