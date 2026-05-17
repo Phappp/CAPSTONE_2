@@ -6,10 +6,10 @@ import "./AvatarMenu.css";
 
 function getRoleLabel(role?: string | null) {
   const key = String(role || "").toLowerCase();
-  if (key === "course_manager" || key === "teacher") return "Giảng viên";
-  if (key === "learner" || key === "student") return "Học viên";
-  if (key === "admin") return "Quản trị viên";
-  return role || "Học viên";
+  if (key === "course_manager" || key === "teacher") return "Course Manager";
+  if (key === "learner" || key === "student") return "Learner";
+  if (key === "admin") return "Administrator";
+  return role || "Unknown Role";
 }
 
 function getInitials(name?: string | null, email?: string | null) {
@@ -60,7 +60,7 @@ export default function AvatarMenu() {
         </div>
         <div className="avatarInfo">
           <div className="avatarName">
-            {user?.full_name || user?.email || "Người dùng"}
+            {user?.full_name || user?.email || "User"}
           </div>
           <div className="avatarRole">
             {getRoleLabel(user?.primary_role || user?.roles?.[0])}
@@ -78,7 +78,7 @@ export default function AvatarMenu() {
               navigate("/profile");
             }}
           >
-            Thông tin tài khoản
+            Account Information
           </button>
           <button
             type="button"
@@ -88,7 +88,7 @@ export default function AvatarMenu() {
               navigate("/profile/security");
             }}
           >
-            Bảo mật
+            Security
           </button>
           <button
             type="button"
@@ -98,17 +98,17 @@ export default function AvatarMenu() {
               setLogoutConfirmOpen(true);
             }}
           >
-            Đăng xuất
+            Logout
           </button>
         </div>
       )}
 
       <ConfirmModal
         open={logoutConfirmOpen}
-        title="Xác nhận đăng xuất"
-        message="Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này? Mọi phiên làm việc chưa lưu có thể bị mất."
-        confirmText={loggingOut ? "Đang đăng xuất..." : "Đăng xuất"}
-        cancelText="Hủy"
+        title="Confirm Logout"
+        message="Are you sure you want to logout of this account? Any unsaved work may be lost."
+        confirmText={loggingOut ? "Logging out..." : "Logout"}
+        cancelText="Cancel"
         destructive
         onConfirm={handleLogout}
         onClose={() => setLogoutConfirmOpen(false)}
