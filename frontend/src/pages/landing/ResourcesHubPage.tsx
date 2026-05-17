@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import MindBridgeHeader from "../../components/MindBridgeHeader";
+import { House } from "lucide-react";
 import MindBridgeFooter from "../../components/MindBridgeFooter";
 import "./ResourcesHubPage.css";
 
@@ -43,8 +43,6 @@ export default function ResourcesHubPage() {
 
   return (
     <div className="mb-public resources-page bg-[#F8FAFC] text-on-surface">
-      <MindBridgeHeader active="resources" />
-
       <header className="pt-12 pb-16 px-4">
         <div className="max-w-4xl mx-auto text-center space-y-8">
           <h1 className="text-4xl md:text-5xl font-extrabold text-primary tracking-tight font-headline">
@@ -181,6 +179,15 @@ export default function ResourcesHubPage() {
       </main>
 
       <MindBridgeFooter />
+
+      <button
+        type="button"
+        className="ld-fab"
+        aria-label="Add"
+        onClick={() => navigate('/learner/dashboard')}
+      >
+        <House size={22} strokeWidth={2.6} />
+      </button>
     </div>
   );
 }

@@ -81,11 +81,11 @@ type PickImportPayload = {
   questions: Array<{
     id: number;
     question_text: string;
-    question_type: "multiple_choice" | "true_false";
+    question_type: "multiple_choice" | "true_false" | "short_answer";
     explanation?: string;
     points?: number;
     difficulty?: "easy" | "medium" | "hard";
-    options: Array<{ option_text: string; is_correct: boolean }>;
+    options?: Array<{ option_text: string; is_correct: boolean }>;
   }>;
 };
 

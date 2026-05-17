@@ -74,6 +74,77 @@ export class CourseController extends BaseController {
     });
   }
 
+  async listInstructorsCatalog(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const result = await this.service.listInstructorsCatalog();
+      res.status(200).json(result);
+    });
+  }
+
+  async getInstructorById(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const instructorId = Number(req.params.id);
+      if (isNaN(instructorId)) {
+        res.status(400).json({ message: 'Invalid instructor ID' });
+        return;
+      }
+      const item = await this.service.getInstructorById(instructorId);
+      if (!item) {
+        res.status(404).json({ message: 'Instructor not found' });
+        return;
+      }
+      res.status(200).json({ item });
+    });
+  }
+
+  // Course review routes
+  async createReview(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const { rating, comment } = req.body as { rating: number; comment?: string };
+      if (!rating || rating < 1 || rating > 5) {
+        res.status(400).json({ message: 'Rating must be between 1 and 5.' });
+        return;
+      }
+      const review = await this.service.createCourseReview(uid, courseId, rating, comment ?? null);
+      res.status(201).json(review);
+    });
+  }
+
+  async listReviews(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const courseId = Number(req.params.id);
+      const page = Number(req.query.page || 1);
+      const pageSize = Number(req.query.page_size || 10);
+      const result = await this.service.listCourseReviews(courseId, page, pageSize);
+      res.status(200).json(result);
+    });
+  }
+
+  async updateReview(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const reviewId = Number(req.params.reviewId);
+      const { rating, comment } = req.body as { rating: number; comment?: string };
+      if (!rating || rating < 1 || rating > 5) {
+        res.status(400).json({ message: 'Rating must be between 1 and 5.' });
+        return;
+      }
+      const review = await this.service.updateCourseReview(reviewId, uid, rating, comment ?? null);
+      res.status(200).json(review);
+    });
+  }
+
+  async deleteReview(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const reviewId = Number(req.params.reviewId);
+      await this.service.deleteCourseReview(reviewId, uid);
+      res.status(204).send();
+    });
+  }
+
   // Enrollment routes
   async enrollCourse(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
     await this.execWithTryCatchBlock(req, res, next, async (req, res) => {

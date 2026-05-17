@@ -52,6 +52,7 @@
   position: relative;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  padding-left: 60px;
 }
 
 .as-page *,
@@ -541,6 +542,78 @@
   margin: 0;
   line-height: 1.2;
   max-width: 820px;
+}
+
+/* Timer Bar */
+.as-page .as-timer-bar {
+  margin-bottom: 16px;
+}
+
+.as-page .as-timer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, var(--as-primary) 0%, var(--as-primary-soft) 100%);
+  border-radius: var(--as-radius-md);
+  color: #fff;
+}
+
+.as-page .as-timer-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.as-page .as-timer-meta {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+}
+
+.as-page .as-timer-label {
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.as-page .as-timer-value {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.as-page .as-timer-value.as-timer-warning {
+  color: #fbbf24;
+  animation: as-pulse 1s ease-in-out infinite;
+}
+
+.as-page .as-timer-start-btn {
+  margin-left: auto;
+  padding: 8px 20px;
+  background: var(--as-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--as-radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--as-ease);
+}
+
+.as-page .as-timer-start-btn:hover {
+  background: var(--as-accent-soft);
+  transform: translateY(-1px);
+}
+
+@keyframes as-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .as-page .as-grid {

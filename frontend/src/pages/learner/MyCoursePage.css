@@ -48,6 +48,7 @@
   position: relative;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  padding-left: 60px;
 }
 
 .mc-page *,

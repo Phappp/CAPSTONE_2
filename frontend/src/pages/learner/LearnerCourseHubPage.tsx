@@ -5,6 +5,7 @@ import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { useAuth } from "../../contexts/Auth";
 import PrerequisiteGraph, { type PrerequisiteGraphData } from "../../components/PrerequisiteGraph";
+import { DEFAULT_COURSE_THUMB } from "../../utils/imageFallback";
 import "./LearnerCourseHubPage.css";
 
 type CourseDetail = {
@@ -175,85 +176,87 @@ export default function LearnerCourseHubPage() {
   const myRank = leaderboard?.items?.find((x) => x.is_me)?.rank ?? null;
 
   return (
-    <div className="learnerHub">
-      <div className="learnerHub__topbar">
-        <button type="button" className="learnerHub__back" onClick={() => navigate("/student/dashboard")}>
+    <div className="lch-page">
+      <div className="lch-topbar">
+        <button type="button" className="lch-back" onClick={() => navigate("/student/dashboard")}>
           ← Về Dashboard
         </button>
-        <div className="learnerHub__topbarTitle">Tổng quan khóa học</div>
-        <AvatarMenu />
+        {/* <div className="lch-topbarTitle">Tổng quan khóa học</div> */}
+        {/* <AvatarMenu /> */}
       </div>
 
-      <div className="learnerHub__container">
+      <div className="lch-container">
         {error ? (
-          <div className="learnerHub__error">
-            <div className="learnerHub__errorTitle">Không thể mở khóa học</div>
-            <div className="learnerHub__errorMsg">{error}</div>
-            <button type="button" className="btn btn--primary" onClick={() => navigate("/student/dashboard")}>
+          <div className="lch-error">
+            <div className="lch-errorTitle">Không thể mở khóa học</div>
+            <div className="lch-errorMsg">{error}</div>
+            <button type="button" className="lch-btn lch-btn--primary" onClick={() => navigate("/student/dashboard")}>
               Về Dashboard
             </button>
           </div>
         ) : null}
 
-        {loading && !course ? <div className="learnerHub__loading">Đang tải...</div> : null}
+        {loading && !course ? (
+          <div className="lch-loading">
+            <div className="lch-loadingSpinner" />
+            <span>Đang tải...</span>
+          </div>
+        ) : null}
 
         {course ? (
-          <div className="learnerHub__hero">
-            <div className="learnerHub__thumb">
-              {course.thumbnail_url ? (
-                <img src={course.thumbnail_url} alt={course.title} />
-              ) : (
-                <div className="learnerHub__thumbPlaceholder">Không có hình ảnh</div>
-              )}
+          <div className="lch-hero">
+            <div className="lch-thumb">
+              <img
+                src={course.thumbnail_url || DEFAULT_COURSE_THUMB}
+                alt={course.title}
+                onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_COURSE_THUMB; }}
+              />
             </div>
 
-            <div className="learnerHub__heroMain">
-              <div className="learnerHub__title">{course.title}</div>
-              <div className="learnerHub__meta">
+            <div className="lch-heroMain">
+              <div className="lch-title">{course.title}</div>
+              <div className="lch-meta">
                 <span>{levelLabel(course.level)}</span>
-                <span className="learnerHub__dot">·</span>
+                <span className="lch-dot">·</span>
                 <span>{languageLabel(course.language)}</span>
                 {Array.isArray(course.instructors) && course.instructors.length ? (
                   <>
-                    <span className="learnerHub__dot">·</span>
+                    <span className="lch-dot">·</span>
                     <span>Giảng viên: {course.instructors.map((i) => i.full_name).filter(Boolean).join(", ")}</span>
                   </>
                 ) : null}
               </div>
-              <div className={`learnerHub__desc ${course.short_description ? "" : "learnerHub__desc--empty"}`}>
+              <div className={`lch-desc ${course.short_description ? "" : "lch-desc--empty"}`}>
                 {course.short_description || "Chưa có mô tả ngắn."}
               </div>
 
-              <div className="learnerHub__actions">
+              <div className="lch-actions">
                 <button
                   type="button"
-                  className="btn btn--primary"
+                  className="lch-btn lch-btn--primary"
                   onClick={() => navigate(`/learning/${courseId}/${slug || course.slug}`)}
                   disabled={!courseId}
                 >
                   Học tiếp
                 </button>
-                <button type="button" className="btn btn--secondary" onClick={() => setGraphModalOpen(true)}>
+                <button type="button" className="lch-btn lch-btn--secondary" onClick={() => setGraphModalOpen(true)}>
                   Sơ đồ tiên quyết
-                </button>
-                <button type="button" className="btn btn--secondary" onClick={() => fetchLeaderboard().catch(() => undefined)}>
-                  Tải lại xếp hạng
                 </button>
               </div>
 
-              <div className="learnerHub__progressCard">
-                <div className="learnerHub__progressRow">
-                  <div className="learnerHub__progressLabel">Tiến độ của bạn</div>
-                  <div className="learnerHub__progressPct">{progressPercent}%</div>
+              <div className="lch-progressCard">
+                <div className="lch-progressRow">
+                  <div className="lch-progressLabel">Tiến độ của bạn</div>
+                  <div className="lch-progressPct">{progressPercent}%</div>
                 </div>
-                <div className="learnerHub__progressBar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent}>
-                  <div className="learnerHub__progressFill" style={{ width: `${Math.max(0, Math.min(100, progressPercent))}%` }} />
+                <div className="lch-progressBar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent}>
+                  <div className="lch-progressFill" style={{ width: `${Math.max(0, Math.min(100, progressPercent))}%` }} />
                 </div>
-                <div className="learnerHub__progressMeta">
+                <div className="lch-progressMeta">
                   Hoàn thành: <b>{completedLessons}</b> / <b>{totalLessons}</b> bài
                   {myRank != null ? (
                     <>
-                      <span className="learnerHub__dot">·</span> Hạng của bạn: <b>#{myRank}</b>
+                      <span className="lch-dot">·</span> Hạng của bạn: <b>#{myRank}</b>
                     </>
                   ) : null}
                 </div>
@@ -263,56 +266,56 @@ export default function LearnerCourseHubPage() {
         ) : null}
 
         {course ? (
-          <div className="learnerHub__grid">
-            <section className="learnerHub__card">
-              <div className="learnerHub__cardHeader">
-                <div className="learnerHub__cardTitle">Bảng xếp hạng</div>
-                <div className="learnerHub__cardHint">Top {leaderboard?.top_limit ?? 100} + bạn (nếu ngoài top)</div>
+          <div className="lch-grid">
+            <section className="lch-card">
+              <div className="lch-cardHeader">
+                <div className="lch-cardTitle">Bảng xếp hạng</div>
+                <div className="lch-cardHint">Top {leaderboard?.top_limit ?? 100} + bạn (nếu ngoài top)</div>
               </div>
-              <div className="learnerHub__leaderboardList">
+              <div className="lch-leaderboardList">
                 {leaderboard?.items?.length ? (
                   leaderboard.items.map((it) => (
                     <div
                       key={it.user_id}
                       className={[
-                        "learnerHub__leaderboardItem",
-                        it.rank === 1 ? "learnerHub__leaderboardItem--gold" : "",
-                        it.rank === 2 ? "learnerHub__leaderboardItem--silver" : "",
-                        it.rank === 3 ? "learnerHub__leaderboardItem--bronze" : "",
-                        it.is_me ? "learnerHub__leaderboardItem--me" : "",
+                        "lch-leaderboardItem",
+                        it.rank === 1 ? "lch-leaderboardItem--gold" : "",
+                        it.rank === 2 ? "lch-leaderboardItem--silver" : "",
+                        it.rank === 3 ? "lch-leaderboardItem--bronze" : "",
+                        it.is_me ? "lch-leaderboardItem--me" : "",
                       ]
                         .filter(Boolean)
                         .join(" ")}
                     >
-                      <div className="learnerHub__leaderboardRank">#{it.rank}</div>
+                      <div className="lch-leaderboardRank">#{it.rank}</div>
                       {it.avatar_url ? (
-                        <img src={it.avatar_url} alt={it.full_name} className="learnerHub__leaderboardAvatar" />
+                        <img src={it.avatar_url} alt={it.full_name} className="lch-leaderboardAvatar" />
                       ) : (
-                        <div className="learnerHub__leaderboardAvatar learnerHub__leaderboardAvatar--placeholder" aria-hidden="true">
+                        <div className="lch-leaderboardAvatar lch-leaderboardAvatar--placeholder" aria-hidden="true">
                           {String(it.full_name || "U").trim().charAt(0).toUpperCase()}
                         </div>
                       )}
-                      <div className="learnerHub__leaderboardName">{it.full_name}</div>
-                      <div className="learnerHub__leaderboardScore">{Number(it.progress_percent || 0)}%</div>
+                      <div className="lch-leaderboardName">{it.full_name}</div>
+                      <div className="lch-leaderboardScore">{Number(it.progress_percent || 0)}%</div>
                     </div>
                   ))
                 ) : (
-                  <div className="learnerHub__empty">Chưa có dữ liệu bảng xếp hạng.</div>
+                  <div className="lch-empty">Chưa có dữ liệu bảng xếp hạng.</div>
                 )}
               </div>
             </section>
 
-            <section className="learnerHub__card">
-              <div className="learnerHub__cardHeader">
-                <div className="learnerHub__cardTitle">Thông tin</div>
-                <div className="learnerHub__cardHint">Một số thông tin cơ bản</div>
+            <section className="lch-card">
+              <div className="lch-cardHeader">
+                <div className="lch-cardTitle">Thông tin</div>
+                <div className="lch-cardHint">Một số thông tin cơ bản</div>
               </div>
-              <div className="learnerHub__infoList">
-                <div className="learnerHub__infoItem">
+              <div className="lch-infoList">
+                <div className="lch-infoItem">
                   <span>Trạng thái</span>
                   <b>{course.enrollment?.status || "active"}</b>
                 </div>
-                <div className="learnerHub__infoItem">
+                <div className="lch-infoItem">
                   <span>Slug</span>
                   <b>{course.slug}</b>
                 </div>
@@ -322,15 +325,15 @@ export default function LearnerCourseHubPage() {
         ) : null}
 
         {graphModalOpen ? (
-          <div className="learnerHub__modalOverlay" role="dialog" aria-modal="true">
-            <div className="learnerHub__modal">
-              <div className="learnerHub__modalHeader">
-                <div className="learnerHub__modalTitle">Sơ đồ tiên quyết</div>
-                <button type="button" className="btn btn--secondary" onClick={() => setGraphModalOpen(false)}>
+          <div className="lch-modalOverlay" role="dialog" aria-modal="true">
+            <div className="lch-modal">
+              <div className="lch-modalHeader">
+                <div className="lch-modalTitle">Sơ đồ tiên quyết</div>
+                <button type="button" className="lch-btn lch-btn--secondary" onClick={() => setGraphModalOpen(false)}>
                   Đóng
                 </button>
               </div>
-              <div className="learnerHub__modalBody">
+              <div className="lch-modalBody">
                 <PrerequisiteGraph
                   data={prerequisiteGraph}
                   showCompletionStatus

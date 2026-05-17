@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import MindBridgeHeader from "../../components/MindBridgeHeader";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { House } from "lucide-react";
 import MindBridgeFooter from "../../components/MindBridgeFooter";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { getAccessToken } from "../../utils/authStorage";
+import { DEFAULT_COURSE_THUMB } from "../../utils/imageFallback";
 import "./CoursesCatalogPage.css";
 
 interface CatalogCourse {
@@ -17,8 +18,12 @@ interface CatalogCourse {
   price?: number | null;
   rating?: number | null;
   rating_count?: number | null;
-  instructor_name?: string;
   category?: string | null;
+  instructors?: {
+    id: number;
+    full_name: string;
+    avatar_url: string | null;
+  }[];
 }
 
 interface CatalogResponse {
@@ -26,9 +31,6 @@ interface CatalogResponse {
   total?: number;
   message?: string;
 }
-
-const FALLBACK_THUMB =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuCU4Jx3s6o3gP6W_qnQwEbN_upNC2RrPgboIwyBIcHUUjG3gh4kXK0LBxP55wivPEzVNdz7J7qZpawWHuwig0R1lQW5QzRE5NsU3JFnmzgryZUchAyHLw2YKj9P-EcQ1auPTeYw3qWfXyW_2vet-yOo53wgy-6ndJjEZ57thi4UBuLYzpm-9HS_H8BOfaBJd4VchqX7GNPKYhtXNLdw_DWm46_5oyzSXqPlt6F173Uw-qd97hApERDLbpVHOWE6LmkFRc5iIw96iw";
 
 const CATEGORIES = [
   "AI & Machine Learning",
@@ -53,6 +55,7 @@ const renderStars = (rating: number) => {
 };
 
 export default function CoursesCatalogPage() {
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const queryFromUrl = params.get("q") ?? "";
   const [search, setSearch] = useState(queryFromUrl);
@@ -64,6 +67,7 @@ export default function CoursesCatalogPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [enrolledCourseIds, setEnrolledCourseIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const id = window.setTimeout(() => setDebouncedQ(search.trim()), 350);
@@ -105,12 +109,32 @@ export default function CoursesCatalogPage() {
           qs.set("sort_by", "learners_count");
           qs.set("sort_dir", "desc");
         }
-        const res = await fetch(`${url}${COURSES_API.catalog}?${qs.toString()}`, { headers });
-        const data = (await res.json().catch(() => ({}))) as CatalogResponse;
-        if (!res.ok) throw new Error(data?.message || "Unable to load courses.");
+
+        // Fetch catalog and enrolled courses in parallel
+        const [catalogRes, enrollmentsRes] = await Promise.all([
+          fetch(`${url}${COURSES_API.catalog}?${qs.toString()}`, { headers }),
+          token ? fetch(`${url}${COURSES_API.myEnrollments}?page_size=100`, { headers }) : Promise.resolve(null),
+        ]);
+
+        const catalogData = (await catalogRes.json().catch(() => ({}))) as CatalogResponse;
+        if (!catalogRes.ok) throw new Error(catalogData?.message || "Unable to load courses.");
+
+        // Extract enrolled course IDs
+        const enrolled = new Set<number>();
+        if (enrollmentsRes && enrollmentsRes.ok) {
+          const enrollData = (await enrollmentsRes.json().catch(() => ({}))) as { items?: { course_id?: number }[] };
+          for (const e of enrollData.items ?? []) {
+            if (e.course_id != null) enrolled.add(e.course_id);
+          }
+        }
         if (cancelled) return;
-        setCourses(Array.isArray(data.items) ? data.items : []);
-        setTotal(typeof data.total === "number" ? data.total : 0);
+        setEnrolledCourseIds(enrolled);
+
+        const rawCourses = Array.isArray(catalogData.items) ? catalogData.items : [];
+        // Filter out enrolled courses from catalog
+        const filtered = rawCourses.filter((c) => !enrolled.has(c.id));
+        setCourses(filtered);
+        setTotal(typeof catalogData.total === "number" ? catalogData.total - enrolled.size : filtered.length);
       } catch (err: any) {
         if (cancelled) return;
         setError(err?.message || "Unable to load courses.");
@@ -137,8 +161,6 @@ export default function CoursesCatalogPage() {
 
   return (
     <div className="mb-public catalog-page bg-[#F8FAFC] text-on-surface">
-      <MindBridgeHeader active="courses" />
-
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <section className="mb-16">
           <div className="flex flex-col md:flex-row items-center justify-between gap-12">
@@ -259,22 +281,24 @@ export default function CoursesCatalogPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
                 {courses.map((c) => {
-                  const rating = typeof c.rating === "number" ? c.rating : 4.8;
+                  const rating = typeof c.rating === "number" ? c.rating : 0;
+                  const primaryInstructor = c.instructors?.[0];
                   const priceLabel =
                     typeof c.price === "number" && c.price > 0
-                      ? `$${c.price.toFixed(2)}`
-                      : "Free";
+                      ? new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(c.price)
+                      : "Miễn phí";
                   return (
                     <Link
                       key={c.id}
                       to={`/courses/${c.slug}`}
-                      className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100 flex flex-col group"
+                      className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100 flex flex-col group no-underline"
                     >
                       <div className="aspect-video relative overflow-hidden">
                         <img
                           className="object-cover w-full h-full group-hover:scale-110 transition-transform duration-500"
-                          src={c.thumbnail_url || FALLBACK_THUMB}
+                          src={c.thumbnail_url || DEFAULT_COURSE_THUMB}
                           alt={c.title}
+                          onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_COURSE_THUMB; }}
                         />
                         <span className="absolute top-3 left-3 bg-[#0D9488]/90 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider backdrop-blur-sm">
                           {c.category || c.level || "Course"}
@@ -285,7 +309,7 @@ export default function CoursesCatalogPage() {
                           {c.title}
                         </h2>
                         <p className="text-[14px] text-[#64748B] mb-4">
-                          {c.instructor_name || "MindBridge Instructor"}
+                          {primaryInstructor?.full_name || "MindBridge Instructor"}
                         </p>
                         <div className="flex items-center gap-1 mb-6">
                           {renderStars(rating).map((s) => (
@@ -294,7 +318,7 @@ export default function CoursesCatalogPage() {
                             </span>
                           ))}
                           <span className="text-xs font-bold text-on-surface-variant ml-1">
-                            ({rating.toFixed(1)})
+                            ({c.rating != null ? rating.toFixed(1) : "0.0"})
                           </span>
                         </div>
                         <div className="mt-auto flex items-center justify-between gap-4">
@@ -315,6 +339,15 @@ export default function CoursesCatalogPage() {
       </main>
 
       <MindBridgeFooter />
+
+      <button
+        type="button"
+        className="ld-fab"
+        aria-label="Add"
+        onClick={() => navigate('/learner/dashboard')}
+      >
+        <House size={22} strokeWidth={2.6} />
+      </button>
     </div>
   );
 }

@@ -97,11 +97,10 @@ function loadFromStorage(): {
       : Date.now();
 
     // Nếu đã quá thời gian idle cho phép thì coi như hết session
-    if (Date.now() - lastActiveAt > IDLE_TIMEOUT_MS) {
-      window.localStorage.removeItem("auth");
-      window.sessionStorage.removeItem("auth");
-      window.localStorage.removeItem("access_token");
-      window.sessionStorage.removeItem("access_token");
+    // NHƯNG không xóa localStorage ở đây — chỉ return null để React state quản lý.
+    // Xóa localStorage sẽ gây logout tất cả các tab khác cùng lúc.
+    const isExpired = Date.now() - lastActiveAt > IDLE_TIMEOUT_MS;
+    if (isExpired) {
       return { accessToken: null, refreshToken: null, user: null, remember: false };
     }
 
@@ -195,11 +194,16 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Hàm xóa auth data khỏi storage
-  const clearAuth = useCallback(() => {
-    window.localStorage.removeItem("auth");
+  const clearAuth = useCallback((clearPersistentStorage = false) => {
     window.sessionStorage.removeItem("auth");
-    window.localStorage.removeItem("access_token");
     window.sessionStorage.removeItem("access_token");
+    // Only clear localStorage (persistent storage) if explicitly requested,
+    // e.g. when user explicitly logs out. Idle timeout should NOT clear it
+    // because it would log out all other open tabs that share the same localStorage.
+    if (clearPersistentStorage) {
+      window.localStorage.removeItem("auth");
+      window.localStorage.removeItem("access_token");
+    }
   }, []);
 
   const resolveReauthRequests = useCallback((ok: boolean) => {
@@ -421,7 +425,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     setRefreshToken(null);
     setUser(null);
     resolveReauthRequests(false);
-    clearAuth();
+    clearAuth(true); // Clear both session and persistent storage on explicit logout
     navigate("/login", { replace: true });
   }, [refreshToken, resolveReauthRequests, clearAuth, navigate]);
 
@@ -479,22 +483,37 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, user, location.pathname, navigate]);
 
-  // Idle timeout auto logout
+  // Idle timeout auto logout — BUT only clear LOCAL state, do NOT call logout()
+  // because logout() clears shared localStorage and would log out ALL tabs.
+  // Token expiration is handled separately by the fetch interceptor.
   const idleTimerRef = useRef<number | null>(null);
+  const isIdleLogoutRef = useRef(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
       return;
     }
 
-    const resetIdleTimer = () => {
+    const clearIdleLogout = () => {
       if (idleTimerRef.current) {
         window.clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
       }
-      idleTimerRef.current = window.setTimeout(() => {
-        logout();
-      }, IDLE_TIMEOUT_MS);
+    };
 
+    const handleIdleTimeout = () => {
+      // Only clear local state — do NOT call logout() which would clear storage for ALL tabs
+      isIdleLogoutRef.current = true;
+      setAccessToken(null);
+      setRefreshToken(null);
+      setUser(null);
+      resolveReauthRequests(false);
+      clearAuth(); // clears this tab's sessionStorage if used
+    };
+
+    const resetIdleTimer = () => {
+      clearIdleLogout();
+      idleTimerRef.current = window.setTimeout(handleIdleTimeout, IDLE_TIMEOUT_MS);
       updateLastActive();
     };
 
@@ -514,14 +533,12 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     resetIdleTimer();
 
     return () => {
-      if (idleTimerRef.current) {
-        window.clearTimeout(idleTimerRef.current);
-      }
+      clearIdleLogout();
       events.forEach((event) => {
         window.removeEventListener(event, resetIdleTimer);
       });
     };
-  }, [isAuthenticated, logout, updateLastActive]);
+  }, [isAuthenticated, updateLastActive, clearAuth, resolveReauthRequests]);
 
   useEffect(() => {
     const originalFetch = window.fetch.bind(window);

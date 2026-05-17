@@ -29,6 +29,7 @@ import PaymentRevenueLedger from '../../../../../internal/model/payment_revenue_
 import OpenRouterKey from '../../../../../internal/model/openrouter_key';
 import OpenRouterSetting from '../../../../../internal/model/openrouter_setting';
 import AuditLog from '../../../../../internal/model/audit_log';
+import CourseReview from '../../../../../internal/model/course_review';
 import crypto from 'crypto';
 import env from '../../../utils/env';
 
@@ -103,6 +104,11 @@ import {
   LessonResourceReviewTimelineResult,
   LearningActivityResult,
   LearningActivityDayPoint,
+  InstructorCatalogResult,
+  InstructorCatalogItem,
+  InstructorDetailItem,
+  CourseReviewItem,
+  CourseReviewListResult,
 } from '../types';
 import { AiSummaryService, LessonSummaryPayload, LessonSummarySourceType } from '../../ai-summary/types';
 
@@ -430,9 +436,27 @@ async function ensureCourseWorkflowSchema(): Promise<void> {
     `
   );
 
+  // Helper to retry a query on deadlock (MySQL error 1213)
+  const retryOnDeadlock = async <T>(fn: () => Promise<T>, retries = 3): Promise<T> => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        return await fn();
+      } catch (err: any) {
+        if (err?.code === 'ER_LOCK_DEADLOCK' && attempt < retries) {
+          // Wait a bit before retrying
+          await new Promise((resolve) => setTimeout(resolve, 50 * attempt));
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new Error('Max retries exceeded');
+  };
+
   // Backfill marker review-items for structured content (quiz/assignment)
   // so admin moderation can handle them through the same lesson_resources flow.
-  await AppDataSource.query(
+  await retryOnDeadlock(async () =>
+    AppDataSource.query(
     `
     INSERT INTO lesson_resources
       (lesson_id, resource_type, url, filename, mime_type, preview_url, size_bytes, resource_kind, review_status, review_reason, reviewed_by, reviewed_at)
@@ -455,9 +479,11 @@ async function ensureCourseWorkflowSchema(): Promise<void> {
      AND lr.url = CONCAT('internal://lesson/', q.lesson_id, '/quiz')
     WHERE lr.id IS NULL
     `
+    )
   );
 
-  await AppDataSource.query(
+  await retryOnDeadlock(async () =>
+    AppDataSource.query(
     `
     INSERT INTO lesson_resources
       (lesson_id, resource_type, url, filename, mime_type, preview_url, size_bytes, resource_kind, review_status, review_reason, reviewed_by, reviewed_at)
@@ -485,6 +511,7 @@ async function ensureCourseWorkflowSchema(): Promise<void> {
      AND lr.url = CONCAT('internal://lesson/', a.lesson_id, '/assignment')
     WHERE lr.id IS NULL
     `
+    )
   );
 
   // Backfill granular assignment review markers (description + attachment/{idx})
@@ -758,6 +785,9 @@ function mapToPublishedCourseListItem(row: any): PublishedCourseListItem {
     is_enrolled: Number(row.is_enrolled ?? 0) > 0,
     can_enroll: row.can_enroll == null ? true : Boolean(row.can_enroll),
     instructors: safeJsonParse<any[]>(row.instructors, []),
+    rating: row.rating != null ? Number(row.rating) : null,
+    avg_rating: row.rating != null ? Number(row.rating) : null,
+    rating_count: Number(row.rating_count ?? 0),
   };
 }
 
@@ -1513,6 +1543,23 @@ export class CourseServiceImpl implements CourseService {
         .where('ci.course_id = c.id');
     }, 'instructors');
 
+    // Add avg rating and rating count
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('AVG(cr.rating)', 'rating')
+        .from(CourseReview, 'cr')
+        .where('cr.course_id = c.id')
+        .andWhere('cr.is_visible = true');
+    }, 'rating');
+
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(*)', 'cnt')
+        .from(CourseReview, 'cr')
+        .where('cr.course_id = c.id')
+        .andWhere('cr.is_visible = true');
+    }, 'rating_count');
+
     // Check if user is enrolled
     if (subjectUserId) {
       qb.addSelect((subQb) => {
@@ -1574,6 +1621,9 @@ export class CourseServiceImpl implements CourseService {
         is_enrolled: r.is_enrolled,
         can_enroll: subjectUserId ? canEnrollByPrerequisite : true,
         instructors: r.instructors,
+        avg_rating: r.rating ? Number(r.rating) : null,
+        rating: r.rating ? Number(r.rating) : null,
+        rating_count: Number(r.rating_count ?? 0),
       };
       return mapToPublishedCourseListItem(row);
     });
@@ -1650,6 +1700,23 @@ export class CourseServiceImpl implements CourseService {
         .where('ci.course_id = c.id');
     }, 'instructors');
 
+    // Add avg rating and rating count
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('AVG(cr.rating)', 'rating')
+        .from(CourseReview, 'cr')
+        .where('cr.course_id = c.id')
+        .andWhere('cr.is_visible = true');
+    }, 'rating');
+
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(*)', 'cnt')
+        .from(CourseReview, 'cr')
+        .where('cr.course_id = c.id')
+        .andWhere('cr.is_visible = true');
+    }, 'rating_count');
+
     // Check if user is enrolled
     if (subjectUserId) {
       qb.addSelect((subQb) => {
@@ -1691,6 +1758,8 @@ export class CourseServiceImpl implements CourseService {
       lessons_count: Number(raw.lessons_count ?? 0),
       price: raw.c_price ?? raw.price,
       total_duration_minutes: raw.total_duration_minutes ? Number(raw.total_duration_minutes) : null,
+      rating: raw.rating ? Number(raw.rating) : null,
+      rating_count: Number(raw.rating_count ?? 0),
       is_enrolled: !!raw.enrollment,
       enrollment: safeJsonParse<any | null>(raw.enrollment, null),
       instructors: safeJsonParse<any[]>(raw.instructors, []),
@@ -1766,6 +1835,215 @@ export class CourseServiceImpl implements CourseService {
       .getOne();
     if (!root) throw new Error('Không tìm thấy khóa học.');
     return this.buildPrerequisiteGraph(root as any, subjectUserId, 'published');
+  }
+
+  async listInstructorsCatalog(): Promise<InstructorCatalogResult> {
+    const now = new Date();
+
+    // Get all users who are instructors (have teacher/course_manager/admin role)
+    // and are linked to at least one published course
+    const qb = AppDataSource.getRepository(User)
+      .createQueryBuilder('u')
+      .innerJoin(CourseInstructor, 'ci', 'ci.instructor_id = u.id')
+      .innerJoin(Course, 'c', 'c.id = ci.course_id')
+      .where(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      )
+      .andWhere('c.deleted_at IS NULL')
+      .groupBy('u.id');
+
+    // Add course count (published courses only)
+    qb.addSelect('COUNT(DISTINCT c.id)', 'course_count');
+
+    // Add total learners across all published courses
+    qb.addSelect((subQb) => {
+      return subQb
+        .select('COUNT(DISTINCT ce.user_id)', 'total_learners')
+        .from(CourseEnrollment, 'ce')
+        .innerJoin(Course, 'cc', 'cc.id = ce.course_id')
+        .where('cc.created_by = u.id')
+        .andWhere(
+          `(cc.status = :published OR (cc.status = :draft AND cc.publish_scheduled_at IS NOT NULL AND cc.publish_scheduled_at <= :now))`,
+          { published: 'published', draft: 'draft', now }
+        )
+        .andWhere('cc.deleted_at IS NULL');
+    }, 'total_learners');
+
+    const result = await qb.getRawAndEntities();
+    const raw = result.raw;
+
+    const MIN_COURSES_FOR_TOP_RATED = 2;
+
+    const items: InstructorCatalogItem[] = raw.map((r: any) => ({
+      id: r.u_id,
+      full_name: r.u_full_name,
+      avatar_url: r.u_avatar_url,
+      title: r.u_bio ? r.u_full_name.split(' ').slice(-1)[0] + ' Expert' : null,
+      bio: r.u_bio,
+      course_count: Number(r.course_count ?? 0),
+      total_learners: Number(r.total_learners ?? 0),
+      top_rated: Number(r.course_count ?? 0) >= MIN_COURSES_FOR_TOP_RATED,
+    }));
+
+    return {
+      items,
+      total: items.length,
+    };
+  }
+
+  async getInstructorById(instructorId: number): Promise<InstructorDetailItem | null> {
+    const now = new Date();
+
+    // Get instructor info
+    const instructor = await AppDataSource.getRepository(User)
+      .createQueryBuilder('u')
+      .where('u.id = :instructorId', { instructorId })
+      .getOne();
+
+    if (!instructor) return null;
+
+    // Get instructor's published courses with count
+    const coursesQb = AppDataSource.getRepository(Course)
+      .createQueryBuilder('c')
+      .innerJoin(CourseInstructor, 'ci', 'ci.course_id = c.id AND ci.instructor_id = :instructorId', { instructorId })
+      .where('c.deleted_at IS NULL')
+      .andWhere(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      );
+
+    const courses = await coursesQb.getMany();
+    const courseCount = courses.length;
+
+    // Get total learners
+    const learnerCount = await AppDataSource.getRepository(CourseEnrollment)
+      .createQueryBuilder('ce')
+      .innerJoin(Course, 'c', 'c.id = ce.course_id')
+      .innerJoin(CourseInstructor, 'ci', 'ci.course_id = c.id AND ci.instructor_id = :instructorId', { instructorId })
+      .where(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      )
+      .andWhere('c.deleted_at IS NULL')
+      .select('COUNT(DISTINCT ce.user_id)', 'total')
+      .getRawOne();
+
+    // Get average rating from course reviews
+    const avgRatingResult = await AppDataSource.getRepository(CourseReview)
+      .createQueryBuilder('cr')
+      .innerJoin(Course, 'c', 'c.id = cr.course_id')
+      .innerJoin(CourseInstructor, 'ci', 'ci.course_id = c.id AND ci.instructor_id = :instructorId', { instructorId })
+      .where(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      )
+      .andWhere('c.deleted_at IS NULL')
+      .select('AVG(cr.rating)', 'avg_rating')
+      .getRawOne();
+
+    const avgRating = avgRatingResult?.avg_rating ? parseFloat(avgRatingResult.avg_rating) : 0;
+
+    // Build credentials based on instructor roles
+    const credentials: { icon: string; title: string; sub: string }[] = [];
+
+    // Check roles
+    const roles = await AppDataSource.getRepository(UserRole)
+      .createQueryBuilder('ur')
+      .innerJoin(Role, 'r', 'r.id = ur.role_id')
+      .where('ur.user_id = :instructorId', { instructorId })
+      .getMany();
+
+    const roleNames = roles.map((r: any) => r.role?.name || 'Instructor');
+    if (roleNames.includes('admin') || roleNames.includes('course_manager')) {
+      credentials.push({ icon: 'workspace_premium', title: 'Course Manager', sub: 'MindBridge Platform' });
+    }
+    if (courseCount >= 2) {
+      credentials.push({ icon: 'school', title: 'Expert Instructor', sub: `${courseCount} Courses` });
+    }
+    if (Number(learnerCount?.total || 0) >= 100) {
+      credentials.push({ icon: 'groups', title: 'Community Leader', sub: `${Number(learnerCount?.total || 0).toLocaleString()} Students` });
+    }
+
+    // Get courses with category info
+    // Get average rating per course
+    const courseIds = courses.map((c: any) => c.id);
+    const courseRatings: Record<number, number> = {};
+    const courseReviewCounts: Record<number, number> = {};
+
+    if (courseIds.length > 0) {
+      const ratingsResult = await AppDataSource.getRepository(CourseReview)
+        .createQueryBuilder('cr')
+        .where('cr.course_id IN (:...courseIds)', { courseIds })
+        .select('cr.course_id', 'course_id')
+        .addSelect('AVG(cr.rating)', 'avg_rating')
+        .addSelect('COUNT(*)', 'review_count')
+        .groupBy('cr.course_id')
+        .getRawMany();
+
+      ratingsResult.forEach((r: any) => {
+        courseRatings[r.course_id] = parseFloat(r.avg_rating) || 0;
+        courseReviewCounts[r.course_id] = parseInt(r.review_count) || 0;
+      });
+    }
+
+    const courseItems = courses.map((c: any) => ({
+      slug: c.slug || String(c.id),
+      title: c.title,
+      category: c.category || 'General',
+      description: c.short_description || c.description || '',
+      price: c.price ? `${Number(c.price).toLocaleString('vi-VN')} ₫` : 'Miễn phí',
+      image: c.thumbnail_url || null,
+      rating: courseRatings[c.id] || 0,
+      reviewCount: courseReviewCounts[c.id] || 0,
+    }));
+
+    // Get a sample testimony (random course review with rating >= 4)
+    const testimonyResult = await AppDataSource.getRepository(CourseReview)
+      .createQueryBuilder('cr')
+      .innerJoin(Course, 'c', 'c.id = cr.course_id')
+      .innerJoin(CourseInstructor, 'ci', 'ci.course_id = c.id AND ci.instructor_id = :instructorId', { instructorId })
+      .innerJoin(User, 'u', 'u.id = cr.user_id')
+      .where(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      )
+      .andWhere('c.deleted_at IS NULL')
+      .andWhere('cr.rating >= :minRating', { minRating: 4 })
+      .orderBy('RAND()')
+      .limit(1)
+      .getRawAndEntities();
+
+    let testimony: { quote: string; author: string; avatar: string | null } | null = null;
+    if (testimonyResult.raw.length > 0) {
+      const t = testimonyResult.raw[0];
+      testimony = {
+        quote: t.cr_comment || `I loved learning from ${instructor.full_name}! Highly recommend their courses.`,
+        author: t.u_full_name || 'Anonymous Student',
+        avatar: t.u_avatar_url || null,
+      };
+    }
+
+    // Parse bio into paragraphs
+    const bioText = instructor.bio || '';
+    const bioParagraphs = bioText.length > 0
+      ? bioText.split(/\n+/).filter(p => p.trim()).slice(0, 3)
+      : [`${instructor.full_name} is a dedicated instructor on MindBridge, sharing their expertise through high-quality courses.`];
+
+    return {
+      id: instructor.id,
+      full_name: instructor.full_name,
+      avatar_url: instructor.avatar_url,
+      bio: bioText,
+      stats: {
+        students: Number(learnerCount?.total || 0),
+        courses: courseCount,
+        rating: Math.round(avgRating * 10) / 10,
+      },
+      credentials,
+      courses: courseItems,
+      testimony,
+    };
   }
 
   // Enrollment methods
@@ -5837,6 +6115,8 @@ export class CourseServiceImpl implements CourseService {
       const pct = maxPts > 0 ? Math.round((earned / maxPts) * 10000) / 100 : 0;
       const passThreshold = (quiz as any).passing_score != null ? Number((quiz as any).passing_score) : null;
       const isPassed = passThreshold == null ? true : pct + 1e-9 >= passThreshold;
+      const maxAttempts = Number((quiz as any).max_attempts ?? 1);
+      const isLastAttempt = nextNum >= maxAttempts;
 
       await attRepo.update(
         { id: attemptId } as any,
@@ -5847,7 +6127,8 @@ export class CourseServiceImpl implements CourseService {
         } as any
       );
 
-      if (isPassed) {
+      // Complete lesson if passed OR this is the last attempt (exhausted all tries)
+      if (isPassed || isLastAttempt) {
         const { orderedLessons } = await this.loadOrderedLessonsForCourse(courseId);
         const idx = orderedLessons.findIndex((l) => Number((l as any).id) === Number(lessonId));
         if (idx >= 0) {
@@ -5870,10 +6151,12 @@ export class CourseServiceImpl implements CourseService {
           );
           await progressRepo.save(entity as any);
         }
+        // Auto-complete the quiz lesson when passed or last attempt - do NOT ignore errors
         try {
           await this.completeLesson(subjectUserId, courseId, lessonId);
-        } catch {
-          // ignore
+        } catch (err) {
+          // Log error for debugging but still consider quiz as completed
+          console.error('[Quiz Complete] Failed to auto-complete lesson:', err);
         }
       }
 
@@ -6133,5 +6416,187 @@ export class CourseServiceImpl implements CourseService {
     }
 
     return { daily_activity: dailyActivity };
+  }
+
+  async createCourseReview(
+    userId: number,
+    courseId: number,
+    rating: number,
+    comment: string | null
+  ): Promise<CourseReviewItem> {
+    const reviewRepo = AppDataSource.getRepository(CourseReview);
+    const courseRepo = AppDataSource.getRepository(Course);
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    const now = new Date();
+
+    if (rating < 1 || rating > 5) {
+      throw new Error('Rating must be between 1 and 5.');
+    }
+
+    // Check if course exists and is effectively published
+    const course = await courseRepo
+      .createQueryBuilder('c')
+      .where('c.id = :courseId', { courseId })
+      .andWhere('c.deleted_at IS NULL')
+      .andWhere(
+        `(c.status = :published OR (c.status = :draft AND c.publish_scheduled_at IS NOT NULL AND c.publish_scheduled_at <= :now))`,
+        { published: 'published', draft: 'draft', now }
+      )
+      .getOne();
+
+    if (!course) {
+      throw new Error('Course not found.');
+    }
+
+    // Check if user is enrolled
+    const enrollment = await enrollmentRepo.findOne({
+      where: { user_id: userId, course_id: courseId },
+    });
+
+    if (!enrollment) {
+      throw new Error('You must be enrolled in this course to leave a review.');
+    }
+
+    // Check if user already reviewed this course
+    const existingReview = await reviewRepo.findOne({
+      where: { user_id: userId, course_id: courseId },
+    });
+
+    if (existingReview) {
+      throw new Error('You have already reviewed this course. Use update instead.');
+    }
+
+    const review = reviewRepo.create({
+      user_id: userId,
+      course_id: courseId,
+      rating,
+      comment: comment?.trim() || null,
+      is_visible: true,
+    });
+
+    await reviewRepo.save(review);
+
+    const userRepo = AppDataSource.getRepository(User);
+    const user = await userRepo.findOne({ where: { id: userId } });
+
+    return {
+      id: review.id,
+      user_id: userId,
+      user_full_name: String((user as any)?.full_name ?? ''),
+      user_avatar: (user as any)?.avatar_url ?? null,
+      rating: review.rating,
+      comment: review.comment,
+      created_at: new Date(review.created_at).toISOString(),
+    };
+  }
+
+  async listCourseReviews(
+    courseId: number,
+    page: number,
+    pageSize: number
+  ): Promise<CourseReviewListResult> {
+    const reviewRepo = AppDataSource.getRepository(CourseReview);
+    const actualPage = Math.max(1, Number(page || 1));
+    const actualPageSize = Math.min(50, Math.max(1, Number(pageSize || 10)));
+
+    // Get total and avg rating
+    const statsQb = reviewRepo
+      .createQueryBuilder('cr')
+      .select('COUNT(*)', 'cnt')
+      .addSelect('AVG(cr.rating)', 'avg_rating')
+      .where('cr.course_id = :courseId', { courseId })
+      .andWhere('cr.is_visible = true');
+
+    const stats = await statsQb.getRawOne();
+
+    const total = Number(stats?.cnt ?? 0);
+    const avgRating = stats?.avg_rating != null ? Number(stats.avg_rating) : null;
+
+    // Get paginated reviews with user info
+    const reviews = await reviewRepo
+      .createQueryBuilder('cr')
+      .innerJoinAndSelect('cr.user', 'u')
+      .where('cr.course_id = :courseId', { courseId })
+      .andWhere('cr.is_visible = true')
+      .orderBy('cr.created_at', 'DESC')
+      .skip((actualPage - 1) * actualPageSize)
+      .take(actualPageSize)
+      .getMany();
+
+    const items: CourseReviewItem[] = reviews.map((r) => ({
+      id: r.id,
+      user_id: r.user_id,
+      user_full_name: String((r.user as any)?.full_name ?? ''),
+      user_avatar: (r.user as any)?.avatar_url ?? null,
+      rating: r.rating,
+      comment: r.comment,
+      created_at: new Date(r.created_at).toISOString(),
+    }));
+
+    return {
+      items,
+      page: actualPage,
+      page_size: actualPageSize,
+      total,
+      avg_rating: avgRating,
+      rating_count: total,
+    };
+  }
+
+  async updateCourseReview(
+    reviewId: number,
+    userId: number,
+    rating: number,
+    comment: string | null
+  ): Promise<CourseReviewItem> {
+    const reviewRepo = AppDataSource.getRepository(CourseReview);
+
+    if (rating < 1 || rating > 5) {
+      throw new Error('Rating must be between 1 and 5.');
+    }
+
+    const review = await reviewRepo.findOne({ where: { id: reviewId } });
+
+    if (!review) {
+      throw new Error('Review not found.');
+    }
+
+    if (review.user_id !== userId) {
+      throw new Error('You can only update your own review.');
+    }
+
+    review.rating = rating;
+    review.comment = comment?.trim() || null;
+
+    await reviewRepo.save(review);
+
+    const userRepo = AppDataSource.getRepository(User);
+    const user = await userRepo.findOne({ where: { id: review.user_id } });
+
+    return {
+      id: review.id,
+      user_id: review.user_id,
+      user_full_name: String((user as any)?.full_name ?? ''),
+      user_avatar: (user as any)?.avatar_url ?? null,
+      rating: review.rating,
+      comment: review.comment,
+      created_at: new Date(review.created_at).toISOString(),
+    };
+  }
+
+  async deleteCourseReview(reviewId: number, userId: number): Promise<void> {
+    const reviewRepo = AppDataSource.getRepository(CourseReview);
+
+    const review = await reviewRepo.findOne({ where: { id: reviewId } });
+
+    if (!review) {
+      throw new Error('Review not found.');
+    }
+
+    if (review.user_id !== userId) {
+      throw new Error('You can only delete your own review.');
+    }
+
+    await reviewRepo.remove(review);
   }
 }

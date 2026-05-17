@@ -1,7 +1,7 @@
 /* LearningPage.tsx */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, type MouseEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Loader2, ArrowLeft, BookOpen, AlertCircle, FileQuestion, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, ArrowLeft, BookOpen, AlertCircle, FileQuestion, ChevronLeft, ChevronRight, CheckSquare, BrainCircuit } from "lucide-react";
 import AvatarMenu from "../../components/AvatarMenu";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
@@ -108,6 +108,12 @@ const STORAGE_KEYS = {
   SUMMARY_COLLAPSED: "learningPage_summaryCollapsed",
 };
 
+interface TabItem {
+  key: string;
+  label: string;
+}
+
+
 // Helper to get/set localStorage values
 function getStoredNumber(key: string, defaultValue: number, min: number, max: number): number {
   try {
@@ -167,6 +173,7 @@ export default function LearningPage() {
     options: { kind: "lesson" | "quiz" | "assignment"; disabled?: boolean; completed?: boolean }[];
   } | null>(null);
   const [lessonModal, setLessonModal] = useState<{ moduleId: number; lessonId: number } | null>(null);
+  const autoSelectedRef = useRef(false);
   const [lessonModalNavPick, setLessonModalNavPick] = useState<{
     moduleId: number;
     lessonId: number;
@@ -231,6 +238,29 @@ export default function LearningPage() {
   );
   const [isResizingTree, setIsResizingTree] = useState(false);
   const [isResizingSummary, setIsResizingSummary] = useState(false);
+  const [activeTab, setActiveTab] = useState("content");
+  const [currentLessonType, setCurrentLessonType] = useState<string | null>(null);
+
+  // Track lesson type when modal opens
+  useEffect(() => {
+    if (!lessonModal || !course?.modules) {
+      setCurrentLessonType(null);
+      return;
+    }
+    const lesson = course.modules
+      .flatMap((m) => m.lessons || [])
+      .find((l) => l.id === lessonModal.lessonId);
+    setCurrentLessonType(lesson?.lesson_type || null);
+  }, [lessonModal, course]);
+
+  // Reset activeTab when lesson type changes (Quiz/Assignment have no content tab)
+  useEffect(() => {
+    if (currentLessonType === "quiz" || currentLessonType === "assignment") {
+      setActiveTab("resources");
+    } else if (currentLessonType === "video" || currentLessonType === "text") {
+      setActiveTab("content");
+    }
+  }, [currentLessonType]);
 
   // ============================================
   // ALL useRef declarations
@@ -283,6 +313,18 @@ export default function LearningPage() {
       maxWidth: `${summaryWidth}px`,
     };
   }, [summaryWidth, isSummaryCollapsed]);
+
+  const tabs: TabItem[] = useMemo(() => {
+    const items: TabItem[] = [];
+    // Only show tabs for video/text lessons
+    if (currentLessonType === "video" || currentLessonType === "text") {
+      items.push({ key: "content", label: "Lesson Content" });
+      items.push({ key: "resources", label: `Resources (${Math.max(0, lessonModalResources.length - 1)})` });
+      items.push({ key: "discussion", label: "Discussion" });
+    }
+    // Quiz/Assignment - no tabs (content opens in new tab)
+    return items;
+  }, [currentLessonType, lessonModalResources.length]);
 
   // ============================================
   // ALL useCallback hooks
@@ -511,6 +553,33 @@ export default function LearningPage() {
     void fetchLearning();
     void fetchProgress();
   }, [fetchLearning, fetchProgress]);
+
+  // Refresh progress when user returns from other tabs (e.g., after completing Quiz/Assignment)
+  useEffect(() => {
+    const handleFocus = () => {
+      void fetchProgress();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [fetchProgress]);
+
+  // Auto-select the first unlocked lesson on initial load
+  useEffect(() => {
+    if (!course?.modules?.length || !progress?.unlocked_lesson_ids || lessonModal || autoSelectedRef.current) return;
+    autoSelectedRef.current = true;
+    const firstModule = course.modules[0];
+    if (!firstModule?.lessons?.length) return;
+    const firstLesson = firstModule.lessons[0];
+    if (!firstLesson) return;
+    const firstLessonId = Number(firstLesson.id);
+    if (!progress.unlocked_lesson_ids.includes(firstLessonId)) return;
+    const assessmentKinds = lessonAssessmentKindsById.get(firstLessonId) || [];
+    if (assessmentKinds.length === 1 && assessmentKinds[0] === "quiz") {
+      requestStartQuiz(firstLessonId, firstLesson.title || "");
+      return;
+    }
+    openLessonDetail(firstModule.id, firstLessonId);
+  }, [course, progress, lessonModal]);
 
   // Assessment submitted status effect
   useEffect(() => {
@@ -1124,7 +1193,7 @@ export default function LearningPage() {
             <ArrowLeft size={16} />
             <span>Quay lại</span>
           </button>
-          <AvatarMenu />
+          {/* <AvatarMenu /> */}
         </div>
         <div className="learningPage__loading">Đang tải bản đồ lộ trình...</div>
       </div>
@@ -1139,7 +1208,7 @@ export default function LearningPage() {
             <ArrowLeft size={16} />
             <span>Quay lại</span>
           </button>
-          <AvatarMenu />
+          {/* <AvatarMenu /> */}
         </div>
         <div className="learningPage__errorBox">
           <div className="learningPage__errorTitle">Không thể mở trang học</div>
@@ -1301,6 +1370,15 @@ export default function LearningPage() {
   });
   const nextModuleOrder = nextModule ? modules.findIndex((m) => m.id === nextModule.id) + 1 : null;
 
+  const progressPercent2 = typeof progress?.progress_percent === "number"
+    ? progress.progress_percent
+    : typeof course.enrollment?.progress_percent === "number"
+      ? course.enrollment.progress_percent
+      : 0;
+
+  const watchedLessons2 = progress?.completed_lessons ?? 0;
+  const totalLessons2 = progress?.total_lessons ?? 0;
+
   function formatTimeVi(date: Date): string {
     try {
       return date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
@@ -1309,14 +1387,14 @@ export default function LearningPage() {
     }
   }
 
-  const openLearnerAssessmentInNewTab = (kind: "quiz" | "assignment", lessonId: number, lessonTitle: string) => {
+  const openLearnerAssessment = (kind: "quiz" | "assignment", lessonId: number, lessonTitle: string) => {
     const params = new URLSearchParams({ title: lessonTitle || "" });
     if (slug) params.set("slug", slug);
     if (kind === "quiz") {
       window.open(`/learner/quiz/${courseId}/${lessonId}?${params.toString()}`, "_blank", "noopener,noreferrer");
     } else {
       params.set("courseId", String(courseId));
-      window.open(`/learner/assignment/${lessonId}?${params.toString()}`, "_blank", "noopener,noreferrer");
+      navigate(`/learner/assignment/${lessonId}?${params.toString()}`);
     }
   };
 
@@ -1347,7 +1425,7 @@ export default function LearningPage() {
         requestStartQuiz(targetLessonId, le?.title || "");
         setLessonModal(null);
       } else {
-        openLearnerAssessmentInNewTab("assignment", targetLessonId, le?.title || "");
+        openLearnerAssessment("assignment", targetLessonId, le?.title || "");
         setLessonModal(null);
         void fetchProgress();
       }
@@ -1379,7 +1457,7 @@ export default function LearningPage() {
         requestStartQuiz(targetLessonId, le?.title || "");
         setLessonModal(null);
       } else {
-        openLearnerAssessmentInNewTab("assignment", targetLessonId, le?.title || "");
+        openLearnerAssessment("assignment", targetLessonId, le?.title || "");
         setLessonModal(null);
         void fetchProgress();
       }
@@ -1641,6 +1719,12 @@ export default function LearningPage() {
   // ============================================
   // MAIN RETURN with JSX
   // ============================================
+  // Breadcrumb data
+  const courseTitle = course?.title ?? "";
+  const currentModule = modules.find((m) => lessonModal && lessonModuleIdById.get(lessonModal.lessonId) === m.id);
+  const moduleLabel = currentModule ? `Chương ${(modules.indexOf(currentModule) + 1)}: ${currentModule.title}` : "";
+  const lessonTitle = modalLesson?.title ?? "";
+  // ============================================
   return (
     <div className="learningPage">
       <div className="learningPage__topbar">
@@ -1657,34 +1741,25 @@ export default function LearningPage() {
             <div className="learningPage__progressFill" style={{ width: `${Math.max(0, Math.min(100, progressPercent))}%` }} />
           </div>
         </div>
-        <AvatarMenu />
+        {/* <AvatarMenu /> */}
       </div>
 
       <div className="learningPage__body">
-        <section className="learningPage__summaryCards">
-          <article className="learningPage__summaryCard">
-            <div className="learningPage__summaryLabel">Chương đã mở</div>
-            <div className="learningPage__summaryValue">{unlockedModules}/{modules.length}</div>
-          </article>
-          <article className="learningPage__summaryCard">
-            <div className="learningPage__summaryLabel">Chương hoàn thành</div>
-            <div className="learningPage__summaryValue">{completedModules}/{modules.length}</div>
-          </article>
-          <article className="learningPage__summaryCard learningPage__summaryCard--highlight">
-            <div className="learningPage__summaryLabel">Mục tiêu tiếp theo</div>
-            <div className="learningPage__summaryValue learningPage__summaryValue--sm">
-              {nextModule ? `Chương ${nextModuleOrder}: ${nextModule.title}` : "Bạn đã hoàn thành toàn bộ lộ trình"}
-            </div>
-          </article>
-        </section>
+          {/* <div className="lw-crumbs">
+            <span className="lw-crumb">{courseTitle}</span>
+            <ChevronRight size={14} strokeWidth={2.2} className="lw-crumb-sep" />
+            <span className="lw-crumb">{moduleLabel}</span>
+            <ChevronRight size={14} strokeWidth={2.2} className="lw-crumb-sep" />
+            <span className="lw-crumb lw-crumb--active">{lessonTitle}</span>
+          </div> */}
 
         <section className="learningPage__split">
           {/* Left Pane - Tree */}
-          <aside className="learningPage__treePane" style={treePaneStyle}>
+          <aside className={`learningPage__treePane ${isTreeCollapsed ? "learningPage__treePane--collapsed" : ""}`} style={treePaneStyle}>
             <div className="learningPage__treeHeader">
               {!isTreeCollapsed && <div className="learningPage__treeTitle">Cây nội dung</div>}
               <button
-                className="learningPage__toggleBtn"
+                className="learningPage__toggleBtn learningPage__toggleBtn--tree"
                 onClick={toggleTreeCollapse}
                 title={isTreeCollapsed ? "Mở rộng" : "Thu gọn"}
               >
@@ -1745,7 +1820,7 @@ export default function LearningPage() {
                                         return;
                                       }
                                       if (le.lesson_type === "assignment") {
-                                        openLearnerAssessmentInNewTab("assignment", le.id, le.title || "");
+                                        openLearnerAssessment("assignment", le.id, le.title || "");
                                         setLessonModal(null);
                                         void fetchProgress();
                                         return;
@@ -1780,8 +1855,11 @@ export default function LearningPage() {
 
           {/* Center Pane - Content */}
           <article className="learningPage__contentPane">
+            {/* Header */}
             <div className="learningPage__lessonModalHeader">
-              <div className="learningPage__lessonModalTitle">{modalLesson?.title || "Chọn một mục từ cây nội dung"}</div>
+              {/* <div className="learningPage__lessonModalTitle">
+                {modalLesson?.title || "Chọn một mục từ cây nội dung"}
+              </div> */}
               <div className="learningPage__lessonModalActions">
                 {(() => {
                   const kinds = lessonModal ? lessonAssessmentKindsById.get(lessonModal.lessonId) || [] : [];
@@ -1795,7 +1873,7 @@ export default function LearningPage() {
                         if (k === "quiz") {
                           requestStartQuiz(lessonModal.lessonId, modalLesson?.title || "");
                         } else {
-                          openLearnerAssessmentInNewTab("assignment", lessonModal.lessonId, modalLesson?.title || "");
+                          openLearnerAssessment("assignment", lessonModal.lessonId, modalLesson?.title || "");
                           void fetchProgress();
                         }
                       }}
@@ -1807,8 +1885,78 @@ export default function LearningPage() {
               </div>
             </div>
 
-            <div className="learningPage__lessonModalBody">
-              {quizStartConfirm ? (
+            {/* Video Player */}
+            {lessonModal && lessonModalResources.some(r => {
+              const ytId = parseYoutubeVideoId(r.url);
+              const mime = (r.mime || "").toLowerCase();
+              const isVideo = mime.startsWith("video/") || r.resourceKind === "video" || r.resourceKind === "youtube" || r.resourceType === "video";
+              return ytId || isVideo;
+            }) && (
+              <div className="learningPage__video">
+                {( () => {
+                  const ytResource = lessonModalResources.find(r => parseYoutubeVideoId(r.url));
+                  const videoResource = lessonModalResources.find(r => {
+                    const mime = (r.mime || "").toLowerCase();
+                    return mime.startsWith("video/") || r.resourceKind === "video" || r.resourceType === "video";
+                  });
+                  const videoSrc = videoResource?.url || null;
+                  const ytId = ytResource ? parseYoutubeVideoId(ytResource.url) : null;
+                  return { videoSrc, ytId, ytResource };
+                })().ytId ? (
+                  <iframe
+                    className="learningPage__lessonModalFrame learningPage__lessonModalFrame--youtube"
+                    src={`https://www.youtube.com/embed/${( () => {
+                      const ytResource = lessonModalResources.find(r => parseYoutubeVideoId(r.url));
+                      const ytId = ytResource ? parseYoutubeVideoId(ytResource.url) : null;
+                      return ytId;
+                    })()}?autoplay=1&rel=0`}
+                    title={modalLesson?.title}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : ( () => {
+                  const videoResource = lessonModalResources.find(r => {
+                    const mime = (r.mime || "").toLowerCase();
+                    return mime.startsWith("video/") || r.resourceKind === "video" || r.resourceType === "video";
+                  });
+                  return videoResource?.url || null;
+                })() ? (
+                  <video
+                    className="learningPage__lessonModalVideo"
+                    src={(() => {
+                      const videoResource = lessonModalResources.find(r => {
+                        const mime = (r.mime || "").toLowerCase();
+                        return mime.startsWith("video/") || r.resourceKind === "video" || r.resourceType === "video";
+                      });
+                      return videoResource?.url ?? undefined;
+                    })()}
+                    controls
+                    autoPlay
+                  />
+                ) : null}
+              </div>
+            )}
+
+            {/* Tabs */}
+            <div className="learningPage__tabs" role="tablist">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab.key}
+                  className={`learningPage__tab ${activeTab === tab.key ? "learningPage__tab--active" : ""}`}
+                  onClick={() => setActiveTab(tab.key)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab Content */}
+            <div className="learningPage__tabs-body">
+              {/* Quiz Start Confirm — show above content regardless of tab */}
+              {quizStartConfirm && (
                 <div className="learningPage__quizSideCard">
                   <div className="learningPage__quizSideTitle">Thông tin Quizz</div>
                   {quizInfoLoading ? (
@@ -1825,140 +1973,141 @@ export default function LearningPage() {
                         <div>Số câu hỏi: <b>{quizInfoPreview.questions_count}</b></div>
                         <div>Thời gian: <b>{quizInfoPreview.time_limit_minutes != null ? `${quizInfoPreview.time_limit_minutes} phút` : "Không giới hạn"}</b></div>
                         <div>Điểm đạt: <b>{quizInfoPreview.passing_score != null ? `${quizInfoPreview.passing_score}%` : "Không yêu cầu"}</b></div>
-                        <div>
-                          Số lượt còn lại: <b>{Math.max(0, quizInfoPreview.max_attempts - quizInfoPreview.attempts_used)}</b>/{quizInfoPreview.max_attempts}
-                        </div>
+                        <div>Số lượt còn lại: <b>{Math.max(0, quizInfoPreview.max_attempts - quizInfoPreview.attempts_used)}</b>/{quizInfoPreview.max_attempts}</div>
                       </div>
                       <div className="learningPage__quizSideActions">
-                        <button
-                          type="button"
-                          className="learningPage__lessonModalNavBtn"
-                          onClick={() => setQuizStartConfirm(null)}
-                        >
-                          Hủy
-                        </button>
+                        <button type="button" className="learningPage__lessonModalNavBtn" onClick={() => setQuizStartConfirm(null)}>Hủy</button>
                         <button
                           type="button"
                           className="learningPage__lessonModalActBtn learningPage__lessonModalActBtn--primary"
                           onClick={() => {
-                            openLearnerAssessmentInNewTab("quiz", quizInfoPreview.lessonId, quizInfoPreview.title || "");
+                            openLearnerAssessment("quiz", quizInfoPreview.lessonId, quizInfoPreview.title || "");
                             setQuizStartConfirm(null);
                             void fetchProgress();
                           }}
                         >
-                          {quizInfoPreview.attempts_used >= quizInfoPreview.max_attempts
-                            ? "Xem kết quả"
-                            : "Bắt đầu làm bài"}
+                          {quizInfoPreview.attempts_used >= quizInfoPreview.max_attempts ? "Xem kết quả" : "Bắt đầu làm bài"}
                         </button>
                       </div>
                     </>
                   ) : null}
                 </div>
-              ) : !lessonModal ? (
-                <EmptyState
-                  icon={<BookOpen size={40} />}
-                  title="Bắt đầu học ngay"
-                  description="Chọn một bài học từ cây nội dung bên trái để bắt đầu hành trình học tập của bạn."
-                />
-              ) : lessonModalLoading ? (
-                <SkeletonLoader />
-              ) : lessonModalError ? (
-                <EmptyState
-                  icon={<AlertCircle size={40} />}
-                  title="Đã xảy ra lỗi"
-                  description={lessonModalError}
-                />
-              ) : lessonModalResources.length > 0 ? (
-                <div className="learningPage__lessonModalResources">
-  {lessonModalResources.map((resource, index) => {
-    const ytId = parseYoutubeVideoId(resource.url);
-    const mime = (resource.mime || "").toLowerCase();
-    const isVideo = mime.startsWith("video/") || resource.resourceKind === "video" || resource.resourceKind === "youtube" || resource.resourceType === "video";
-    const isPdfOrWord = mime.includes("pdf") || mime.includes("word") || mime.includes("document") || resource.resourceKind === "pdf" || resource.resourceKind === "word";
-
-    if (ytId) {
-      return (
-        <div key={resource.resourceId || index} className="learningPage__lessonModalResourceItem">
-          <iframe
-            className="learningPage__lessonModalFrame learningPage__lessonModalFrame--youtube"
-            src={`https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0`}
-            title={resource.filename}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
-      );
-    }
-
-    if (isVideo) {
-      return (
-        <div key={resource.resourceId || index} className="learningPage__lessonModalResourceItem">
-          <video className="learningPage__lessonModalVideo" src={resource.url} controls autoPlay />
-        </div>
-      );
-    }
-
-    if (isPdfOrWord) {
-      return (
-        <div key={resource.resourceId || index} className="learningPage__lessonModalResourceItem learningPage__lessonModalResourceItem--download">
-          <span className="material-symbols-outlined">description</span>
-          <span className="learningPage__lessonModalFileName">{resource.filename}</span>
-          <a href={resource.url} target="_blank" rel="noreferrer" className="learningPage__lessonModalDownloadBtn">
-            <span className="material-symbols-outlined">download</span>
-          </a>
-        </div>
-      );
-    }
-
-    return (
-      <div key={resource.resourceId || index} className="learningPage__lessonModalResourceItem learningPage__lessonModalResourceItem--download">
-        <span className="material-symbols-outlined">attach_file</span>
-        <span className="learningPage__lessonModalFileName">{resource.filename}</span>
-        <a href={resource.url} target="_blank" rel="noreferrer" className="learningPage__lessonModalDownloadBtn">
-          <span className="material-symbols-outlined">download</span>
-        </a>
-      </div>
-    );
-  })}
-</div>
-              ) : modalLesson?.description ? (
-                <div className="learningPage__lessonModalText">{modalLesson.description}</div>
-              ) : (
-                <EmptyState
-                  icon={<FileQuestion size={40} />}
-                  title="Chưa có tài nguyên"
-                  description="Bài học này chưa có tài liệu hoặc video đính kèm."
-                />
               )}
 
-              {lessonHtmlContent ? (
-                lessonHtmlLoading ? (
-                  <SkeletonLoader />
-                ) : lessonHtmlContent ? (
-                  <div className="learningPage__lessonHtmlContent">
-                    <div
-                      className="learningPage__richPreview"
-                      dangerouslySetInnerHTML={{ __html: lessonHtmlContent }}
-                    />
+              {/* Lesson Content tab */}
+              {activeTab === "content" && currentLessonType && (currentLessonType === "video" || currentLessonType === "text") && (
+                <div className="learningPage__lessonContentGrid">
+                  <div className="learningPage__lesson">
+                    <h1 className="learningPage__lessonTitle">{modalLesson?.title}</h1>
+                    {lessonHtmlLoading ? (
+                      <SkeletonLoader />
+                    ) : modalLesson?.description || lessonHtmlContent ? (
+                      <div className="learningPage__lessonBody">
+                        {modalLesson?.description ? (
+                          <p>{modalLesson.description}</p>
+                        ) : null}
+                        {lessonHtmlContent ? (
+                          <div className="learningPage__richPreview" dangerouslySetInnerHTML={{ __html: lessonHtmlContent }} />
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="learningPage__lessonBody">
+                        <EmptyState
+                          icon={<FileQuestion size={40} />}
+                          title="Chưa có mô tả"
+                          description="Bài học này chưa có nội dung mô tả."
+                        />
+                      </div>
+                    )}
+                    <div className="learningPage__tags">
+                      <span className="learningPage__tag">
+                        {modalLesson?.lesson_type === "video" ? "Video" : "Văn bản"}
+                      </span>
+                    </div>
                   </div>
-                ) : (
+                  {/* <aside className="learningPage__lessonProgressCard">
+                    <h4 className="learningPage__lessonProgressTitle">Tiến độ bài học</h4>
+                    <div className="learningPage__lessonProgressRow">
+                      <span>Hoàn thành khóa học</span>
+                      <span className="learningPage__lessonProgressValue">{progressPercent}%</span>
+                    </div>
+                    <div className="learningPage__lessonProgressTrack">
+                      <div className="learningPage__lessonProgressFill" style={{ width: `${progressPercent}%` }} />
+                    </div>
+                    <p className="learningPage__lessonProgressHint">
+                      {progressPercent >= 100
+                        ? "Bạn đã hoàn thành khóa học!"
+                        : "Hoàn thành mỗi bài học để mở khóa bài kiểm tra cuối khóa."}
+                    </p>
+                  </aside> */}
+                </div>
+              )}
+
+              {/* Resources tab */}
+              {activeTab === "resources" && (
+                <div className="learningPage__tabPanel">
+                  {lessonModalResources.length > 0 ? (
+                    <div className="learningPage__lessonModalResources">
+                      {lessonModalResources.map((resource, index) => {
+                        const ytId = parseYoutubeVideoId(resource.url);
+                        const mime = (resource.mime || "").toLowerCase();
+                        const isVideo = mime.startsWith("video/") || resource.resourceKind === "video" || resource.resourceKind === "youtube" || resource.resourceType === "video";
+                        const isPdfOrWord = mime.includes("pdf") || mime.includes("word") || mime.includes("document") || resource.resourceKind === "pdf" || resource.resourceKind === "word";
+
+                        if (ytId || isVideo) return null;
+
+                        if (isPdfOrWord) {
+                          return (
+                            <div key={resource.resourceId || index} className="learningPage__lessonModalResourceItem learningPage__lessonModalResourceItem--download">
+                              <span className="material-symbols-outlined">description</span>
+                              <span className="learningPage__lessonModalFileName">{resource.filename}</span>
+                              <a href={resource.url} target="_blank" rel="noreferrer" className="learningPage__lessonModalDownloadBtn">
+                                <span className="material-symbols-outlined">download</span>
+                              </a>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div key={resource.resourceId || index} className="learningPage__lessonModalResourceItem learningPage__lessonModalResourceItem--download">
+                            <span className="material-symbols-outlined">attach_file</span>
+                            <span className="learningPage__lessonModalFileName">{resource.filename}</span>
+                            <a href={resource.url} target="_blank" rel="noreferrer" className="learningPage__lessonModalDownloadBtn">
+                              <span className="material-symbols-outlined">download</span>
+                            </a>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <EmptyState
+                      icon={<FileQuestion size={40} />}
+                      title="Chưa có tài nguyên"
+                      description="Bài học này chưa có tài liệu đính kèm."
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Discussion tab */}
+              {activeTab === "discussion" && (
+                <div className="learningPage__tabPanel">
                   <EmptyState
-                    icon={<FileQuestion size={40} />}
-                    title="Không có nội dung"
-                    description="Nội dung HTML không khả dụng cho bài học này."
+                    icon={<BrainCircuit size={40} />}
+                    title="Thảo luận bài học"
+                    description="Tính năng thảo luận đang được phát triển. Hãy quay lại sau!"
                   />
-                )
-              ) : null}
+                </div>
+              )}
             </div>
 
+            {/* Navigation Footer */}
             <div className="learningPage__lessonModalNav">
               <button
                 type="button"
                 className="learningPage__lessonModalNavBtn"
                 disabled={!modalCanGoPrev}
-                onClick={() => {
-                  navigateToPrevLesson(modalPrevLessonId);
-                }}
+                onClick={() => navigateToPrevLesson(modalPrevLessonId)}
                 aria-label="Bài học trước"
               >
                 <ChevronLeft size={18} />
@@ -1977,16 +2126,9 @@ export default function LearningPage() {
                       className="learningPage__lessonModalNavPickBtn"
                       onClick={() => {
                         if (opt === "quiz") {
-                          requestStartQuiz(
-                            lessonModalNavPick.lessonId,
-                            lessonById.get(lessonModalNavPick.lessonId)?.title || ""
-                          );
+                          requestStartQuiz(lessonModalNavPick.lessonId, lessonById.get(lessonModalNavPick.lessonId)?.title || "");
                         } else {
-                          openLearnerAssessmentInNewTab(
-                            "assignment",
-                            lessonModalNavPick.lessonId,
-                            lessonById.get(lessonModalNavPick.lessonId)?.title || ""
-                          );
+                          openLearnerAssessment("assignment", lessonModalNavPick.lessonId, lessonById.get(lessonModalNavPick.lessonId)?.title || "");
                         }
                         setLessonModalNavPick(null);
                         if (opt !== "quiz") void fetchProgress();
@@ -2001,9 +2143,7 @@ export default function LearningPage() {
                 type="button"
                 className="learningPage__lessonModalNavBtn"
                 disabled={!modalCanGoNext}
-                onClick={() => {
-                  navigateToNextLesson(modalNextLessonId);
-                }}
+                onClick={() => navigateToNextLesson(modalNextLessonId)}
                 aria-label="Bài học tiếp theo"
               >
                 <span>Bài tiếp</span>
@@ -2019,7 +2159,7 @@ export default function LearningPage() {
           />
 
           {/* Right Pane - AI Summary */}
-          <aside className="learningPage__aiSummaryPane" style={summaryPaneStyle}>
+          <aside className={`learningPage__aiSummaryPane ${isSummaryCollapsed ? "learningPage__aiSummaryPane--collapsed" : ""}`} style={summaryPaneStyle}>
             <div className="learningPage__aiSummaryPaneTitle">
               {!isSummaryCollapsed && (
                 <>
@@ -2028,7 +2168,7 @@ export default function LearningPage() {
                 </>
               )}
               <button
-                className="learningPage__toggleBtn"
+                className="learningPage__toggleBtn learningPage__toggleBtn--summary"
                 onClick={toggleSummaryCollapse}
                 title={isSummaryCollapsed ? "Mở rộng" : "Thu gọn"}
               >

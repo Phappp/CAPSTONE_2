@@ -70,165 +70,9 @@
 }
 
 /* =========================================================
-   Sidebar
+   Main canvas
    ========================================================= */
-.ld-page .ld-sidebar {
-  position: fixed;
-  inset: 0 auto 0 0;
-  width: var(--ld-sidebar-w);
-  height: 100vh;
-  background: linear-gradient(180deg, #ffffff 0%, #fafbfd 100%);
-  border-right: 1px solid var(--ld-border);
-  display: flex;
-  flex-direction: column;
-  padding: 28px 0 24px;
-  z-index: 50;
-}
-
-.ld-page .ld-brand {
-  padding: 0 24px 32px;
-  border-bottom: 1px solid var(--ld-border);
-}
-
-.ld-page .ld-brand-title {
-  font-family: 'Manrope', 'Inter', sans-serif;
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--ld-text-strong);
-  margin: 0;
-}
-
-.ld-page .ld-brand-sub {
-  font-size: 10.5px;
-  color: var(--ld-text-soft);
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  margin: 6px 0 0;
-  font-weight: 600;
-}
-
-.ld-page .ld-nav {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 24px 14px;
-  overflow-y: auto;
-}
-
-.ld-page .ld-nav-link {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 11px 14px;
-  border-radius: var(--ld-radius-md);
-  color: var(--ld-text-muted);
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 500;
-  transition: var(--ld-ease);
-}
-
-.ld-page .ld-nav-link:hover {
-  color: var(--ld-text-strong);
-  background: var(--ld-surface-soft);
-}
-
-.ld-page .ld-nav-link:active {
-  transform: scale(0.98);
-}
-
-.ld-page .ld-nav-link--active {
-  color: var(--ld-accent-ink);
-  background: var(--ld-accent-tint);
-  font-weight: 700;
-}
-
-.ld-page .ld-nav-link--active:hover {
-  background: var(--ld-accent-tint);
-  color: var(--ld-accent-ink);
-}
-
-.ld-page .ld-nav-indicator {
-  position: absolute;
-  right: 10px;
-  width: 6px;
-  height: 6px;
-  background: var(--ld-accent);
-  border-radius: 999px;
-  box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.12);
-}
-
-.ld-page .ld-nav-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ld-page .ld-sidebar-cta {
-  padding: 0 18px;
-  margin-top: 12px;
-}
-
-.ld-page .ld-cta-btn {
-  width: 100%;
-  background: var(--ld-primary);
-  color: #ffffff;
-  border: none;
-  border-radius: var(--ld-radius-md);
-  padding: 13px 16px;
-  font-weight: 700;
-  font-size: 13.5px;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  box-shadow: var(--ld-shadow-md);
-  transition: var(--ld-ease);
-}
-
-.ld-page .ld-cta-btn:hover {
-  background: var(--ld-primary-soft);
-  transform: translateY(-1px);
-  box-shadow: var(--ld-shadow-lg);
-}
-
-.ld-page .ld-cta-btn:active {
-  transform: translateY(0) scale(0.98);
-}
-
-/* =========================================================
-   Topbar
-   ========================================================= */
-.ld-page .ld-topbar {
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: calc(100% - var(--ld-sidebar-w));
-  height: var(--ld-topbar-h);
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: saturate(180%) blur(12px);
-  -webkit-backdrop-filter: saturate(180%) blur(12px);
-  border-bottom: 1px solid var(--ld-border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 32px;
-  z-index: 40;
-}
-
-.ld-page .ld-topbar-left {
-  display: flex;
-  align-items: center;
-  gap: 28px;
-}
-
 .ld-page .ld-topbar-link {
-  color: var(--ld-text-muted);
   font-size: 13.5px;
   font-weight: 500;
   text-decoration: none;
@@ -394,7 +238,6 @@
    Main canvas
    ========================================================= */
 .ld-page .ld-main {
-  margin-left: 0;
   padding: 36px 36px 64px;
   min-height: auto;
   width: 100%;
@@ -1003,8 +846,8 @@
    ========================================================= */
 .ld-page .ld-fab {
   position: fixed;
-  right: 32px;
-  bottom: 32px;
+  right: 24px;
+  bottom: 100px;
   width: 56px;
   height: 56px;
   border-radius: 999px;

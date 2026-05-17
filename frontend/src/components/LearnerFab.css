@@ -1,5 +1,4 @@
-/* FAB */
-.pricing-page .ld-fab {
+.learner-fab {
   position: fixed;
   right: 24px;
   bottom: 100px;
@@ -18,23 +17,11 @@
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.pricing-page .ld-fab:hover {
-  transform: scale(1.08) rotate(90deg);
+.learner-fab:hover {
+  transform: scale(1.08);
   box-shadow: 0 16px 36px rgba(13, 148, 136, 0.46);
 }
 
-.pricing-page .ld-fab:active {
+.learner-fab:active {
   transform: scale(0.94);
-}
-
-/* PricingPlansPage — scoped styles (prefix: pricing-) */
-
-.pricing-page .material-symbols-outlined {
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-  display: inline-block;
-  line-height: 1;
-}
-
-.pricing-page .pricing-icon-filled {
-  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }

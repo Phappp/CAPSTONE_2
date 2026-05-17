@@ -1,12 +1,48 @@
+/* FAB */
+.instructor-detail-page .ld-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 100px;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #5eead4 0%, #0d9488 100%);
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 28px rgba(13, 148, 136, 0.36);
+  z-index: 50;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.instructor-detail-page .ld-fab:hover {
+  transform: scale(1.08) rotate(90deg);
+  box-shadow: 0 16px 36px rgba(13, 148, 136, 0.46);
+}
+
+.instructor-detail-page .ld-fab:active {
+  transform: scale(0.94);
+}
+
 /* InstructorDetailPage — scoped styles (prefix: instructor-detail-) */
 
 .instructor-detail-page .material-symbols-outlined {
+  font-family: 'Material Symbols Outlined', 'Material Icons', sans-serif;
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   vertical-align: middle;
+  display: inline-block;
 }
 
 .instructor-detail-page .instructor-detail-icon-filled {
   font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.instructor-detail-page .star-icon {
+  color: #fbbf24;
+  font-size: 18px;
 }
 
 .instructor-detail-page .instructor-hero-bg {

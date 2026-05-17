@@ -10,6 +10,8 @@ import {
 import { url } from '../../baseUrl';
 import { COURSES_API } from '../../api/courses';
 import { getAccessToken } from '../../utils/authStorage';
+import { DEFAULT_COURSE_THUMB } from '../../utils/imageFallback';
+import LearnerFab from '../../components/LearnerFab';
 import './MyCoursePage.css';
 
 interface FilterTab {
@@ -37,14 +39,11 @@ interface EnrollmentsResponse {
 }
 
 const filterTabs: FilterTab[] = [
-  { key: 'all', label: 'All Courses', status: 'all' },
-  { key: 'in-progress', label: 'In Progress', status: 'active' },
-  { key: 'completed', label: 'Completed', status: 'completed' },
-  { key: 'saved', label: 'Saved', status: 'saved' },
+  { key: 'all', label: 'Tất cả', status: 'all' },
+  { key: 'active', label: 'Đang học', status: 'active' },
+  { key: 'completed', label: 'Hoàn thành', status: 'completed' },
+  { key: 'saved', label: 'Đã lưu', status: 'saved' },
 ];
-
-const FALLBACK_THUMB =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuC0cu0JXY3mOE3MxlDOO_lL5n-t66lIMEP9P16zUBQoOKxYidEvyWQN2GLUgjVdqAjLqRZILnVmvDbXOoCZbC3o70_CpdBv6xPY_QL_IZqAb6_o_f8ShljY3Hie-N6Ar9iUagEcOoDdO4RTN-G6Qx1-fvbGDOG-npoI8ZQscIEf3HzAVne3hSBNVjX3BPgpt_L9_qrJHbQ5E_PcsNwASQnQlKhglOsNS0Im4kNoPvLdi-WJAKbjxh7f200UNXWc47ufG-l_it1cbQ';
 
 const MyCoursePage: React.FC = () => {
   const navigate = useNavigate();
@@ -117,7 +116,10 @@ const MyCoursePage: React.FC = () => {
     };
   }, [currentTab.status, debouncedSearch]);
 
-  const visibleCourses = useMemo(() => courses, [courses]);
+  const visibleCourses = useMemo(
+    () => [...courses].sort((a, b) => b.progress_percent - a.progress_percent),
+    [courses]
+  );
 
   const openCourse = (c: EnrolledCourse) => {
     navigate(`/my-courses/${c.course_id}/${c.course_slug}`);
@@ -215,8 +217,9 @@ const MyCoursePage: React.FC = () => {
                     <div className="mc-card-media">
                       <img
                         className="mc-card-img"
-                        src={course.course_thumbnail || FALLBACK_THUMB}
+                        src={course.course_thumbnail || DEFAULT_COURSE_THUMB}
                         alt={course.course_title}
+                        onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_COURSE_THUMB; }}
                       />
                       <span className="mc-card-tag">{renderCategory(course)}</span>
                     </div>
@@ -256,6 +259,8 @@ const MyCoursePage: React.FC = () => {
           )}
         </div>
       </main>
+
+      <LearnerFab onClick={() => navigate('/courses')} />
     </div>
   );
 };

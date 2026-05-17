@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import { useAuth } from "../contexts/Auth";
+import { DEFAULT_COURSE_THUMB } from "../utils/imageFallback";
 import "./LearnerCourseContentTree.css";
 
 type LessonType = "video" | "text" | "quiz" | "assignment";
@@ -911,13 +912,13 @@ export default function LearnerCourseContentTree(props: {
       ((latest.mime_type || "").startsWith("image/") ||
         (latest.filename || "").toLowerCase().match(/\.(png|jpg|jpeg|gif|webp|svg)$/));
     const thumbSrcFromResource = ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : isImage ? latest?.preview_url || latest?.url : null;
-    const thumbSrc = quizOnly ? null : courseThumbnailUrl || thumbSrcFromResource;
+    const thumbSrc = quizOnly ? null : courseThumbnailUrl || thumbSrcFromResource || DEFAULT_COURSE_THUMB;
     const firstInModuleId = allLessonsInModule[0]?.id;
     const defaultUnlocked = progress ? unlockedSet.has(l.id) : moduleIdx === 0 && l.id === firstInModuleId;
     const isUnlocked = options.isUnlockedOverride !== undefined ? options.isUnlockedOverride : defaultUnlocked;
     const isCompleted = completedSet.has(l.id);
     const isLocked = !isUnlocked;
-    const shouldShowDefaultThumb = !quizOnly && !ytId && !isImage && hasResource && !courseThumbnailUrl;
+    const shouldShowDefaultThumb = !quizOnly && !ytId && !isImage && !hasResource;
     const lessonOpenAt = l.open_at ? new Date(l.open_at) : null;
     const lessonNotOpenedYet = lessonOpenAt && lessonOpenAt.getTime() > Date.now();
     const moduleOpenAt = moduleSchedule.openAt;
@@ -1057,7 +1058,12 @@ export default function LearnerCourseContentTree(props: {
               }
             >
               {thumbSrc ? (
-                <img src={thumbSrc} alt={latest?.filename || l.title} className="learnerTreeLesson__thumb" />
+                <img
+                  src={thumbSrc}
+                  alt={latest?.filename || l.title}
+                  className="learnerTreeLesson__thumb"
+                  onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_COURSE_THUMB; }}
+                />
               ) : (
                 <div className="learnerTreeLesson__thumbPlaceholder">
                   {list === undefined && !quizOnly ? <div className="learnerTreeLesson__thumbLoading">...</div> : null}

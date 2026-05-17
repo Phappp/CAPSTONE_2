@@ -1,3 +1,32 @@
+/* FAB */
+.resources-page .ld-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 100px;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #5eead4 0%, #0d9488 100%);
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 28px rgba(13, 148, 136, 0.36);
+  z-index: 50;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.resources-page .ld-fab:hover {
+  transform: scale(1.08) rotate(90deg);
+  box-shadow: 0 16px 36px rgba(13, 148, 136, 0.46);
+}
+
+.resources-page .ld-fab:active {
+  transform: scale(0.94);
+}
+
 /* ResourcesHubPage — scoped styles (prefix: resources-) */
 
 .resources-page .material-symbols-outlined {

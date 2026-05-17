@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { url } from "../baseUrl";
 import { COURSES_API } from "../api/courses";
 import { useAuth } from "../contexts/Auth";
+import { DEFAULT_COURSE_THUMB } from "../utils/imageFallback";
 import toast, { Toaster } from "react-hot-toast";
 
 import {
@@ -2278,6 +2279,7 @@ export default function CourseContentTreeEditor(props: {
                                                 alt=""
                                                 style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                                                 loading="lazy"
+                                                onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_COURSE_THUMB; }}
                                               />
                                             ) : ytThumb ? (
                                               <img
@@ -2285,6 +2287,7 @@ export default function CourseContentTreeEditor(props: {
                                                 alt=""
                                                 style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                                                 loading="lazy"
+                                                onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_COURSE_THUMB; }}
                                               />
                                             ) : displayedResource.preview_url ? (
                                               <img
@@ -2292,6 +2295,7 @@ export default function CourseContentTreeEditor(props: {
                                                 alt=""
                                                 style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                                                 loading="lazy"
+                                                onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_COURSE_THUMB; }}
                                               />
                                             ) : displayedResource.mime_type?.startsWith("image/") ? (
                                               <img
@@ -2299,6 +2303,7 @@ export default function CourseContentTreeEditor(props: {
                                                 alt=""
                                                 style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                                                 loading="lazy"
+                                                onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_COURSE_THUMB; }}
                                               />
                                             ) : (
                                               <div
@@ -2344,6 +2349,7 @@ export default function CourseContentTreeEditor(props: {
                                               alt=""
                                               style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                                               loading="lazy"
+                                              onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_COURSE_THUMB; }}
                                             />
                                           ) : (
                                             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af" }}>

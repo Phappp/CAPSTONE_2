@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import MindBridgeHeader from "../../components/MindBridgeHeader";
+import { House } from "lucide-react";
 import MindBridgeFooter from "../../components/MindBridgeFooter";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { getAccessToken } from "../../utils/authStorage";
 import { useAuth } from "../../contexts/Auth";
+import { DEFAULT_COURSE_THUMB } from "../../utils/imageFallback";
 import "./CourseDetailPage.css";
 
 interface ModuleLesson {
@@ -45,8 +46,7 @@ interface CourseDetail {
   best_seller?: boolean;
 }
 
-const FALLBACK_HERO_IMG =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuC2CfqoRX0g7DDhkn5mgt5KAGvNliB4d76jddyUuLZDNoGcNp1XjnkSZ_xQnFTIY5y7gY-W-KpHEcRaOqKQaEQhfX9PJfUIfHAJWFbbGwyKyHHgqpn23OwcxIJgOehfMCf5BxFsIhneTLlT4Lbdy9t3e2ns9MezosB_h8wEjMCfNacxN1L0vVfuIqyIAp6nkBKFzs62gJsNgG6o9KTalD2Tl2bbn2U1AinVJnnaD-0kTSw_i98C106eqmhnACPIWZ7F43NNv_P9Vg";
+const FALLBACK_HERO_IMG = DEFAULT_COURSE_THUMB;
 
 const DEFAULT_LEARN_BULLETS = [
   "Implement CNNs for advanced image recognition and segmentation.",
@@ -134,14 +134,13 @@ export default function CourseDetailPage() {
 
   const priceLabel = useMemo(() => {
     if (!course) return "";
-    if (typeof course.price !== "number" || course.price <= 0) return "Free";
-    return `$${course.price.toFixed(2)}`;
+    if (typeof course.price !== "number" || course.price <= 0) return "Miễn phí";
+    return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(course.price);
   }, [course]);
 
   if (loading) {
     return (
       <div className="mb-public course-detail-page bg-surface text-on-surface">
-        <MindBridgeHeader active="courses" />
         <main className="max-w-7xl mx-auto px-6 py-24 text-center text-on-surface-variant">
           Loading course…
         </main>
@@ -153,7 +152,6 @@ export default function CourseDetailPage() {
   if (error || !course) {
     return (
       <div className="mb-public course-detail-page bg-surface text-on-surface">
-        <MindBridgeHeader active="courses" />
         <main className="max-w-7xl mx-auto px-6 py-24 text-center">
           <h1 className="text-2xl font-bold text-primary mb-4">Course not found</h1>
           <p className="text-on-surface-variant mb-6">{error || "We couldn't find that course."}</p>
@@ -168,8 +166,6 @@ export default function CourseDetailPage() {
 
   return (
     <div className="mb-public course-detail-page bg-surface text-on-surface">
-      <MindBridgeHeader active="courses" />
-
       <main>
         <section className="bg-primary-container text-white py-16 md:py-24 overflow-hidden relative">
           <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center relative z-10">
@@ -214,10 +210,21 @@ export default function CourseDetailPage() {
                 <div className="flex flex-col">
                   <p className="text-sm text-on-primary-container">Rating</p>
                   <div className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-amber-400 course-detail-icon-filled">star</span>
-                    <span className="font-bold">{(course.rating ?? 4.9).toFixed(1)}</span>
+                    <span className="font-bold">{(course.rating ?? 0).toFixed(1)}</span>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <span
+                        key={star}
+                        className={`material-symbols-outlined text-sm ${
+                          star <= Math.round(course.rating ?? 0)
+                            ? 'text-amber-400 course-detail-icon-filled'
+                            : 'text-gray-400'
+                        }`}
+                      >
+                        star
+                      </span>
+                    ))}
                     <span className="text-on-primary-container text-sm">
-                      ({(course.learners_count ?? 0).toLocaleString()} students)
+                      ({(course.rating_count ?? 0).toLocaleString()} đánh giá)
                     </span>
                   </div>
                 </div>
@@ -229,6 +236,7 @@ export default function CourseDetailPage() {
                   className="w-full h-full object-cover"
                   src={course.thumbnail_url || FALLBACK_HERO_IMG}
                   alt={course.title}
+                  onError={(e) => { (e.target as HTMLImageElement).src = FALLBACK_HERO_IMG; }}
                 />
               </div>
             </div>
@@ -346,7 +354,7 @@ export default function CourseDetailPage() {
                     <span className="text-3xl font-extrabold text-primary">{priceLabel}</span>
                     {typeof course.original_price === "number" && course.original_price > (course.price ?? 0) && (
                       <span className="text-slate-400 line-through">
-                        ${course.original_price.toFixed(2)}
+                        {new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(course.original_price)}
                       </span>
                     )}
                   </div>
@@ -384,6 +392,15 @@ export default function CourseDetailPage() {
       </main>
 
       <MindBridgeFooter />
+
+      <button
+        type="button"
+        className="ld-fab"
+        aria-label="Add"
+        onClick={() => navigate('/learner/dashboard')}
+      >
+        <House size={22} strokeWidth={2.6} />
+      </button>
     </div>
   );
 }

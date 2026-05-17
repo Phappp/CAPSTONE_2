@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import MindBridgeHeader from "../../components/MindBridgeHeader";
+import { House } from "lucide-react";
 import MindBridgeFooter from "../../components/MindBridgeFooter";
 import "./PricingPlansPage.css";
 
@@ -18,59 +18,59 @@ const PLANS: PricingPlan[] = [
   {
     key: "free",
     name: "Free",
-    price: "$0",
-    unit: "/month",
-    description: "Basic access for individuals starting their learning journey.",
+    price: "0 ₫",
+    unit: "/tháng",
+    description: "Truy cập cơ bản cho cá nhân bắt đầu hành trình học tập.",
     features: [
-      { label: "Access to 5 free courses", included: true },
-      { label: "Community support", included: true },
-      { label: "Standard course materials", included: true },
-      { label: "No AI assistance", included: false },
+      { label: "Truy cập 5 khóa học miễn phí", included: true },
+      { label: "Hỗ trợ cộng đồng", included: true },
+      { label: "Tài liệu khóa học tiêu chuẩn", included: true },
+      { label: "Không có hỗ trợ AI", included: false },
     ],
-    cta: { label: "Get Started", variant: "primary" },
+    cta: { label: "Bắt đầu ngay", variant: "primary" },
   },
   {
     key: "academic",
     name: "Academic",
-    price: "$0",
-    unit: "/month",
-    description: "Exclusive for learners & instructors with a .edu email.",
+    price: "0 ₫",
+    unit: "/tháng",
+    description: "Dành riêng cho người học & giảng viên có email .edu.",
     features: [
-      { label: "Everything in Free", included: true },
-      { label: "LLM Study Assistant (Basic)", included: true },
-      { label: "10 AI Quizzes per month", included: true },
-      { label: "Verified student badge", included: true },
+      { label: "Tất cả tính năng của Free", included: true },
+      { label: "Trợ lý AI học tập (Cơ bản)", included: true },
+      { label: "10 bài Quiz AI mỗi tháng", included: true },
+      { label: "Huy hiệu sinh viên đã xác minh", included: true },
     ],
-    cta: { label: "Verify .edu Email", variant: "outline" },
+    cta: { label: "Xác minh email .edu", variant: "outline" },
   },
   {
     key: "pro",
     name: "Pro",
-    price: "$10",
-    unit: "/month",
-    description: "Advanced tools for serious learners and instructors.",
+    price: "250.000 ₫",
+    unit: "/tháng",
+    description: "Công cụ nâng cao cho người học nghiêm túc và giảng viên.",
     features: [
-      { label: "Unlimited AI Quizzes & Assignments", included: true },
-      { label: "LLM Study Assistant", included: true },
-      { label: "Priority Instructor support", included: true },
-      { label: "Full Course Library access", included: true },
-      { label: "Offline course viewing", included: true },
+      { label: "Quiz & Bài tập AI không giới hạn", included: true },
+      { label: "Trợ lý AI học tập LLM", included: true },
+      { label: "Hỗ trợ ưu tiên từ giảng viên", included: true },
+      { label: "Truy cập toàn bộ thư viện khóa học", included: true },
+      { label: "Xem khóa học offline", included: true },
     ],
-    cta: { label: "Upgrade to Pro", variant: "primary" },
+    cta: { label: "Nâng cấp lên Pro", variant: "primary" },
     highlight: true,
   },
   {
     key: "enterprise",
     name: "Enterprise",
-    price: "Custom",
-    description: "Tailored solutions for organizations and large teams.",
+    price: "Liên hệ",
+    description: "Giải pháp tùy chỉnh cho tổ chức và nhóm lớn.",
     features: [
-      { label: "SSO & User management", included: true },
-      { label: "Custom learning paths", included: true },
-      { label: "Dedicated account manager", included: true },
-      { label: "Advanced analytics & reporting", included: true },
+      { label: "SSO & Quản lý người dùng", included: true },
+      { label: "Lộ trình học tập tùy chỉnh", included: true },
+      { label: "Quản lý tài khoản chuyên dụng", included: true },
+      { label: "Phân tích & Báo cáo nâng cao", included: true },
     ],
-    cta: { label: "Contact Sales", variant: "primary" },
+    cta: { label: "Liên hệ bán hàng", variant: "primary" },
   },
 ];
 
@@ -87,16 +87,14 @@ export default function PricingPlansPage() {
 
   return (
     <div className="mb-public pricing-page bg-[#F8FAFC] font-body text-on-surface">
-      <MindBridgeHeader active="pricing" />
-
       <main>
         <section className="py-20 px-4">
           <div className="max-w-7xl mx-auto text-center">
             <h1 className="font-headline text-4xl md:text-6xl font-extrabold text-primary mb-6 tracking-tight">
-              Flexible Pricing for Future-Proof Learning
+              Định giá linh hoạt cho việc học tập tương lai
             </h1>
             <p className="text-on-surface-variant text-lg md:text-xl max-w-2xl mx-auto font-body">
-              Empower your educational journey with tools designed for modern learners. Choose the plan that scales with your ambition.
+              Trao quyền cho hành trình học tập của bạn với những công cụ được thiết kế cho người học hiện đại. Chọn gói phù hợp với tham vọng của bạn.
             </p>
           </div>
         </section>
@@ -115,7 +113,7 @@ export default function PricingPlansPage() {
                 >
                   {plan.highlight && (
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#0D9488] text-white px-4 py-1 rounded-full text-sm font-bold tracking-wide uppercase">
-                      BEST CHOICE
+                      LỰA CHỌN TỐT NHẤT
                     </div>
                   )}
                   <div className="mb-8">
@@ -175,10 +173,10 @@ export default function PricingPlansPage() {
             />
             <div className="absolute inset-0 bg-gradient-to-r from-primary/90 to-transparent flex flex-col justify-center p-12">
               <h2 className="text-white font-headline text-3xl font-bold mb-4">
-                Trusted by 500+ Organizations
+                Được tin tưởng bởi 500+ Tổ chức
               </h2>
               <p className="text-slate-300 max-w-md">
-                Join the thousands of learners who have transformed their careers with MindBridge&apos;s AI-powered platform.
+                Tham gia cùng hàng nghìn người học đã thay đổi sự nghiệp của họ với nền tảng MindBridge hỗ trợ AI.
               </p>
             </div>
           </div>
@@ -186,6 +184,15 @@ export default function PricingPlansPage() {
       </main>
 
       <MindBridgeFooter />
+
+      <button
+        type="button"
+        className="ld-fab"
+        aria-label="Add"
+        onClick={() => navigate('/learner/dashboard')}
+      >
+        <House size={22} strokeWidth={2.6} />
+      </button>
     </div>
   );
 }

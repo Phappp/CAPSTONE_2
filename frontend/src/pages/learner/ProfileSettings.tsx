@@ -17,6 +17,7 @@ import { url } from '../../baseUrl';
 import { PROFILE_API } from '../../api/profile';
 import { getAccessToken } from '../../utils/authStorage';
 import { useAuth } from '../../contexts/Auth';
+import LearnerFab from '../../components/LearnerFab';
 import './ProfileSettings.css';
 
 interface TabItem {
@@ -627,6 +628,8 @@ const ProfileSettings: React.FC = () => {
           </section>
         </div>
       </main>
+
+      <LearnerFab onClick={() => navigate('/courses')} />
     </div>
   );
 };

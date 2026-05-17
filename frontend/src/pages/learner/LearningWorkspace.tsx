@@ -22,6 +22,7 @@ import {
 import { url } from '../../baseUrl';
 import { COURSES_API } from '../../api/courses';
 import { getAccessToken } from '../../utils/authStorage';
+import LearnerFab from '../../components/LearnerFab';
 import './LearningWorkspace.css';
 
 interface TabItem {
@@ -478,6 +479,8 @@ const LearningWorkspace: React.FC = () => {
           </div>
         </aside>
       </main>
+
+      <LearnerFab onClick={() => navigate('/courses')} />
     </div>
   );
 };

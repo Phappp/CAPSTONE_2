@@ -121,6 +121,8 @@ export type CourseDetail = {
   lessons_count: number;
   price?: number | null;
   total_duration_minutes?: number | null;
+  rating?: number | null;
+  rating_count?: number;
   is_enrolled?: boolean;
   enrollment?: {
     status: EnrollmentStatus;
@@ -153,6 +155,9 @@ export type PublishedCourseListItem = {
   total_duration_minutes?: number | null;
   is_enrolled?: boolean;
   can_enroll?: boolean;
+  avg_rating?: number | null;
+  rating?: number | null;
+  rating_count?: number;
   instructors: {
     id: number;
     full_name: string;
@@ -381,6 +386,77 @@ export type PublishedCourseListResult = {
   page: number;
   page_size: number;
   total: number;
+};
+
+export type InstructorCatalogItem = {
+  id: number;
+  full_name: string;
+  avatar_url: string | null;
+  title: string | null;
+  bio: string | null;
+  course_count: number;
+  total_learners: number;
+  top_rated: boolean;
+};
+
+export type InstructorCatalogResult = {
+  items: InstructorCatalogItem[];
+  total: number;
+};
+
+export type InstructorDetailItem = {
+  id: number;
+  full_name: string;
+  avatar_url: string | null;
+  bio: string | null;
+  stats: {
+    students: number;
+    courses: number;
+    rating: number;
+  };
+  credentials: {
+    icon: string;
+    title: string;
+    sub: string;
+  }[];
+  courses: {
+    slug: string;
+    title: string;
+    category: string;
+    description: string;
+    price: string;
+    image: string | null;
+    rating: number;
+    reviewCount: number;
+  }[];
+  testimony: {
+    quote: string;
+    author: string;
+    avatar: string | null;
+  } | null;
+};
+
+export type InstructorDetailResult = {
+  item: InstructorDetailItem | null;
+};
+
+export type CourseReviewItem = {
+  id: number;
+  user_id: number;
+  user_full_name: string;
+  user_avatar: string | null;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+};
+
+export type CourseReviewListResult = {
+  items: CourseReviewItem[];
+  page: number;
+  page_size: number;
+  total: number;
+  avg_rating: number | null;
+  rating_count: number;
 };
 
 export type CourseDashboardStats = {
@@ -796,6 +872,8 @@ export interface CourseService {
   listPublishedCourses(subjectUserId: number | undefined, query: PublishedCourseListQuery): Promise<PublishedCourseListResult>;
   getPublishedCourseBySlug(subjectUserId: number | undefined, slug: string): Promise<CourseDetail>;
   getPublishedCoursePrerequisiteGraphBySlug(subjectUserId: number | undefined, slug: string): Promise<CoursePrerequisiteGraph>;
+  listInstructorsCatalog(): Promise<InstructorCatalogResult>;
+  getInstructorById(instructorId: number): Promise<InstructorDetailItem | null>;
 
   // Enrollment methods
   enrollCourse(subjectUserId: number, courseId: number): Promise<EnrollmentResult>;
@@ -927,4 +1005,10 @@ export interface CourseService {
 
   // Learning activity (dashboard)
   getMyLearningActivity(subjectUserId: number): Promise<LearningActivityResult>;
+
+  // Course review methods
+  createCourseReview(userId: number, courseId: number, rating: number, comment: string | null): Promise<CourseReviewItem>;
+  listCourseReviews(courseId: number, page: number, pageSize: number): Promise<CourseReviewListResult>;
+  updateCourseReview(reviewId: number, userId: number, rating: number, comment: string | null): Promise<CourseReviewItem>;
+  deleteCourseReview(reviewId: number, userId: number): Promise<void>;
 }
