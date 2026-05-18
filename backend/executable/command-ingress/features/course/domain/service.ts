@@ -4501,6 +4501,10 @@ export class CourseServiceImpl implements CourseService {
         decision: 'approve',
         note: note || 'Admin đã duyệt yêu cầu xóa tài nguyên',
       });
+      await AppDataSource.query(
+        `DELETE FROM lesson_resource_review_events WHERE resource_id = ?`,
+        [resourceId]
+      );
       await resourceRepo.delete({ id: resourceId } as any);
       return;
     }
@@ -5044,6 +5048,10 @@ export class CourseServiceImpl implements CourseService {
       }
 
       await assignmentRepo.delete({ lesson_id: lessonId } as any);
+      await AppDataSource.query(
+        `DELETE FROM lesson_resource_review_events WHERE resource_id IN (SELECT id FROM lesson_resources WHERE lesson_id = ?)`,
+        [lessonId]
+      );
       await resourceRepo.delete({ lesson_id: lessonId } as any);
       await progressRepo.delete({ lesson_id: lessonId } as any);
       await completionRepo.delete({ lesson_id: lessonId } as any);

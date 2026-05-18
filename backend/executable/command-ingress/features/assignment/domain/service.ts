@@ -356,6 +356,10 @@ export class AssignmentServiceImpl implements AssignmentService {
       .map((row) => Number((row as any).id))
       .filter((id) => Number.isFinite(id) && id > 0);
     if (removeIds.length > 0) {
+      await AppDataSource.query(
+        `DELETE FROM lesson_resource_review_events WHERE resource_id IN (?)`,
+        [removeIds]
+      );
       await resourceRepo.delete(removeIds as any);
     }
   }
