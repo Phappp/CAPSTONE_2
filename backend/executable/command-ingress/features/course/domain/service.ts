@@ -617,6 +617,10 @@ async function ensureCourseWorkflowSchema(): Promise<void> {
     }
 
     if (row.legacy_resource_id != null) {
+      await AppDataSource.query(
+        `DELETE FROM lesson_resource_review_events WHERE resource_id = ?`,
+        [Number(row.legacy_resource_id)]
+      );
       await AppDataSource.query(`DELETE FROM lesson_resources WHERE id = ?`, [Number(row.legacy_resource_id)]);
     }
   }
@@ -5404,6 +5408,11 @@ export class CourseServiceImpl implements CourseService {
       return;
     }
 
+    // Xóa các review events liên quan trước để tránh foreign key constraint
+    await AppDataSource.query(
+      `DELETE FROM lesson_resource_review_events WHERE resource_id = ?`,
+      [resourceId]
+    );
     await resourceRepo.delete({ id: resourceId } as any);
   }
 
