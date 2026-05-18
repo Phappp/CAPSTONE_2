@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { House } from "lucide-react";
 import MindBridgeFooter from "../../components/MindBridgeFooter";
+import Chatbot from "../../components/Chatbot/Chatbot";
 import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { PAYMENTS_API } from "../../api/payments";
@@ -211,6 +212,12 @@ export default function CourseDetailPage() {
                     Best Seller
                   </span>
                 )}
+                {course.is_enrolled && (
+                  <span className="bg-green-600 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm leading-none">check_circle</span>
+                    Enrolled
+                  </span>
+                )}
               </div>
               <h1 className="text-4xl md:text-5xl font-extrabold mb-6 leading-tight font-headline">
                 {course.title}
@@ -391,11 +398,17 @@ export default function CourseDetailPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={handleEnroll}
-                  disabled={enrolling || course.is_enrolled}
+                  onClick={() => {
+                    if (course.is_enrolled) {
+                      navigate(`/my-courses/${course.id}/${course.slug}`);
+                    } else {
+                      handleEnroll();
+                    }
+                  }}
+                  disabled={enrolling}
                   className="w-full bg-[#0D9488] text-white py-3 rounded-lg font-bold hover:brightness-110 transition-all disabled:opacity-60"
                 >
-                  {course.is_enrolled ? "Already Enrolled" : enrolling ? "Enrolling…" : "Enroll Now"}
+                  {course.is_enrolled ? "Go to Course" : enrolling ? "Enrolling…" : "Enroll Now"}
                 </button>
                 <ul className="text-sm text-slate-600 space-y-3 pt-2 border-t border-slate-100">
                   {course.duration_hours && (
@@ -422,6 +435,8 @@ export default function CourseDetailPage() {
       </main>
 
       <MindBridgeFooter />
+
+      <Chatbot />
 
       <button
         type="button"

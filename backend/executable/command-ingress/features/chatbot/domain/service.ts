@@ -403,6 +403,51 @@ export class ChatbotServiceImpl implements ChatbotService {
         // If user explicitly selected learning mode, prioritize learning support
         if (chatMode === 'learning') {
             console.log('[Chatbot Debug] User selected learning mode, prioritizing learning support');
+
+            // Check if user is asking about enrolled courses (regardless of learningContext)
+            const lower = message.toLowerCase();
+            const isMyCoursesQuery = lower.includes('khóa học của tôi') || 
+                                     lower.includes('course của tôi') || 
+                                     lower.includes('đã đăng ký') || 
+                                     lower.includes('enrolled') || 
+                                     lower.includes('danh sách khóa');
+
+            if (isMyCoursesQuery) {
+                // Show enrolled courses even without learningContext
+                const enrolledCourses = await this.getEnrolledCourses(userId);
+
+                if (enrolledCourses.length === 0) {
+                    return {
+                        reply: 'Bạn chưa đăng ký khóa học nào. Hãy vào chế độ Tư vấn để tìm khóa học phù hợp nhé!',
+                        references: [],
+                        quickReplies: [
+                            { text: 'Về chế độ Tư vấn', value: '__switch_to_consult__' },
+                            { text: 'Tìm khóa học', value: 'tìm khóa học' },
+                        ],
+                        action: null,
+                    };
+                }
+
+                return {
+                    reply: `Bạn đã đăng ký ${enrolledCourses.length} khóa học:`,
+                    references: enrolledCourses.map((course) => ({
+                        type: 'course' as const,
+                        id: course.id,
+                        slug: course.slug,
+                        title: course.title,
+                        level: course.level,
+                        price: course.price,
+                        has_certificate: course.has_certificate,
+                        progress_percent: course.progress_percent,
+                    })),
+                    quickReplies: [
+                        { text: 'Về chế độ Tư vấn', value: '__switch_to_consult__' },
+                        { text: 'Xem tiến độ', value: 'xem tiến độ của tôi' },
+                    ],
+                    action: null,
+                };
+            }
+
             // If learning context is available, use it
             if (learningContext && learningContext.courseId) {
                 return this.processLearningMessage(userId, message, conversationHistory, learningContext);
@@ -413,7 +458,7 @@ export class ChatbotServiceImpl implements ChatbotService {
                 references: [],
                 quickReplies: [
                     { text: 'Về chế độ Tư vấn', value: '__switch_to_consult__' },
-                    { text: 'Tìm khóa học', value: '__switch_to_consult__' },
+                    { text: 'Khóa học của tôi', value: 'khóa học của tôi' },
                 ],
                 action: null,
             };
@@ -937,6 +982,8 @@ Bạn quan tâm đến nghề nào nhất?`,
                 id: e.course_id,
                 title: (e.course as any)?.title,
                 slug: (e.course as any)?.slug,
+                level: (e.course as any)?.level,
+                price: (e.course as any)?.price,
                 status: e.status,
                 progress_percent: e.progress_percent,
                 has_certificate: (e.course as any)?.has_certificate,
@@ -1408,6 +1455,42 @@ ${responseLabel}:
         const intent = this.detectLearningIntent(message, learningContext);
         console.log('[Chatbot Debug] Detected learning intent:', intent);
 
+        // ========== Handle 'my_courses' intent specially ==========
+        if (intent === 'my_courses') {
+            const enrolledCourses = await this.getEnrolledCourses(userId);
+
+            if (enrolledCourses.length === 0) {
+                return {
+                    reply: 'Bạn chưa đăng ký khóa học nào. Hãy vào chế độ Tư vấn để tìm khóa học phù hợp nhé!',
+                    references: [],
+                    quickReplies: [
+                        { text: 'Về chế độ Tư vấn', value: '__switch_to_consult__' },
+                        { text: 'Tìm khóa học', value: 'tìm khóa học' },
+                    ],
+                    action: null,
+                };
+            }
+
+            return {
+                reply: `Bạn đã đăng ký ${enrolledCourses.length} khóa học:`,
+                references: enrolledCourses.map((course) => ({
+                    type: 'course' as const,
+                    id: course.id,
+                    slug: course.slug,
+                    title: course.title,
+                    level: course.level,
+                    price: course.price,
+                    has_certificate: course.has_certificate,
+                    progress_percent: course.progress_percent,
+                })),
+                quickReplies: [
+                    { text: 'Về chế độ Tư vấn', value: '__switch_to_consult__' },
+                    { text: 'Xem tiến độ', value: 'xem tiến độ của tôi' },
+                ],
+                action: null,
+            };
+        }
+
         // Build context info string
         const contextInfo = this.buildLearningContextInfo(learningContext);
         const systemPrompt = this.buildLearningSystemPrompt(contextInfo);
@@ -1423,25 +1506,31 @@ ${responseLabel}:
             { role: 'user', content: userPrompt }
         ]);
 
+        // Clean the raw LLM response first
+        let cleanedResponse = llmResponse
+            .replace(/^["']?(final)["']?[\s:]*/gi, '')
+            .replace(/\{"[^"]*":\s*[^}]*\}[\s\n]*$/g, '')
+            .trim();
+
         // Parse response - handle both plain text and JSON
-        let reply = llmResponse;
+        let reply = cleanedResponse;
         let quickReplies: ChatbotQuickReply[] = [];
 
         try {
             // Try to parse as JSON first
-            const parsed = JSON.parse(llmResponse);
+            const parsed = JSON.parse(cleanedResponse);
             if (typeof parsed === 'object') {
-                reply = parsed.reply || llmResponse;
+                reply = this.sanitizeString(parsed.reply || cleanedResponse);
                 quickReplies = this.validateQuickReplies(parsed.quickReplies);
             }
         } catch {
             // Not JSON, use as plain text
-            reply = llmResponse;
+            reply = this.sanitizeString(cleanedResponse);
             quickReplies = this.getLearningQuickReplies(learningContext, intent);
         }
 
         return {
-            reply: reply,
+            reply: this.sanitizeString(reply),
             references: [],
             quickReplies: quickReplies.length > 0 ? quickReplies : this.getLearningQuickReplies(learningContext, intent),
             action: null
@@ -1464,6 +1553,12 @@ ${responseLabel}:
                 return `summarize_${nodeType}`;
             }
             return `query_${nodeType}`;
+        }
+
+        // My courses intent
+        if (lower.includes('khóa học của tôi') || lower.includes('course của tôi') || 
+            lower.includes('đã đăng ký') || lower.includes('enrolled') || lower.includes('danh sách khóa')) {
+            return 'my_courses';
         }
 
         // Summary intent
@@ -1673,6 +1768,9 @@ QUY TẮC QUAN TRỌNG:
             .replace(/[{}]/g, '')
             .replace(/\\+"/g, '"')
             .replace(/""/g, '"')
+            .replace(/[\u200b-\u200f\u2028-\u202f\ufeff]/g, '')
+            .replace(/\{[^}]*"[^"]*":\s*[^}]*\}/g, '')
+            .replace(/\{"[^"]*":\s*[^}]*\}/g, '')
             .trim();
     }
 

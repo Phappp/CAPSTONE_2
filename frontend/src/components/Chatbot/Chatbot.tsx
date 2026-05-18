@@ -177,6 +177,24 @@ export default function Chatbot() {
         prevCourseIdRef.current = learningContext?.courseId || null;
     }, [learningContext?.courseId]);
 
+    // Reset welcome message when mode changes (manual switch from dropdown)
+    const prevModeRef = useRef<ChatMode | null>(null);
+    useEffect(() => {
+        // Skip on initial mount (when prevModeRef is null)
+        if (prevModeRef.current === null) {
+            prevModeRef.current = chatMode;
+            return;
+        }
+
+        // Only reset if mode actually changed
+        if (prevModeRef.current !== chatMode) {
+            prevModeRef.current = chatMode;
+            // Clear localStorage history for this mode and reset to welcome message
+            localStorage.removeItem(STORAGE_KEY);
+            setMessages([getWelcomeMessage()]);
+        }
+    }, [chatMode]);
+
     // Auto-hide course info after 3s
     useEffect(() => {
         if (showCourseInfo) {
@@ -286,10 +304,12 @@ export default function Chatbot() {
                 const result = reader.result;
                 if (typeof result === 'string') {
                     resolve(result.substring(0, 10000)); // Limit to 10k chars
-                } else {
+                } else if (result) {
                     // For binary files, return base64
                     const base64 = btoa(String.fromCharCode(...new Uint8Array(result)));
                     resolve(base64);
+                } else {
+                    reject(new Error('Failed to read file'));
                 }
             };
             reader.onerror = reject;
@@ -307,6 +327,7 @@ export default function Chatbot() {
             ? [
                 { text: 'Giải thích bài này', value: 'Giải thích bài học hiện tại' },
                 { text: 'Hướng dẫn làm bài', value: 'Hướng dẫn tôi làm bài tập' },
+                { text: 'Khóa học của tôi', value: 'khóa học của tôi' },
             ]
             : [
                 { text: 'Tìm khóa học', value: 'tìm khóa học' },
