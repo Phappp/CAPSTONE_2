@@ -820,4 +820,38 @@ export class CourseController extends BaseController {
       res.status(200).json(data);
     });
   }
+
+  /** Learner: get quiz questions for chatbot context (without correct answers) */
+  async getQuizQuestionsForLearner(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const data = await this.service.getQuizQuestionsForLearner(uid, courseId, lessonId);
+      res.status(200).json(data);
+    });
+  }
+
+  /** Learner: get transcript for chatbot context */
+  async getLessonTranscript(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const data = await this.service.getLessonTranscriptForLearner(uid, courseId, lessonId);
+      res.status(200).json(data);
+    });
+  }
+
+  async getLessonTranscriptChunk(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const courseId = Number(req.params.id);
+      const lessonId = Number(req.params.lessonId);
+      const fromSec = Number(req.query.from) || 0;
+      const toSec = Number(req.query.to) || 0;
+      const data = await this.service.getLessonTranscriptChunkForLearner(uid, courseId, lessonId, fromSec, toSec);
+      res.status(200).json(data);
+    });
+  }
 }

@@ -24,6 +24,7 @@ import QuestionOption from '../../../../../internal/model/question_option';
 import QuizResponse from '../../../../../internal/model/quiz_response';
 import QuizResponseOption from '../../../../../internal/model/quiz_response_options';
 import Assignment from '../../../../../internal/model/assignment';
+import LessonTranscriptCache from '../../../../../internal/model/lesson_transcript_cache';
 import PaymentOrder from '../../../../../internal/model/payment_order';
 import PaymentRevenueLedger from '../../../../../internal/model/payment_revenue_ledger';
 import OpenRouterKey from '../../../../../internal/model/openrouter_key';
@@ -6764,5 +6765,271 @@ export class CourseServiceImpl implements CourseService {
     }
 
     await reviewRepo.remove(review);
+  }
+
+  /** Learner: get quiz questions for chatbot context (without correct answers) */
+  async getQuizQuestionsForLearner(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number
+  ): Promise<{ lesson_id: number; quiz_id: number | null; questions: any[] }> {
+    await this.ensureEnrolledLearner(subjectUserId, courseId);
+    await this.ensureCanAccessLesson(subjectUserId, courseId, lessonId);
+
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
+    if (!lesson) throw new Error('Lesson not found');
+
+    const quizRepo = AppDataSource.getRepository(Quiz);
+    const quiz = await quizRepo.findOne({ where: { lesson_id: lessonId } as any });
+
+    if (!quiz) {
+      return { lesson_id: lessonId, quiz_id: null, questions: [] };
+    }
+
+    const qqRepo = AppDataSource.getRepository(QuizQuestion);
+    const qOptRepo = AppDataSource.getRepository(QuestionOption);
+
+    const questions = await qqRepo.find({
+      where: { quiz_id: (quiz as any).id } as any,
+      order: { order_index: 'ASC' } as any,
+      relations: ['bankQuestion'],
+    });
+
+    const resultQuestions: any[] = [];
+    for (const m of questions as any[]) {
+      const bq = m.bankQuestion;
+      if (!bq) continue;
+
+      const rawOpts = await qOptRepo.find({
+        where: { quiz_question_id: Number(m.id) } as any,
+        order: { order_index: 'ASC' } as any,
+      });
+
+      resultQuestions.push({
+        id: Number(m.id),
+        question_text: String(bq.question_text || ''),
+        options: rawOpts.map((opt: any) => ({
+          id: Number(opt.id),
+          option_text: String(opt.option_text || ''),
+          order_index: Number(opt.order_index ?? 0),
+        })),
+      });
+    }
+
+    return {
+      lesson_id: lessonId,
+      quiz_id: (quiz as any).id ? Number((quiz as any).id) : null,
+      questions: resultQuestions,
+    };
+  }
+
+  /** Learner: get assignment content for chatbot context */
+  async getAssignmentContentForLearner(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number
+  ): Promise<{
+    description: string | null;
+    short_answer_questions: any[];
+    attachments: any[];
+  } | null> {
+    await this.ensureEnrolledLearner(subjectUserId, courseId);
+    await this.ensureCanAccessLesson(subjectUserId, courseId, lessonId);
+
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
+    if (!lesson) return null;
+
+    const assignmentRepo = AppDataSource.getRepository(Assignment);
+    const assignment = await assignmentRepo.findOne({ where: { lesson_id: lessonId } as any });
+    if (!assignment) return null;
+
+    // Parse JSON fields - attachments and short_answer_questions are stored as JSON
+    const rawAttachments = (assignment as any).attachments;
+    const rawQuestions = (assignment as any).short_answer_questions;
+
+    let attachments: any[] = [];
+    let shortAnswerQuestions: any[] = [];
+
+    try {
+      if (rawAttachments) {
+        if (typeof rawAttachments === 'string') {
+          attachments = JSON.parse(rawAttachments);
+        } else if (Array.isArray(rawAttachments)) {
+          attachments = rawAttachments;
+        }
+      }
+    } catch (e) { /* ignore */ }
+
+    try {
+      if (rawQuestions) {
+        if (typeof rawQuestions === 'string') {
+          shortAnswerQuestions = JSON.parse(rawQuestions);
+        } else if (Array.isArray(rawQuestions)) {
+          shortAnswerQuestions = rawQuestions;
+        }
+      }
+    } catch (e) { /* ignore */ }
+
+    return {
+      description: String((assignment as any).description || ''),
+      short_answer_questions: shortAnswerQuestions.map((q: any, idx: number) => ({
+        id: q.id || idx + 1,
+        question_text: String(q.question_text || q.question || ''),
+        order_index: Number(q.order_index ?? idx),
+      })),
+      attachments: attachments.map((a: any, idx: number) => ({
+        id: a.id || idx + 1,
+        filename: String(a.filename || a.name || ''),
+        file_url: String(a.file_url || a.url || ''),
+      })),
+    };
+  }
+
+  /** Learner: get transcript for chatbot context */
+  async getLessonTranscriptForLearner(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number
+  ): Promise<{ transcript: string | null; segments: any[] }> {
+    await this.ensureEnrolledLearner(subjectUserId, courseId);
+    await this.ensureCanAccessLesson(subjectUserId, courseId, lessonId);
+
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
+    if (!lesson) throw new Error('Lesson not found');
+
+    const transcriptRepo = AppDataSource.getRepository(LessonTranscriptCache);
+    const lessonType = String((lesson as any).lesson_type || '');
+
+    let transcriptText: string | null = null;
+    let segments: any[] = [];
+
+    if (lessonType === 'video') {
+      // Try to get YouTube transcript
+      const youtubeRows = await transcriptRepo.find({
+        where: {
+          lesson_id: lessonId,
+          source_type: In(['youtube_stt', 'youtube_timedtext', 'youtube']),
+        } as any,
+        order: { updated_at: 'DESC' } as any,
+      });
+
+      const hasSegments = (x: any) =>
+        Boolean(x && Array.isArray((x as any).transcript_segments_json) && (x as any).transcript_segments_json.length > 0);
+
+      const youtubeCache = youtubeRows.find((x: any) => String((x as any).source_type || '') === 'youtube_stt' && hasSegments(x))
+        || youtubeRows.find((x: any) => String((x as any).source_type || '') === 'youtube_timedtext' && hasSegments(x))
+        || youtubeRows.find((x: any) => String((x as any).source_type || '') === 'youtube' && hasSegments(x))
+        || youtubeRows.find((x: any) => String((x as any).source_type || '') === 'youtube_stt')
+        || youtubeRows.find((x: any) => String((x as any).source_type || '') === 'youtube_timedtext')
+        || youtubeRows[0]
+        || null;
+
+      if (youtubeCache && Array.isArray((youtubeCache as any).transcript_segments_json)) {
+        segments = (youtubeCache as any).transcript_segments_json;
+        transcriptText = segments.map((s: any) => s.text).join(' ');
+      } else {
+        // Try uploaded video transcript
+        const uploadedRows = await transcriptRepo.find({
+          where: {
+            lesson_id: lessonId,
+            source_type: 'uploaded_video',
+          } as any,
+          order: { updated_at: 'DESC' } as any,
+        });
+
+        const uploadedCache = uploadedRows.find((x: any) => hasSegments(x)) || uploadedRows[0] || null;
+        if (uploadedCache && Array.isArray((uploadedCache as any).transcript_segments_json)) {
+          segments = (uploadedCache as any).transcript_segments_json;
+          transcriptText = segments.map((s: any) => s.text).join(' ');
+        }
+      }
+    }
+
+    return {
+      transcript: transcriptText,
+      segments: segments.map((s: any) => ({
+        start_sec: s.start_sec,
+        end_sec: s.end_sec,
+        text: s.text,
+      })),
+    };
+  }
+
+  async getLessonTranscriptChunkForLearner(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number,
+    fromSec: number,
+    toSec: number
+  ): Promise<{ transcript: string | null; segments: any[] }> {
+    await this.ensureEnrolledLearner(subjectUserId, courseId);
+    await this.ensureCanAccessLesson(subjectUserId, courseId, lessonId);
+
+    const lessonRepo = AppDataSource.getRepository(Lesson);
+    const lesson = await lessonRepo.findOne({ where: { id: lessonId } as any });
+    if (!lesson) throw new Error('Lesson not found');
+
+    const transcriptRepo = AppDataSource.getRepository(LessonTranscriptCache);
+    const lessonType = String((lesson as any).lesson_type || '');
+
+    let segments: any[] = [];
+
+    if (lessonType === 'video') {
+      // Get all segments
+      const youtubeRows = await transcriptRepo.find({
+        where: {
+          lesson_id: lessonId,
+          source_type: In(['youtube_stt', 'youtube_timedtext', 'youtube']),
+        } as any,
+        order: { updated_at: 'DESC' } as any,
+      });
+
+      const hasSegments = (x: any) =>
+        Boolean(x && Array.isArray((x as any).transcript_segments_json) && (x as any).transcript_segments_json.length > 0);
+
+      const youtubeCache = youtubeRows.find((x: any) => String((x as any).source_type || '') === 'youtube_stt' && hasSegments(x))
+        || youtubeRows.find((x: any) => String((x as any).source_type || '') === 'youtube_timedtext' && hasSegments(x))
+        || youtubeRows.find((x: any) => String((x as any).source_type || '') === 'youtube' && hasSegments(x))
+        || null;
+
+      if (youtubeCache && Array.isArray((youtubeCache as any).transcript_segments_json)) {
+        segments = (youtubeCache as any).transcript_segments_json;
+      } else {
+        // Try uploaded video transcript
+        const uploadedRows = await transcriptRepo.find({
+          where: {
+            lesson_id: lessonId,
+            source_type: 'uploaded_video',
+          } as any,
+          order: { updated_at: 'DESC' } as any,
+        });
+
+        const uploadedCache = uploadedRows.find((x: any) => hasSegments(x)) || uploadedRows[0] || null;
+        if (uploadedCache && Array.isArray((uploadedCache as any).transcript_segments_json)) {
+          segments = (uploadedCache as any).transcript_segments_json;
+        }
+      }
+    }
+
+    // Filter segments within the time range
+    const filteredSegments = segments.filter((s: any) => {
+      const start = Number(s.start_sec);
+      const end = Number(s.end_sec);
+      return (start >= fromSec && start <= toSec) || (end >= fromSec && end <= toSec) || (start <= fromSec && end >= toSec);
+    });
+
+    const transcriptText = filteredSegments.map((s: any) => s.text).join(' ');
+
+    return {
+      transcript: transcriptText,
+      segments: filteredSegments.map((s: any) => ({
+        start_sec: s.start_sec,
+        end_sec: s.end_sec,
+        text: s.text,
+      })),
+    };
   }
 }

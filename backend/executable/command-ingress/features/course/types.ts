@@ -1022,6 +1022,29 @@ export interface CourseService {
   getLessonSummary(subjectUserId: number, courseId: number, lessonId: number): Promise<LessonSummaryPayload>;
   regenerateLessonSummary(subjectUserId: number, courseId: number, lessonId: number): Promise<LessonSummaryPayload>;
 
+  /** Learner: get quiz questions for chatbot context (without correct answers) */
+  getQuizQuestionsForLearner(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number
+  ): Promise<{ lesson_id: number; quiz_id: number | null; questions: any[] }>;
+
+  /** Learner: get transcript for chatbot context */
+  getLessonTranscriptForLearner(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number
+  ): Promise<{ transcript: string | null; segments: any[] }>;
+
+  /** Learner: get transcript chunk for chatbot (with timestamp range) */
+  getLessonTranscriptChunkForLearner(
+    subjectUserId: number,
+    courseId: number,
+    lessonId: number,
+    fromSec: number,
+    toSec: number
+  ): Promise<{ transcript: string | null; segments: any[] }>;
+
   // Learning activity (dashboard)
   getMyLearningActivity(subjectUserId: number): Promise<LearningActivityResult>;
 

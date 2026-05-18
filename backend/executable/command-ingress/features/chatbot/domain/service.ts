@@ -397,8 +397,18 @@ export class ChatbotServiceImpl implements ChatbotService {
         conversationHistory?: ChatMessage[],
         enrolledCourseIds?: number[],
         learningContext?: LearningContext,
-        chatMode?: 'consult' | 'learning'
+        chatMode?: 'consult' | 'learning',
+        videoQuery?: { timestamp: number; rangeSeconds: number },
+        specialCommand?: string
     ): Promise<ChatbotResponse> {
+        // ========== HANDLE SPECIAL COMMANDS ==========
+        if (specialCommand === 'video_summary') {
+            return await this.handleVideoSummary(userId, message, learningContext);
+        }
+        if (specialCommand === 'fetch_attachments') {
+            return await this.handleFetchAttachments(userId, message, learningContext);
+        }
+
         // ========== USER-SELECTED MODE ROUTING ==========
         // If user explicitly selected learning mode, prioritize learning support
         if (chatMode === 'learning') {
@@ -450,7 +460,7 @@ export class ChatbotServiceImpl implements ChatbotService {
 
             // If learning context is available, use it
             if (learningContext && learningContext.courseId) {
-                return this.processLearningMessage(userId, message, conversationHistory, learningContext);
+                return this.processLearningMessage(userId, message, conversationHistory, learningContext, videoQuery);
             }
             // If no learning context, guide user to provide context
             return {
@@ -465,10 +475,11 @@ export class ChatbotServiceImpl implements ChatbotService {
         }
 
         // ========== LEARNING CONTEXT DETECTION ==========
-        // If learning context is provided, route to learning support mode
-        if (learningContext && learningContext.courseId) {
+        // If learning context is provided AND user didn't explicitly select consult mode,
+        // route to learning support mode
+        if (chatMode !== 'consult' && learningContext && learningContext.courseId) {
             console.log('[Chatbot Debug] Learning context detected, routing to learning mode');
-            return this.processLearningMessage(userId, message, conversationHistory, learningContext);
+            return this.processLearningMessage(userId, message, conversationHistory, learningContext, videoQuery);
         }
 
         // ========== LANGUAGE DETECTION ==========
@@ -1446,7 +1457,8 @@ ${responseLabel}:
         userId: number,
         message: string,
         conversationHistory?: ChatMessage[],
-        learningContext?: LearningContext
+        learningContext?: LearningContext,
+        videoQuery?: { timestamp: number; rangeSeconds: number }
     ): Promise<ChatbotResponse> {
         console.log('[Chatbot Debug] Processing learning message:', message);
         console.log('[Chatbot Debug] Learning context:', JSON.stringify(learningContext, null, 2));
@@ -1491,8 +1503,59 @@ ${responseLabel}:
             };
         }
 
+        // ========== VIDEO QUERY PROCESSING ==========
+        // If user specified a timestamp, fetch transcript chunk
+        let videoTranscriptChunk: string | null = null;
+        if (videoQuery && learningContext?.droppedNode && learningContext?.courseId) {
+            try {
+                const node = learningContext.droppedNode;
+                const { timestamp, rangeSeconds } = videoQuery;
+                const fromSec = Math.max(0, timestamp - rangeSeconds);
+                const toSec = timestamp + rangeSeconds;
+
+                const transcriptData = await this.getLessonTranscriptChunk(
+                    userId,
+                    learningContext.courseId,
+                    node.id,
+                    fromSec,
+                    toSec
+                );
+
+                if (transcriptData.transcript) {
+                    const startMin = Math.floor(fromSec / 60);
+                    const startSec = fromSec % 60;
+                    const endMin = Math.floor(toSec / 60);
+                    const endSec = toSec % 60;
+                    videoTranscriptChunk = `[Video transcript (${startMin}:${String(startSec).padStart(2, '0')} → ${endMin}:${String(endSec).padStart(2, '0')})]\n${transcriptData.transcript}`;
+                }
+            } catch (err) {
+                console.error('[Chatbot] Failed to fetch video transcript chunk:', err);
+            }
+        }
+
+        // ========== AUTO-FETCH QUIZ/ASSIGNMENT CONTENT ==========
+        // If dropped node is quiz/assignment but has no content, fetch it
+        const node = learningContext?.droppedNode;
+        if (node && !node.content && learningContext?.courseId) {
+            try {
+                if (node.type === 'quiz') {
+                    const quizData = await this.fetchQuizQuestions(userId, learningContext.courseId, node.id);
+                    if (quizData) {
+                        (learningContext.droppedNode as any).content = { questions: quizData };
+                    }
+                } else if (node.type === 'assignment') {
+                    const assignmentData = await this.fetchAssignmentContent(userId, learningContext.courseId, node.id);
+                    if (assignmentData) {
+                        (learningContext.droppedNode as any).content = assignmentData;
+                    }
+                }
+            } catch (err) {
+                console.error('[Chatbot] Failed to fetch dropped node content:', err);
+            }
+        }
+
         // Build context info string
-        const contextInfo = this.buildLearningContextInfo(learningContext);
+        const contextInfo = this.buildLearningContextInfo(learningContext, videoTranscriptChunk);
         const systemPrompt = this.buildLearningSystemPrompt(contextInfo);
         const userPrompt = this.buildLearningUserPrompt(message, learningContext, intent);
 
@@ -1506,33 +1569,27 @@ ${responseLabel}:
             { role: 'user', content: userPrompt }
         ]);
 
-        // Clean the raw LLM response first
+        // Clean the raw LLM response first - remove ALL "(final)" markers with surrounding text
         let cleanedResponse = llmResponse
-            .replace(/^["']?(final)["']?[\s:]*/gi, '')
-            .replace(/\{"[^"]*":\s*[^}]*\}[\s\n]*$/g, '')
+            // Remove entire blocks like "*/ (final). */" or ". (final)."
+            .replace(/\s*\*\/\s*\(\s*final\s*\)\.?\s*\*/gi, ' ')
+            .replace(/\.\s*\(\s*final\s*\)\.?\s*/gi, ' ')
+            .replace(/\s*\(\s*final\s*\)\.?\s*/gi, ' ')
+            // Remove remaining orphaned markers
+            .replace(/\s*\*\/\s*/gi, ' ')
+            // Clean trailing junk at end of response
+            .replace(/(\(\s*final\s*\)[\s\.\)]*)+$/gi, '')
+            .replace(/\s{2,}/g, ' ')
             .trim();
 
-        // Parse response - handle both plain text and JSON
-        let reply = cleanedResponse;
-        let quickReplies: ChatbotQuickReply[] = [];
-
-        try {
-            // Try to parse as JSON first
-            const parsed = JSON.parse(cleanedResponse);
-            if (typeof parsed === 'object') {
-                reply = this.sanitizeString(parsed.reply || cleanedResponse);
-                quickReplies = this.validateQuickReplies(parsed.quickReplies);
-            }
-        } catch {
-            // Not JSON, use as plain text
-            reply = this.sanitizeString(cleanedResponse);
-            quickReplies = this.getLearningQuickReplies(learningContext, intent);
-        }
+        // For learning mode, always use text response (not JSON)
+        const reply = this.sanitizeString(cleanedResponse);
+        const quickReplies = this.getLearningQuickReplies(learningContext, intent);
 
         return {
-            reply: this.sanitizeString(reply),
+            reply,
             references: [],
-            quickReplies: quickReplies.length > 0 ? quickReplies : this.getLearningQuickReplies(learningContext, intent),
+            quickReplies,
             action: null
         };
     }
@@ -1608,13 +1665,18 @@ ${responseLabel}:
         return 'general';
     }
 
-    private buildLearningContextInfo(ctx?: LearningContext): string {
+    private buildLearningContextInfo(ctx?: LearningContext, videoTranscriptChunk?: string | null): string {
         if (!ctx) return 'Không có thông tin khóa học.';
 
         let info = `# THÔNG TIN KHÓA HỌC HIỆN TẠI\n\n`;
         info += `**Khóa học:** ${ctx.courseTitle}\n`;
         info += `**Tiến độ:** ${ctx.progressPercent}%\n`;
         info += `**Đã hoàn thành:** ${ctx.completedLessons}/${ctx.totalLessons} bài\n\n`;
+
+        // Add video transcript chunk if available
+        if (videoTranscriptChunk) {
+            info += `## VIDEO TRANSCRIPT CHUNK:\n${videoTranscriptChunk}\n\n`;
+        }
 
         if (ctx.currentModuleTitle) {
             info += `**Module hiện tại:** ${ctx.currentModuleTitle}\n`;
@@ -1667,6 +1729,7 @@ QUICK REPLIES - Chỉ gợi ý khi hữu ích:
 ${contextInfo}
 
 QUY TẮC QUAN TRỌNG:
+- KHÔNG trả về JSON - LUÔN trả lời bằng VĂN BẢN THƯỜNG có định dạng markdown đẹp mắt
 - KHÔNG bịa đặt thông tin bài học nếu không có trong context
 - Nếu không có đủ thông tin, nói rõ và gợi ý cách tìm hiểu thêm
 - Hướng dẫn cụ thể, step-by-step cho quiz và assignment`;
@@ -1680,6 +1743,49 @@ QUY TẮC QUAN TRỌNG:
             prompt += `**Loại:** ${ctx.droppedNode.type}\n`;
             prompt += `**Tên:** ${ctx.droppedNode.title}\n`;
             prompt += `**ID:** ${ctx.droppedNode.id}\n\n`;
+
+            // Include dropped content if available
+            const content = (ctx.droppedNode as any).content;
+            if (content) {
+                // Video/Text transcript
+                if (content.transcript) {
+                    prompt += `## TRANSCRIPT BÀI GIẢNG:\n${String(content.transcript).substring(0, 3000)}\n\n`;
+                }
+
+                // Quiz questions
+                if (content.questions && Array.isArray(content.questions)) {
+                    prompt += `## CÂU HỎI QUIZ:\n`;
+                    content.questions.forEach((q: any, idx: number) => {
+                        prompt += `${idx + 1}. ${q.question_text}\n`;
+                        if (q.options && Array.isArray(q.options)) {
+                            q.options.forEach((opt: any, optIdx: number) => {
+                                prompt += `   ${String.fromCharCode(65 + optIdx)}. ${opt.option_text}\n`;
+                            });
+                        }
+                        prompt += '\n';
+                    });
+                    prompt += '\n';
+                }
+
+                // Assignment content
+                if (content.description) {
+                    prompt += `## MÔ TẢ BÀI TẬP:\n${content.description}\n\n`;
+                }
+                if (content.short_answer_questions && Array.isArray(content.short_answer_questions)) {
+                    prompt += `## CÂU HỎI BÀI TẬP:\n`;
+                    content.short_answer_questions.forEach((q: any, idx: number) => {
+                        prompt += `${idx + 1}. ${q.question_text}\n`;
+                    });
+                    prompt += '\n';
+                }
+                if (content.attachments && Array.isArray(content.attachments)) {
+                    prompt += `## FILE ĐÍNH KÈM:\n`;
+                    content.attachments.forEach((att: any) => {
+                        prompt += `- ${att.filename}\n`;
+                    });
+                    prompt += '\n';
+                }
+            }
         }
 
         if (ctx?.attachedContent) {
@@ -2753,5 +2859,175 @@ ${topic2}: ${enrolled2Text}`;
         }
 
         return reply;
+    }
+
+    // ========== HELPER METHODS FOR VIDEO QUERY ==========
+
+    private async getLessonTranscriptChunk(
+        userId: number,
+        courseId: number,
+        lessonId: number,
+        fromSec: number,
+        toSec: number
+    ): Promise<{ transcript: string | null; segments: any[] }> {
+        // Use the course service's method
+        const courseService = new (await import('../../course/domain/service')).CourseServiceImpl();
+        return await courseService.getLessonTranscriptChunkForLearner(userId, courseId, lessonId, fromSec, toSec);
+    }
+
+    private async fetchQuizQuestions(
+        userId: number,
+        courseId: number,
+        lessonId: number
+    ): Promise<any[] | null> {
+        try {
+            const courseService = new (await import('../../course/domain/service')).CourseServiceImpl();
+            const result = await courseService.getQuizQuestionsForLearner(userId, courseId, lessonId);
+            return result?.questions || null;
+        } catch (err) {
+            console.error('[Chatbot] Failed to fetch quiz questions:', err);
+            return null;
+        }
+    }
+
+    private async fetchAssignmentContent(
+        userId: number,
+        courseId: number,
+        lessonId: number
+    ): Promise<any | null> {
+        try {
+            const courseService = new (await import('../../course/domain/service')).CourseServiceImpl();
+            return await courseService.getAssignmentContentForLearner(userId, courseId, lessonId);
+        } catch (err) {
+            console.error('[Chatbot] Failed to fetch assignment content:', err);
+            return null;
+        }
+    }
+
+    private async handleVideoSummary(
+        userId: number,
+        _message: string,
+        learningContext?: LearningContext
+    ): Promise<ChatbotResponse> {
+        if (!learningContext?.droppedNode || !learningContext?.courseId) {
+            return {
+                reply: 'Không có thông tin bài học để tóm tắt.',
+                references: [],
+                quickReplies: [],
+                action: null,
+            };
+        }
+
+        const node = learningContext.droppedNode;
+        try {
+            const transcriptData = await this.getLessonTranscriptChunk(
+                userId,
+                learningContext.courseId,
+                node.id,
+                0,
+                3600 // Get first hour
+            );
+
+            if (!transcriptData.transcript) {
+                return {
+                    reply: 'Không tìm thấy transcript cho bài học này.',
+                    references: [],
+                    quickReplies: [],
+                    action: null,
+                };
+            }
+
+            // Build prompt for summary
+            const summaryPrompt = `Hãy tóm tắt nội dung video sau một cách ngắn gọn (khoảng 3-5 câu):
+
+${transcriptData.transcript.substring(0, 3000)}`;
+
+            const summaryResponse = await this.llmClient.chat([
+                { role: 'user', content: summaryPrompt }
+            ]);
+
+            return {
+                reply: `📝 **Tóm tắt bài học: ${node.title}**\n\n${summaryResponse}`,
+                references: [],
+                quickReplies: [
+                    { text: '📹 Hỏi về video', value: `__ask_video__:${node.id}:${node.title}` },
+                    { text: '❓ Hỏi thêm', value: `hỏi về: ${node.title}` },
+                ],
+                action: null,
+            };
+        } catch (err) {
+            console.error('[Chatbot] Failed to get video summary:', err);
+            return {
+                reply: 'Không thể tóm tắt bài học lúc này. Bạn thử hỏi lại nhé!',
+                references: [],
+                quickReplies: [],
+                action: null,
+            };
+        }
+    }
+
+    private async handleFetchAttachments(
+        _userId: number,
+        _message: string,
+        learningContext?: LearningContext
+    ): Promise<ChatbotResponse> {
+        if (!learningContext?.droppedNode) {
+            return {
+                reply: 'Không có thông tin bài học để lấy file.',
+                references: [],
+                quickReplies: [],
+                action: null,
+            };
+        }
+
+        const node = learningContext.droppedNode;
+        try {
+            // Fetch lesson resources directly using SQL
+            const resources = await AppDataSource.query(
+                `SELECT id, filename, url, mime_type, resource_type
+                 FROM lesson_resources
+                 WHERE lesson_id = ? AND review_status = 'approved'
+                 ORDER BY order_index ASC`,
+                [node.id]
+            ) as any[];
+
+            if (resources.length === 0) {
+                return {
+                    reply: `📎 **${node.title}**\n\nBài học này không có file đính kèm.`,
+                    references: [],
+                    quickReplies: [
+                        { text: '📹 Hỏi về video', value: `__ask_video__:${node.id}:${node.title}` },
+                        { text: '📝 Tóm tắt', value: `__video_summary__:${node.id}` },
+                    ],
+                    action: null,
+                };
+            }
+
+            const resourceList = resources.map((r: any, idx: number) =>
+                `${idx + 1}. 📄 ${r.filename || 'File'}`
+            ).join('\n');
+
+            return {
+                reply: `📎 **File đính kèm: ${node.title}**\n\n${resourceList}`,
+                references: resources.map((r: any) => ({
+                    type: 'lesson' as const,
+                    id: r.id,
+                    title: r.filename || 'File',
+                })),
+                quickReplies: [
+                    { text: '📹 Hỏi về video', value: `__ask_video__:${node.id}:${node.title}` },
+                    { text: '📝 Tóm tắt', value: `__video_summary__:${node.id}` },
+                ],
+                action: null,
+            };
+        } catch (err) {
+            console.error('[Chatbot] Failed to fetch attachments:', err);
+            return {
+                reply: 'Không thể lấy file đính kèm lúc này. Bạn thử hỏi lại nhé!',
+                references: [],
+                quickReplies: [],
+                action: null,
+            };
+        }
     }
 }

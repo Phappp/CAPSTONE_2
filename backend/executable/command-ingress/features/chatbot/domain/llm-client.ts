@@ -42,53 +42,74 @@ export class OpenRouterClient {
             order: { last_used_at: 'ASC', id: 'ASC' } as any,
         });
 
-        const picked = keys.find((k) => !k.cooldown_until || new Date(k.cooldown_until) <= now);
-        if (!picked) {
+        if (keys.length === 0) {
             throw new Error('Khong co OpenRouter key kha dung. Hay kiem tra tab Admin > Keys.');
         }
 
-        const apiKey = this.decryptKey(String((picked as any).key_encrypted || ''));
-        if (!apiKey) throw new Error('Khong the giai ma OpenRouter key.');
+        // Try each key with retry
+        const MAX_RETRIES = 2;
+        let lastError: Error | null = null;
 
-        console.log(`[Chatbot] Model: ${model}, KeyID: ${picked.id}`);
+        for (const key of keys) {
+            const cooldownOk = !key.cooldown_until || new Date(key.cooldown_until) <= now;
+            if (!cooldownOk) continue;
 
-        try {
-            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json',
-                    'HTTP-Referer': process.env.APP_URL || 'https://e-learning.com',
-                    'X-Title': process.env.APP_NAME || 'e-Learning Platform',
-                },
-                body: JSON.stringify({
-                    model,
-                    messages,
-                    temperature: 0.3,
-                    max_tokens: 2000,
-                    response_format: { type: 'json_object' },
-                }),
-            });
+            const apiKey = this.decryptKey(String((key as any).key_encrypted || ''));
+            if (!apiKey) continue;
 
-            if (!response.ok) {
-                const raw = await response.text();
-                console.error(`[Chatbot] OpenRouter error ${response.status}: ${raw?.slice(0, 200)}`);
-                throw new Error(`OpenRouter loi HTTP ${response.status}`);
+            for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    console.log(`[Chatbot] Model: ${model}, KeyID: ${key.id}, Attempt: ${attempt + 1}`);
+
+                    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${apiKey}`,
+                            'Content-Type': 'application/json',
+                            'HTTP-Referer': process.env.APP_URL || 'https://e-learning.com',
+                            'X-Title': process.env.APP_NAME || 'e-Learning Platform',
+                        },
+                        body: JSON.stringify({
+                            model,
+                            messages,
+                            temperature: 0.3,
+                            max_tokens: 2000,
+                        }),
+                    });
+
+                    if (!response.ok) {
+                        const raw = await response.text();
+                        console.error(`[Chatbot] OpenRouter error ${response.status}: ${raw?.slice(0, 200)}`);
+                        throw new Error(`OpenRouter loi HTTP ${response.status}`);
+                    }
+
+                    const data: any = await response.json();
+                    const content = data?.choices?.[0]?.message?.content;
+
+                    if (!content) {
+                        const errorDetail = data?.error?.message || data?.error?.type || JSON.stringify(data?.error || {});
+                        console.error(`[Chatbot] OpenRouter empty response: ${errorDetail}`);
+                        throw new Error(`OpenRouter khong tra ve noi dung: ${errorDetail}`);
+                    }
+
+                    (key as any).last_used_at = new Date();
+                    await keyRepo.save(key as any);
+                    return content;
+                } catch (error: any) {
+                    lastError = error;
+                    console.error(`[Chatbot] Attempt ${attempt + 1} failed: ${error.message}`);
+                    if (attempt < MAX_RETRIES) {
+                        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                    }
+                }
             }
 
-            const data: any = await response.json();
-            const content = data?.choices?.[0]?.message?.content;
-            if (!content) throw new Error('OpenRouter khong tra ve noi dung.');
-
-            (picked as any).last_used_at = new Date();
-            await keyRepo.save(picked as any);
-
-            return content;
-        } catch (error: any) {
-            (picked as any).last_error_at = new Date();
-            (picked as any).error_count = Number((picked as any).error_count || 0) + 1;
-            await keyRepo.save(picked as any);
-            throw error;
+            // Mark key as having issues if all retries failed
+            (key as any).last_error_at = new Date();
+            (key as any).error_count = Number((key as any).error_count || 0) + 1;
+            await keyRepo.save(key as any);
         }
+
+        throw lastError || new Error('OpenRouter loi. Vui long thu lai sau.');
     }
 }

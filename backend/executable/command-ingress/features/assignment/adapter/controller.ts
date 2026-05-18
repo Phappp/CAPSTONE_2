@@ -168,10 +168,20 @@ export class AssignmentController extends BaseController {
         // Gọi service lưu vào DB
         await this.service.createGradeAppeal(studentId, submissionId, content);
 
-        res.status(201).json({ 
-            success: true, 
-            message: 'Đã gửi khiếu nại thành công cho giảng viên!' 
+        res.status(201).json({
+            success: true,
+            message: 'Đã gửi khiếu nại thành công cho giảng viên!'
         });
+    });
+  }
+
+  /** Learner: get assignment content for chatbot context */
+  async getAssignmentContentForLearner(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const assignmentId = Number(req.params.assignmentId);
+      const content = await this.service.getAssignmentContentForLearner(uid, assignmentId);
+      res.status(200).json(content);
     });
   }
 }

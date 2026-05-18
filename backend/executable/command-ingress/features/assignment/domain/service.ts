@@ -31,6 +31,20 @@ import type {
 import GradeEntity from '../../../../../internal/model/grade';
 import SubmissionFeedback from '../../../../../internal/model/submission_feedback';
 
+function safeJsonParse<T>(value: any, fallback: T): T {
+  if (value == null) return fallback;
+  if (typeof value === 'string') {
+    const s = value.trim();
+    if (!s) return fallback;
+    try {
+      return JSON.parse(s) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  return value as T;
+}
+
 async function isUserAdmin(userId: number): Promise<boolean> {
   const userRoleRepo = AppDataSource.getRepository(UserRole);
   const roleRepo = AppDataSource.getRepository(Role);
@@ -1263,5 +1277,54 @@ export class AssignmentServiceImpl implements AssignmentService {
         VALUES (?, ?, ?, NOW())
     `, [submissionId, studentId, content]);
   }
-} 
 
+  /** Learner: get assignment content for chatbot context */
+  async getAssignmentContentForLearner(
+    subjectUserId: number,
+    assignmentId: number
+  ): Promise<{
+    id: number;
+    lesson_id: number;
+    title: string;
+    description: string | null;
+    short_answer_questions: any[];
+    attachments: any[];
+  }> {
+    const assignmentRepo = AppDataSource.getRepository(Assignment);
+
+    const assignment = await assignmentRepo.findOne({ where: { id: assignmentId } as any });
+    if (!assignment) throw new Error('Assignment not found');
+
+    // Check if user is enrolled in the course
+    const enrollmentRepo = AppDataSource.getRepository(CourseEnrollment);
+    const enrollment = await enrollmentRepo.findOne({
+      where: { user_id: subjectUserId, course_id: (assignment as any).course_id } as any,
+    });
+    if (!enrollment) throw new Error('You are not enrolled in this course');
+
+    // Get attachments from JSON field (stored as JSON in assignment.attachments)
+    const attachmentsRaw = safeJsonParse<any[]>((assignment as any).attachments, []);
+    const attachments = attachmentsRaw.map((att: any, idx: number) => ({
+      id: att.id ?? idx + 1,
+      filename: att.filename || att.file_name || '',
+      url: att.url || att.file_path || '',
+      mime_type: att.mime_type || null,
+    }));
+
+    // Parse short answer questions
+    const shortAnswerQuestions = safeJsonParse<any[]>((assignment as any).short_answer_questions, []);
+
+    return {
+      id: Number((assignment as any).id),
+      lesson_id: Number((assignment as any).lesson_id),
+      title: String((assignment as any).title || ''),
+      description: (assignment as any).description || null,
+      short_answer_questions: shortAnswerQuestions.map((q, idx) => ({
+        id: q.id ?? idx + 1,
+        question_text: q.question_text || '',
+        order_index: idx + 1,
+      })),
+      attachments,
+    };
+  }
+}

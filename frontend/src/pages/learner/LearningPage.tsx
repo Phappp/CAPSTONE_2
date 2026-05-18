@@ -522,6 +522,23 @@ export default function LearningPage() {
   const toggleSummaryCollapse = useCallback(() => setIsSummaryCollapsed(prev => !prev), []);
 
   // ============================================
+  // Drag & Drop for Chatbot
+  // ============================================
+  const handleTreeNodeDragStart = useCallback((
+    e: React.DragEvent<HTMLElement>,
+    nodeType: 'module' | 'lesson' | 'quiz' | 'assignment',
+    nodeId: number,
+    nodeTitle: string
+  ) => {
+    e.dataTransfer.setData('application/json', JSON.stringify({
+      type: nodeType,
+      id: nodeId,
+      title: nodeTitle,
+    }));
+    e.dataTransfer.effectAllowed = 'copy';
+  }, []);
+
+  // ============================================
   // ALL useEffect hooks
   // ============================================
   
@@ -1854,7 +1871,12 @@ export default function LearningPage() {
                     return (
                       <li key={m.id} className="tree-node module-node">
                         <div className="tree-title-row">
-                          <span className="tree-review-status-wrap">
+                          <span
+                            className="tree-review-status-wrap"
+                            draggable
+                            onDragStart={(e) => handleTreeNodeDragStart(e, 'module', m.id, m.title)}
+                            style={{ cursor: 'grab' }}
+                          >
                             <span className="material-symbols-outlined review-status-icon empty" title="Chương">folder</span>
                           </span>
                           <div className="tree-title">Chương {moduleIdx + 1}: {m.title}</div>
@@ -1872,7 +1894,19 @@ export default function LearningPage() {
                             return (
                               <li key={le.id} className="tree-node lesson-node">
                                 <div className="tree-title-row">
-                                  <span className="tree-review-status-wrap">
+                                  <span
+                                    className="tree-review-status-wrap"
+                                    draggable
+                                    onDragStart={(e) => {
+                                      const dragType = le.lesson_type === 'quiz'
+                                        ? 'quiz'
+                                        : le.lesson_type === 'assignment'
+                                          ? 'assignment'
+                                          : 'lesson';
+                                      handleTreeNodeDragStart(e, dragType, le.id, le.title || '');
+                                    }}
+                                    style={{ cursor: 'grab' }}
+                                  >
                                     <span
                                       className={`tree-lesson-type-icon ${lessonTypeBadge.className}`}
                                       title={lessonTypeBadge.title}

@@ -67,6 +67,16 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
         const handleDrop = (e: React.DragEvent) => {
             e.preventDefault();
             e.stopPropagation();
+            
+            // Check if this is a course tree node (JSON data)
+            const nodeData = e.dataTransfer.getData('application/json');
+            if (nodeData) {
+                // Let the modal handle lesson/quiz/assignment nodes
+                // Don't call onFileUpload for course tree nodes
+                return;
+            }
+            
+            // Handle file drops
             const file = e.dataTransfer.files?.[0];
             if (file) {
                 setAttachedFile(file);

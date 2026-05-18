@@ -192,6 +192,19 @@ export interface AssignmentService {
 
     getMyAssignmentGradeDetail(studentId: number, assignmentId: number): Promise<any>;
     createGradeAppeal(studentId: number, submissionId: number, content: string): Promise<void>;
+
+    /** Learner: get assignment content for chatbot context */
+    getAssignmentContentForLearner(
+      subjectUserId: number,
+      assignmentId: number
+    ): Promise<{
+      id: number;
+      lesson_id: number;
+      title: string;
+      description: string | null;
+      short_answer_questions: ShortAnswerQuestionDef[];
+      attachments: AssignmentAttachmentPreview[];
+    }>;
 }
 
 export type CourseGradeSummary = {

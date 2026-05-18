@@ -72,7 +72,9 @@ export interface ChatbotService {
         conversationHistory?: ChatMessage[],
         enrolledCourseIds?: number[],
         learningContext?: LearningContext,
-        chatMode?: ChatMode
+        chatMode?: ChatMode,
+        videoQuery?: { timestamp: number; rangeSeconds: number },
+        specialCommand?: string
     ): Promise<ChatbotResponse>;
 }
 
@@ -80,9 +82,26 @@ export interface ChatbotService {
 export type LessonType = 'video' | 'text' | 'quiz' | 'assignment';
 
 export type DroppedNode = {
-    type: 'module' | 'lesson' | 'quiz' | 'assignment';
+    type: 'module' | 'lesson' | 'quiz' | 'assignment' | 'video' | 'text';
     id: number;
     title: string;
+    content?: DroppedNodeContent;
+};
+
+export type DroppedNodeContent = {
+    // Video/Text transcript
+    transcript?: string | null;
+    segments?: Array<{ start_sec: number; end_sec: number; text: string }>;
+    // Quiz questions
+    questions?: Array<{
+        id: number;
+        question_text: string;
+        options: Array<{ id: number; option_text: string; order_index: number }>;
+    }>;
+    // Assignment content
+    description?: string;
+    short_answer_questions?: Array<{ id: number; question_text: string; order_index: number }>;
+    attachments?: Array<{ id: number; filename: string; url: string; mime_type: string | null }>;
 };
 
 export type AttachedContent = {

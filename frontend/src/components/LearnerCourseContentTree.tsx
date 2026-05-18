@@ -971,6 +971,18 @@ export default function LearnerCourseContentTree(props: {
                 ? "Hoàn thành các mục đứng trước trong chương (theo thứ tự) để mở bài tập."
                 : undefined);
 
+    // Determine drag data based on lesson type and interaction
+    const dragType = quizOnly ? "quiz" : assignmentOnly ? "assignment" : l.lesson_type;
+    const handleDragStart = (e: React.DragEvent) => {
+      e.dataTransfer.setData("application/json", JSON.stringify({
+        type: dragType,
+        id: l.id,
+        title: l.title || displayIndexLabel,
+        moduleId: l.module_id,
+      }));
+      e.dataTransfer.effectAllowed = "copy";
+    };
+
     return (
       <div
         key={options.rowKey ?? `lesson-${l.id}`}
@@ -985,6 +997,8 @@ export default function LearnerCourseContentTree(props: {
         ]
           .filter(Boolean)
           .join(" ")}
+        draggable={!isLocked}
+        onDragStart={isLocked ? undefined : handleDragStart}
         role={isLocked ? "group" : "button"}
         tabIndex={isLocked ? -1 : 0}
         aria-disabled={isLocked ? "true" : "false"}

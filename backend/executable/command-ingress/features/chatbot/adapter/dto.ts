@@ -54,6 +54,8 @@ export class ChatbotMessageBody {
     conversationHistory?: ChatMessageInput[];
     enrolledCourseIds?: number[];
     learningContext?: LearningContextInput;
+    videoQuery?: { timestamp: number; rangeSeconds: number };
+    specialCommand?: string;
 
     constructor(body: any) {
         this.message = String(body?.message || '').trim();
@@ -73,6 +75,16 @@ export class ChatbotMessageBody {
             ? body.enrolledCourseIds.filter((id: any) => Number.isFinite(Number(id)))
             : undefined;
         this.learningContext = this.parseLearningContext(body?.learningContext);
+        this.videoQuery = this.parseVideoQuery(body?.videoQuery);
+        this.specialCommand = typeof body?.specialCommand === 'string' ? body.specialCommand : undefined;
+    }
+
+    private parseVideoQuery(vq: any): { timestamp: number; rangeSeconds: number } | undefined {
+        if (!vq || typeof vq !== 'object') return undefined;
+        const timestamp = Number(vq?.timestamp);
+        const rangeSeconds = Number(vq?.rangeSeconds) || 60;
+        if (!Number.isFinite(timestamp) || timestamp <= 0) return undefined;
+        return { timestamp, rangeSeconds };
     }
 
     private parseLearningContext(ctx: any): LearningContextInput | undefined {

@@ -31,6 +31,12 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
   router.route('/:id/lessons/:lessonId/complete').post(requireAuthorizedUser, controller.completeLesson.bind(controller));
   router.route('/:id/lessons/:lessonId/quiz/take').get(requireAuthorizedUser, controller.getLearnerQuizTake.bind(controller));
   router.route('/:id/lessons/:lessonId/quiz/submit').post(requireAuthorizedUser, controller.submitLearnerQuizTake.bind(controller));
+  /** Learner: quiz questions for chatbot context (without correct answers) */
+  router.route('/:id/lessons/:lessonId/quiz-questions').get(requireAuthorizedUser, controller.getQuizQuestionsForLearner.bind(controller));
+  /** Learner: transcript for chatbot context */
+  router.route('/:id/lessons/:lessonId/transcript').get(requireAuthorizedUser, controller.getLessonTranscript.bind(controller));
+  /** Learner: transcript chunk for chatbot (with timestamp range) */
+  router.route('/:id/lessons/:lessonId/transcript-chunk').get(requireAuthorizedUser, controller.getLessonTranscriptChunk.bind(controller));
   /** Giảng viên: điểm quiz theo từng học viên (ghi danh). */
   router
     .route('/:id/lessons/:lessonId/quiz/learner-scores')

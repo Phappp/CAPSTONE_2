@@ -261,6 +261,15 @@
   background: linear-gradient(0deg, rgba(243, 244, 246, 0.75), rgba(243, 244, 246, 0.75));
 }
 
+/* Draggable state */
+.learnerTreeLesson[draggable="true"] {
+  cursor: grab;
+}
+
+.learnerTreeLesson[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .learnerTreeLesson__statusPill {
   display: inline-flex;
   align-items: center;

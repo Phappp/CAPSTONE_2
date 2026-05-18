@@ -82,7 +82,11 @@ type ChatMessageData = {
     };
 };
 
-const STORAGE_KEY = 'chatbot_history';
+// Separate storage keys for each mode
+const STORAGE_KEYS = {
+    consult: 'chatbot_history_consult',
+    learning: 'chatbot_history_learning',
+} as const;
 const CHATBOT_OPEN_KEY = 'chatbot_is_open';
 
 const createMessageId = () => `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -125,21 +129,37 @@ export default function Chatbot() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatInputRef = useRef<ChatInputHandles>(null);
     const prevCourseIdRef = useRef<number | null>(null);
+    
+    // Refs for drag-drop handlers to avoid circular dependencies
+    const handleSendMessageRef = useRef<((text: string, options?: { attachedContent?: any }) => void) | null>(null);
+    const handleFileUploadRef = useRef<((file: File) => void) | null>(null);
+    const fetchDroppedNodeContentRef = useRef<((node: any) => Promise<any>) | null>(null);
+    
     const { user, accessToken } = useAuth();
     const { learningContext, setDroppedNode } = useChatbotContext();
     const navigate = useNavigate();
 
+    // Migration: Clean up old single key on first load
     useEffect(() => {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        const parsed = parseMessages(saved);
-        setMessages(parsed.length > 0 ? parsed : [getWelcomeMessage()]);
+        const oldKey = 'chatbot_history';
+        if (localStorage.getItem(oldKey)) {
+            localStorage.removeItem(oldKey);
+        }
     }, []);
 
+    // Load messages based on current mode
+    useEffect(() => {
+        const saved = localStorage.getItem(STORAGE_KEYS[chatMode]);
+        const parsed = parseMessages(saved);
+        setMessages(parsed.length > 0 ? parsed : [getWelcomeMessage()]);
+    }, [chatMode]);
+
+    // Save messages based on current mode
     useEffect(() => {
         if (messages.length > 0) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+            localStorage.setItem(STORAGE_KEYS[chatMode], JSON.stringify(messages));
         }
-    }, [messages]);
+    }, [messages, chatMode]);
 
     useEffect(() => {
         localStorage.setItem(CHATBOT_OPEN_KEY, String(isOpen));
@@ -176,24 +196,6 @@ export default function Chatbot() {
         // Update previous courseId
         prevCourseIdRef.current = learningContext?.courseId || null;
     }, [learningContext?.courseId]);
-
-    // Reset welcome message when mode changes (manual switch from dropdown)
-    const prevModeRef = useRef<ChatMode | null>(null);
-    useEffect(() => {
-        // Skip on initial mount (when prevModeRef is null)
-        if (prevModeRef.current === null) {
-            prevModeRef.current = chatMode;
-            return;
-        }
-
-        // Only reset if mode actually changed
-        if (prevModeRef.current !== chatMode) {
-            prevModeRef.current = chatMode;
-            // Clear localStorage history for this mode and reset to welcome message
-            localStorage.removeItem(STORAGE_KEY);
-            setMessages([getWelcomeMessage()]);
-        }
-    }, [chatMode]);
 
     // Auto-hide course info after 3s
     useEffect(() => {
@@ -233,17 +235,50 @@ export default function Chatbot() {
             try {
                 const node = JSON.parse(nodeData);
                 if (node.type && node.id && node.title) {
-                    setDroppedNode(node);
-                    
-                    // Auto-send message based on node type
-                    const messages = {
-                        module: `cho tôi biết về chương: ${node.title}`,
-                        lesson: `giải thích bài: ${node.title}`,
-                        quiz: `hướng dẫn làm quiz: ${node.title}`,
-                        assignment: `yêu cầu bài tập: ${node.title}`,
+                    // Only save basic info, don't fetch content yet
+                    // User will clarify what they want to ask
+                    const nodeWithMeta = {
+                        ...node,
+                        hasVideo: node.lesson_type === 'video' || node.type === 'lesson',
+                        hasAttachments: false, // Will be fetched later if needed
                     };
-                    const autoMessage = messages[node.type as keyof typeof messages] || `hỏi về: ${node.title}`;
-                    handleSendMessage(autoMessage);
+                    setDroppedNode(nodeWithMeta);
+
+                    // Show clarification QuickReplies based on node type
+                    let quickReplies: any[] = [];
+
+                    if (node.type === 'quiz') {
+                        quickReplies = [
+                            { text: '❓ Xem câu hỏi', value: `__ask_quiz__:${node.id}:${node.title}` },
+                            { text: '💡 Giải đáp', value: `hỏi đáp án quiz ${node.title}` },
+                            { text: '📝 Tóm tắt', value: `tóm tắt quiz ${node.title}` },
+                        ];
+                    } else if (node.type === 'assignment') {
+                        quickReplies = [
+                            { text: '📋 Xem yêu cầu', value: `__ask_assignment__:${node.id}:${node.title}` },
+                            { text: '💡 Hướng dẫn', value: `hướng dẫn làm bài ${node.title}` },
+                        ];
+                    } else if (node.type === 'module') {
+                        quickReplies = [
+                            { text: '📚 Danh sách bài', value: `danh sách bài trong ${node.title}` },
+                            { text: '📝 Tóm tắt', value: `tóm tắt chương ${node.title}` },
+                        ];
+                    } else {
+                        // Video/lesson
+                        quickReplies = [
+                            { text: '📹 Video', value: `__ask_video__:${node.id}:${node.title}:${node.type}` },
+                            { text: '📎 File đính kèm', value: `__ask_attachment__:${node.id}:${node.title}` },
+                            { text: '📝 Tóm tắt bài', value: `__ask_summary__:${node.id}:${node.title}` },
+                        ];
+                    }
+
+                    const clarificationMessage: ChatMessageData = {
+                        id: createMessageId(),
+                        role: 'assistant',
+                        content: `📚 **${node.title}**\n\nBạn muốn hỏi về phần nào?`,
+                        quickReplies,
+                    };
+                    setMessages((prev) => [...prev, clarificationMessage]);
                     return;
                 }
             } catch (err) {
@@ -254,9 +289,79 @@ export default function Chatbot() {
         // Check for files
         const files = Array.from(e.dataTransfer.files);
         if (files.length > 0) {
-            handleFileUpload(files[0]);
+            const uploadFn = handleFileUploadRef.current;
+            if (uploadFn) {
+                uploadFn(files[0]);
+            }
         }
-    }, [setDroppedNode]);
+    }, [setDroppedNode, setMessages]);
+
+    const fetchDroppedNodeContent = async (node: any): Promise<any> => {
+        try {
+            const { type, id } = node;
+            const courseId = learningContext?.courseId;
+
+            if (type === 'video' || type === 'quiz' || type === 'text' || type === 'lesson') {
+                // These need courseId for the API
+                if (courseId) {
+                    if (type === 'video' || type === 'text' || type === 'lesson') {
+                        // Fetch video/text transcript
+                        const res = await fetch(`${url}/api/v1/courses/${courseId}/lessons/${id}/transcript`, {
+                            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            return {
+                                ...node,
+                                content: {
+                                    transcript: data.transcript,
+                                    segments: data.segments,
+                                },
+                            };
+                        }
+                    } else if (type === 'quiz') {
+                        // Fetch quiz questions
+                        const res = await fetch(`${url}/api/v1/courses/${courseId}/lessons/${id}/quiz-questions`, {
+                            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.questions) {
+                                return {
+                                    ...node,
+                                    content: {
+                                        questions: data.questions,
+                                    },
+                                };
+                            }
+                        }
+                    }
+                }
+            } else if (type === 'assignment') {
+                // Fetch assignment content (doesn't need courseId)
+                const res = await fetch(`${url}/api/v1/assignments/${id}/content`, {
+                    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    return {
+                        ...node,
+                        content: {
+                            description: data.description,
+                            short_answer_questions: data.short_answer_questions,
+                            attachments: data.attachments,
+                        },
+                    };
+                }
+            }
+
+            // Return node without content if no fetch was needed or failed
+            return node;
+        } catch (err) {
+            console.error('Failed to fetch dropped node content:', err);
+            return node;
+        }
+    };
 
     const handleFileUpload = useCallback(async (file: File) => {
         try {
@@ -283,15 +388,18 @@ export default function Chatbot() {
                 contentType = 'code';
             }
 
-            // Send message with attached content
-            handleSendMessage(`Phân tích file: ${file.name}`, {
-                attachedContent: {
-                    type: contentType,
-                    content: content,
-                    filename: file.name,
-                    mimeType: mimeType,
-                }
-            });
+            // Send message with attached content via ref
+            const sendFn = handleSendMessageRef.current;
+            if (sendFn) {
+                sendFn(`Phân tích file: ${file.name}`, {
+                    attachedContent: {
+                        type: contentType,
+                        content: content,
+                        filename: file.name,
+                        mimeType: mimeType,
+                    }
+                });
+            }
         } catch (err) {
             console.error('Failed to upload file:', err);
         }
@@ -390,6 +498,62 @@ export default function Chatbot() {
                 chatMode: chatMode,
             };
 
+            // Check for special commands
+            let videoQuery: { timestamp: number; rangeSeconds: number } | undefined;
+            let specialCommand: string | undefined;
+
+            if (text.startsWith('__video_summary__:')) {
+                specialCommand = 'video_summary';
+                payload.message = text;
+            } else if (text.startsWith('__fetch_attachments__:')) {
+                specialCommand = 'fetch_attachments';
+                payload.message = text;
+            } else if (learningContext?.droppedNode?.type === 'lesson' || learningContext?.droppedNode?.type === 'module') {
+                // Check if message is a timestamp
+                // Format 1: "1p32s" or "1m30s" or "1p30" (Vietnamese compact format)
+                const vietCompactMatch = text.match(/^(\d+)\s*[pPmM]?\s*(\d+)\s*[sS]?$/);
+                // Format 2: "1 phút 30 giây" or "1 phút 30s" (Vietnamese full format)
+                const vietFullMatch = text.match(/^(\d+)\s*(?:phút|p|ph|minute|m)\s*(\d+)\s*(?:giây|giay|s|sec)?$/i);
+                // Format 3: "1:30" or "3:20" or "1:30:45"
+                const colonMatch = text.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+
+                let totalSeconds = 0;
+
+                if (vietFullMatch) {
+                    // "1 phút 30 giây" = 90 seconds
+                    const minutes = parseInt(vietFullMatch[1]);
+                    const seconds = parseInt(vietFullMatch[2]);
+                    totalSeconds = minutes * 60 + seconds;
+                } else if (vietCompactMatch) {
+                    // "1p30s" = 90 seconds
+                    const minutes = parseInt(vietCompactMatch[1]);
+                    const seconds = parseInt(vietCompactMatch[2]);
+                    totalSeconds = minutes * 60 + seconds;
+                } else if (colonMatch) {
+                    const hours = colonMatch[3] ? parseInt(colonMatch[1]) : 0;
+                    const minutes = colonMatch[3] ? parseInt(colonMatch[2]) : parseInt(colonMatch[1]);
+                    const seconds = colonMatch[3] ? parseInt(colonMatch[3]) : parseInt(colonMatch[2]);
+                    totalSeconds = hours * 3600 + minutes * 60 + seconds;
+                }
+
+                if (totalSeconds > 0) {
+                    videoQuery = {
+                        timestamp: totalSeconds,
+                        rangeSeconds: 60, // ±60 seconds
+                    };
+                }
+            }
+
+            // Add videoQuery to payload if detected
+            if (videoQuery) {
+                payload.videoQuery = videoQuery;
+            }
+
+            // Add special command info
+            if (specialCommand) {
+                payload.specialCommand = specialCommand;
+            }
+
             // Add learning context if available
             if (learningContext) {
                 payload.learningContext = {
@@ -484,6 +648,163 @@ export default function Chatbot() {
             return;
         }
 
+        // Handle dropped node clarification - Video
+        if (value.startsWith('__ask_video__')) {
+            const parts = value.split(':');
+            const lessonId = parts[1];
+            const title = parts[2];
+
+            // Ask for timestamp
+            const timestampAskMessage: ChatMessageData = {
+                id: createMessageId(),
+                role: 'assistant',
+                content: `📹 **${title}**\n\nBạn muốn hỏi về đoạn nào trong video?\n\nNhập thời điểm, ví dụ: **3:20** hoặc **5:10**`,
+                quickReplies: [
+                    { text: 'Tóm tắt toàn bộ video', value: `__video_summary__:${lessonId}` },
+                ],
+            };
+            setMessages((prev) => [...prev, timestampAskMessage]);
+            return;
+        }
+
+        // Handle dropped node clarification - Attachment
+        if (value.startsWith('__ask_attachment__')) {
+            const parts = value.split(':');
+            const lessonId = parts[1];
+            const title = parts[2];
+
+            // Ask user to wait while fetching attachments
+            const loadingMessage: ChatMessageData = {
+                id: createMessageId(),
+                role: 'assistant',
+                content: `📎 **${title}**\n\nĐang tải danh sách file đính kèm...`,
+            };
+            setMessages((prev) => [...prev, loadingMessage]);
+
+            // Fetch attachments and send as message
+            const courseId = learningContext?.courseId;
+            if (courseId) {
+                fetch(`${url}/api/v1/courses/${courseId}/lessons/${lessonId}`, {
+                    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+                })
+                    .then((res) => res.json())
+                    .then((data) => {
+                        const attachments = data.resources || [];
+                        if (attachments.length > 0) {
+                            handleSendMessage(`__fetch_attachments__:${lessonId}`);
+                        } else {
+                            const noAttachMessage: ChatMessageData = {
+                                id: createMessageId(),
+                                role: 'assistant',
+                                content: `📎 **${title}**\n\nBài học này không có file đính kèm.`,
+                            };
+                            setMessages((prev) => prev.slice(0, -1).concat(noAttachMessage));
+                        }
+                    })
+                    .catch(() => {
+                        const errorMessage: ChatMessageData = {
+                            id: createMessageId(),
+                            role: 'assistant',
+                            content: 'Không thể tải file đính kèm. Bạn thử hỏi lại nhé!',
+                        };
+                        setMessages((prev) => prev.slice(0, -1).concat(errorMessage));
+                    });
+            }
+            return;
+        }
+
+        // Handle dropped node clarification - Quiz
+        if (value.startsWith('__ask_quiz__')) {
+            const parts = value.split(':');
+            const quizId = parts[1];
+            const title = parts[2];
+
+            // Fetch quiz content first, then ask
+            const courseId = learningContext?.courseId;
+            if (courseId) {
+                fetch(`${url}/api/v1/courses/${courseId}/lessons/${quizId}/quiz-questions`, {
+                    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.questions && data.questions.length > 0) {
+                            // Update dropped node with content
+                            const updatedNode = {
+                                ...learningContext?.droppedNode,
+                                id: parseInt(quizId),
+                                content: { questions: data.questions },
+                            };
+                            setDroppedNode(updatedNode);
+                            handleSendMessage(`Xem câu hỏi quiz: ${title}`);
+                        } else {
+                            handleSendMessage(`Xem câu hỏi quiz: ${title}`);
+                        }
+                    })
+                    .catch(() => {
+                        handleSendMessage(`Xem câu hỏi quiz: ${title}`);
+                    });
+            } else {
+                handleSendMessage(`Xem câu hỏi quiz: ${title}`);
+            }
+            return;
+        }
+
+        // Handle dropped node clarification - Assignment
+        if (value.startsWith('__ask_assignment__')) {
+            const parts = value.split(':');
+            const assignmentId = parts[1];
+            const title = parts[2];
+
+            // Fetch assignment content first, then ask
+            const courseId = learningContext?.courseId;
+            if (courseId) {
+                fetch(`${url}/api/v1/courses/${courseId}/lessons/${assignmentId}`, {
+                    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.description) {
+                            const updatedNode = {
+                                ...learningContext?.droppedNode,
+                                id: parseInt(assignmentId),
+                                content: {
+                                    description: data.description,
+                                    short_answer_questions: data.short_answer_questions,
+                                    attachments: data.attachments,
+                                },
+                            };
+                            setDroppedNode(updatedNode);
+                        }
+                        handleSendMessage(`Xem yêu cầu bài tập: ${title}`);
+                    })
+                    .catch(() => {
+                        handleSendMessage(`Xem yêu cầu bài tập: ${title}`);
+                    });
+            } else {
+                handleSendMessage(`Xem yêu cầu bài tập: ${title}`);
+            }
+            return;
+        }
+
+        // Handle dropped node clarification - Summary
+        if (value.startsWith('__ask_summary__')) {
+            const parts = value.split(':');
+            const lessonId = parts[1];
+            const title = parts[2];
+
+            // Send request for summary
+            handleSendMessage(`Tóm tắt bài học: ${title}`);
+            return;
+        }
+
+        // Handle video summary request
+        if (value.startsWith('__video_summary__')) {
+            const parts = value.split(':');
+            const lessonId = parts[1];
+            handleSendMessage(`__video_summary__:${lessonId}`);
+            return;
+        }
+
         // Kiểm tra nếu là retry
         const retryKeywords = ['hỏi lại', 'retry', '__retry__', 'thử lại'];
         const isRetry = retryKeywords.some(kw => value.toLowerCase().includes(kw.toLowerCase()));
@@ -497,7 +818,10 @@ export default function Chatbot() {
     };
 
     const handleCourseClick = (courseId: number, slug?: string) => {
-        if (slug && slug !== 'undefined') {
+        // In learning mode, navigate to LearningPage directly with id and slug
+        if (chatMode === 'learning' && slug && slug !== 'undefined') {
+            navigate(`/learning/${courseId}/${slug}`);
+        } else if (slug && slug !== 'undefined') {
             navigate(`/courses/${slug}`);
         } else {
             navigate(`/courses`);
@@ -505,7 +829,8 @@ export default function Chatbot() {
     };
 
     const handleClearHistory = () => {
-        localStorage.removeItem(STORAGE_KEY);
+        // Only clear history for current mode
+        localStorage.removeItem(STORAGE_KEYS[chatMode]);
         setMessages([getWelcomeMessage()]);
     };
 
@@ -544,6 +869,19 @@ export default function Chatbot() {
             setShowPayment(true);
         }
     };
+
+    // Update refs for drag-drop handlers
+    useEffect(() => {
+        handleSendMessageRef.current = handleSendMessage;
+    }, [handleSendMessage]);
+
+    useEffect(() => {
+        handleFileUploadRef.current = handleFileUpload;
+    }, [handleFileUpload]);
+
+    useEffect(() => {
+        fetchDroppedNodeContentRef.current = fetchDroppedNodeContent;
+    }, [fetchDroppedNodeContent]);
 
     if (!user) return null;
 
@@ -655,6 +993,34 @@ export default function Chatbot() {
                             </button>
                         </div>
                     </div>
+
+                    {/* Context chip when node is dropped */}
+                    {learningContext?.droppedNode && (
+                        <div className="chatbot-context-chip">
+                            <div className="chatbot-context-chip-info">
+                                <span className="chatbot-context-chip-icon">
+                                    {learningContext.droppedNode.type === 'module' && '📁'}
+                                    {learningContext.droppedNode.type === 'lesson' && '📖'}
+                                    {learningContext.droppedNode.type === 'quiz' && '📝'}
+                                    {learningContext.droppedNode.type === 'assignment' && '📋'}
+                                </span>
+                                <span className="chatbot-context-chip-label">
+                                    {learningContext.droppedNode.type === 'module' && 'Chương: '}
+                                    {learningContext.droppedNode.type === 'lesson' && 'Bài học: '}
+                                    {learningContext.droppedNode.type === 'quiz' && 'Quiz: '}
+                                    {learningContext.droppedNode.type === 'assignment' && 'Bài tập: '}
+                                    {learningContext.droppedNode.title}
+                                </span>
+                            </div>
+                            <button
+                                className="chatbot-context-chip-clear"
+                                onClick={() => setDroppedNode(null)}
+                                title="Xóa ngữ cảnh"
+                            >
+                                <X size={14} />
+                            </button>
+                        </div>
+                    )}
 
                     <div className="chatbot-messages">
                         {messages.map((msg, index) => (

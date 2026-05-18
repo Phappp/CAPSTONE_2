@@ -49,6 +49,12 @@ const initAssignmentRoute: (controller: AssignmentController) => express.Router 
     .route('/lessons/:lessonId/assignments/:assignmentId/submissions')
     .get(requireAuthorizedUser, controller.listAssignmentSubmissions.bind(controller));
 
+  /** Learner: assignment content for chatbot context */
+  router.route('/assignments/:assignmentId/content').get(
+    requireAuthorizedUser,
+    controller.getAssignmentContentForLearner.bind(controller)
+  );
+
   // Edit assignment (K3)
   router.route('/lessons/:lessonId/assignments/:assignmentId').patch(
     requireAuthorizedUser,

@@ -848,6 +848,70 @@
     font-weight: 500;
 }
 
+/* ====== Context Chip ====== */
+.chatbot-context-chip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--chatbot-accent);
+    border: 1px solid var(--chatbot-primary-solid);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin: 0 12px 8px;
+    font-size: 13px;
+    animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.chatbot-context-chip-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+}
+
+.chatbot-context-chip-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.chatbot-context-chip-label {
+    color: var(--chatbot-primary-solid);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chatbot-context-chip-clear {
+    background: none;
+    border: none;
+    color: var(--chatbot-text-muted);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.chatbot-context-chip-clear:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--chatbot-danger, #dc2626);
+}
+
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }

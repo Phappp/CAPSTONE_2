@@ -10,9 +10,43 @@ import {
 export type LessonType = 'video' | 'text' | 'quiz' | 'assignment';
 
 export type DroppedNode = {
-  type: 'module' | 'lesson' | 'quiz' | 'assignment';
+  type: 'module' | 'lesson' | 'quiz' | 'assignment' | 'video' | 'text';
   id: number;
   title: string;
+  content?: string | DroppedNodeContent;
+};
+
+export type DroppedNodeContent = {
+  // Quiz content
+  questions?: Array<{
+    id: number;
+    question_text: string;
+    options: Array<{
+      id: number;
+      option_text: string;
+      order_index: number;
+    }>;
+  }>;
+  // Assignment content
+  description?: string;
+  short_answer_questions?: Array<{
+    id: number;
+    question_text: string;
+    order_index: number;
+  }>;
+  attachments?: Array<{
+    id: number;
+    filename: string;
+    url: string;
+    mime_type: string | null;
+  }>;
+  // Video transcript
+  transcript?: string | null;
+  segments?: Array<{
+    start_sec: number;
+    end_sec: number;
+    text: string;
+  }>;
 };
 
 export type AttachedContent = {
