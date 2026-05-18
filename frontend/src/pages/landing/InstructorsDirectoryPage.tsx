@@ -12,6 +12,7 @@ const DEFAULT_INSTRUCTOR_AVATAR =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuCQWbSP6l4jjWpUqhyNzmaKicl4UD0XC4wu0eneuTaqQUfbp5j64sSu0AnSLRuplKdgW5485bobbmH4lkTFi7tHBkprYcSQkK34iryL_sE2XRnpIOiH3Osim8ZDraIFEVzU721vIawWMIlgiBUB8ODiqwBYgZyzNId91o5y3TCKPqLGmK1MSC6uoPBcTcYNe0ugFr3_XII6gEq_byXKtGOj372-KoUXi5jkO4jZS5ocPEuZIJV2HRvK18eFrI81YLp45vT3Pp21Tw";
 
 function truncateText(text: string, maxWords: number): string {
+  if (!text) return "";
   const words = text.trim().split(/\s+/);
   if (words.length <= maxWords) return text;
   return words.slice(0, maxWords).join(" ") + "…";
@@ -111,8 +112,8 @@ export default function InstructorsDirectoryPage() {
                   )}
                 </div>
                 <h2 className="text-[18px] font-bold text-[#1E293B] mb-1">{ins.name}</h2>
-                <p className="instructor-title text-secondary font-semibold text-sm mb-4">{truncateText(ins.title, 30)}</p>
-                <p className="instructor-bio text-[14px] text-[#64748B] leading-relaxed mb-6">{truncateText(ins.bio, 50)}</p>
+                <p className="instructor-title text-secondary font-semibold text-sm mb-4">{truncateText(ins.title ?? "", 30)}</p>
+                <p className="instructor-bio text-[14px] text-[#64748B] leading-relaxed mb-6">{truncateText(ins.bio ?? "", 50)}</p>
                 <div className="mt-auto flex flex-col gap-3 w-full">
                   {ins.topRated && (
                     <span className="tag-hover inline-flex items-center justify-center gap-1 text-xs font-bold uppercase tracking-wider text-amber-600 bg-amber-50 py-1 px-3 rounded-full">
