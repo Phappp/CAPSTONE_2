@@ -156,7 +156,7 @@ def transcribe(req: TranscribeRequest) -> dict[str, Any]:
 
         model = get_model()
         lang = req.language or "vi"
-        print(f"[transcribe] Starting Whisper transcription (model={MODEL_NAME}, lang={lang}, device={DEVICE})...")
+        print(f"[transcribe] Starting Whisper transcription (model={model.model_size_or_path}, lang={lang}, device={DEVICE})...")
         import time
         t0 = time.time()
         segments, info = model.transcribe(

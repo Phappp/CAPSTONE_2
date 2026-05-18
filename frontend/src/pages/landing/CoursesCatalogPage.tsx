@@ -68,6 +68,8 @@ export default function CoursesCatalogPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [enrolledCourseIds, setEnrolledCourseIds] = useState<Set<number>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 24;
 
   useEffect(() => {
     const id = window.setTimeout(() => setDebouncedQ(search.trim()), 350);
@@ -96,7 +98,7 @@ export default function CoursesCatalogPage() {
       setLoading(true);
       setError(null);
       try {
-        const qs = new URLSearchParams({ page: "1", page_size: "24" });
+        const qs = new URLSearchParams({ page: String(currentPage), page_size: String(PAGE_SIZE) });
         if (debouncedQ) qs.set("q", debouncedQ);
         if (activeDifficulties.length === 1) qs.set("level", activeDifficulties[0]);
         if (sortBy === "newest") {
@@ -149,6 +151,10 @@ export default function CoursesCatalogPage() {
     return () => {
       cancelled = true;
     };
+  }, [debouncedQ, activeDifficulties, sortBy, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
   }, [debouncedQ, activeDifficulties, sortBy]);
 
   const toggleDifficulty = (d: Difficulty) => {
@@ -158,6 +164,7 @@ export default function CoursesCatalogPage() {
   };
 
   const totalLabel = useMemo(() => total.toLocaleString(), [total]);
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <div className="mb-public catalog-page bg-[#F8FAFC] text-on-surface">
@@ -241,6 +248,7 @@ export default function CoursesCatalogPage() {
                   setSearch("");
                   setActiveDifficulties([]);
                   setSortBy("popular");
+                  setCurrentPage(1);
                 }}
                 className=" cursor-pointer w-full py-3 rounded-lg border-2 border-[#0D9488] text-[#0D9488] font-bold hover:bg-teal-50 transition-all"
               >
@@ -333,9 +341,34 @@ export default function CoursesCatalogPage() {
                   );
                 })}
               </div>
-            )}
+              )}
+
+            <div className="flex items-center justify-center gap-2 mt-10">
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-all"
+              >
+                <span className="material-symbols-outlined text-lg">chevron_left</span>
+              </button>
+
+              <span className="px-5 py-2 rounded-lg bg-[#0D9488] text-white font-bold">
+                Page {currentPage} / {totalPages}
+              </span>
+
+              <button
+                type="button"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-all"
+              >
+                <span className="material-symbols-outlined text-lg">chevron_right</span>
+              </button>
+            </div>
+
+            </div>
           </div>
-        </div>
       </main>
 
       <MindBridgeFooter />
