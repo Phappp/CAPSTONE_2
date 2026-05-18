@@ -45,6 +45,8 @@ import {
   Copy,
   MoreVertical,
   ExternalLink,
+  FileSearch,
+  XCircle,
 } from "lucide-react";
 import AvatarMenu from "../../components/AvatarMenu";
 import CommonModal, { ConfirmModal } from "../../components/CommonModal";
@@ -1933,6 +1935,10 @@ function LessonResourceReviewsPanel({
   onViewTimeline,
   refetch,
 }: LessonResourceReviewsPanelProps) {
+  const [selectedResource, setSelectedResource] = useState<PendingLessonResource | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [showRejectModal, setShowRejectModal] = useState(false);
+
   const kindLabels: Record<string, string> = {
     pdf: "PDF",
     word: "Word",
@@ -1956,36 +1962,251 @@ function LessonResourceReviewsPanel({
     );
   };
 
-  const getResourcePreview = (resource: PendingLessonResource) => {
-    if (resource.resource_kind === "youtube") {
-      const videoId = resource.url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?]+)/)?.[1];
+  // Render preview based on resource type
+  const renderResourcePreview = (resource: PendingLessonResource) => {
+    const url = resource.url;
+    const kind = resource.resource_kind;
+
+    if (kind === "youtube") {
+      const videoId = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?]+)/)?.[1];
       if (videoId) {
         return (
-          <div style={{ marginTop: 8 }}>
-            <img
-              src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`}
-              alt="YouTube thumbnail"
-              style={{ width: 160, height: 90, objectFit: "cover", borderRadius: 6 }}
+          <div style={{ marginTop: 12 }}>
+            <iframe
+              width="100%"
+              height="315"
+              src={`https://www.youtube.com/embed/${videoId}`}
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              style={{ borderRadius: 8 }}
             />
-            <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>
-              <a href={resource.url} target="_blank" rel="noreferrer" style={{ color: "#3498db" }}>
-                Xem trên YouTube
-              </a>
-            </div>
           </div>
         );
       }
     }
-    if (resource.preview_url) {
+
+    if (kind === "video") {
       return (
-        <div style={{ marginTop: 8 }}>
-          <img src={resource.preview_url} alt="Preview" style={{ maxWidth: 160, maxHeight: 90, borderRadius: 6 }} />
+        <div style={{ marginTop: 12 }}>
+          <video controls style={{ width: "100%", maxHeight: 400, borderRadius: 8 }}>
+            <source src={url} />
+            Trình duyệt không hỗ trợ video.
+          </video>
         </div>
       );
     }
-    return null;
+
+    if (kind === "pdf") {
+      const encodedUrl = encodeURIComponent(url);
+      return (
+        <div style={{ marginTop: 12 }}>
+          <iframe
+            src={`https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`}
+            width="100%"
+            height="500"
+            style={{ border: "none", borderRadius: 8 }}
+            title="PDF Preview"
+          />
+          <div style={{ marginTop: 8 }}>
+            <a href={url} target="_blank" rel="noreferrer" style={{ color: "#3498db", display: "flex", alignItems: "center", gap: 4 }}>
+              <ExternalLink size={14} /> Mở trong tab mới
+            </a>
+          </div>
+        </div>
+      );
+    }
+
+    if (kind === "word") {
+      const encodedUrl = encodeURIComponent(url);
+      return (
+        <div style={{ marginTop: 12 }}>
+          <iframe
+            src={`https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`}
+            width="100%"
+            height="500"
+            style={{ border: "none", borderRadius: 8 }}
+            title="Document Preview"
+          />
+          <div style={{ marginTop: 8 }}>
+            <a href={url} target="_blank" rel="noreferrer" style={{ color: "#3498db", display: "flex", alignItems: "center", gap: 4 }}>
+              <ExternalLink size={14} /> Mở trong tab mới
+            </a>
+          </div>
+        </div>
+      );
+    }
+
+    // Default: show link
+    return (
+      <div style={{ marginTop: 12 }}>
+        <a href={url} target="_blank" rel="noreferrer" className="btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <ExternalLink size={14} /> Mở tài nguyên
+        </a>
+      </div>
+    );
   };
 
+  // Detail View
+  if (selectedResource) {
+    return (
+      <div className="panel" style={{ padding: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, color: "#0f172a" }}>
+            Duyệt bài học &gt; {selectedResource.filename || "Tài nguyên không tên"}
+          </div>
+          <button className="btn-secondary" onClick={() => setSelectedResource(null)}>
+            Quay lại danh sách
+          </button>
+        </div>
+
+        {/* Context Info */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 20 }}>
+          <div style={{ padding: 12, background: "#f8fafc", borderRadius: 8 }}>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Khóa học</div>
+            <div style={{ fontWeight: 600 }}>{selectedResource.course_title}</div>
+            <div style={{ fontSize: 12, color: "#94a3b8" }}>#{selectedResource.course_id}</div>
+          </div>
+          <div style={{ padding: 12, background: "#f8fafc", borderRadius: 8 }}>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Bài học</div>
+            <div style={{ fontWeight: 600 }}>{selectedResource.lesson_title}</div>
+            <div style={{ fontSize: 12, color: "#94a3b8" }}>#{selectedResource.lesson_id}</div>
+          </div>
+          <div style={{ padding: 12, background: "#f8fafc", borderRadius: 8 }}>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Loại tài nguyên</div>
+            <div>{getKindBadge(selectedResource.resource_kind)}</div>
+          </div>
+          <div style={{ padding: 12, background: "#f8fafc", borderRadius: 8 }}>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Ngày tải lên</div>
+            <div style={{ fontWeight: 500 }}>{new Date(selectedResource.created_at).toLocaleString("vi-VN")}</div>
+          </div>
+        </div>
+
+        {/* Resource Info */}
+        <div style={{ marginBottom: 20 }}>
+          <h4 style={{ marginBottom: 12 }}>Thông tin tài nguyên</h4>
+          <div style={{ padding: 16, background: "#f8fafc", borderRadius: 8 }}>
+            <div style={{ marginBottom: 8 }}>
+              <strong>Tên file:</strong> {selectedResource.filename || "Không có tên"}
+            </div>
+            <div style={{ marginBottom: 8, wordBreak: "break-all" }}>
+              <strong>URL:</strong>{" "}
+              <a href={selectedResource.url} target="_blank" rel="noreferrer" style={{ color: "#3498db" }}>
+                {selectedResource.url}
+              </a>
+            </div>
+            {selectedResource.is_resubmitted && (
+              <div style={{ color: "#e67e22", fontWeight: 500, marginBottom: 8 }}>
+                ↻ Đây là bản gửi lại sau khi bị từ chối
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Previous Rejection Reason */}
+        {selectedResource.previous_rejected_reason && (
+          <div style={{ marginBottom: 20, padding: 16, background: "#fef3cd", borderRadius: 8, borderLeft: "4px solid #e67e22" }}>
+            <div style={{ fontWeight: 600, color: "#856404", marginBottom: 8 }}>Lý do từ chối trước đó:</div>
+            <div style={{ color: "#856404" }}>{selectedResource.previous_rejected_reason}</div>
+          </div>
+        )}
+
+        {/* Preview */}
+        <div style={{ marginBottom: 20 }}>
+          <h4 style={{ marginBottom: 12 }}>Xem trước nội dung</h4>
+          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 8 }}>
+            {renderResourcePreview(selectedResource)}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", borderTop: "1px solid #e2e8f0", paddingTop: 16 }}>
+          <button
+            className="btn-secondary"
+            onClick={() => onViewTimeline(selectedResource)}
+          >
+            <Clock size={14} /> Xem lịch sử
+          </button>
+          <button
+            className="btn-small btn-danger"
+            onClick={() => {
+              setRejectReason(selectedResource.previous_rejected_reason || "");
+              setShowRejectModal(true);
+            }}
+            disabled={actionLoading === selectedResource.id}
+          >
+            <XCircle size={14} /> Từ chối
+          </button>
+          <button
+            className="btn-small"
+            onClick={() => onReview(selectedResource, "approve")}
+            disabled={actionLoading === selectedResource.id}
+            style={{ background: "#16a34a", color: "#fff", borderColor: "#16a34a" }}
+          >
+            <Check size={14} /> Duyệt
+          </button>
+        </div>
+
+        {/* Reject Modal */}
+        {showRejectModal && (
+          <div style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000
+          }}>
+            <div style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 500, width: "90%" }}>
+              <h3 style={{ marginBottom: 16 }}>Lý do từ chối</h3>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Nhập lý do từ chối bài học này..."
+                rows={4}
+                style={{
+                  width: "100%",
+                  padding: 12,
+                  border: "1px solid #ddd",
+                  borderRadius: 6,
+                  fontSize: 14,
+                  resize: "vertical"
+                }}
+              />
+              <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 16 }}>
+                <button
+                  className="btn-secondary"
+                  onClick={() => {
+                    setShowRejectModal(false);
+                    setRejectReason("");
+                  }}
+                >
+                  Hủy
+                </button>
+                <button
+                  className="btn-small btn-danger"
+                  onClick={() => {
+                    onReview(selectedResource, "reject");
+                    setShowRejectModal(false);
+                    setSelectedResource(null);
+                  }}
+                  disabled={!rejectReason.trim()}
+                >
+                  Xác nhận từ chối
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // List View
   return (
     <div>
       <div className="filters-card">
@@ -2079,7 +2300,7 @@ function LessonResourceReviewsPanel({
                       Lý do từ chối trước: {resource.previous_rejected_reason}
                     </div>
                   )}
-                  {getResourcePreview(resource)}
+                  {renderResourcePreview(resource)}
                 </td>
                 <td>{getKindBadge(resource.resource_kind)}</td>
                 <td>
@@ -2094,21 +2315,16 @@ function LessonResourceReviewsPanel({
                   <div className="action-buttons">
                     <button
                       className="btn-small"
-                      onClick={() => onReview(resource, "approve")}
-                      disabled={actionLoading === resource.id}
-                      style={{ background: "#16a34a", color: "#fff", borderColor: "#16a34a" }}
+                      onClick={() => setSelectedResource(resource)}
+                      style={{ background: "#3b82f6", color: "#fff", borderColor: "#3b82f6" }}
                     >
-                      <Check size={12} /> Duyệt
+                      <FileSearch size={12} /> Xem chi tiết
                     </button>
                     <button
-                      className="btn-small btn-danger"
-                      onClick={() => onReview(resource, "reject")}
-                      disabled={actionLoading === resource.id}
+                      className="btn-small"
+                      onClick={() => onViewTimeline(resource)}
                     >
-                      <X size={12} /> Từ chối
-                    </button>
-                    <button className="btn-small" onClick={() => onViewTimeline(resource)}>
-                      Lịch sử
+                      <Clock size={12} /> Lịch sử
                     </button>
                   </div>
                 </td>
