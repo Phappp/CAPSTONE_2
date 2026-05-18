@@ -459,22 +459,19 @@ const AssignmentSubmission: React.FC<{
                   </span>
                   Assignment Overview
                 </h2>
-                <p className="as-overview-body">
-                  {assignment?.description ||
-                    'In this final project, you are tasked with redesigning a complex financial dashboard with a primary focus on WCAG 2.1 Level AA compliance. You must consider color contrast, screen reader compatibility, and keyboard navigation.'}
-                </p>
-
+                <div
+                  className="as-overview-body"
+                  dangerouslySetInnerHTML={{
+                    __html: assignment?.description || '',
+                  }}
+                />
                 <h3 className="as-overview-sub">Detailed Instructions</h3>
-                <ul className="as-instructions">
-                  {instructions.map((inst) => (
-                    <li key={inst.key} className="as-instruction">
-                      <span className="as-check-icon">
-                        <CheckCircle2 size={18} strokeWidth={2.2} />
-                      </span>
-                      <span className="as-instruction-text">{inst.text}</span>
-                    </li>
-                  ))}
-                </ul>
+                <div
+                  className="as-instructions-html"
+                  dangerouslySetInnerHTML={{
+                    __html: assignment?.description || '',
+                  }}
+                />
               </section>
             )}
 
