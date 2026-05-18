@@ -487,6 +487,87 @@ export class ChatbotServiceImpl implements ChatbotService {
         const langProvider = getLanguageProvider(message);
         console.log('[Chatbot Debug] Detected language:', langProvider.locale);
 
+        // ====== HANDLE TYPO CONFIRMATION ======
+        // User confirmed typo correction
+        if (message.startsWith('__confirm_typo__:')) {
+            const correctedTopic = message.replace('__confirm_typo__:', '');
+            console.log('[Chatbot Debug] User confirmed typo correction, searching for:', correctedTopic);
+            
+            // Search courses with the corrected topic
+            const courses = await this.getPublishedCourses([correctedTopic]);
+            const enrolledCourses = await this.getEnrolledCourses(userId);
+            
+            if (courses.length === 0) {
+                return {
+                    reply: `Mình tìm thấy khóa học về **${correctedTopic.toUpperCase()}** nhưng hiện tại chưa có trong hệ thống. Bạn thử hỏi chủ đề khác nhé!`,
+                    references: [],
+                    quickReplies: langProvider.quickReplies.courseSearch,
+                    action: null,
+                };
+            }
+            
+            // Filter out enrolled courses
+            const availableCourses = courses.filter(c => !enrolledCourses.some(e => e.id === c.id));
+            
+            return {
+                reply: `Đây là khóa học về **${correctedTopic.toUpperCase()}** mình tìm được cho bạn 👇`,
+                references: availableCourses.slice(0, 5).map(course => ({
+                    type: 'course' as const,
+                    id: course.id,
+                    slug: course.slug,
+                    title: course.title,
+                    level: course.level,
+                    price: course.price,
+                    has_certificate: course.has_certificate,
+                })),
+                quickReplies: [
+                    { text: 'Tìm khóa khác', value: 'tìm khóa học khác' },
+                    { text: 'Xem tất cả', value: 'xem tất cả khóa học' },
+                ],
+                action: null,
+            };
+        }
+        
+        // User said typo correction is not correct - search with original typed word
+        if (message.startsWith('__typo_not_correct__:')) {
+            const originalWord = message.replace('__typo_not_correct__:', '');
+            console.log('[Chatbot Debug] User said typo is not correct, searching with:', originalWord);
+            
+            // Search with the original word as-is
+            const courses = await this.getPublishedCourses([originalWord]);
+            const enrolledCourses = await this.getEnrolledCourses(userId);
+            
+            if (courses.length === 0) {
+                return {
+                    reply: `Mình không tìm được khóa học nào liên quan đến "${originalWord}". Bạn thử mô tả chi tiết hơn hoặc hỏi về chủ đề khác nhé!`,
+                    references: [],
+                    quickReplies: langProvider.quickReplies.courseSearch,
+                    action: null,
+                };
+            }
+            
+            // Filter out enrolled courses
+            const availableCourses = courses.filter(c => !enrolledCourses.some(e => e.id === c.id));
+            
+            return {
+                reply: `Mình tìm được vài khóa học liên quan đến "${originalWord}" 👇`,
+                references: availableCourses.slice(0, 5).map(course => ({
+                    type: 'course' as const,
+                    id: course.id,
+                    slug: course.slug,
+                    title: course.title,
+                    level: course.level,
+                    price: course.price,
+                    has_certificate: course.has_certificate,
+                })),
+                quickReplies: [
+                    { text: 'Tìm khóa khác', value: 'tìm khóa học khác' },
+                    { text: 'Xem tất cả', value: 'xem tất cả khóa học' },
+                ],
+                action: null,
+            };
+        }
+
         // Check if this is a payment quick reply (format: "pay_{courseId}")
         const payMatch = String(message).match(/^pay_(\d+)$/i);
         if (payMatch) {
@@ -617,7 +698,7 @@ Bạn quan tâm đến nghề nào nhất?`,
         }
 
         // Step 2: Extract specific topics — ALSO resolve from conversation history
-        const topics = this.extractTopicFromMessage(message);
+        const { topics, potentialTypos } = this.extractTopicFromMessage(message);
         const priceFilter = this.extractPriceFilterFromMessage(message);
 
         // ====== NEW: Resolve topic from history if current message is a follow-up ======
@@ -633,7 +714,30 @@ Bạn quan tâm đến nghề nào nhất?`,
         }
 
         console.log('[Chatbot Debug] Extracted topics:', topics);
+        console.log('[Chatbot Debug] Potential typos:', potentialTypos);
         console.log('[Chatbot Debug] Price filter:', priceFilter);
+
+        // ====== NEW: Handle potential typos - ask for confirmation ======
+        if (potentialTypos.length > 0 && topics.length > 0) {
+            const typo = potentialTypos[0];
+            console.log('[Chatbot Debug] Detected potential typo:', typo);
+            
+            // Build confirmation message
+            const typoDisplay = typo.typed.toUpperCase();
+            const correctedDisplay = typo.corrected.toUpperCase();
+            
+            return {
+                reply: `Mình nghĩ bạn có thể đang đề cập đến **${correctedDisplay}** thay vì "${typoDisplay}" phải không? 🤔
+
+Nếu đúng thì mình sẽ tìm khóa học về **${correctedDisplay}** cho bạn nhé!`,
+                references: [],
+                quickReplies: [
+                    { text: `Đúng rồi, tìm ${correctedDisplay}`, value: `__confirm_typo__:${typo.corrected}` },
+                    { text: 'Không đúng', value: `__typo_not_correct__:${typo.typed}` },
+                ],
+                action: null,
+            };
+        }
 
         // Step 3: Only search DB if we have specific topics or price filter
         const courses = (topics.length > 0 || priceFilter)
@@ -950,12 +1054,15 @@ Bạn quan tâm đến nghề nào nhất?`,
         if (keywords && keywords.length > 0) {
             const lowerKeywords = keywords.map(k => k.toLowerCase());
             filteredCourses = courses.filter(course => {
-                const titleMatch = course.title?.toLowerCase().includes(lowerKeywords[0]);
-                const descMatch = course.short_description?.toLowerCase().includes(lowerKeywords[0]);
-                const catMatch = course.category?.toLowerCase().includes(lowerKeywords[0]);
-                const tagsMatch = Array.isArray(course.tags) && 
-                    course.tags.some((tag: string) => lowerKeywords.some(kw => tag.toLowerCase().includes(kw)));
-                return titleMatch || descMatch || catMatch || tagsMatch;
+                // Check if ANY keyword matches
+                return lowerKeywords.some(keyword => {
+                    const titleMatch = course.title?.toLowerCase().includes(keyword);
+                    const descMatch = course.short_description?.toLowerCase().includes(keyword);
+                    const catMatch = course.category?.toLowerCase().includes(keyword);
+                    const tagsMatch = Array.isArray(course.tags) && 
+                        course.tags.some((tag: string) => keyword.includes(tag.toLowerCase()) || tag.toLowerCase().includes(keyword));
+                    return titleMatch || descMatch || catMatch || tagsMatch;
+                });
             });
         }
         
@@ -2202,6 +2309,7 @@ Bạn có muốn đăng ký khóa học này không?`,
             'design', 'photoshop', 'illustrator', 'figma', 'ui', 'ux',
             'excel', 'word', 'powerpoint', 'tin học', 'văn phòng',
             'tiếng anh', 'tiếng nhật', 'tiếng trung', 'ngoại ngữ',
+            'ielts', 'toeic', 'toiec', // Language exams - toeic/toiec handle typo
             'python', 'java', 'c++', 'lập trình',
             'business', 'kinh doanh', 'startup', 'quản lý',
             // English
@@ -2245,6 +2353,7 @@ Bạn có muốn đăng ký khóa học này không?`,
             'excel', 'powerpoint', 'word',
             'marketing', 'seo', 'content', 'social media',
             'english', 'tiếng anh', 'tiếng nhật', 'tiếng trung',
+            'ielts', 'toeic', 'toiec', // Language exams - toeic/toiec handle typo
             'design', 'photoshop', 'illustrator', 'figma',
             'lập trình', 'programming', 'coding',
             'web', 'mobile', 'app', 'frontend', 'backend', 'fullstack', 'devops',
@@ -2285,9 +2394,11 @@ Bạn có muốn đăng ký khóa học này không?`,
     }
 
     // NEW: Extract only specific topics for DB search (RAG Pattern)
-    private extractTopicFromMessage(message: string): string[] {
+    // Also returns potential typos for confirmation
+    private extractTopicFromMessage(message: string): { topics: string[]; potentialTypos: Array<{ typed: string; corrected: string }> } {
         const lower = message.toLowerCase();
         const topics: string[] = [];
+        const potentialTypos: Array<{ typed: string; corrected: string }> = [];
 
         const knownTopics = [
             'java', 'python', 'react', 'nodejs', 'javascript', 'typescript',
@@ -2298,6 +2409,7 @@ Bạn có muốn đăng ký khóa học này không?`,
             'spring', 'django', 'flask', 'laravel',
             'machine learning', 'deep learning', 'ai', 'data science',
             'excel', 'marketing', 'seo', 'english', 'tiếng anh',
+            'ielts', 'toeic', // toeic is correct, toiec is typo
             'design', 'photoshop', 'illustrator', 'figma',
             'lập trình', 'programming', 'coding',
             'web', 'mobile', 'app', 'frontend', 'backend', 'fullstack', 'devops',
@@ -2305,13 +2417,82 @@ Bạn có muốn đăng ký khóa học này không?`,
             'git', 'linux', 'network', 'security',
         ];
 
+        // Mapping of common typos to correct words
+        const typoMappings: Record<string, string> = {
+            'toiec': 'toeic',
+            'todiec': 'toeic',
+            'ilet': 'ielts',
+            'reactjs': 'react',
+            'node': 'nodejs',
+            'javascrip': 'javascript',
+            'javscript': 'javascript',
+            'typecript': 'typescript',
+            'phyton': 'python',
+            'pytho': 'python',
+        };
+
         for (const topic of knownTopics) {
             if (lower.includes(topic)) {
                 topics.push(topic);
             }
         }
 
-        return topics;
+        // Check for potential typos (words that are close to known topics but not exact match)
+        const words = lower.split(/[\s,.!?;:]+/).filter(w => w.length > 2);
+        
+        for (const word of words) {
+            // Check if this word is close to a known topic (Levenshtein distance)
+            for (const known of knownTopics) {
+                if (word === known) continue; // Already matched exactly
+                
+                // Check typo mappings first
+                if (typoMappings[word] === known) {
+                    if (!topics.includes(known)) {
+                        potentialTypos.push({ typed: word, corrected: known });
+                        topics.push(known); // Use corrected version
+                    }
+                    break;
+                }
+                
+                // Use Levenshtein distance for fuzzy matching
+                const distance = this.levenshteinDistance(word, known);
+                // If distance is 1-2 and word length > 3, it's likely a typo
+                if (distance > 0 && distance <= 2 && word.length > 3 && known.length > 3) {
+                    if (!topics.includes(known)) {
+                        potentialTypos.push({ typed: word, corrected: known });
+                        topics.push(known); // Use corrected version
+                    }
+                    break;
+                }
+            }
+        }
+
+        return { topics, potentialTypos };
+    }
+
+    // Calculate Levenshtein distance between two strings
+    private levenshteinDistance(str1: string, str2: string): number {
+        const m = str1.length;
+        const n = str2.length;
+        const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+        for (let i = 0; i <= m; i++) dp[i][0] = i;
+        for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+        for (let i = 1; i <= m; i++) {
+            for (let j = 1; j <= n; j++) {
+                if (str1[i - 1] === str2[j - 1]) {
+                    dp[i][j] = dp[i - 1][j - 1];
+                } else {
+                    dp[i][j] = Math.min(
+                        dp[i - 1][j] + 1,     // delete
+                        dp[i][j - 1] + 1,     // insert
+                        dp[i - 1][j - 1] + 1  // replace
+                    );
+                }
+            }
+        }
+        return dp[m][n];
     }
 
     // Price filter types
@@ -2520,7 +2701,7 @@ Bạn có muốn đăng ký khóa học này không?`,
         }
 
         // Extract topic from message
-        const topics = this.extractTopicFromMessage(message);
+        const { topics } = this.extractTopicFromMessage(message);
         if (topics.length === 0) {
             return null; // Need a specific topic for roadmap
         }

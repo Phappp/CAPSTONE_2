@@ -6571,8 +6571,8 @@ export class CourseServiceImpl implements CourseService {
     const today = new Date();
     const dailyActivity: LearningActivityDayPoint[] = [];
 
-    console.log('[DEBUG] getMyLearningActivity - userId:', subjectUserId);
-    console.log('[DEBUG] today:', today.toISOString());
+    // console.log('[DEBUG] getMyLearningActivity - userId:', subjectUserId);
+    // console.log('[DEBUG] today:', today.toISOString());
 
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today);
@@ -6582,7 +6582,7 @@ export class CourseServiceImpl implements CourseService {
       const startOfDay = new Date(dateStr + 'T00:00:00.000Z');
       const endOfDay = new Date(dateStr + 'T23:59:59.999Z');
 
-      console.log('[DEBUG] Checking date:', dateStr, 'range:', startOfDay.toISOString(), '-', endOfDay.toISOString());
+      // console.log('[DEBUG] Checking date:', dateStr, 'range:', startOfDay.toISOString(), '-', endOfDay.toISOString());
 
       const count = await completionRepo
         .createQueryBuilder('lc')
@@ -6591,7 +6591,7 @@ export class CourseServiceImpl implements CourseService {
         .andWhere('lc.completed_at <= :end', { end: endOfDay })
         .getCount();
 
-      console.log('[DEBUG] Count for', dateStr, ':', count);
+      // console.log('[DEBUG] Count for', dateStr, ':', count);
 
       dailyActivity.push({
         date: dateStr,
