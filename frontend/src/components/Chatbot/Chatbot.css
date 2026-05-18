@@ -69,7 +69,7 @@
 
 /* Expanded Sidebar Mode */
 .chatbot-expanded {
-    width: 450px;
+    width: 550px;
     height: calc(100vh - 48px);
     max-height: calc(100vh - 48px);
     bottom: 24px;
@@ -1002,4 +1002,42 @@
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
+}
+
+/* ====== Markdown Table Styles ====== */
+/* ====== Markdown Table Styles ====== */
+.chatbot-table-wrapper {
+    overflow-x: auto;
+    margin: 12px 0;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+}
+
+.chatbot-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.chatbot-table th {
+    background: #f3f4f6;
+    color: #374151;
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 1px solid #d1d5db;
+}
+
+.chatbot-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #e5e7eb;
+    color: #4b5563;
+}
+
+.chatbot-table tr:last-child td {
+    border-bottom: none;
+}
+
+.chatbot-table tr:nth-child(even) {
+    background: #fafafa;
 }
