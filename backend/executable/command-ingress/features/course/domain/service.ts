@@ -6994,41 +6994,21 @@ export class CourseServiceImpl implements CourseService {
 
     let segments: any[] = [];
 
-    if (lessonType === 'video') {
-      // Get all segments
-      const youtubeRows = await transcriptRepo.find({
-        where: {
-          lesson_id: lessonId,
-          source_type: In(['youtube_stt', 'youtube_timedtext', 'youtube']),
-        } as any,
-        order: { updated_at: 'DESC' } as any,
-      });
+    // Get all segments regardless of lesson type - if transcript exists in cache, use it
+    const transcriptRows = await transcriptRepo.find({
+      where: {
+        lesson_id: lessonId,
+      } as any,
+      order: { updated_at: 'DESC' } as any,
+    });
 
-      const hasSegments = (x: any) =>
-        Boolean(x && Array.isArray((x as any).transcript_segments_json) && (x as any).transcript_segments_json.length > 0);
+    const hasSegments = (x: any) =>
+      Boolean(x && Array.isArray((x as any).transcript_segments_json) && (x as any).transcript_segments_json.length > 0);
 
-      const youtubeCache = youtubeRows.find((x: any) => String((x as any).source_type || '') === 'youtube_stt' && hasSegments(x))
-        || youtubeRows.find((x: any) => String((x as any).source_type || '') === 'youtube_timedtext' && hasSegments(x))
-        || youtubeRows.find((x: any) => String((x as any).source_type || '') === 'youtube' && hasSegments(x))
-        || null;
-
-      if (youtubeCache && Array.isArray((youtubeCache as any).transcript_segments_json)) {
-        segments = (youtubeCache as any).transcript_segments_json;
-      } else {
-        // Try uploaded video transcript
-        const uploadedRows = await transcriptRepo.find({
-          where: {
-            lesson_id: lessonId,
-            source_type: 'uploaded_video',
-          } as any,
-          order: { updated_at: 'DESC' } as any,
-        });
-
-        const uploadedCache = uploadedRows.find((x: any) => hasSegments(x)) || uploadedRows[0] || null;
-        if (uploadedCache && Array.isArray((uploadedCache as any).transcript_segments_json)) {
-          segments = (uploadedCache as any).transcript_segments_json;
-        }
-      }
+    // Find first row with segments
+    const cacheWithSegments = transcriptRows.find(hasSegments) || null;
+    if (cacheWithSegments && Array.isArray((cacheWithSegments as any).transcript_segments_json)) {
+      segments = (cacheWithSegments as any).transcript_segments_json;
     }
 
     // Filter segments within the time range
