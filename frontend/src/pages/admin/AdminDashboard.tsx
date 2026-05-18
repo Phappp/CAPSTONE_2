@@ -48,6 +48,8 @@ import {
   FileSearch,
   XCircle,
 } from "lucide-react";
+import { url } from "../../baseUrl";
+import { COURSES_API } from "../../api/courses";
 import AvatarMenu from "../../components/AvatarMenu";
 import CommonModal, { ConfirmModal } from "../../components/CommonModal";
 import { useAuth } from "../../contexts/Auth";
@@ -1935,9 +1937,22 @@ function LessonResourceReviewsPanel({
   onViewTimeline,
   refetch,
 }: LessonResourceReviewsPanelProps) {
+  const { accessToken: token } = useAuth();
   const [selectedResource, setSelectedResource] = useState<PendingLessonResource | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [previewExternalUrl, setPreviewExternalUrl] = useState<string | null>(null);
+  const [previewViewUrl, setPreviewViewUrl] = useState<string | null>(null);
+  const [previewedIds, setPreviewedIds] = useState<number[]>([]);
+
+  const releasePreviewBlob = () => {
+    if (previewBlobUrl) {
+      URL.revokeObjectURL(previewBlobUrl);
+    }
+  };
 
   const kindLabels: Record<string, string> = {
     pdf: "PDF",
@@ -1962,89 +1977,226 @@ function LessonResourceReviewsPanel({
     );
   };
 
-  // Render preview based on resource type
+  const getFileExt = (name?: string) => {
+    const raw = String(name || "").trim().toLowerCase();
+    const idx = raw.lastIndexOf(".");
+    if (idx < 0) return "";
+    return raw.slice(idx + 1);
+  };
+
+  const getPreviewModeByExt = (ext: string): "blob" | "office_viewer" | "unsupported" => {
+    if (!ext) return "blob";
+    if (["pdf", "png", "jpg", "jpeg", "gif", "webp", "txt", "csv", "mp4", "webm", "mp3", "wav"].includes(ext)) {
+      return "blob";
+    }
+    if (["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(ext)) {
+      return "office_viewer";
+    }
+    if (["zip", "rar", "7z"].includes(ext)) {
+      return "unsupported";
+    }
+    return "blob";
+  };
+
+  const getYoutubeEmbedUrl = (input: string): string => {
+    const raw = String(input || "").trim();
+    if (!raw) return "";
+    try {
+      const parsed = new URL(raw);
+      const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+      if (host === "youtu.be") {
+        const id = parsed.pathname.split("/").filter(Boolean)[0] || "";
+        return id ? `https://www.youtube.com/embed/${id}` : raw;
+      }
+      if (host === "youtube.com" || host.endsWith(".youtube.com")) {
+        const fromQuery = parsed.searchParams.get("v");
+        if (fromQuery) return `https://www.youtube.com/embed/${fromQuery}`;
+        const parts = parsed.pathname.split("/").filter(Boolean);
+        const idx = parts.findIndex((p) => p === "embed" || p === "shorts");
+        if (idx >= 0 && parts[idx + 1]) {
+          return `https://www.youtube.com/embed/${parts[idx + 1]}`;
+        }
+      }
+      return raw;
+    } catch {
+      return raw;
+    }
+  };
+
+  const isYoutubeUrl = (input: string): boolean => {
+    const raw = String(input || "").toLowerCase();
+    return raw.includes("youtube.com") || raw.includes("youtu.be");
+  };
+
+  // Open preview via API (similar to AdminCourseContentReviewPage)
+  const openPreview = async (resource: PendingLessonResource) => {
+    releasePreviewBlob();
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setPreviewBlobUrl(null);
+    setPreviewExternalUrl(null);
+    setPreviewViewUrl(null);
+
+    const resourceUrl = resource.url;
+    const lowerUrl = resourceUrl.toLowerCase();
+
+    // Handle internal:// URLs specially (assignment descriptions)
+    if (lowerUrl.startsWith('internal://')) {
+      setPreviewError("Tài nguyên này là nội dung assignment. Vui lòng xem chi tiết trong trang quản lý khóa học.");
+      setPreviewLoading(false);
+      setPreviewedIds((prev) => (prev.includes(resource.id) ? prev : [...prev, resource.id]));
+      return;
+    }
+
+    // Handle YouTube URLs
+    if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be')) {
+      setPreviewViewUrl(resourceUrl);
+      setPreviewLoading(false);
+      setPreviewedIds((prev) => (prev.includes(resource.id) ? prev : [...prev, resource.id]));
+      return;
+    }
+
+    try {
+      const res = await fetch(`${url}${COURSES_API.viewLessonResource(resource.course_id, resource.id)}`, {
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any)?.message || "Không thể mở nội dung.");
+      }
+      const contentType = String(res.headers.get("content-type") || "").toLowerCase();
+      if (contentType.includes("application/json")) {
+        const json = await res.json().catch(() => ({}));
+        const viewUrl = String((json as any)?.url || "");
+        if (!viewUrl) throw new Error("Không nhận được URL xem nội dung.");
+        const ext = getFileExt(resource.filename || viewUrl);
+        const mode = getPreviewModeByExt(ext);
+        if (mode === "office_viewer") {
+          setPreviewExternalUrl(`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(viewUrl)}`);
+        } else {
+          setPreviewViewUrl(viewUrl);
+        }
+      } else {
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        setPreviewBlobUrl(blobUrl);
+      }
+      setPreviewedIds((prev) => (prev.includes(resource.id) ? prev : [...prev, resource.id]));
+    } catch (e: any) {
+      setPreviewError(e?.message || "Không thể mở nội dung.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const clearPreview = () => {
+    releasePreviewBlob();
+    setPreviewLoading(false);
+    setPreviewError(null);
+    setPreviewBlobUrl(null);
+    setPreviewExternalUrl(null);
+    setPreviewViewUrl(null);
+  };
+
+  // Render preview based on resource type (for list view thumbnail)
   const renderResourcePreview = (resource: PendingLessonResource) => {
-    const url = resource.url;
     const kind = resource.resource_kind;
 
     if (kind === "youtube") {
-      const videoId = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?]+)/)?.[1];
+      const videoId = resource.url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?]+)/)?.[1];
       if (videoId) {
         return (
-          <div style={{ marginTop: 12 }}>
-            <iframe
-              width="100%"
-              height="315"
-              src={`https://www.youtube.com/embed/${videoId}`}
-              frameBorder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              style={{ borderRadius: 8 }}
+          <div style={{ marginTop: 8 }}>
+            <img
+              src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`}
+              alt="YouTube thumbnail"
+              style={{ width: 160, height: 90, objectFit: "cover", borderRadius: 6 }}
             />
           </div>
         );
       }
     }
+    return null;
+  };
 
-    if (kind === "video") {
+  // Render the actual preview content
+  const renderPreviewContent = () => {
+    if (previewLoading) {
+      return <div style={{ padding: 20, textAlign: "center", color: "#64748b" }}>Đang tải nội dung...</div>;
+    }
+    if (previewError) {
+      return <div style={{ padding: 20, color: "#dc2626" }}>{previewError}</div>;
+    }
+    if (previewExternalUrl) {
       return (
-        <div style={{ marginTop: 12 }}>
-          <video controls style={{ width: "100%", maxHeight: 400, borderRadius: 8 }}>
-            <source src={url} />
-            Trình duyệt không hỗ trợ video.
-          </video>
-        </div>
+        <iframe
+          src={previewExternalUrl}
+          title="resource-preview-external"
+          style={{ width: "100%", height: 600, border: "1px solid #e2e8f0", borderRadius: 8 }}
+        />
       );
     }
-
-    if (kind === "pdf") {
-      const encodedUrl = encodeURIComponent(url);
+    const resourceUrl = selectedResource?.url || "";
+    const isYoutube = resourceUrl.toLowerCase().includes('youtube.com') || resourceUrl.toLowerCase().includes('youtu.be');
+    if (isYoutube || selectedResource?.resource_kind === "youtube") {
       return (
-        <div style={{ marginTop: 12 }}>
-          <iframe
-            src={`https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`}
-            width="100%"
-            height="500"
-            style={{ border: "none", borderRadius: 8 }}
-            title="PDF Preview"
-          />
-          <div style={{ marginTop: 8 }}>
-            <a href={url} target="_blank" rel="noreferrer" style={{ color: "#3498db", display: "flex", alignItems: "center", gap: 4 }}>
-              <ExternalLink size={14} /> Mở trong tab mới
-            </a>
-          </div>
-        </div>
+        <iframe
+          src={getYoutubeEmbedUrl(previewViewUrl || resourceUrl)}
+          title="youtube-preview"
+          style={{ width: "100%", height: 400, border: "none", borderRadius: 8 }}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        />
       );
     }
-
-    if (kind === "word") {
-      const encodedUrl = encodeURIComponent(url);
+    if (selectedResource?.resource_kind === "video") {
       return (
-        <div style={{ marginTop: 12 }}>
-          <iframe
-            src={`https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`}
-            width="100%"
-            height="500"
-            style={{ border: "none", borderRadius: 8 }}
-            title="Document Preview"
-          />
-          <div style={{ marginTop: 8 }}>
-            <a href={url} target="_blank" rel="noreferrer" style={{ color: "#3498db", display: "flex", alignItems: "center", gap: 4 }}>
-              <ExternalLink size={14} /> Mở trong tab mới
-            </a>
-          </div>
-        </div>
+        <video controls style={{ width: "100%", maxHeight: 500, borderRadius: 8 }}>
+          <source src={previewBlobUrl || previewViewUrl || ""} type={selectedResource.mime_type || "video/mp4"} />
+          Trình duyệt không hỗ trợ video.
+        </video>
       );
     }
-
-    // Default: show link
+    if (previewBlobUrl) {
+      return (
+        <iframe
+          src={previewBlobUrl}
+          title="resource-preview"
+          style={{ width: "100%", height: 600, border: "1px solid #e2e8f0", borderRadius: 8 }}
+        />
+      );
+    }
+    if (previewViewUrl) {
+      return (
+        <iframe
+          src={previewViewUrl}
+          title="resource-preview"
+          style={{ width: "100%", height: 600, border: "1px solid #e2e8f0", borderRadius: 8 }}
+        />
+      );
+    }
     return (
-      <div style={{ marginTop: 12 }}>
-        <a href={url} target="_blank" rel="noreferrer" className="btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <ExternalLink size={14} /> Mở tài nguyên
+      <div style={{ padding: 20, textAlign: "center", color: "#64748b" }}>
+        <a href={selectedResource?.url} target="_blank" rel="noreferrer" style={{ color: "#3498db" }}>
+          Mở tài nguyên
         </a>
       </div>
     );
+  };
+
+  // Open detail view with preview
+  const openDetailView = async (resource: PendingLessonResource) => {
+    setSelectedResource(resource);
+    clearPreview();
+    await openPreview(resource);
+  };
+
+  const closeDetailView = () => {
+    setSelectedResource(null);
+    clearPreview();
+  };
+
+  const canApprove = (resource: PendingLessonResource) => {
+    return previewedIds.includes(resource.id);
   };
 
   // Detail View
@@ -2055,13 +2207,13 @@ function LessonResourceReviewsPanel({
           <div style={{ fontWeight: 700, color: "#0f172a" }}>
             Duyệt bài học &gt; {selectedResource.filename || "Tài nguyên không tên"}
           </div>
-          <button className="btn-secondary" onClick={() => setSelectedResource(null)}>
+          <button className="btn-secondary" onClick={closeDetailView}>
             Quay lại danh sách
           </button>
         </div>
 
         {/* Context Info */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 20 }}>
           <div style={{ padding: 12, background: "#f8fafc", borderRadius: 8 }}>
             <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Khóa học</div>
             <div style={{ fontWeight: 600 }}>{selectedResource.course_title}</div>
@@ -2113,9 +2265,28 @@ function LessonResourceReviewsPanel({
 
         {/* Preview */}
         <div style={{ marginBottom: 20 }}>
-          <h4 style={{ marginBottom: 12 }}>Xem trước nội dung</h4>
-          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 8 }}>
-            {renderResourcePreview(selectedResource)}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <h4 style={{ margin: 0 }}>Xem trước nội dung</h4>
+            <div style={{ display: "flex", gap: 8 }}>
+              {!previewedIds.includes(selectedResource.id) && !previewLoading && (
+                <span style={{ fontSize: 12, color: "#b45309", background: "#fef3cd", padding: "4px 8px", borderRadius: 4 }}>
+                  Chưa xem nội dung
+                </span>
+              )}
+              {previewedIds.includes(selectedResource.id) && (
+                <span style={{ fontSize: 12, color: "#166534", background: "#dcfce7", padding: "4px 8px", borderRadius: 4 }}>
+                  ✓ Đã xem
+                </span>
+              )}
+            </div>
+          </div>
+          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 8, minHeight: 400 }}>
+            {renderPreviewContent()}
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <button className="btn-secondary" onClick={() => openPreview(selectedResource)} disabled={previewLoading}>
+              <RefreshCw size={14} style={{ animation: previewLoading ? "spin 1s linear infinite" : undefined }} /> Tải lại preview
+            </button>
           </div>
         </div>
 
@@ -2140,8 +2311,9 @@ function LessonResourceReviewsPanel({
           <button
             className="btn-small"
             onClick={() => onReview(selectedResource, "approve")}
-            disabled={actionLoading === selectedResource.id}
-            style={{ background: "#16a34a", color: "#fff", borderColor: "#16a34a" }}
+            disabled={actionLoading === selectedResource.id || !canApprove(selectedResource)}
+            style={{ background: "#16a34a", color: "#fff", borderColor: "#16a34a", opacity: canApprove(selectedResource) ? 1 : 0.5 }}
+            title={!canApprove(selectedResource) ? "Cần xem nội dung trước khi duyệt" : ""}
           >
             <Check size={14} /> Duyệt
           </button>
@@ -2315,7 +2487,7 @@ function LessonResourceReviewsPanel({
                   <div className="action-buttons">
                     <button
                       className="btn-small"
-                      onClick={() => setSelectedResource(resource)}
+                      onClick={() => openDetailView(resource)}
                       style={{ background: "#3b82f6", color: "#fff", borderColor: "#3b82f6" }}
                     >
                       <FileSearch size={12} /> Xem chi tiết
