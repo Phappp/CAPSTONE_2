@@ -442,8 +442,8 @@ export default function LearningPage() {
 
     const elapsedSeconds = (Date.now() - countdownBaselineAtMsRef.current) / 1000;
     const predictedSpent = countdownBaselineTimeSpentRef.current + elapsedSeconds;
-    const remaining = Math.max(0, Math.min(100, (1 - predictedSpent / req) * 100));
-    setCountdownRemainingPct(Math.round(remaining * 10) / 10);
+    const pct = Math.max(0, Math.min(100, (predictedSpent / req) * 100));
+    setCountdownRemainingPct(Math.round(pct * 10) / 10);
   }, []);
 
   const postHeartbeat = useCallback(async (lessonId: number, deltaSeconds: number) => {
@@ -888,6 +888,7 @@ export default function LearningPage() {
   // Heartbeat effect for video/text lessons
   useEffect(() => {
     if (!lessonModal) {
+      console.log('[Debug Countdown] No lessonModal, hiding countdown');
       setHeartbeat(null);
       setCountdownRemainingPct(100);
       countdownRequiredSecondsRef.current = 0;
@@ -897,26 +898,45 @@ export default function LearningPage() {
     }
 
     const lesson = course?.modules?.flatMap((m) => m.lessons || []).find((x) => x.id === lessonModal.lessonId);
-    if (!lesson || (lesson.lesson_type !== "video" && lesson.lesson_type !== "text")) return;
-    if (progress && !(progress.unlocked_lesson_ids || []).some((id) => Number(id) === lessonModal.lessonId)) return;
+    if (!lesson) {
+      console.log('[Debug Countdown] Lesson not found');
+      return;
+    }
+    console.log('[Debug Countdown] Lesson type:', lesson.lesson_type);
+    if (lesson.lesson_type !== "video" && lesson.lesson_type !== "text") {
+      console.log('[Debug Countdown] Not video/text, hiding countdown');
+      return;
+    }
+    if (progress && !(progress.unlocked_lesson_ids || []).some((id) => Number(id) === lessonModal.lessonId)) {
+      console.log('[Debug Countdown] Lesson not unlocked, hiding countdown');
+      console.log('[Debug Countdown] unlocked_lesson_ids:', progress.unlocked_lesson_ids);
+      return;
+    }
 
     setHeartbeat(null);
-    setCountdownRemainingPct(100);
+    setCountdownRemainingPct(0);
     countdownRequiredSecondsRef.current = 0;
     countdownBaselineTimeSpentRef.current = 0;
     countdownBaselineAtMsRef.current = Date.now();
     const lessonId = lessonModal.lessonId;
+    console.log('[Debug Countdown] Starting heartbeat for lesson:', lessonId);
 
     const tick = async (deltaSeconds: number) => {
       try {
         const data = await postHeartbeat(lessonId, deltaSeconds);
+        console.log('[Debug Countdown] Heartbeat response:', data);
+        console.log('[Debug Countdown] required_seconds:', data?.required_seconds);
+        console.log('[Debug Countdown] time_spent_seconds:', data?.time_spent_seconds);
+        console.log('[Debug Countdown] can_complete:', data?.can_complete);
+        console.log('[Debug Countdown] progress_percent:', data?.progress_percent);
         setHeartbeat(data);
         syncCountdownBaseline(data);
         if (data?.can_complete) {
+          console.log('[Debug Countdown] can_complete true, calling tryCompleteLesson');
           void tryCompleteLesson(lessonId);
         }
-      } catch {
-        // ignore
+      } catch (e) {
+        console.error('[Debug Countdown] Heartbeat error:', e);
       }
     };
 
@@ -950,8 +970,8 @@ export default function LearningPage() {
       if (!localReq || localReq <= 0) return;
       const elapsedSeconds = (Date.now() - countdownBaselineAtMsRef.current) / 1000;
       const predictedSpent = countdownBaselineTimeSpentRef.current + elapsedSeconds;
-      const remaining = Math.max(0, Math.min(100, (1 - predictedSpent / localReq) * 100));
-      setCountdownRemainingPct(Math.round(remaining * 10) / 10);
+      const pct = Math.max(0, Math.min(100, (predictedSpent / localReq) * 100));
+      setCountdownRemainingPct(Math.round(pct * 10) / 10);
     }, 120);
 
     return () => {
@@ -960,7 +980,7 @@ export default function LearningPage() {
         countdownAnimTimerRef.current = null;
       }
     };
-  }, [lessonModal]);
+  }, [lessonModal, heartbeat]);
 
   // Animated modules effect
   useEffect(() => {
@@ -2327,19 +2347,32 @@ export default function LearningPage() {
       </div>
 
       {lessonModal && heartbeat && heartbeat.required_seconds > 0 ? (
-        <div
-          className={`learningPage__countdown ${heartbeat.can_complete ? "learningPage__countdown--ready" : ""}`}
-          aria-hidden="true"
-          // data-tooltip={heartbeat.can_complete ? "Bài học hoàn thành!" : `Tiến độ xem: ${Math.round(100 - countdownRemainingPct)}%`}
-          style={{ ["--pct" as any]: countdownRemainingPct }}
-        >
-          <svg className="learningPage__countdownSvg" viewBox="0 0 48 48">
-            <circle className="learningPage__countdownTrack" cx="24" cy="24" r="20" />
-            <circle className="learningPage__countdownRing" cx="24" cy="24" r="20" />
-            <path className="learningPage__countdownTick" d="M16.5 24.5l5.2 5.4L32.5 18.6" />
-          </svg>
+        <>
+          <div
+            className={`learningPage__countdown ${heartbeat.can_complete ? "learningPage__countdown--ready" : ""}`}
+            aria-hidden="true"
+            // data-tooltip={heartbeat.can_complete ? "Bài học hoàn thành!" : `Tiến độ xem: ${Math.round(100 - countdownRemainingPct)}%`}
+            style={{ ["--pct" as any]: countdownRemainingPct }}
+          >
+            <svg className="learningPage__countdownSvg" viewBox="0 0 48 48">
+              <circle className="learningPage__countdownTrack" cx="24" cy="24" r="20" />
+              <circle
+                className="learningPage__countdownRing"
+                cx="24" cy="24" r="20"
+                style={{
+                  strokeDashoffset: 125.66 * (1 - countdownRemainingPct / 100),
+                  transition: 'stroke-dashoffset 0.12s linear',
+                }}
+              />
+              <path className="learningPage__countdownTick" d="M16.5 24.5l5.2 5.4L32.5 18.6" />
+            </svg>
+          </div>
+        </>
+      ) : (
+        <div style={{ position: 'fixed', bottom: 24, right: 28, fontSize: 12, color: '#999' }}>
+          [Debug] countdown hidden: lessonModal={!!lessonModal} heartbeat={!!heartbeat} required_seconds={heartbeat?.required_seconds}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

@@ -258,22 +258,7 @@ const AssignmentSubmission: React.FC<{
 
   const resources: ResourceItem[] = useMemo(() => {
     if (!assignment?.attachments?.length) {
-      return [
-        {
-          key: 'r1',
-          name: 'Project_Brief.pdf',
-          size: '2.4 MB',
-          type: 'PDF Document',
-          icon: <FileDown size={24} strokeWidth={2} />,
-        },
-        {
-          key: 'r2',
-          name: 'Assets_Pack.zip',
-          size: '45.8 MB',
-          type: 'Compressed Archive',
-          icon: <Package size={24} strokeWidth={2} />,
-        },
-      ];
+      return [];
     }
     return assignment.attachments.map((a, idx) => ({
       key: `att-${idx}`,
@@ -340,6 +325,27 @@ const AssignmentSubmission: React.FC<{
     setShortAnswers((prev) => ({ ...prev, [questionId]: value }));
   };
 
+  const refetchGrade = async () => {
+    if (!assignment) return;
+    const token = getAccessToken();
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+    try {
+      const gradeRes = await fetch(
+        `${url}${ASSIGNMENTS_API.myAssignmentGrade(assignment.assignment_id)}`,
+        { headers }
+      );
+      const gradeJson = await gradeRes.json().catch(() => ({}));
+      if (gradeRes.ok) {
+        setGrade(((gradeJson as any)?.data ?? gradeJson) as GradeRow);
+      }
+    } catch {
+      // silently ignore
+    }
+  };
+
   const handleSubmit = async () => {
     if (submitting) return;
     setSubmitError(null);
@@ -377,10 +383,8 @@ const AssignmentSubmission: React.FC<{
       const form = new FormData();
 
       if (assignment.assignment_kind === 'short_answer') {
-        // Submit short answer format
         form.append('answers_json', JSON.stringify(shortAnswers));
       } else {
-        // Submit file prompt format
         if (hasText) form.append('text_submission', reflection.trim());
         for (const f of files) form.append('files', f);
       }
@@ -405,6 +409,7 @@ const AssignmentSubmission: React.FC<{
       setFiles([]);
       setReflection('');
       setShortAnswers({});
+      await refetchGrade();
     } catch (err: any) {
       setSubmitError(err?.message || 'Failed to submit assignment.');
     } finally {
@@ -486,26 +491,30 @@ const AssignmentSubmission: React.FC<{
                 </h2>
 
                 <div className="as-resources-grid">
-                  {resources.map((r) => (
-                    <a
-                      key={r.key}
-                      href={r.href || '#'}
-                      target={r.href ? '_blank' : undefined}
-                      rel={r.href ? 'noreferrer' : undefined}
-                      className="as-resource"
-                    >
-                      <span className="as-resource-icon">{r.icon}</span>
-                      <div className="as-resource-info">
-                        <div className="as-resource-name">{r.name}</div>
-                        <div className="as-resource-meta">
-                          {r.size} • {r.type}
+                  {resources.length > 0 ? (
+                    resources.map((r) => (
+                      <a
+                        key={r.key}
+                        href={r.href || '#'}
+                        target={r.href ? '_blank' : undefined}
+                        rel={r.href ? 'noreferrer' : undefined}
+                        className="as-resource"
+                      >
+                        <span className="as-resource-icon">{r.icon}</span>
+                        <div className="as-resource-info">
+                          <div className="as-resource-name">{r.name}</div>
+                          <div className="as-resource-meta">
+                            {r.size} • {r.type}
+                          </div>
                         </div>
-                      </div>
-                      <span className="as-resource-download">
-                        <Download size={18} strokeWidth={2.2} />
-                      </span>
-                    </a>
-                  ))}
+                        <span className="as-resource-download">
+                          <Download size={18} strokeWidth={2.2} />
+                        </span>
+                      </a>
+                    ))
+                  ) : (
+                    <p className="as-empty-resources">No learning resources available for this assignment.</p>
+                  )}
                 </div>
               </section>
             )}

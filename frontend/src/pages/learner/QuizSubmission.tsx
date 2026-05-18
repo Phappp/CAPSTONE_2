@@ -303,6 +303,22 @@ const QuizSubmission: React.FC<QuizSubmissionProps> = ({ inlineMode = false, onC
       setSubmitOk(String((data as any)?.message || 'Quiz submitted successfully.'));
       setSubmittedSelections({ ...selections });
       setSelections({});
+      // Update attempts_used to reflect new submission
+      if (quiz) {
+        setQuiz((prev) =>
+          prev
+            ? {
+                ...prev,
+                attempts_used: prev.attempts_used + 1,
+                recent_attempts: ((data as any)?.attempt
+                  ? [((data as any).attempt as QuizAttempt), ...(prev.recent_attempts ?? [])]
+                  : prev.recent_attempts),
+              }
+            : prev
+        );
+      }
+      // Reload quiz data to get fresh attempts info
+      setReloadKey((k) => k + 1);
     } catch (err: any) {
       setSubmitError(err?.message || 'Failed to submit quiz.');
     } finally {
