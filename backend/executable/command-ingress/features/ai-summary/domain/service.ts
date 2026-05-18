@@ -188,7 +188,10 @@ export class AiSummaryServiceImpl implements AiSummaryService {
     const pending = await cacheRepo
       .createQueryBuilder('c')
       .where('c.source_type = :type', { type: 'uploaded_video' })
-      .andWhere("c.error_message LIKE 'Đang trích%'")
+      .andWhere('c.transcript_text IS NULL') // Chưa có transcript thành công
+      .andWhere(
+        "(c.error_message LIKE 'Đang trích%' OR c.error_message LIKE '%thất bại%' OR c.error_message IS NULL)"
+      )
       .getMany();
 
     let queued = 0, skipped = 0;
@@ -746,6 +749,13 @@ export class AiSummaryServiceImpl implements AiSummaryService {
 
     const summary = await summaryRepo.findOne({ where: { lesson_id: lessonId } as any });
     if (!summary) return;
+
+    // Check if source (transcript) is ready BEFORE starting processing
+    const sourceReady = await this.getLessonSummarySourceReady(lessonId, (summary as any)?.source_type);
+    if (!sourceReady) {
+      console.log(`[summary] waiting for transcript source, lesson=${lessonId}`);
+      return; // Don't update status, let user click again when transcript is done
+    }
 
     await summaryRepo.update({ id: Number((summary as any).id) } as any, {
       status: 'processing',

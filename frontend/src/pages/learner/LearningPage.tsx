@@ -1625,7 +1625,7 @@ export default function LearningPage() {
                 !lessonModal ||
                 lessonSummaryMutating ||
                 lessonSummary?.status === "processing" ||
-                lessonSummary?.status === "pending"
+                (lessonSummary?.status === "pending" && !lessonSummary?.source_ready)
               }
               onClick={() => {
                 if (!lessonModal) return;
@@ -1649,16 +1649,24 @@ export default function LearningPage() {
           </div>
         </div>
 
-        {lessonSummary?.status === "pending" || lessonSummary?.status === "processing" ? (
+        {lessonSummary?.status === "pending" && !lessonSummary?.source_ready ? (
           <div className="learningPage__aiSummaryStatus">
             <Loader2 size={16} className="learningPage__aiSummarySpinner" />
-            <span>
-              {lessonSummary?.status === "pending" && !lessonSummary?.source_ready
-                ? "Đang transcript video, vui lòng đợi..."
-                : lessonSummary?.status === "pending" && lessonSummary?.source_ready
-                ? "Đang chờ tạo tóm tắt..."
-                : "Đang tạo tóm tắt bằng AI..."}
-            </span>
+            <span>Đang transcript video, vui lòng đợi...</span>
+          </div>
+        ) : null}
+
+        {lessonSummary?.status === "pending" && lessonSummary?.source_ready ? (
+          <div className="learningPage__aiSummaryStatus learningPage__aiSummaryStatus--ready">
+            <span className="material-symbols-outlined">check_circle</span>
+            <span>Transcript đã sẵn sàng. Nhấn "Tạo tóm tắt" để bắt đầu.</span>
+          </div>
+        ) : null}
+
+        {lessonSummary?.status === "processing" ? (
+          <div className="learningPage__aiSummaryStatus">
+            <Loader2 size={16} className="learningPage__aiSummarySpinner" />
+            <span>Đang tạo tóm tắt bằng AI...</span>
           </div>
         ) : null}
 
