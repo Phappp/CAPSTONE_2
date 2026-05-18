@@ -6,12 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview",
-    "db:seed": "npm --prefix ../backend run db:seed",
-    "test:e2e": "playwright test --headed",
-    "test:e2e:debug": "playwright test --headed --debug",
-    "test:e2e:report": "playwright show-report",
-    "demo:run": "npm run db:seed && playwright test --headed"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -49,7 +44,6 @@
     "socket.io-client": "^4.6.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0",
     "@types/react": "^18.0.27",
     "@types/react-dom": "^18.0.10",
     "@types/react-syntax-highlighter": "^15.5.6",

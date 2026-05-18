@@ -14,8 +14,6 @@
     "db:sync": "npx ts-node lib/sync-db.ts sync",
     "db:drop": "npx ts-node lib/sync-db.ts drop",
     "db:help": "npx ts-node lib/sync-db.ts",
-    "db:seed": "npx ts-node lib/seed-demo.ts",
-    "db:seed:reset": "npx ts-node lib/seed-demo.ts --reset",
     "stt:backfill": "npx ts-node lib/backfill-youtube-stt.ts",
     "stt:backfill:video": "npx ts-node lib/backfill-uploaded-video-stt.ts",
     "admin": "npx ts-node lib/create-admin.ts",
