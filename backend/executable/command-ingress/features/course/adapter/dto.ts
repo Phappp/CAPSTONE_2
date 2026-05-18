@@ -117,6 +117,25 @@ export class ListPendingReviewCoursesQuery extends RequestDto {
   }
 }
 
+export class ListAdminCoursesQuery extends RequestDto {
+  page?: number;
+  page_size?: number;
+  q?: string;
+  status?: string;
+  sort_by?: string;
+  sort_dir?: string;
+
+  constructor(query: any) {
+    super();
+    if (query?.page != null) this.page = Number(query.page);
+    if (query?.page_size != null) this.page_size = Number(query.page_size);
+    if (query?.q != null) this.q = String(query.q);
+    if (query?.status != null) this.status = String(query.status);
+    if (query?.sort_by != null) this.sort_by = String(query.sort_by);
+    if (query?.sort_dir != null) this.sort_dir = String(query.sort_dir);
+  }
+}
+
 export class ReviewCourseBody extends RequestDto {
   @Length(1, 20)
   decision: 'approve' | 'reject';

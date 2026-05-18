@@ -49,6 +49,7 @@ const initCourseRoute: (controller: CourseController) => express.Router = (contr
   router.route('/my/revenue/transactions').get(requireAuthorizedUser, controller.listMyRevenueTransactions.bind(controller));
   router.route('/my').get(requireAuthorizedUser, controller.listMyCourses.bind(controller));
   router.route('/admin/pending-review').get(requireAuthorizedUser, controller.listPendingReviewCourses.bind(controller));
+  router.route('/admin/courses').get(requireAuthorizedUser, controller.listAdminCourses.bind(controller));
   router.route('/admin/resources/pending-review').get(requireAuthorizedUser, controller.listPendingLessonResourcesByAdmin.bind(controller));
   router.route('/:id/admin-review').patch(requireAuthorizedUser, controller.reviewCourseByAdmin.bind(controller));
   router.route('/:id/admin-review/timeline').get(requireAuthorizedUser, controller.getCourseReviewTimelineByAdmin.bind(controller));

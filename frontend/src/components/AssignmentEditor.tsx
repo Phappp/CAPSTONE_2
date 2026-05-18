@@ -172,6 +172,7 @@ export default function AssignmentEditor(props: {
   forcedAssignmentKind?: AssignmentKind | null;
   hideAssignmentKindSwitch?: boolean;
   autoSaveOnForcedKindSwitch?: boolean;
+  hideDueDateField?: boolean;
 }) {
   const {
     courses,
@@ -193,6 +194,7 @@ export default function AssignmentEditor(props: {
     forcedAssignmentKind = null,
     hideAssignmentKindSwitch = false,
     autoSaveOnForcedKindSwitch = false,
+    hideDueDateField = false,
   } = props;
 
   const [selectedCourseId, setSelectedCourseId] = useState<number | "">(courses?.[0]?.id ?? "");
@@ -206,7 +208,7 @@ export default function AssignmentEditor(props: {
   const [description, setDescription] = useState("");
   const [maxScore, setMaxScore] = useState<number>(10);
   const [passingScore, setPassingScore] = useState<string>(""); // empty => null
-  const [dueDate, setDueDate] = useState<string>("");
+  const [dueDate, setDueDate] = useState<string>("2050-01-01T12:00");
 
   const [allowLate, setAllowLate] = useState<boolean>(false);
   const [lateDays, setLateDays] = useState<number>(0);
@@ -276,7 +278,7 @@ export default function AssignmentEditor(props: {
         description.trim() !== "" ||
         Number(maxScore) !== 10 ||
         passingScore.trim() !== "" ||
-        dueDate.trim() !== "" ||
+        (!hideDueDateField && dueDate.trim() !== "") ||
         allowLate ||
         lateDays !== 0 ||
         allowResubmission ||
@@ -296,12 +298,13 @@ export default function AssignmentEditor(props: {
     const draftShort = shortAnswerLines.map((x) => x.trim()).filter(Boolean);
     const previewPassing = preview.passing_score != null ? String(preview.passing_score) : "";
     const draftPassing = passingScore.trim();
+    const draftDueDate = hideDueDateField ? isoToDatetimeLocal(preview.due_date) : dueDate;
     return (
       assignmentKind !== normalizedPreviewKind ||
       description.trim() !== String(preview.description || "").trim() ||
       Number(maxScore) !== Number(preview.max_score || 0) ||
       draftPassing !== previewPassing ||
-      dueDate !== isoToDatetimeLocal(preview.due_date) ||
+      draftDueDate !== isoToDatetimeLocal(preview.due_date) ||
       allowLate !== Boolean(preview.allow_late_submission) ||
       Number(lateDays) !== Number(preview.late_submission_days || 0) ||
       allowResubmission !== Boolean(preview.allow_resubmission) ||
@@ -326,6 +329,7 @@ export default function AssignmentEditor(props: {
     selectedFiles.length,
     shortAnswerLines,
     timeLimitMinutes,
+    hideDueDateField,
   ]);
 
   const authHeaders = useMemo<Record<string, string>>(() => {
@@ -589,7 +593,12 @@ export default function AssignmentEditor(props: {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${url}${QUESTION_BANKS_API.list}`, { headers: authHeaders });
+        const res = await fetch(`${url}${QUESTION_BANKS_API.list}`, {
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeaders,
+          },
+        });
         if (cancelled) return;
         if (!res.ok) throw new Error("Lỗi tải ngân hàng câu hỏi.");
         const data = await res.json();
@@ -615,7 +624,12 @@ export default function AssignmentEditor(props: {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${url}${QUESTION_BANKS_API.listQuestions(Number(selectedShortAnswerBankId))}`, { headers: authHeaders });
+        const res = await fetch(`${url}${QUESTION_BANKS_API.listQuestions(Number(selectedShortAnswerBankId))}`, {
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeaders,
+          },
+        });
         if (cancelled) return;
         if (!res.ok) throw new Error("Lỗi tải câu hỏi.");
         const data = await res.json();
@@ -758,10 +772,10 @@ export default function AssignmentEditor(props: {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message || json?.error || "Lỗi khi tạo câu hỏi.");
-      const questions: string[] = json.questions || json.data || [];
-      if (!questions.length) throw new Error("Không nhận được câu hỏi nào từ AI.");
-      setShortAnswerLines(questions);
-      toast.success(`Đã tạo ${questions.length} câu hỏi bằng AI.`);
+      const extracted: string[] = (json.questions || json.data || []).map((q: any) => typeof q === 'string' ? q : String(q.question_text || ''));
+      if (!extracted.length) throw new Error("Không nhận được câu hỏi nào từ AI.");
+      setShortAnswerLines(extracted);
+      toast.success(`Đã tạo ${extracted.length} câu hỏi bằng AI.`);
       setShortAnswerCreateMode("manual");
     } catch (err: any) {
       toast.error(err?.message || "Lỗi khi tạo câu hỏi bằng AI.");
@@ -823,7 +837,7 @@ export default function AssignmentEditor(props: {
       );
       return;
     }
-    if (!dueDate) {
+    if (!hideDueDateField && !dueDate) {
       toast.error("Vui lòng chọn hạn nộp.");
       return;
     }
@@ -1132,6 +1146,7 @@ export default function AssignmentEditor(props: {
               placeholder="Ví dụ: 6"
             />
           </div>
+          {!hideDueDateField && (
           <div className="field" style={{ minWidth: 520 }}>
           <hr style={{ margin: "16px 0" }} />
             <label>Hạn nộp *</label>
@@ -1210,6 +1225,7 @@ export default function AssignmentEditor(props: {
               </label>
             </div>
           </div>
+          )}
         </div>
         {/* <hr style={{ margin: "16px 0" }} /> */}
         {isFilePrompt ? (

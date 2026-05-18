@@ -712,6 +712,7 @@ type AssignmentEditorSectionProps = {
   removeAssignmentAttachment: (filePath: string) => Promise<void>;
   isRejectedContext?: boolean;
   readOnly?: boolean;
+  hideDueDateField?: boolean;
 };
 
 export function AssignmentEditorSection({
@@ -745,6 +746,7 @@ export function AssignmentEditorSection({
   removeAssignmentAttachment,
   isRejectedContext = false,
   readOnly = false,
+  hideDueDateField = false,
 }: AssignmentEditorSectionProps) {
   if (activeSection !== "assignment") return null;
   return (
@@ -810,6 +812,7 @@ export function AssignmentEditorSection({
             forcedAssignmentKind={requestedAssignmentKind}
             hideAssignmentKindSwitch={Boolean(requestedAssignmentKind)}
             autoSaveOnForcedKindSwitch={autoSaveKindSwitch}
+            hideDueDateField={hideDueDateField}
           />
         </div>
       </div>

@@ -121,7 +121,9 @@ const QuizSubmission: React.FC<QuizSubmissionProps> = ({ inlineMode = false, onC
   const [quiz, setQuiz] = useState<QuizPayload | null>(null);
   const [result, setResult] = useState<SubmitResult | null>(null);
   const [selections, setSelections] = useState<Record<number, number>>({});
+  const [submittedSelections, setSubmittedSelections] = useState<Record<number, number> | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -133,6 +135,7 @@ const QuizSubmission: React.FC<QuizSubmissionProps> = ({ inlineMode = false, onC
   useEffect(() => {
     setResult(null);
     setSelections({});
+    setSubmittedSelections(null);
     setSubmitOk(null);
     setSubmitError(null);
     setTimeRemaining(null);
@@ -175,7 +178,7 @@ const QuizSubmission: React.FC<QuizSubmissionProps> = ({ inlineMode = false, onC
     return () => {
       cancelled = true;
     };
-  }, [effectiveLessonId, effectiveCourseId]);
+  }, [effectiveLessonId, effectiveCourseId, reloadKey]);
 
   // Timer effect
   useEffect(() => {
@@ -274,7 +277,6 @@ const QuizSubmission: React.FC<QuizSubmissionProps> = ({ inlineMode = false, onC
     setSubmitting(true);
     try {
       const token = getAccessToken();
-      const courseId = Number(searchParams.get('courseId') || '0');
       const answers = quiz.questions.map((q) => ({
         quiz_question_id: q.quiz_question_id,
         selected_option_id: selections[q.quiz_question_id],
@@ -286,7 +288,7 @@ const QuizSubmission: React.FC<QuizSubmissionProps> = ({ inlineMode = false, onC
       };
 
       const res = await fetch(
-        `${url}${COURSES_API.learnerQuizSubmit(courseId, queryLessonId)}`,
+        `${url}${COURSES_API.learnerQuizSubmit(effectiveCourseId, effectiveLessonId)}`,
         {
           method: 'POST',
           headers,
@@ -299,6 +301,7 @@ const QuizSubmission: React.FC<QuizSubmissionProps> = ({ inlineMode = false, onC
       }
       setResult(data as SubmitResult);
       setSubmitOk(String((data as any)?.message || 'Quiz submitted successfully.'));
+      setSubmittedSelections({ ...selections });
       setSelections({});
     } catch (err: any) {
       setSubmitError(err?.message || 'Failed to submit quiz.');
@@ -309,9 +312,17 @@ const QuizSubmission: React.FC<QuizSubmissionProps> = ({ inlineMode = false, onC
 
   const handleDiscard = () => {
     setSelections({});
+    setSubmittedSelections(null);
     setSubmitOk(null);
     setSubmitError(null);
     setResult(null);
+  };
+
+  const handleRetry = () => {
+    setSubmittedSelections(null);
+    setResult(null);
+    setReloadKey((k) => k + 1);
+    setTimerStarted(true);
   };
 
   return (
@@ -440,12 +451,12 @@ const QuizSubmission: React.FC<QuizSubmissionProps> = ({ inlineMode = false, onC
                 )}
               </div>
 
-              {timerStarted && (
+              {(timerStarted || submittedSelections !== null) && (
                 <h2 className="qs-section-title">Answer the Questions</h2>
               )}
 
               {/* Quiz Questions */}
-              {timerStarted && (
+              {(timerStarted || submittedSelections !== null) && (
                 <div className="qs-questions-section">
                   {sortedQuestions.length > 0 ? (
                     sortedQuestions.map((q, idx) => (
@@ -463,7 +474,10 @@ const QuizSubmission: React.FC<QuizSubmissionProps> = ({ inlineMode = false, onC
                         <p className="qs-question-text">{q.question_text}</p>
                         <div className="qs-options">
                           {q.options.map((o) => {
-                            const sel = selections[q.quiz_question_id] === o.id;
+                            const isSubmitted = submittedSelections != null;
+                            const submittedAnswer = submittedSelections?.[q.quiz_question_id];
+                            const currentSelection = isSubmitted ? submittedAnswer : selections[q.quiz_question_id];
+                            const sel = currentSelection === o.id;
                             const isCorrectChoice = result?.show_correct_answers &&
                               (detailByQq.get(q.quiz_question_id)?.correct_option_ids || []).includes(o.id);
                             const isWrongChoice = sel && result?.show_correct_answers &&
@@ -474,13 +488,15 @@ const QuizSubmission: React.FC<QuizSubmissionProps> = ({ inlineMode = false, onC
                                 key={o.id}
                                 className={`qs-option ${sel ? 'qs-option--selected' : ''} ${isCorrectChoice ? 'qs-option--correct' : ''} ${isWrongChoice ? 'qs-option--wrong' : ''}`}
                               >
-                                <input
-                                  type="radio"
-                                  name={`qq-${q.quiz_question_id}`}
-                                  checked={sel}
-                                  onChange={() => handleOptionChange(q.quiz_question_id, o.id)}
-                                  disabled={!!result}
-                                />
+                                {!isSubmitted && (
+                                  <input
+                                    type="radio"
+                                    name={`qq-${q.quiz_question_id}`}
+                                    checked={sel}
+                                    onChange={() => handleOptionChange(q.quiz_question_id, o.id)}
+                                    disabled={!!result}
+                                  />
+                                )}
                                 <span className="qs-option-indicator" />
                                 <span className="qs-option-text">{o.option_text}</span>
                                 {isCorrectChoice && <CheckCircle2 size={18} className="qs-option-icon qs-option-icon--correct" />}
@@ -522,6 +538,16 @@ const QuizSubmission: React.FC<QuizSubmissionProps> = ({ inlineMode = false, onC
                   <p className="qs-result-detail">
                     {result.earned_points} / {result.max_points} points — <strong>{result.is_passed ? 'Passed' : 'Not Passed'}</strong>
                   </p>
+                  {attemptsLeft > 0 && (
+                    <button
+                      type="button"
+                      className="qs-retry-btn"
+                      onClick={handleRetry}
+                    >
+                      <RotateCcw size={16} strokeWidth={2.4} />
+                      Try Again ({attemptsLeft} {attemptsLeft === 1 ? 'attempt' : 'attempts'} left)
+                    </button>
+                  )}
                 </div>
               )}
 

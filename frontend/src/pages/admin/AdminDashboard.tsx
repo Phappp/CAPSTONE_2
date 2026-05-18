@@ -74,25 +74,33 @@ import {
   apiGetAdminRevenueByTeacher,
   apiReviewCourseManagerVerification,
   apiReviewCourseByAdmin,
+  apiGetAdminCourses,
   AdminRevenueByTeacherItem,
   AdminRevenueSummary,
   AuditLogItem,
   CourseManagerVerification,
   PendingReviewCourse,
+  apiGetPendingLessonResources,
+  apiReviewLessonResourceByAdmin,
+  apiGetLessonResourceReviewTimeline,
+  PendingLessonResource,
 } from "../../services/adminUsersClient";
 import "./AdminDashboard.css";
 import transLogo from "../../assets/trans-logo-2.png";
 
 type RoleFilter = "all" | "learner" | "course_manager" | "admin";
 type StatusFilter = "all" | "active" | "pending" | "banned" | "deleted";
-type AdminView = "users" | "audit_logs" | "keys" | "course_reviews" | "manager_verifications" | "revenue";
+type CourseStatusFilter = "all" | "draft" | "pending_review" | "published" | "archived";
+type AdminView = "users" | "audit_logs" | "keys" | "course_management" | "course_reviews" | "lesson_reviews" | "manager_verifications" | "revenue";
 type AdminTier = "admin" | "non_admin";
 
 const VIEW_CONFIG: Record<AdminView, { label: string; icon: React.ReactNode; description: string }> = {
   users: { label: "Quản lý người dùng", icon: <Users size={18} />, description: "Quản lý tất cả người dùng trong hệ thống" },
   audit_logs: { label: "Nhật ký hệ thống", icon: <FileText size={18} />, description: "Xem lịch sử hoạt động hệ thống" },
   keys: { label: "Khóa API", icon: <Key size={18} />, description: "Quản lý khóa API OpenRouter" },
-  course_reviews: { label: "Duyệt khóa học", icon: <BookOpen size={18} />, description: "Duyệt khóa học chờ xuất bản" },
+  course_management: { label: "Quản lý khóa học", icon: <BookOpen size={18} />, description: "Xem và quản lý tất cả khóa học trong hệ thống" },
+  course_reviews: { label: "Duyệt khóa học", icon: <CheckCircle size={18} />, description: "Duyệt khóa học chờ xuất bản" },
+  lesson_reviews: { label: "Duyệt bài học", icon: <FileIcon size={18} />, description: "Duyệt tài nguyên bài học (video, tài liệu, YouTube) chờ duyệt" },
   manager_verifications: { label: "Xác minh giảng viên", icon: <UserCheck size={18} />, description: "Xác minh và cấp phép giảng viên" },
   revenue: { label: "Doanh thu hệ thống", icon: <Wallet size={18} />, description: "Tổng quan doanh thu và đối soát theo giảng viên" },
 };
@@ -154,8 +162,18 @@ export default function AdminDashboard() {
   // Course reviews state
   const [reviewPage, setReviewPage] = useState(1);
   const [reviewQ, setReviewQ] = useState("");
+  const [reviewStatus, setReviewStatus] = useState<"all" | "draft" | "pending_review" | "published" | "archived">("all");
   const [reviewActionLoading, setReviewActionLoading] = useState<number | null>(null);
   const [reviewPhaseByCourse, setReviewPhaseByCourse] = useState<Record<number, string>>({});
+
+  // Lesson reviews state
+  const [lessonReviewPage, setLessonReviewPage] = useState(1);
+  const [lessonReviewQ, setLessonReviewQ] = useState("");
+  const [lessonReviewKind, setLessonReviewKind] = useState<"all" | "pdf" | "word" | "video" | "youtube" | "other">("all");
+  const [lessonReviewCourseId, setLessonReviewCourseId] = useState<number | undefined>(undefined);
+  const [lessonReviewActionLoading, setLessonReviewActionLoading] = useState<number | null>(null);
+  const [lessonReviewPhaseByResource, setLessonReviewPhaseByResource] = useState<Record<number, string>>({});
+  const [selectedLessonResource, setSelectedLessonResource] = useState<PendingLessonResource | null>(null);
 
   // Manager verifications state
   const [verificationPage, setVerificationPage] = useState(1);
@@ -208,6 +226,29 @@ export default function AdminDashboard() {
     keepPreviousData: true,
   });
 
+  // Course Management state
+  const [courseMgmtPage, setCourseMgmtPage] = useState(1);
+  const [courseMgmtQ, setCourseMgmtQ] = useState("");
+  const [courseMgmtStatus, setCourseMgmtStatus] = useState<CourseStatusFilter>("all");
+  const [courseMgmtSortBy, setCourseMgmtSortBy] = useState<"updated_at" | "created_at" | "title" | "learners_count">("updated_at");
+  const [courseMgmtSortDir, setCourseMgmtSortDir] = useState<"asc" | "desc">("desc");
+
+  const courseManagementQuery = useQuery({
+    queryKey: ["admin-course-management", { courseMgmtPage, courseMgmtQ, courseMgmtStatus, courseMgmtSortBy, courseMgmtSortDir }],
+    queryFn: () =>
+      apiGetAdminCourses({
+        accessToken: accessToken || "",
+        page: courseMgmtPage,
+        pageSize: 10,
+        q: courseMgmtQ || undefined,
+        status: courseMgmtStatus === "all" ? undefined : courseMgmtStatus,
+        sort_by: courseMgmtSortBy,
+        sort_dir: courseMgmtSortDir,
+      }),
+    enabled: !!accessToken && view === "course_management",
+    keepPreviousData: true,
+  });
+
   const openRouterQuery = useQuery({
     queryKey: ["admin-openrouter-config"],
     queryFn: () => apiGetOpenRouterConfig({ accessToken: accessToken || "" }),
@@ -215,15 +256,31 @@ export default function AdminDashboard() {
   });
 
   const pendingReviewQuery = useQuery({
-    queryKey: ["admin-course-pending-review", { reviewPage, reviewQ }],
+    queryKey: ["admin-all-courses", { reviewPage, reviewQ, reviewStatus }],
     queryFn: () =>
-      apiGetPendingReviewCourses({
+      apiGetAdminCourses({
         accessToken: accessToken || "",
         page: reviewPage,
         pageSize: 10,
         q: reviewQ || undefined,
+        status: reviewStatus === "all" ? undefined : reviewStatus,
       }),
     enabled: !!accessToken && view === "course_reviews",
+    keepPreviousData: true,
+  });
+
+  const pendingLessonResourcesQuery = useQuery({
+    queryKey: ["admin-lesson-resources-pending-review", { lessonReviewPage, lessonReviewQ, lessonReviewKind, lessonReviewCourseId }],
+    queryFn: () =>
+      apiGetPendingLessonResources({
+        accessToken: accessToken || "",
+        page: lessonReviewPage,
+        pageSize: 10,
+        q: lessonReviewQ || undefined,
+        kind: lessonReviewKind === "all" ? undefined : lessonReviewKind,
+        courseId: lessonReviewCourseId,
+      }),
+    enabled: !!accessToken && view === "lesson_reviews",
     keepPreviousData: true,
   });
 
@@ -686,6 +743,57 @@ export default function AdminDashboard() {
     }
   };
 
+  const reviewLessonResource = async (resource: PendingLessonResource, decision: "approve" | "reject") => {
+    if (!can(adminTier, "change_status")) {
+      showNotice("Bạn không có quyền duyệt tài nguyên.", "Lỗi quyền", "error");
+      return;
+    }
+    const note = window.prompt(decision === "reject" ? "Lý do từ chối (bắt buộc):" : "Ghi chú duyệt (tùy chọn):", "");
+    if (decision === "reject" && !String(note || "").trim()) {
+      showNotice("Bạn phải nhập lý do khi từ chối tài nguyên.", "Lỗi", "error");
+      return;
+    }
+    if (!window.confirm(`${decision === "approve" ? "Duyệt" : "Từ chối"} tài nguyên "${resource.filename || resource.url}" (#${resource.id})?`)) return;
+    setLessonReviewActionLoading(resource.id);
+    setLessonReviewPhaseByResource((prev) => ({ ...prev, [resource.id]: "Đang xử lý" }));
+    try {
+      await apiReviewLessonResourceByAdmin({ accessToken: accessToken || "", resourceId: resource.id, decision, note: note || undefined });
+      await pendingLessonResourcesQuery.refetch();
+      showNotice(
+        decision === "approve" ? "Đã duyệt tài nguyên." : "Đã từ chối tài nguyên.",
+        "Thành công",
+        "success"
+      );
+    } catch (e: any) {
+      showNotice(`Thao tác thất bại: ${String(e?.message || e)}`, "Lỗi", "error");
+    } finally {
+      setLessonReviewPhaseByResource((prev) => {
+        const copy = { ...prev };
+        delete copy[resource.id];
+        return copy;
+      });
+      setLessonReviewActionLoading(null);
+    }
+  };
+
+  const viewLessonResourceTimeline = async (resource: PendingLessonResource) => {
+    try {
+      const data = await apiGetLessonResourceReviewTimeline({ accessToken: accessToken || "", resourceId: resource.id });
+      if (!data.items.length) {
+        showNotice("Tài nguyên chưa có lịch sử duyệt.");
+        return;
+      }
+      const lines = data.items.slice(0, 10).map((item) => {
+        const time = new Date(item.created_at).toLocaleString("vi-VN");
+        const note = item.note ? ` | note: ${item.note}` : "";
+        return `${time} | ${item.decision} | ${item.from_status ?? "—"} -> ${item.to_status}${note}`;
+      });
+      showNotice(`Dòng thời gian gần nhất của tài nguyên #${resource.id}\n\n${lines.join("\n")}`, "Lịch sử duyệt");
+    } catch (e: any) {
+      showNotice(`Không thể tải timeline: ${String(e?.message || e)}`, "Lỗi", "error");
+    }
+  };
+
   const reviewManagerVerification = async (item: CourseManagerVerification, status: "verified" | "rejected" | "suspended") => {
     const note = window.prompt(status === "verified" ? "Ghi chú xác minh (tùy chọn):" : "Lý do (khuyến nghị nhập):", "");
     if (!window.confirm(`Cập nhật trạng thái xác minh của ${item.email} -> ${status.toUpperCase()}?`)) return;
@@ -706,6 +814,7 @@ export default function AdminDashboard() {
     { id: "audit_logs" as const, label: "Nhật ký hệ thống", icon: <FileText size={18} />, disabled: !can(adminTier, "view_audit_logs") },
     { id: "keys" as const, label: "Khóa API", icon: <Key size={18} />, disabled: !can(adminTier, "change_status") },
     { id: "course_reviews" as const, label: "Duyệt khóa học", icon: <BookOpen size={18} />, disabled: !can(adminTier, "change_status") },
+    { id: "lesson_reviews" as const, label: "Duyệt bài học", icon: <FileIcon size={18} />, disabled: !can(adminTier, "change_status") },
     { id: "manager_verifications" as const, label: "Xác minh giảng viên", icon: <UserCheck size={18} />, disabled: !can(adminTier, "change_status") },
     { id: "revenue" as const, label: "Doanh thu hệ thống", icon: <Wallet size={18} />, disabled: !can(adminTier, "view_audit_logs") },
   ];
@@ -987,6 +1096,34 @@ export default function AdminDashboard() {
           />
         )}
 
+        {view === "course_management" && (
+          <CourseManagementPanel
+            data={courseManagementQuery.data?.items ?? []}
+            pagination={
+              courseManagementQuery.data
+                ? {
+                    page: courseManagementQuery.data.page,
+                    limit: courseManagementQuery.data.page_size,
+                    total: courseManagementQuery.data.total,
+                    pages: Math.max(1, Math.ceil(courseManagementQuery.data.total / courseManagementQuery.data.page_size)),
+                  }
+                : undefined
+            }
+            isLoading={courseManagementQuery.isLoading}
+            isError={courseManagementQuery.isError}
+            page={courseMgmtPage}
+            setPage={setCourseMgmtPage}
+            q={courseMgmtQ}
+            setQ={setCourseMgmtQ}
+            status={courseMgmtStatus}
+            setStatus={setCourseMgmtStatus}
+            sortBy={courseMgmtSortBy}
+            setSortBy={setCourseMgmtSortBy}
+            sortDir={courseMgmtSortDir}
+            setSortDir={setCourseMgmtSortDir}
+          />
+        )}
+
         {view === "course_reviews" && (
           <CourseReviewsPanel
             data={pendingReviewQuery.data?.items ?? []}
@@ -1006,11 +1143,42 @@ export default function AdminDashboard() {
             setPage={setReviewPage}
             q={reviewQ}
             setQ={setReviewQ}
+            status={reviewStatus}
+            setStatus={setReviewStatus}
             actionLoading={reviewActionLoading}
             phaseByCourse={reviewPhaseByCourse}
             onReview={reviewCourse}
             onViewTimeline={viewReviewTimeline}
             refetch={pendingReviewQuery.refetch}
+          />
+        )}
+
+        {view === "lesson_reviews" && (
+          <LessonResourceReviewsPanel
+            data={pendingLessonResourcesQuery.data?.items ?? []}
+            pagination={
+              pendingLessonResourcesQuery.data
+                ? {
+                    page: pendingLessonResourcesQuery.data.page,
+                    limit: pendingLessonResourcesQuery.data.page_size,
+                    total: pendingLessonResourcesQuery.data.total,
+                    pages: Math.max(1, Math.ceil(pendingLessonResourcesQuery.data.total / pendingLessonResourcesQuery.data.page_size)),
+                  }
+                : undefined
+            }
+            isLoading={pendingLessonResourcesQuery.isLoading}
+            isError={pendingLessonResourcesQuery.isError}
+            page={lessonReviewPage}
+            setPage={setLessonReviewPage}
+            q={lessonReviewQ}
+            setQ={setLessonReviewQ}
+            kind={lessonReviewKind}
+            setKind={setLessonReviewKind}
+            actionLoading={lessonReviewActionLoading}
+            phaseByResource={lessonReviewPhaseByResource}
+            onReview={reviewLessonResource}
+            onViewTimeline={viewLessonResourceTimeline}
+            refetch={pendingLessonResourcesQuery.refetch}
           />
         )}
 
@@ -1328,6 +1496,222 @@ function KeysPanel({
   );
 }
 
+type CourseManagementPanelProps = {
+  data: any[];
+  pagination?: { page: number; limit: number; total: number; pages: number };
+  isLoading: boolean;
+  isError: boolean;
+  page: number;
+  setPage: (page: number) => void;
+  q: string;
+  setQ: (q: string) => void;
+  status: CourseStatusFilter;
+  setStatus: (status: CourseStatusFilter) => void;
+  sortBy: "updated_at" | "created_at" | "title" | "learners_count";
+  setSortBy: (sortBy: "updated_at" | "created_at" | "title" | "learners_count") => void;
+  sortDir: "asc" | "desc";
+  setSortDir: (sortDir: "asc" | "desc") => void;
+};
+
+function CourseManagementPanel({
+  data,
+  pagination,
+  isLoading,
+  isError,
+  page,
+  setPage,
+  q,
+  setQ,
+  status,
+  setStatus,
+  sortBy,
+  setSortBy,
+  sortDir,
+  setSortDir,
+}: CourseManagementPanelProps) {
+  const statusOptions: { value: CourseStatusFilter; label: string }[] = [
+    { value: "all", label: "Tất cả" },
+    { value: "draft", label: "Bản nháp" },
+    { value: "pending_review", label: "Chờ duyệt" },
+    { value: "published", label: "Đã xuất bản" },
+    { value: "archived", label: "Đã lưu trữ" },
+  ];
+
+  const sortOptions: { value: typeof sortBy; label: string }[] = [
+    { value: "updated_at", label: "Cập nhật gần nhất" },
+    { value: "created_at", label: "Ngày tạo" },
+    { value: "title", label: "Tên khóa học" },
+    { value: "learners_count", label: "Số học viên" },
+  ];
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "draft":
+        return <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "12px", background: "#e5e5e5", color: "#666" }}>Bản nháp</span>;
+      case "pending_review":
+        return <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "12px", background: "#fff3cd", color: "#856404" }}>Chờ duyệt</span>;
+      case "published":
+        return <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "12px", background: "#d4edda", color: "#155724" }}>Đã xuất bản</span>;
+      case "archived":
+        return <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "12px", background: "#f8d7da", color: "#721c24" }}>Đã lưu trữ</span>;
+      default:
+        return <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "12px", background: "#e5e5e5", color: "#666" }}>{status}</span>;
+    }
+  };
+
+  return (
+    <div style={{ padding: "24px" }}>
+      <div style={{ marginBottom: "24px" }}>
+        <h2 style={{ fontSize: "20px", fontWeight: 600, marginBottom: "16px" }}>Quản lý khóa học</h2>
+
+        {/* Filters */}
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "16px" }}>
+          <div style={{ flex: 1, minWidth: "200px" }}>
+            <input
+              type="text"
+              placeholder="Tìm kiếm theo tên hoặc slug..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                fontSize: "14px",
+              }}
+            />
+          </div>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as CourseStatusFilter)}
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              fontSize: "14px",
+              minWidth: "150px",
+            }}
+          >
+            {statusOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              fontSize: "14px",
+              minWidth: "180px",
+            }}
+          >
+            {sortOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setSortDir(sortDir === "asc" ? "desc" : "asc")}
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              fontSize: "14px",
+              background: "#fff",
+              cursor: "pointer",
+            }}
+          >
+            {sortDir === "asc" ? "↑ Tăng dần" : "↓ Giảm dần"}
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+      {isLoading ? (
+        <div style={{ textAlign: "center", padding: "40px", color: "#666" }}>Đang tải...</div>
+      ) : isError ? (
+        <div style={{ textAlign: "center", padding: "40px", color: "#dc3545" }}>Đã xảy ra lỗi khi tải dữ liệu</div>
+      ) : data.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "40px", color: "#666" }}>Không có khóa học nào</div>
+      ) : (
+        <>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff", borderRadius: "8px", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+              <thead>
+                <tr style={{ background: "#f5f5f5" }}>
+                  <th style={{ padding: "12px", textAlign: "left", fontWeight: 600 }}>STT</th>
+                  <th style={{ padding: "12px", textAlign: "left", fontWeight: 600 }}>Tên khóa học</th>
+                  <th style={{ padding: "12px", textAlign: "left", fontWeight: 600 }}>Trạng thái</th>
+                  <th style={{ padding: "12px", textAlign: "left", fontWeight: 600 }}>Người tạo</th>
+                  <th style={{ padding: "12px", textAlign: "center", fontWeight: 600 }}>Học viên</th>
+                  <th style={{ padding: "12px", textAlign: "center", fontWeight: 600 }}>Modules</th>
+                  <th style={{ padding: "12px", textAlign: "center", fontWeight: 600 }}>Bài học</th>
+                  <th style={{ padding: "12px", textAlign: "left", fontWeight: 600 }}>Cập nhật</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((course, index) => (
+                  <tr key={course.id} style={{ borderTop: "1px solid #eee" }}>
+                    <td style={{ padding: "12px" }}>{(page - 1) * 10 + index + 1}</td>
+                    <td style={{ padding: "12px" }}>
+                      <div style={{ fontWeight: 500 }}>{course.title}</div>
+                      <div style={{ fontSize: "12px", color: "#666" }}>{course.slug}</div>
+                    </td>
+                    <td style={{ padding: "12px" }}>{getStatusBadge(course.status)}</td>
+                    <td style={{ padding: "12px" }}>{course.creator_name || "N/A"}</td>
+                    <td style={{ padding: "12px", textAlign: "center" }}>{course.learners_count ?? 0}</td>
+                    <td style={{ padding: "12px", textAlign: "center" }}>{course.modules_count ?? 0}</td>
+                    <td style={{ padding: "12px", textAlign: "center" }}>{course.lessons_count ?? 0}</td>
+                    <td style={{ padding: "12px", fontSize: "13px", color: "#666" }}>
+                      {course.updated_at ? new Date(course.updated_at).toLocaleDateString("vi-VN") : "N/A"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {pagination && pagination.pages > 1 && (
+            <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginTop: "24px" }}>
+              <button
+                onClick={() => setPage(page - 1)}
+                disabled={page === 1}
+                style={{
+                  padding: "8px 16px",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  background: page === 1 ? "#f5f5f5" : "#fff",
+                  cursor: page === 1 ? "not-allowed" : "pointer",
+                }}
+              >
+                ← Trang trước
+              </button>
+              <span style={{ padding: "8px 16px", display: "flex", alignItems: "center" }}>
+                Trang {pagination.page} / {pagination.pages}
+              </span>
+              <button
+                onClick={() => setPage(page + 1)}
+                disabled={page >= pagination.pages}
+                style={{
+                  padding: "8px 16px",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  background: page >= pagination.pages ? "#f5f5f5" : "#fff",
+                  cursor: page >= pagination.pages ? "not-allowed" : "pointer",
+                }}
+              >
+                Trang sau →
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function CourseReviewsPanel({
   data,
   pagination,
@@ -1337,75 +1721,54 @@ function CourseReviewsPanel({
   setPage,
   q,
   setQ,
+  status,
+  setStatus,
   actionLoading,
   phaseByCourse,
   onReview,
   onViewTimeline,
   refetch,
-}: any) {
+}: {
+  data: any[];
+  pagination?: { page: number; limit: number; total: number; pages: number };
+  isLoading: boolean;
+  isError: boolean;
+  page: number;
+  setPage: (page: number) => void;
+  q: string;
+  setQ: (q: string) => void;
+  status: "all" | "draft" | "pending_review" | "published" | "archived";
+  setStatus: (status: "all" | "draft" | "pending_review" | "published" | "archived") => void;
+  actionLoading: number | null;
+  phaseByCourse: Record<number, string>;
+  onReview: (course: any, decision: "approve" | "reject") => void;
+  onViewTimeline: (course: any) => void;
+  refetch: () => void;
+}) {
   const navigate = useNavigate();
-  const [selectedCourse, setSelectedCourse] = useState<PendingReviewCourse | null>(null);
 
-  if (selectedCourse) {
-    const qualityGateReady = Boolean(selectedCourse.quality_gate?.ready);
-    const qualityGateIssues = selectedCourse.quality_gate?.issues?.length
-      ? selectedCourse.quality_gate.issues.join(" | ")
-      : "Không có lỗi";
+  const statusOptions: { value: typeof status; label: string }[] = [
+    { value: "all", label: "Tất cả" },
+    { value: "draft", label: "Bản nháp" },
+    { value: "pending_review", label: "Chờ duyệt" },
+    { value: "published", label: "Đã xuất bản" },
+    { value: "archived", label: "Đã lưu trữ" },
+  ];
 
-    return (
-      <div className="panel" style={{ padding: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, color: "#0f172a" }}>
-            Duyệt khóa học &gt; {selectedCourse.title} (#{selectedCourse.id})
-          </div>
-          <button className="btn-secondary" onClick={() => setSelectedCourse(null)}>
-            Quay lại danh sách
-          </button>
-        </div>
-
-        <div className="course-review-detail-grid">
-          <div className="course-review-detail-card">
-            <div className="course-review-detail-label">Slug</div>
-            <div className="course-review-detail-value">/{selectedCourse.slug}</div>
-          </div>
-          <div className="course-review-detail-card">
-            <div className="course-review-detail-label">Danh mục</div>
-            <div className="course-review-detail-value">{selectedCourse.category || "—"}</div>
-          </div>
-          <div className="course-review-detail-card">
-            <div className="course-review-detail-label">Cập nhật</div>
-            <div className="course-review-detail-value">{new Date(selectedCourse.updated_at).toLocaleString("vi-VN")}</div>
-          </div>
-          <div className="course-review-detail-card">
-            <div className="course-review-detail-label">Chất lượng</div>
-            <div className={`course-review-detail-value ${qualityGateReady ? "quality-pass" : "quality-warn"}`}>
-              {qualityGateReady ? "Đạt" : "Chưa đạt"}
-            </div>
-          </div>
-          <div className="course-review-detail-card course-review-detail-card-wide">
-            <div className="course-review-detail-label">Mô tả ngắn</div>
-            <div className="course-review-detail-value">{selectedCourse.short_description || "—"}</div>
-          </div>
-          <div className="course-review-detail-card course-review-detail-card-wide">
-            <div className="course-review-detail-label">Ghi chú kiểm tra chất lượng</div>
-            <div className="course-review-detail-value">{qualityGateIssues}</div>
-          </div>
-        </div>
-
-        <div className="action-buttons">
-          <button
-            className="btn-small"
-            onClick={() => navigate(`/admin/courses/${selectedCourse.id}/content-review`)}
-          >
-            Duyệt nội dung
-          </button>
-          <button className="btn-small" onClick={() => onViewTimeline(selectedCourse)}>
-            Lịch sử
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const getStatusBadge = (s: string) => {
+    switch (s) {
+      case "draft":
+        return <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "11px", background: "#e5e5e5", color: "#666" }}>Bản nháp</span>;
+      case "pending_review":
+        return <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "11px", background: "#fff3cd", color: "#856404" }}>Chờ duyệt</span>;
+      case "published":
+        return <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "11px", background: "#d4edda", color: "#155724" }}>Đã xuất bản</span>;
+      case "archived":
+        return <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "11px", background: "#f8d7da", color: "#721c24" }}>Đã lưu trữ</span>;
+      default:
+        return <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "11px", background: "#e5e5e5", color: "#666" }}>{s}</span>;
+    }
+  };
 
   return (
     <div>
@@ -1414,9 +1777,25 @@ function CourseReviewsPanel({
           <div style={{ flex: 1 }}>
             <div style={{ position: "relative" }}>
               <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-              <input className="filter-input" placeholder="Tìm theo tiêu đề / slug" value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} style={{ paddingLeft: 36, width: "100%" }} />
+              <input
+                className="filter-input"
+                placeholder="Tìm theo tiêu đề / slug..."
+                value={q}
+                onChange={(e) => { setPage(1); setQ(e.target.value); }}
+                style={{ paddingLeft: 36, width: "100%" }}
+              />
             </div>
           </div>
+          <select
+            className="filter-select"
+            value={status}
+            onChange={(e) => { setPage(1); setStatus(e.target.value as typeof status); }}
+            style={{ minWidth: 140 }}
+          >
+            {statusOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
           <button className="btn-secondary" onClick={() => refetch()}><RefreshCw size={14} /> Tải lại</button>
         </div>
       </div>
@@ -1424,30 +1803,312 @@ function CourseReviewsPanel({
       <div className="table-container">
         <table className="admin-table">
           <thead>
-            <tr><th>Khóa học</th><th>Danh mục</th><th>Slug</th><th>Kiểm tra chất lượng</th><th>Phase</th><th>Cập nhật</th><th>Thao tác</th></tr>
+            <tr>
+              <th>Khóa học</th>
+              <th>Trạng thái</th>
+              <th>Danh mục</th>
+              <th>Người tạo</th>
+              <th>Học viên</th>
+              <th>Bài học</th>
+              <th>Cập nhật</th>
+              <th>Thao tác</th>
+            </tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={7} className="table-empty"><RefreshCw size={20} style={{ animation: "spin 1s linear infinite" }} /> Đang tải...</td></tr>}
-            {isError && <tr><td colSpan={7} className="table-empty"><AlertCircle size={20} /> Không thể tải danh sách</td></tr>}
-            {!isLoading && !isError && data.length === 0 && <tr><td colSpan={7} className="table-empty">Không có khóa học nào chờ duyệt</td></tr>}
-            {data.map((course: any) => (
-              <tr key={course.id}>
-                <td><div className="user-name">{course.title}</div><div className="user-id">#{course.id}</div></td>
-                <td>{course.category || "—"}</td>
-                <td>/{course.slug}</td>
-                <td>{course.quality_gate?.ready ? <Check size={16} style={{ color: "#16a34a" }} /> : <AlertCircle size={16} style={{ color: "#b45309" }} />}</td>
-                <td>
-                  {phaseByCourse?.[course.id] ? (
-                    <span className="status-badge-text warning">{phaseByCourse[course.id]}</span>
-                  ) : (
-                    <span style={{ color: "#94a3b8" }}>—</span>
-                  )}
+            {isLoading && (
+              <tr>
+                <td colSpan={8} className="table-empty">
+                  <RefreshCw size={20} style={{ animation: "spin 1s linear infinite" }} /> Đang tải...
                 </td>
+              </tr>
+            )}
+            {isError && (
+              <tr>
+                <td colSpan={8} className="table-empty">
+                  <AlertCircle size={20} /> Không thể tải danh sách
+                </td>
+              </tr>
+            )}
+            {!isLoading && !isError && data.length === 0 && (
+              <tr>
+                <td colSpan={8} className="table-empty">Không có khóa học nào</td>
+              </tr>
+            )}
+            {data.map((course) => (
+              <tr key={course.id}>
+                <td>
+                  <div className="user-name">{course.title}</div>
+                  <div className="user-id">#{course.id} · /{course.slug}</div>
+                </td>
+                <td>{getStatusBadge(course.status)}</td>
+                <td>{course.category || "—"}</td>
+                <td>{course.creator_name || "—"}</td>
+                <td style={{ textAlign: "center" }}>{course.learners_count ?? 0}</td>
+                <td style={{ textAlign: "center" }}>{course.lessons_count ?? 0}</td>
                 <td>{new Date(course.updated_at).toLocaleString("vi-VN")}</td>
                 <td>
                   <div className="action-buttons">
-                    <button className="btn-small" onClick={() => setSelectedCourse(course)}>
-                      Tiến hành duyệt
+                    {course.status === "pending_review" && (
+                      <>
+                        <button
+                          className="btn-small"
+                          onClick={() => onReview(course, "approve")}
+                          disabled={actionLoading === course.id}
+                          style={{ background: "#16a34a", color: "#fff", borderColor: "#16a34a" }}
+                        >
+                          <Check size={12} /> Duyệt
+                        </button>
+                        <button
+                          className="btn-small btn-danger"
+                          onClick={() => onReview(course, "reject")}
+                          disabled={actionLoading === course.id}
+                        >
+                          <X size={12} /> Từ chối
+                        </button>
+                      </>
+                    )}
+                    <button
+                      className="btn-small"
+                      onClick={() => onViewTimeline(course)}
+                    >
+                      Lịch sử
+                    </button>
+                    <button
+                      className="btn-small"
+                      onClick={() => navigate(`/admin/courses/${course.id}/content-review`)}
+                    >
+                      Chi tiết
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="pagination">
+        <div className="pagination-buttons">
+          <button className="btn-secondary" disabled={!pagination || page <= 1} onClick={() => setPage(Math.max(1, page - 1))}>Trước</button>
+          <button className="btn-secondary" disabled={!pagination || page >= (pagination?.pages ?? 1)} onClick={() => setPage(Math.min(pagination?.pages || 1, page + 1))}>Sau</button>
+        </div>
+        <div className="pagination-info">Trang {page} / {pagination?.pages ?? 1}</div>
+      </div>
+    </div>
+  );
+}
+
+type LessonResourceReviewsPanelProps = {
+  data: PendingLessonResource[];
+  pagination?: { page: number; limit: number; total: number; pages: number };
+  isLoading: boolean;
+  isError: boolean;
+  page: number;
+  setPage: (page: number) => void;
+  q: string;
+  setQ: (q: string) => void;
+  kind: "all" | "pdf" | "word" | "video" | "youtube" | "other";
+  setKind: (kind: "all" | "pdf" | "word" | "video" | "youtube" | "other") => void;
+  actionLoading: number | null;
+  phaseByResource: Record<number, string>;
+  onReview: (resource: PendingLessonResource, decision: "approve" | "reject") => void;
+  onViewTimeline: (resource: PendingLessonResource) => void;
+  refetch: () => void;
+};
+
+function LessonResourceReviewsPanel({
+  data,
+  pagination,
+  isLoading,
+  isError,
+  page,
+  setPage,
+  q,
+  setQ,
+  kind,
+  setKind,
+  actionLoading,
+  phaseByResource,
+  onReview,
+  onViewTimeline,
+  refetch,
+}: LessonResourceReviewsPanelProps) {
+  const kindLabels: Record<string, string> = {
+    pdf: "PDF",
+    word: "Word",
+    video: "Video",
+    youtube: "YouTube",
+    other: "Khác",
+  };
+
+  const getKindBadge = (k: string) => {
+    const colors: Record<string, string> = {
+      pdf: "#e74c3c",
+      word: "#2980b9",
+      video: "#8e44ad",
+      youtube: "#c0392b",
+      other: "#7f8c8d",
+    };
+    return (
+      <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "11px", background: colors[k] || "#7f8c8d", color: "#fff" }}>
+        {kindLabels[k] || k}
+      </span>
+    );
+  };
+
+  const getResourcePreview = (resource: PendingLessonResource) => {
+    if (resource.resource_kind === "youtube") {
+      const videoId = resource.url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?]+)/)?.[1];
+      if (videoId) {
+        return (
+          <div style={{ marginTop: 8 }}>
+            <img
+              src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`}
+              alt="YouTube thumbnail"
+              style={{ width: 160, height: 90, objectFit: "cover", borderRadius: 6 }}
+            />
+            <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>
+              <a href={resource.url} target="_blank" rel="noreferrer" style={{ color: "#3498db" }}>
+                Xem trên YouTube
+              </a>
+            </div>
+          </div>
+        );
+      }
+    }
+    if (resource.preview_url) {
+      return (
+        <div style={{ marginTop: 8 }}>
+          <img src={resource.preview_url} alt="Preview" style={{ maxWidth: 160, maxHeight: 90, borderRadius: 6 }} />
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div>
+      <div className="filters-card">
+        <div className="filters-row">
+          <div style={{ flex: 1 }}>
+            <div style={{ position: "relative" }}>
+              <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+              <input
+                className="filter-input"
+                placeholder="Tìm theo tên file, khóa học, bài học..."
+                value={q}
+                onChange={(e) => { setPage(1); setQ(e.target.value); }}
+                style={{ paddingLeft: 36, width: "100%" }}
+              />
+            </div>
+          </div>
+          <select
+            className="filter-select"
+            value={kind}
+            onChange={(e) => { setPage(1); setKind(e.target.value as typeof kind); }}
+            style={{ minWidth: 120 }}
+          >
+            <option value="all">Tất cả loại</option>
+            <option value="pdf">PDF</option>
+            <option value="word">Word</option>
+            <option value="video">Video</option>
+            <option value="youtube">YouTube</option>
+            <option value="other">Khác</option>
+          </select>
+          <button className="btn-secondary" onClick={() => refetch()}><RefreshCw size={14} /> Tải lại</button>
+        </div>
+      </div>
+
+      <div className="table-container">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Khóa học</th>
+              <th>Bài học</th>
+              <th>Tài nguyên</th>
+              <th>Loại</th>
+              <th>Trạng thái</th>
+              <th>Ngày tải lên</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && (
+              <tr>
+                <td colSpan={7} className="table-empty">
+                  <RefreshCw size={20} style={{ animation: "spin 1s linear infinite" }} /> Đang tải...
+                </td>
+              </tr>
+            )}
+            {isError && (
+              <tr>
+                <td colSpan={7} className="table-empty">
+                  <AlertCircle size={20} /> Không thể tải danh sách
+                </td>
+              </tr>
+            )}
+            {!isLoading && !isError && data.length === 0 && (
+              <tr>
+                <td colSpan={7} className="table-empty">Không có tài nguyên nào chờ duyệt</td>
+              </tr>
+            )}
+            {data.map((resource) => (
+              <tr key={resource.id}>
+                <td>
+                  <div className="user-name">{resource.course_title}</div>
+                  <div className="user-id">#{resource.course_id}</div>
+                </td>
+                <td>
+                  <div style={{ fontWeight: 500 }}>{resource.lesson_title}</div>
+                  <div style={{ fontSize: 11, color: "#666" }}>#{resource.lesson_id}</div>
+                </td>
+                <td style={{ maxWidth: 250 }}>
+                  <div style={{ fontWeight: 500, wordBreak: "break-all" }}>
+                    {resource.filename || "Không có tên file"}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#666", wordBreak: "break-all" }}>
+                    {resource.url.length > 60 ? resource.url.slice(0, 60) + "..." : resource.url}
+                  </div>
+                  {resource.is_resubmitted && (
+                    <span style={{ fontSize: 11, color: "#e67e22", marginTop: 4, display: "inline-block" }}>
+                      ↻ Gửi lại
+                    </span>
+                  )}
+                  {resource.previous_rejected_reason && (
+                    <div style={{ fontSize: 11, color: "#e74c3c", marginTop: 4 }}>
+                      Lý do từ chối trước: {resource.previous_rejected_reason}
+                    </div>
+                  )}
+                  {getResourcePreview(resource)}
+                </td>
+                <td>{getKindBadge(resource.resource_kind)}</td>
+                <td>
+                  {phaseByResource?.[resource.id] ? (
+                    <span className="status-badge-text warning">{phaseByResource[resource.id]}</span>
+                  ) : (
+                    <span className="status-badge-text warning">Chờ duyệt</span>
+                  )}
+                </td>
+                <td>{new Date(resource.created_at).toLocaleString("vi-VN")}</td>
+                <td>
+                  <div className="action-buttons">
+                    <button
+                      className="btn-small"
+                      onClick={() => onReview(resource, "approve")}
+                      disabled={actionLoading === resource.id}
+                      style={{ background: "#16a34a", color: "#fff", borderColor: "#16a34a" }}
+                    >
+                      <Check size={12} /> Duyệt
+                    </button>
+                    <button
+                      className="btn-small btn-danger"
+                      onClick={() => onReview(resource, "reject")}
+                      disabled={actionLoading === resource.id}
+                    >
+                      <X size={12} /> Từ chối
+                    </button>
+                    <button className="btn-small" onClick={() => onViewTimeline(resource)}>
+                      Lịch sử
                     </button>
                   </div>
                 </td>

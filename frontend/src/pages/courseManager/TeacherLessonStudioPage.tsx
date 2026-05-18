@@ -943,6 +943,7 @@ export default function TeacherLessonStudioPage() {
                   removeAssignmentAttachment={removeAssignmentAttachment}
                   isRejectedContext={isAssignmentRejectedContext}
                   readOnly={isReadOnlyByReview}
+                  hideDueDateField={true}
                 />
               </div>
 

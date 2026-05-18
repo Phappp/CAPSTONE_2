@@ -10,6 +10,7 @@ export const COURSES_API = {
   myRevenueTransactions: `${COURSES_API_BASE}/my/revenue/transactions`,
   myList: `${COURSES_API_BASE}/my`,
   adminPendingReview: `${COURSES_API_BASE}/admin/pending-review`,
+  adminCourses: `${COURSES_API_BASE}/admin/courses`,
   adminPendingLessonResources: `${COURSES_API_BASE}/admin/resources/pending-review`,
   adminReview: (id: number | string) => `${COURSES_API_BASE}/${id}/admin-review`,
   adminReviewTimeline: (id: number | string) => `${COURSES_API_BASE}/${id}/admin-review/timeline`,

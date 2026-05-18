@@ -38,6 +38,7 @@ import { LiveSessionController } from './features/live-session/adapter/controlle
 import { LiveSessionServiceImpl } from './features/live-session/domain/service';
 import initAiShortAnswerRoute from './features/ai-short-answer/adapter/route';
 import { AiShortAnswerController } from './features/ai-short-answer/adapter/controller';
+import { AiShortAnswerServiceImpl } from './features/ai-short-answer/domain/service';
 import initChatbotRoute from './features/chatbot/adapter/route';
 import { AiSummaryController } from './features/ai-summary/adapter/controller';
 import { AiSummaryServiceImpl } from './features/ai-summary/domain/service';
@@ -89,7 +90,7 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/v1/question-banks', initQuestionBankRoute());
   app.use('/api/v1/payments', initPaymentRoute(new PaymentController(new PaymentServiceImpl())));
   app.use('/api/v1/live-sessions', initLiveSessionRoute(new LiveSessionController(new LiveSessionServiceImpl())));
-  app.use('/api/v1/ai', initAiShortAnswerRoute(new AiShortAnswerController()));
+  app.use('/api/v1/ai', initAiShortAnswerRoute(new AiShortAnswerController(new AiShortAnswerServiceImpl())));
   app.use('/api/v1/chatbot', initChatbotRoute());
   app.use('/api/v1', initAnalyticsRoute());
   app.use(recoverMiddleware);

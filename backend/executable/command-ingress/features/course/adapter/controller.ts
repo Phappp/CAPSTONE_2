@@ -12,6 +12,7 @@ import {
   LearnerLessonProgressBody,
   ListPendingReviewCoursesQuery,
   ListPendingLessonResourcesQuery,
+  ListAdminCoursesQuery,
   ReviewCourseBody,
   ReviewLessonResourceBody,
   UpdateCourseCompletionRulesBody,
@@ -435,6 +436,22 @@ export class CourseController extends BaseController {
         page: query.page,
         page_size: query.page_size,
         q: query.q,
+      });
+      res.status(200).json(result);
+    });
+  }
+
+  async listAdminCourses(req: HttpRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.execWithTryCatchBlock(req, res, next, async (req, res) => {
+      const uid = Number(req.getSubject());
+      const query = new ListAdminCoursesQuery(req.query);
+      const result = await this.service.listAdminCourses(uid, {
+        page: query.page,
+        page_size: query.page_size,
+        q: query.q,
+        status: query.status,
+        sort_by: query.sort_by,
+        sort_dir: query.sort_dir,
       });
       res.status(200).json(result);
     });

@@ -1785,10 +1785,20 @@ export class CourseServiceImpl implements CourseService {
           .getMany()
       : [];
 
-    const attachFlags = await this.loadLessonAttachmentFlags((lessons as any[]).map((l) => Number(l.id)));
+    const lessonIds = (lessons as any[]).map((l) => Number(l.id));
+    const attachFlags = await this.loadLessonAttachmentFlags(lessonIds);
+    // Load resource review statuses to filter out lessons with pending/rejected resources
+    const resourceStatuses = await this.loadLessonResourceStatuses(lessonIds);
+
     const lessonByModule = new Map<number, CourseLessonItem[]>();
     for (const l of lessons as any[]) {
       const lid = Number(l.id);
+      const resStatus = resourceStatuses.get(lid);
+      const hasUnapproved = resStatus && (resStatus.hasPending || resStatus.hasRejected);
+
+      // Skip lessons that have pending or rejected resources for learners
+      if (hasUnapproved) continue;
+
       const arr = lessonByModule.get(l.module_id) || [];
       arr.push({
         id: l.id,
@@ -2277,10 +2287,20 @@ export class CourseServiceImpl implements CourseService {
           .getMany()
       : [];
 
-    const attachFlagsLearning = await this.loadLessonAttachmentFlags((lessons as any[]).map((l) => Number(l.id)));
+    const lessonIds = (lessons as any[]).map((l) => Number(l.id));
+    const attachFlagsLearning = await this.loadLessonAttachmentFlags(lessonIds);
+    // Load resource review statuses to filter out lessons with pending/rejected resources for learners
+    const resourceStatuses = await this.loadLessonResourceStatuses(lessonIds);
+
     const lessonByModule = new Map<number, CourseLessonItem[]>();
     for (const l of lessons as any[]) {
       const lid = Number(l.id);
+      const resStatus = resourceStatuses.get(lid);
+      const hasUnapproved = resStatus && (resStatus.hasPending || resStatus.hasRejected);
+
+      // Skip lessons that have pending or rejected resources for learners
+      if (hasUnapproved) continue;
+
       const arr = lessonByModule.get(l.module_id) || [];
       arr.push({
         id: l.id,
@@ -2415,6 +2435,52 @@ export class CourseServiceImpl implements CourseService {
       if (Number.isFinite(lid)) hasAssignment.add(lid);
     }
     return { hasQuiz, hasAssignment };
+  }
+
+  /**
+   * Load resource review statuses for lessons.
+   * Returns a map of lessonId -> { hasApproved, hasPending, hasRejected }
+   * A lesson is considered "content approved" only if it has NO pending/rejected resources.
+   */
+  private async loadLessonResourceStatuses(lessonIds: number[]): Promise<Map<number, {
+    hasApproved: boolean;
+    hasPending: boolean;
+    hasRejected: boolean;
+  }>> {
+    const result = new Map<number, { hasApproved: boolean; hasPending: boolean; hasRejected: boolean }>();
+    const ids = lessonIds.map((x) => Number(x)).filter((x) => Number.isFinite(x));
+    if (!ids.length) return result;
+
+    // Initialize all lessons with empty status
+    for (const id of ids) {
+      result.set(id, { hasApproved: false, hasPending: false, hasRejected: false });
+    }
+
+    const resourceRepo = AppDataSource.getRepository(LessonResource);
+    const raw = await resourceRepo
+      .createQueryBuilder('r')
+      .select('r.lesson_id', 'lesson_id')
+      .addSelect('r.review_status', 'review_status')
+      .addSelect('COUNT(*)', 'cnt')
+      .where('r.lesson_id IN (:...ids)', { ids })
+      .groupBy('r.lesson_id, r.review_status')
+      .getRawMany();
+
+    for (const row of raw as any[]) {
+      const lid = Number(row.lesson_id);
+      const status = String(row.review_status || 'pending');
+      const cnt = Number(row.cnt) || 0;
+      if (!cnt) continue;
+
+      const entry = result.get(lid);
+      if (!entry) continue;
+
+      if (status === 'approved') entry.hasApproved = true;
+      else if (status === 'pending') entry.hasPending = true;
+      else if (status === 'rejected') entry.hasRejected = true;
+    }
+
+    return result;
   }
 
   private moduleLessonsInOrder(moduleId: number, orderedLessons: Lesson[]): Lesson[] {
@@ -3881,6 +3947,97 @@ export class CourseServiceImpl implements CourseService {
     };
   }
 
+  async listAdminCourses(
+    subjectUserId: number,
+    query: {
+      status?: string;
+      q?: string;
+      page?: number;
+      page_size?: number;
+      sort_by?: string;
+      sort_dir?: string;
+    }
+  ): Promise<{ items: any[]; page: number; page_size: number; total: number }> {
+    const admin = await isUserAdmin(subjectUserId);
+    if (!admin) throw new Error('Bạn không có quyền thực hiện thao tác này.');
+
+    const courseRepo = AppDataSource.getRepository(Course);
+    const page = Math.max(1, Number(query.page || 1));
+    const pageSize = Math.min(50, Math.max(1, Number(query.page_size || 20)));
+    const status = String(query.status || 'all');
+    const q = String(query.q || '').trim();
+    const sortBy = String(query.sort_by || 'updated_at');
+    const sortDir = String(query.sort_dir || 'desc').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+    const qb = courseRepo.createQueryBuilder('c');
+    qb.where('c.deleted_at IS NULL');
+
+    if (status !== 'all') {
+      qb.andWhere('c.status = :status', { status });
+    }
+
+    if (q) {
+      qb.andWhere('(c.title LIKE :q OR c.slug LIKE :q)', { q: `%${q}%` });
+    }
+
+    qb.addSelect((subQb) => subQb.select('COUNT(*)').from(CourseEnrollment, 'ce').where('ce.course_id = c.id'), 'learners_count');
+    qb.addSelect((subQb) => subQb.select('COUNT(*)').from(Module, 'm').where('m.course_id = c.id'), 'modules_count');
+    qb.addSelect((subQb) => subQb
+      .select('COUNT(*)')
+      .from(Lesson, 'l')
+      .innerJoin(Module, 'm', 'm.id = l.module_id')
+      .where('m.course_id = c.id'), 'lessons_count');
+    qb.addSelect((subQb) => subQb
+      .select('u.full_name')
+      .from(User, 'u')
+      .where('u.id = c.created_by')
+      .limit(1), 'creator_name');
+
+    const validSortFields: Record<string, string> = {
+      updated_at: 'c.updated_at',
+      created_at: 'c.created_at',
+      title: 'c.title',
+      learners_count: 'learners_count',
+    };
+    const sortField = validSortFields[sortBy] || 'c.updated_at';
+    qb.orderBy(sortField, sortDir);
+
+    qb.skip((page - 1) * pageSize).take(pageSize);
+
+    const total = await qb.getCount();
+    const { raw } = await qb.getRawAndEntities();
+    const items = raw.map((r: any) => ({
+      id: r.c_id ?? r.id,
+      title: r.c_title ?? r.title,
+      slug: r.c_slug ?? r.slug,
+      short_description: r.c_short_description ?? r.short_description,
+      category: r.c_category ?? r.category,
+      thumbnail_url: r.c_thumbnail_url ?? r.thumbnail_url,
+      level: r.c_level ?? r.level,
+      language: r.c_language ?? r.language,
+      price: r.c_price ?? r.price,
+      has_certificate: r.c_has_certificate ?? r.has_certificate,
+      estimated_hours: r.c_estimated_hours ?? r.estimated_hours,
+      tags: r.c_tags ?? r.tags,
+      status: r.c_status ?? r.status,
+      published_at: r.c_published_at ?? r.published_at,
+      publish_scheduled_at: r.c_publish_scheduled_at ?? r.publish_scheduled_at,
+      created_at: r.c_created_at ?? r.created_at,
+      updated_at: r.c_updated_at ?? r.updated_at,
+      learners_count: Number(r.learners_count ?? 0),
+      modules_count: Number(r.modules_count ?? 0),
+      lessons_count: Number(r.lessons_count ?? 0),
+      creator_name: r.creator_name ?? null,
+    }));
+
+    return {
+      items,
+      page,
+      page_size: pageSize,
+      total,
+    };
+  }
+
   async reviewCourseByAdmin(
     subjectUserId: number,
     courseId: number,
@@ -4949,8 +5106,17 @@ export class CourseServiceImpl implements CourseService {
     if (!lesson) throw new Error('Không tìm thấy bài học.');
     const mod = await moduleRepo.findOne({ where: { id: (lesson as any).module_id, course_id: courseId } as any });
     if (!mod) throw new Error('Không tìm thấy bài học.');
+
+    const isManager = await isUserCourseManager(subjectUserId);
+    const isAdmin = await isUserAdmin(subjectUserId);
+
+    const where: any = { lesson_id: lessonId };
+    if (!isManager && !isAdmin) {
+      where.review_status = 'approved';
+    }
+
     const resources = await resourceRepo.find({
-      where: { lesson_id: lessonId } as any,
+      where,
       order: { created_at: 'DESC', id: 'DESC' } as any,
     });
 

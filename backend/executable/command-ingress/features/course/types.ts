@@ -43,6 +43,22 @@ export type CourseListQuery = {
   sort_dir?: SortDir;
 };
 
+export type AdminListCoursesQuery = {
+  status?: string;
+  q?: string;
+  page?: number;
+  page_size?: number;
+  sort_by?: string;
+  sort_dir?: string;
+};
+
+export type AdminListCoursesResult = {
+  items: CourseListItem[];
+  page: number;
+  page_size: number;
+  total: number;
+};
+
 export type PublishedCourseListQuery = {
   q?: string;
   level?: string;
@@ -83,6 +99,8 @@ export type CourseLessonItem = {
   quality_status?: 'ok' | 'needs_fix';
   /** Lý do lesson chưa đạt chất lượng (nếu có). */
   quality_issue?: string | null;
+  /** Lesson có tài nguyên đã được duyệt hay không. Nếu false, ẩn khỏi học viên. */
+  is_content_approved?: boolean;
 };
 
 export type CourseModuleItem = {
@@ -906,6 +924,7 @@ export interface CourseService {
   listMyCourseLearnerProgress(subjectUserId: number, courseId: number, query: { page?: number; page_size?: number; q?: string }): Promise<CourseLearnerProgressResult>;
   getCourseLeaderboard(subjectUserId: number, courseId: number): Promise<CourseLeaderboardResult>;
   listPendingReviewCourses(subjectUserId: number, query: PendingReviewCourseQuery): Promise<PendingReviewCourseListResult>;
+  listAdminCourses(subjectUserId: number, query: AdminListCoursesQuery): Promise<AdminListCoursesResult>;
   reviewCourseByAdmin(subjectUserId: number, courseId: number, decision: ReviewCourseDecision, note?: string | null): Promise<void>;
   getCourseReviewTimelineByAdmin(subjectUserId: number, courseId: number): Promise<CourseReviewTimelineResult>;
   getMyCourseReviewTimeline(subjectUserId: number, courseId: number): Promise<CourseReviewTimelineResult>;

@@ -490,6 +490,59 @@ export async function apiGetPendingReviewCourses(params: {
   return data as { items: PendingReviewCourse[]; page: number; page_size: number; total: number };
 }
 
+export type AdminCourseItem = {
+  id: number;
+  title: string;
+  slug: string;
+  short_description: string | null;
+  category: string | null;
+  thumbnail_url: string | null;
+  level: string;
+  language: string;
+  price: number | null;
+  has_certificate: boolean;
+  estimated_hours: number | null;
+  tags: string[] | null;
+  status: "draft" | "pending_review" | "published" | "archived";
+  published_at: string | null;
+  publish_scheduled_at: string | null;
+  created_at: string;
+  updated_at: string;
+  learners_count: number;
+  modules_count: number;
+  lessons_count: number;
+  creator_name: string | null;
+};
+
+export async function apiGetAdminCourses(params: {
+  accessToken: string;
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  status?: "draft" | "pending_review" | "published" | "archived" | "all";
+  sort_by?: "updated_at" | "created_at" | "title" | "learners_count";
+  sort_dir?: "asc" | "desc";
+}): Promise<{ items: AdminCourseItem[]; page: number; page_size: number; total: number }> {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.pageSize) q.set("page_size", String(params.pageSize));
+  if (params.q?.trim()) q.set("q", params.q.trim());
+  if (params.status) q.set("status", params.status);
+  if (params.sort_by) q.set("sort_by", params.sort_by);
+  if (params.sort_dir) q.set("sort_dir", params.sort_dir);
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}${COURSES_API.adminCourses}${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as any)?.message || (data as any)?.code || "ADMIN_COURSES_FETCH_FAILED");
+  }
+  return data as { items: AdminCourseItem[]; page: number; page_size: number; total: number };
+}
+
 export async function apiReviewCourseByAdmin(params: {
   accessToken: string;
   courseId: number;
