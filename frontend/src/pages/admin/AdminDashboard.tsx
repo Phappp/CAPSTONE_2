@@ -1424,15 +1424,15 @@ function KeysPanel({
         <h3>🤖 Cấu hình OpenRouter</h3>
         <div style={{ display: "grid", gap: 12 }}>
           <div>
-            <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>Danh sách model (mỗi dòng 1 model)</label>
+            <label className="openrouter-config-label">Danh sách model (mỗi dòng 1 model)</label>
             <textarea className="form-textarea" rows={5} value={openRouterModelsInput} onChange={(e) => setOpenRouterModelsInput(e.target.value)} placeholder="openai/gpt-4o-mini&#10;anthropic/claude-3.5-sonnet" />
           </div>
           <div>
-            <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>Model mặc định</label>
+            <label className="openrouter-config-label">Model mặc định</label>
             <input className="filter-input" value={openRouterDefaultModel} onChange={(e) => setOpenRouterDefaultModel(e.target.value)} placeholder="openai/gpt-4o-mini" style={{ width: "100%" }} />
           </div>
           <div>
-            <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>Số phút chờ khi key bị giới hạn</label>
+            <label className="openrouter-config-label">Số phút chờ khi key bị giới hạn</label>
             <input className="filter-input" type="number" min={1} value={openRouterCooldownMinutes} onChange={(e) => setOpenRouterCooldownMinutes(e.target.value)} style={{ width: 120 }} />
           </div>
           <div>

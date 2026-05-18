@@ -2284,6 +2284,35 @@ body {
   border-color: var(--accent-secondary);
 }
 
+.review-tree-panel-title,
+.review-tree-module-title,
+.review-tree-lesson-title,
+.review-lesson-detail-title {
+  color: var(--text-secondary);
+}
+
+.review-tree-panel-title {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.review-tree-module-title {
+  font-weight: 700;
+}
+
+.review-tree-lesson-title {
+  text-align: left;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.review-lesson-detail-title {
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
 .course-review-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3352,6 +3381,14 @@ img[loading="lazy"]:not([src]) {
   color: #5eead4;
   font-size: 1rem;
   margin-bottom: 0.75rem;
+}
+
+/* Field labels: same tone as page subtitle ("Quản lý khóa API OpenRouter") */
+.openrouter-config-label {
+  display: block;
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+  color: var(--text-muted);
 }
 
 /* Key cards */

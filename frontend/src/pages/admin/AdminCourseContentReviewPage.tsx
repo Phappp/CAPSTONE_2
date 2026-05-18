@@ -4,6 +4,7 @@ import { url } from "../../baseUrl";
 import { COURSES_API } from "../../api/courses";
 import { ASSIGNMENTS_API } from "../../api/assignments";
 import { useAuth } from "../../contexts/Auth";
+import "./AdminDashboard.css";
 
 type LessonResource = {
   id: number;
@@ -932,7 +933,7 @@ export default function AdminCourseContentReviewPage() {
         {!loading && tree && (
           <div style={{ display: "grid", gridTemplateColumns: "45% minmax(0, 1fr)", gap: 12 }}>
             <div className="panel review-tree-panel" style={{ padding: 12, maxHeight: "75vh", overflow: "auto" }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Cây nội dung khóa học</div>
+              <div className="review-tree-panel-title">Cây nội dung khóa học</div>
               <ul className="review-tree-root">
                 {(tree.modules || []).map((m) => {
                   const moduleStats = getModuleReviewStats(m.lessons || []);
@@ -943,7 +944,7 @@ export default function AdminCourseContentReviewPage() {
                         <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", marginBottom: 8 }}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                             <span>{renderReviewIcon(moduleState)}</span>
-                            <div style={{ fontWeight: 700 }}>{m.title}</div>
+                            <div className="review-tree-module-title">{m.title}</div>
                           </div>
                           <div style={{ fontSize: 12, color: "#64748b" }}>
                             {moduleStats.total} tài nguyên · P:{moduleStats.pending} · R:{moduleStats.rejected}
@@ -978,7 +979,7 @@ export default function AdminCourseContentReviewPage() {
                                   }}
                                 >
                                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-                                    <div style={{ textAlign: "left", fontWeight: 600, color: "#0f172a", display: "inline-flex", alignItems: "center", gap: 8 }}>
+                                    <div className="review-tree-lesson-title">
                                       <span>{renderReviewIcon(lessonState)}</span>
                                       <span>{l.title}</span>
                                     </div>
@@ -1005,7 +1006,7 @@ export default function AdminCourseContentReviewPage() {
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 18 }}>{selectedLesson.title}</div>
+                      <div className="review-lesson-detail-title">{selectedLesson.title}</div>
                       <div style={{ color: "#64748b", fontSize: 13 }}>
                         Chương: {selectedModule?.title || "--"} · Loại bài: {lessonTypeLabel(selectedLesson.lesson_type)}
                       </div>
