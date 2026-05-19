@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 405" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d9488"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.3" cy="0.3" r="0.6">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="720" height="405" fill="url(#g)"/>
+  <rect width="720" height="405" fill="url(#glow)"/>
+  <g opacity="0.95">
+    <rect x="430" y="110" width="80" height="170" rx="8" fill="#fff" opacity="0.95"/>
+    <rect x="445" y="125" width="50" height="6" rx="2" fill="#0d9488"/>
+    <rect x="445" y="140" width="40" height="22" rx="3" fill="#fbbf24"/>
+    <rect x="445" y="170" width="50" height="22" rx="3" fill="#06b6d4" opacity="0.7"/>
+    <rect x="445" y="200" width="50" height="22" rx="3" fill="#06b6d4" opacity="0.5"/>
+
+    <rect x="525" y="110" width="80" height="170" rx="8" fill="#fff" opacity="0.85"/>
+    <rect x="540" y="125" width="50" height="6" rx="2" fill="#0d9488"/>
+    <rect x="540" y="140" width="50" height="22" rx="3" fill="#06b6d4" opacity="0.6"/>
+    <rect x="540" y="170" width="50" height="22" rx="3" fill="#06b6d4" opacity="0.4"/>
+
+    <rect x="620" y="110" width="80" height="170" rx="8" fill="#fff" opacity="0.75"/>
+    <rect x="635" y="125" width="50" height="6" rx="2" fill="#0d9488"/>
+    <rect x="635" y="140" width="50" height="22" rx="3" fill="#06b6d4" opacity="0.5"/>
+  </g>
+  <text x="40" y="60" font-family="Inter, system-ui, sans-serif" font-size="14" font-weight="700" fill="#fbbf24" letter-spacing="3">FLASH SALE · 61% OFF</text>
+  <text x="40" y="350" font-family="Inter, system-ui, sans-serif" font-size="36" font-weight="800" fill="#fff">Product Management</text>
+  <text x="40" y="385" font-family="Inter, system-ui, sans-serif" font-size="20" font-weight="600" fill="#fff" opacity="0.9">Intensive</text>
+</svg>

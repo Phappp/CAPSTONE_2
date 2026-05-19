@@ -53,8 +53,7 @@ const COURSES: Course[] = [
     id: 1,
     title: "AI Prompt Engineering Masterclass",
     instructor: "Dr. Linh Tran",
-    thumbnail:
-      "https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=720&q=80",
+    thumbnail: "/assets/courses/ai-prompt.svg",
     category: "AI & Machine Learning",
     level: "Intermediate",
     rating: 4.9,
@@ -68,8 +67,7 @@ const COURSES: Course[] = [
     id: 2,
     title: "Full-Stack Web Development 2026",
     instructor: "Khoa Nguyen",
-    thumbnail:
-      "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=720&q=80",
+    thumbnail: "/assets/courses/fullstack.svg",
     category: "Tech Stack",
     level: "Beginner",
     rating: 4.8,
@@ -82,8 +80,7 @@ const COURSES: Course[] = [
     id: 3,
     title: "Data Analytics with Python & SQL",
     instructor: "Prof. Maria Santos",
-    thumbnail:
-      "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=720&q=80",
+    thumbnail: "/assets/courses/data-analytics.svg",
     category: "Data Science",
     level: "Intermediate",
     rating: 4.7,
@@ -97,8 +94,7 @@ const COURSES: Course[] = [
     id: 4,
     title: "UX & UI Design Fundamentals",
     instructor: "Aiko Yamamoto",
-    thumbnail:
-      "https://images.unsplash.com/photo-1561070791-2526d30994b8?auto=format&fit=crop&w=720&q=80",
+    thumbnail: "/assets/courses/ux-ui-design.svg",
     category: "Design",
     level: "Beginner",
     rating: 4.9,
@@ -112,8 +108,7 @@ const COURSES: Course[] = [
     id: 5,
     title: "Digital Marketing & Growth",
     instructor: "James Carter",
-    thumbnail:
-      "https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=720&q=80",
+    thumbnail: "/assets/courses/digital-marketing.svg",
     category: "Business",
     level: "All Levels",
     rating: 4.6,
@@ -126,8 +121,7 @@ const COURSES: Course[] = [
     id: 6,
     title: "Business Strategy for Founders",
     instructor: "Olivia Park",
-    thumbnail:
-      "https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&w=720&q=80",
+    thumbnail: "/assets/courses/business-strategy.svg",
     category: "Business",
     level: "Advanced",
     rating: 4.8,
@@ -193,8 +187,7 @@ const FLASH_DEALS: FlashDeal[] = [
   {
     id: 1,
     title: "AI Engineering Bootcamp",
-    image:
-      "https://images.unsplash.com/photo-1518709268805-4e9042af2176?auto=format&fit=crop&w=720&q=80",
+    image: "/assets/flash/ai-bootcamp.svg",
     originalPrice: 199,
     salePrice: 79,
     discountPct: 60,
@@ -204,8 +197,7 @@ const FLASH_DEALS: FlashDeal[] = [
   {
     id: 2,
     title: "Cloud Architect Certification Track",
-    image:
-      "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=720&q=80",
+    image: "/assets/flash/cloud-architect.svg",
     originalPrice: 249,
     salePrice: 119,
     discountPct: 52,
@@ -215,8 +207,7 @@ const FLASH_DEALS: FlashDeal[] = [
   {
     id: 3,
     title: "Product Management Intensive",
-    image:
-      "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=720&q=80",
+    image: "/assets/flash/product-management.svg",
     originalPrice: 179,
     salePrice: 69,
     discountPct: 61,

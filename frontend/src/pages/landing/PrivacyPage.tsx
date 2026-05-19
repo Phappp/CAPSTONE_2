@@ -54,7 +54,7 @@ export default function PrivacyPage() {
               <div className="mb-privacy__help">
                 <p className="mb-privacy__help-tag">Need Help?</p>
                 <p className="mb-privacy__help-text">Questions about your data privacy?</p>
-                <a className="mb-privacy__help-link" href="mailto:privacy@mindbridge.co">
+                <a className="mb-privacy__help-link" href="mailto:leminhtuank0@gmail.com">
                   Contact Legal Team
                 </a>
               </div>

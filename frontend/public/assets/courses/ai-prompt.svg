@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 405" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.8" cy="0.2" r="0.6">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="720" height="405" fill="url(#g)"/>
+  <rect width="720" height="405" fill="url(#glow)"/>
+  <g opacity="0.35" stroke="#fff" stroke-width="1.2" fill="none">
+    <circle cx="180" cy="200" r="70"/>
+    <circle cx="180" cy="200" r="110"/>
+    <circle cx="180" cy="200" r="150"/>
+    <path d="M180 50 L180 350 M30 200 L330 200" stroke-dasharray="4 6"/>
+  </g>
+  <g fill="#fff">
+    <circle cx="540" cy="120" r="6"/>
+    <circle cx="600" cy="160" r="4" opacity="0.7"/>
+    <circle cx="640" cy="100" r="3" opacity="0.5"/>
+    <circle cx="500" cy="280" r="5" opacity="0.6"/>
+    <circle cx="580" cy="320" r="3" opacity="0.4"/>
+  </g>
+  <text x="40" y="60" font-family="Inter, system-ui, sans-serif" font-size="14" font-weight="600" fill="#fff" opacity="0.85" letter-spacing="3">AI &amp; MACHINE LEARNING</text>
+  <text x="40" y="350" font-family="Inter, system-ui, sans-serif" font-size="38" font-weight="800" fill="#fff">Prompt Engineering</text>
+  <text x="40" y="385" font-family="Inter, system-ui, sans-serif" font-size="18" font-weight="500" fill="#fff" opacity="0.85">Masterclass</text>
+</svg>
