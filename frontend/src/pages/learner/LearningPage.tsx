@@ -19,12 +19,12 @@ import "./LearningPage.css";
 function normalizeLearnerErrorMessage(raw: unknown): string {
   const msg = String(raw || "").trim();
   const lower = msg.toLowerCase();
-  if (!msg) return "Đã xảy ra lỗi. Vui lòng thử lại.";
+  if (!msg) return "An error occurred. Please try again.";
   if (lower.includes("ghi danh hợp lệ") || lower.includes("chưa đăng ký khóa học này")) {
-    return "Bạn không còn quyền học khóa này (có thể đã dừng hoặc hết hạn).";
+    return "You no longer have access to this course (may have been paused or expired).";
   }
   if (lower.includes("không thể truy cập bài học") || lower.includes("chưa mở theo lịch")) {
-    return "Bài học chưa mở hoặc bạn chưa đủ điều kiện truy cập.";
+    return "Lesson not available yet or you do not meet access requirements.";
   }
   return msg;
 }
@@ -350,12 +350,12 @@ export default function LearningPage() {
         },
       });
       const json = (await res.json().catch(() => ({}))) as Partial<CourseDetail> & { message?: string };
-      if (!res.ok) throw new Error(json?.message || "Không thể tải khóa học để học.");
+      if (!res.ok) throw new Error(json?.message || "Failed to load course.");
 
       const nextCourse = json as CourseDetail;
       setCourse(nextCourse);
     } catch (e: any) {
-      setError(normalizeLearnerErrorMessage(e?.message || "Đã xảy ra lỗi."));
+      setError(normalizeLearnerErrorMessage(e?.message || "An error occurred."));
     } finally {
       setLoading(false);
     }
@@ -371,7 +371,7 @@ export default function LearningPage() {
         },
       });
       const json = (await res.json().catch(() => ({}))) as Partial<CourseProgress> & { message?: string };
-      if (!res.ok) throw new Error(json?.message || "Không thể tải tiến độ.");
+      if (!res.ok) throw new Error(json?.message || "Failed to load progress.");
       setProgress(json as CourseProgress);
     } catch {
       setProgress(null);
@@ -389,7 +389,7 @@ export default function LearningPage() {
         },
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((json as any)?.message || "Không thể tải tóm tắt bài học.");
+      if (!res.ok) throw new Error((json as any)?.message || "Failed to load lesson summary.");
       const data = json as LessonSummaryData;
       setLessonSummary(data);
       if (
@@ -401,7 +401,7 @@ export default function LearningPage() {
       }
     } catch (e: any) {
       setLessonSummary(null);
-      setLessonSummaryError(normalizeLearnerErrorMessage(e?.message || "Không thể tải tóm tắt."));
+      setLessonSummaryError(normalizeLearnerErrorMessage(e?.message || "Failed to load summary."));
     } finally {
       setLessonSummaryLoading(false);
     }
@@ -424,10 +424,10 @@ export default function LearningPage() {
         },
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((json as any)?.message || "Không thể tạo tóm tắt.");
+      if (!res.ok) throw new Error((json as any)?.message || "Failed to create summary.");
       setLessonSummary(json as LessonSummaryData);
     } catch (e: any) {
-      setLessonSummaryError(normalizeLearnerErrorMessage(e?.message || "Không thể tạo tóm tắt."));
+      setLessonSummaryError(normalizeLearnerErrorMessage(e?.message || "Failed to create summary."));
     } finally {
       setLessonSummaryMutating(false);
     }
@@ -457,7 +457,7 @@ export default function LearningPage() {
       body: JSON.stringify({ delta_seconds: deltaSeconds }),
     });
     const json = (await res.json().catch(() => ({}))) as Partial<LessonHeartbeatDto> & { message?: string };
-    if (!res.ok) throw new Error(json?.message || "Không thể cập nhật tiến độ bài học.");
+    if (!res.ok) throw new Error(json?.message || "Failed to update lesson progress.");
     return json as LessonHeartbeatDto;
   }, [courseId, token]);
 
@@ -473,7 +473,7 @@ export default function LearningPage() {
         },
       });
       const json = (await res.json().catch(() => ({}))) as Partial<{ message?: string }>;
-      if (!res.ok) throw new Error(json?.message || "Không thể hoàn thành bài học.");
+      if (!res.ok) throw new Error(json?.message || "Failed to complete lesson.");
       await fetchProgress();
     } catch {
       completedAttemptedRef.current.delete(lessonId);
@@ -758,7 +758,7 @@ export default function LearningPage() {
       course?.modules
         ?.flatMap((m) => m.lessons || [])
         ?.find((l) => l.id === lessonModal.lessonId)
-        ?.title || "Tài nguyên";
+        ?.title || "Resources";
     const load = async () => {
       setLessonModalLoading(true);
       setLessonModalError(null);
@@ -772,7 +772,7 @@ export default function LearningPage() {
           },
         });
         const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error((json as any)?.message || "Không tải được tài nguyên bài học.");
+        if (!res.ok) throw new Error((json as any)?.message || "Failed to load lesson resources.");
         const items = (json as any)?.items as LessonResourceItem[] | undefined;
 
         if (!alive) return;
@@ -836,7 +836,7 @@ export default function LearningPage() {
         }
       } catch (e: any) {
         if (!alive) return;
-        setLessonModalError(normalizeLearnerErrorMessage(e?.message || "Không tải được tài nguyên."));
+        setLessonModalError(normalizeLearnerErrorMessage(e?.message || "Failed to load resources."));
         setLessonModalResources([]);
       } finally {
         if (alive) setLessonModalLoading(false);
@@ -1161,7 +1161,7 @@ export default function LearningPage() {
           },
         });
         const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error((json as any)?.message || "Không tải được thông tin quizz.");
+        if (!res.ok) throw new Error((json as any)?.message || "Failed to load quiz info.");
         const quiz = (json as any)?.quiz;
         if (!alive) return;
         setQuizInfoPreview({
@@ -1177,7 +1177,7 @@ export default function LearningPage() {
       } catch (e: any) {
         if (!alive) return;
         setQuizInfoPreview(null);
-        setQuizInfoError(normalizeLearnerErrorMessage(e?.message || "Không tải được thông tin quizz."));
+        setQuizInfoError(normalizeLearnerErrorMessage(e?.message || "Failed to load quiz info."));
       } finally {
         if (alive) setQuizInfoLoading(false);
       }
@@ -1288,11 +1288,11 @@ export default function LearningPage() {
         <div className="learningPage__topbar">
           <button className="learningPage__back" onClick={() => navigate(`/my-courses/${courseId}/${slug || ""}`)} type="button" disabled>
             <ArrowLeft size={16} />
-            <span>Quay lại</span>
+            <span>Back</span>
           </button>
           {/* <AvatarMenu /> */}
         </div>
-        <div className="learningPage__loading">Đang tải bản đồ lộ trình...</div>
+        <div className="learningPage__loading">Loading roadmap...</div>
       </div>
     );
   }
@@ -1303,14 +1303,14 @@ export default function LearningPage() {
         <div className="learningPage__topbar">
           <button className="learningPage__back" onClick={() => navigate(`/my-courses/${courseId}/${slug || ""}`)} type="button">
             <ArrowLeft size={16} />
-            <span>Quay lại</span>
+            <span>Back</span>
           </button>
           {/* <AvatarMenu /> */}
         </div>
         <div className="learningPage__errorBox">
-          <div className="learningPage__errorTitle">Không thể mở trang học</div>
+          <div className="learningPage__errorTitle">Unable to open learning page</div>
           <div className="learningPage__errorMsg">{error}</div>
-          <button className="btn btn--primary" onClick={() => navigate(`/my-courses/${courseId}/${slug || ""}`)} type="button">Quay lại</button>
+          <button className="btn btn--primary" onClick={() => navigate(`/my-courses/${courseId}/${slug || ""}`)} type="button">Go back</button>
         </div>
       </div>
     );
@@ -1608,8 +1608,8 @@ export default function LearningPage() {
       return (
         <EmptyState
           icon={<BookOpen size={40} />}
-          title="Tóm tắt AI"
-          description="Tính năng tóm tắt AI chỉ khả dụng cho bài học video hoặc văn bản."
+          title="AI Summary"
+          description="AI summary is only available for video or text lessons."
         />
       );
     }
@@ -1624,7 +1624,7 @@ export default function LearningPage() {
       <div className={`learningPage__aiSummary ${summaryStatusClass}`}>
         <div className="learningPage__aiSummaryHeader">
           <div className="learningPage__aiSummaryTitle">
-            Tóm tắt AI
+            AI Summary
             <span
               className={`learningPage__aiSummaryDot ${
                 lessonSummaryErrorShownAt
@@ -1637,21 +1637,21 @@ export default function LearningPage() {
               }`}
               title={
                 lessonSummaryErrorShownAt
-                  ? `Lỗi: ${lessonSummary?.error_message || "Không rõ"}`
+                  ? `Error: ${lessonSummary?.error_message || "Unknown"}`
                   : lessonSummary?.status === "pending" || lessonSummary?.status === "processing"
-                  ? "Hệ thống đang trích xuất nguồn text"
+                  ? "Extracting text source"
                   : lessonSummary?.source_ready
-                  ? "Nguồn text đã sẵn sàng cho LLM"
-                  : "Nguồn text chưa sẵn sàng cho LLM"
+                  ? "Text source ready for LLM"
+                  : "Text source not ready for LLM"
               }
               aria-label={
                 lessonSummaryErrorShownAt
-                  ? `Lỗi: ${lessonSummary?.error_message || "Không rõ"}`
+                  ? `Error: ${lessonSummary?.error_message || "Unknown"}`
                   : lessonSummary?.status === "pending" || lessonSummary?.status === "processing"
-                  ? "Hệ thống đang trích xuất nguồn text"
+                  ? "Extracting text source"
                   : lessonSummary?.source_ready
-                  ? "Nguồn text đã sẵn sàng cho LLM"
-                  : "Nguồn text chưa sẵn sàng cho LLM"
+                  ? "Text source ready for LLM"
+                  : "Text source not ready for LLM"
               }
             />
           </div>
@@ -1676,12 +1676,12 @@ export default function LearningPage() {
               {lessonSummaryMutating ? (
                 <span className="learningPage__aiSummaryLoading">
                   <Loader2 size={14} className="learningPage__aiSummarySpinner" />
-                  Đang tạo...
+                  Generating...
                 </span>
               ) : lessonSummary?.status === "succeeded" && lessonSummary?.overall_summary ? (
-                "Tạo lại"
+                "Regenerate"
               ) : (
-                "Tạo tóm tắt"
+                "Generate Summary"
               )}
             </button>
           </div>
@@ -1690,21 +1690,21 @@ export default function LearningPage() {
         {lessonSummary?.status === "pending" && !lessonSummary?.source_ready ? (
           <div className="learningPage__aiSummaryStatus">
             <Loader2 size={16} className="learningPage__aiSummarySpinner" />
-            <span>Đang transcript video, vui lòng đợi...</span>
+            <span>Processing video transcript, please wait...</span>
           </div>
         ) : null}
 
         {lessonSummary?.status === "pending" && lessonSummary?.source_ready ? (
           <div className="learningPage__aiSummaryStatus learningPage__aiSummaryStatus--ready">
             <span className="material-symbols-outlined">check_circle</span>
-            <span>Transcript đã sẵn sàng. Nhấn "Tạo tóm tắt" để bắt đầu.</span>
+            <span>Transcript ready. Press "Generate Summary" to start.</span>
           </div>
         ) : null}
 
         {lessonSummary?.status === "processing" ? (
           <div className="learningPage__aiSummaryStatus">
             <Loader2 size={16} className="learningPage__aiSummarySpinner" />
-            <span>Đang tạo tóm tắt bằng AI...</span>
+            <span>Generating summary with AI...</span>
           </div>
         ) : null}
 
@@ -1715,7 +1715,7 @@ export default function LearningPage() {
         !lessonSummaryErrorShownAt ? (
           <div className="learningPage__aiSummaryStatus learningPage__aiSummaryStatus--ready">
             <span className="material-symbols-outlined">check_circle</span>
-            <span>Transcript đã sẵn sàng. Nhấn "Tạo tóm tắt" để bắt đầu.</span>
+            <span>Transcript ready. Press "Generate Summary" to start.</span>
           </div>
         ) : null}
 
@@ -1727,8 +1727,8 @@ export default function LearningPage() {
               lessonSummary.error_message?.toLowerCase().includes("all model") ||
               lessonSummary.error_message?.toLowerCase().includes("key đều thất bại") ||
               lessonSummary.error_message?.toLowerCase().includes("model/key")
-                ? "Hệ thống lỗi, vui lòng thử lại sau ít phút nữa."
-                : lessonSummary.error_message || "Đã xảy ra lỗi. Vui lòng thử lại."}
+                ? "System error, please try again in a few minutes."
+                : lessonSummary.error_message || "An error occurred. Please try again."}
             </span>
           </div>
         ) : null}
@@ -1739,7 +1739,7 @@ export default function LearningPage() {
               <div className="learningPage__aiSummarySection">
                 <div className="learningPage__aiSummarySectionTitle">
                   <span className="material-symbols-outlined">article</span>
-                  Tóm tắt tổng quát
+                  Overall Summary
                 </div>
                 <p className="learningPage__aiSummaryText">{lessonSummary.overall_summary}</p>
               </div>
@@ -1749,7 +1749,7 @@ export default function LearningPage() {
               <div className="learningPage__aiSummarySection">
                 <div className="learningPage__aiSummarySectionTitle">
                   <span className="material-symbols-outlined">lightbulb</span>
-                  Điểm chính
+                  Key Points
                 </div>
                 <ul className="learningPage__aiSummaryList">
                   {lessonSummary.key_points.map((point, index) => (
@@ -1769,7 +1769,7 @@ export default function LearningPage() {
                 >
                   <div className="learningPage__aiSummarySectionTitle">
                     <span className="material-symbols-outlined">format_list_numbered</span>
-                    Chi tiết theo phần
+                    Segment Details
                   </div>
                   <span className={`learningPage__segmentsChevron ${lessonSummarySegmentsExpanded ? "learningPage__segmentsChevron--open" : ""}`}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1782,7 +1782,7 @@ export default function LearningPage() {
                     <div key={segment.segment_index} className="learningPage__aiSummarySegment">
                       <div className="learningPage__aiSummarySegmentHeader">
                         <span className="learningPage__aiSummarySegmentIndex">
-                          Phần {segment.segment_index}
+                          Segment {segment.segment_index}
                         </span>
                         {segment.start_sec !== null && segment.end_sec !== null && (
                           <span className="learningPage__aiSummarySegmentTime">
@@ -1819,7 +1819,7 @@ export default function LearningPage() {
           !lessonSummary?.error_message &&
           !lessonSummary?.source_ready && (
             <div className="learningPage__aiSummaryMuted">
-              Transcript chưa sẵn sàng. Vui lòng chờ video được xử lý.
+              Transcript not ready. Please wait for the video to be processed.
             </div>
           )
         )}
@@ -1833,7 +1833,7 @@ export default function LearningPage() {
   // Breadcrumb data
   const courseTitle = course?.title ?? "";
   const currentModule = modules.find((m) => lessonModal && lessonModuleIdById.get(lessonModal.lessonId) === m.id);
-  const moduleLabel = currentModule ? `Chương ${(modules.indexOf(currentModule) + 1)}: ${currentModule.title}` : "";
+  const moduleLabel = currentModule ? `Chapter ${(modules.indexOf(currentModule) + 1)}: ${currentModule.title}` : "";
   const lessonTitle = modalLesson?.title ?? "";
   // ============================================
   return (
@@ -1841,12 +1841,12 @@ export default function LearningPage() {
       <div className="learningPage__topbar">
         <button className="learningPage__back" onClick={() => navigate(`/my-courses/${courseId}/${slug || ""}`)} type="button">
           <ArrowLeft size={16} />
-          <span>Quay lại</span>
+          <span>Back</span>
         </button>
         <div className="learningPage__topbarCenter">
           <div className="learningPage__title">{course.title}</div>
           <div className="learningPage__meta">
-            Đã hoàn thành <b>{completedLessons}</b>/<b>{totalLessons}</b> bài học · Tiến độ tổng <b>{progressPercent}%</b>
+            Completed <b>{completedLessons}</b>/<b>{totalLessons}</b> lessons · Overall progress <b>{progressPercent}%</b>
           </div>
           <div className="learningPage__progressBar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent}>
             <div className="learningPage__progressFill" style={{ width: `${Math.max(0, Math.min(100, progressPercent))}%` }} />
@@ -1868,11 +1868,11 @@ export default function LearningPage() {
           {/* Left Pane - Tree */}
           <aside className={`learningPage__treePane ${isTreeCollapsed ? "learningPage__treePane--collapsed" : ""}`} style={treePaneStyle}>
             <div className="learningPage__treeHeader">
-              {!isTreeCollapsed && <div className="learningPage__treeTitle">Cây nội dung</div>}
+              {!isTreeCollapsed && <div className="learningPage__treeTitle">Content Tree</div>}
               <button
                 className="learningPage__toggleBtn learningPage__toggleBtn--tree"
                 onClick={toggleTreeCollapse}
-                title={isTreeCollapsed ? "Mở rộng" : "Thu gọn"}
+                title={isTreeCollapsed ? "Expand" : "Collapse"}
               >
                 <span className="material-symbols-outlined">
                   {isTreeCollapsed ? "chevron_right" : "chevron_left"}
@@ -1898,9 +1898,9 @@ export default function LearningPage() {
                             onDragStart={(e) => handleTreeNodeDragStart(e, 'module', m.id, m.title)}
                             style={{ cursor: 'grab' }}
                           >
-                            <span className="material-symbols-outlined review-status-icon empty" title="Chương">folder</span>
+                            <span className="material-symbols-outlined review-status-icon empty" title="Chapter">folder</span>
                           </span>
-                          <div className="tree-title">Chương {moduleIdx + 1}: {m.title}</div>
+              <div className="tree-title">Chapter {moduleIdx + 1}: {m.title}</div>
                         </div>
                         <ul className="tree-children">
                           {sortedLessons.map((le) => {
@@ -1910,8 +1910,8 @@ export default function LearningPage() {
                               le.lesson_type === "quiz"
                                 ? { icon: "quiz", className: "is-quiz", title: "Quizz" }
                                 : le.lesson_type === "assignment"
-                                  ? { icon: "assignment", className: "is-assignment", title: "Bài tập" }
-                                  : { icon: "menu_book", className: "is-content", title: "Bài học" };
+                                  ? { icon: "assignment", className: "is-assignment", title: "Assignment" }
+                                  : { icon: "menu_book", className: "is-content", title: "Lesson" };
                             return (
                               <li key={le.id} className="tree-node lesson-node">
                                 <div className="tree-title-row">
@@ -1960,12 +1960,12 @@ export default function LearningPage() {
                                       }
                                       openLessonDetail(m.id, le.id);
                                     }}
-                                    title={canClick ? le.title : "Bài học chưa mở"}
+                                    title={canClick ? le.title : "Lesson not available"}
                                   >
                                     {le.title}
                                   </button>
                                   {!canClick ? (
-                                    <span className="tree-schedule-chip">Bị khóa</span>
+                                    <span className="tree-schedule-chip">Locked</span>
                                   ) : null}
                                 </div>
                               </li>
@@ -2035,7 +2035,7 @@ export default function LearningPage() {
                             }
                           }}
                         >
-                          {k === "quiz" ? "Quizz" : "Bài tập"}
+                          {k === "quiz" ? "Quiz" : "Assignment"}
                         </button>
                       ));
                     })()}
@@ -2115,9 +2115,9 @@ export default function LearningPage() {
               {/* Quiz Start Confirm — show above content regardless of tab */}
               {quizStartConfirm && (
                 <div className="learningPage__quizSideCard">
-                  <div className="learningPage__quizSideTitle">Thông tin Quizz</div>
+                  <div className="learningPage__quizSideTitle">Quiz Information</div>
                   {quizInfoLoading ? (
-                    <div className="learningPage__quizSideMsg">Đang tải thông tin...</div>
+                    <div className="learningPage__quizSideMsg">Loading quiz info...</div>
                   ) : quizInfoError ? (
                     <div className="learningPage__quizSideMsg learningPage__quizSideMsg--error">{quizInfoError}</div>
                   ) : quizInfoPreview ? (
@@ -2127,13 +2127,13 @@ export default function LearningPage() {
                         <div className="learningPage__quizSideDesc">{quizInfoPreview.description}</div>
                       ) : null}
                       <div className="learningPage__quizSideMeta">
-                        <div>Số câu hỏi: <b>{quizInfoPreview.questions_count}</b></div>
-                        <div>Thời gian: <b>{quizInfoPreview.time_limit_minutes != null ? `${quizInfoPreview.time_limit_minutes} phút` : "Không giới hạn"}</b></div>
-                        <div>Điểm đạt: <b>{quizInfoPreview.passing_score != null ? `${quizInfoPreview.passing_score}%` : "Không yêu cầu"}</b></div>
-                        <div>Số lượt còn lại: <b>{Math.max(0, quizInfoPreview.max_attempts - quizInfoPreview.attempts_used)}</b>/{quizInfoPreview.max_attempts}</div>
+                        <div>Questions: <b>{quizInfoPreview.questions_count}</b></div>
+                        <div>Time limit: <b>{quizInfoPreview.time_limit_minutes != null ? `${quizInfoPreview.time_limit_minutes} min` : "Unlimited"}</b></div>
+                        <div>Passing score: <b>{quizInfoPreview.passing_score != null ? `${quizInfoPreview.passing_score}%` : "Not required"}</b></div>
+                        <div>Attempts remaining: <b>{Math.max(0, quizInfoPreview.max_attempts - quizInfoPreview.attempts_used)}</b>/{quizInfoPreview.max_attempts}</div>
                       </div>
                       <div className="learningPage__quizSideActions">
-                        <button type="button" className="learningPage__lessonModalNavBtn" onClick={() => setQuizStartConfirm(null)}>Hủy</button>
+                        <button type="button" className="learningPage__lessonModalNavBtn" onClick={() => setQuizStartConfirm(null)}>Cancel</button>
                         <button
                           type="button"
                           className="learningPage__lessonModalActBtn learningPage__lessonModalActBtn--primary"
@@ -2143,7 +2143,7 @@ export default function LearningPage() {
                             void fetchProgress();
                           }}
                         >
-                          {quizInfoPreview.attempts_used >= quizInfoPreview.max_attempts ? "Xem kết quả" : "Bắt đầu làm bài"}
+                          {quizInfoPreview.attempts_used >= quizInfoPreview.max_attempts ? "View Results" : "Start Quiz"}
                         </button>
                       </div>
                     </>
@@ -2171,21 +2171,21 @@ export default function LearningPage() {
                       <div className="learningPage__lessonBody">
                         <EmptyState
                           icon={<FileQuestion size={40} />}
-                          title="Chưa có mô tả"
-                          description="Bài học này chưa có nội dung mô tả."
+                          title="No description available"
+                          description="This lesson has no description."
                         />
                       </div>
                     )}
                     {/* <div className="learningPage__tags">
                       <span className="learningPage__tag">
-                        {modalLesson?.lesson_type === "video" ? "Video" : "Văn bản"}
+                        {modalLesson?.lesson_type === "video" ? "Video" : "Text"}
                       </span>
                     </div> */}
                   </div>
                   {/* <aside className="learningPage__lessonProgressCard">
-                    <h4 className="learningPage__lessonProgressTitle">Tiến độ bài học</h4>
+                    <h4 className="learningPage__lessonProgressTitle">Lesson Progress</h4>
                     <div className="learningPage__lessonProgressRow">
-                      <span>Hoàn thành khóa học</span>
+                      <span>Complete Course</span>
                       <span className="learningPage__lessonProgressValue">{progressPercent}%</span>
                     </div>
                     <div className="learningPage__lessonProgressTrack">
@@ -2193,8 +2193,8 @@ export default function LearningPage() {
                     </div>
                     <p className="learningPage__lessonProgressHint">
                       {progressPercent >= 100
-                        ? "Bạn đã hoàn thành khóa học!"
-                        : "Hoàn thành mỗi bài học để mở khóa bài kiểm tra cuối khóa."}
+                        ? "You have completed the course!"
+                        : "Complete each lesson to unlock the final exam."}
                     </p>
                   </aside> */}
                 </div>
@@ -2239,8 +2239,8 @@ export default function LearningPage() {
                   ) : (
                     <EmptyState
                       icon={<FileQuestion size={40} />}
-                      title="Chưa có tài nguyên"
-                      description="Bài học này chưa có tài liệu đính kèm."
+                      title="No resources available"
+                      description="This lesson has no attached resources."
                     />
                   )}
                 </div>
@@ -2261,17 +2261,17 @@ export default function LearningPage() {
                 className="learningPage__lessonModalNavBtn"
                 disabled={!modalCanGoPrev}
                 onClick={() => navigateToPrevLesson(modalPrevLessonId)}
-                aria-label="Bài học trước"
+                aria-label="Previous lesson"
               >
                 <ChevronLeft size={18} />
-                <span>Bài trước</span>
+                <span>Previous</span>
               </button>
               <span className="learningPage__lessonModalNavPosition">
                 {modalLessonIndex >= 0 ? `${modalLessonIndex + 1} / ${orderedLessonIds.length}` : ''}
               </span>
               {lessonModalNavPick ? (
                 <div className="learningPage__lessonModalNavPick">
-                  <span className="learningPage__lessonModalNavPickLabel">Chọn đích:</span>
+                  <span className="learningPage__lessonModalNavPickLabel">Select destination:</span>
                   {lessonModalNavPick.options.map((opt) => (
                     <button
                       key={opt}
@@ -2287,7 +2287,7 @@ export default function LearningPage() {
                         if (opt !== "quiz") void fetchProgress();
                       }}
                     >
-                      {opt === "quiz" ? "Quizz" : "Bài tập"}
+                      {opt === "quiz" ? "Quiz" : "Assignment"}
                     </button>
                   ))}
                 </div>
@@ -2297,9 +2297,9 @@ export default function LearningPage() {
                 className="learningPage__lessonModalNavBtn"
                 disabled={!modalCanGoNext}
                 onClick={() => navigateToNextLesson(modalNextLessonId)}
-                aria-label="Bài học tiếp theo"
+                aria-label="Next lesson"
               >
-                <span>Bài tiếp</span>
+                <span>Next</span>
                 <ChevronRight size={18} />
               </button>
             </div>
@@ -2322,13 +2322,13 @@ export default function LearningPage() {
                 {!isSummaryCollapsed && (
                   <>
                     <span className="material-symbols-outlined">auto_awesome</span>
-                    Tóm tắt thông minh
+                    Smart Summary
                   </>
                 )}
                 <button
                   className="learningPage__toggleBtn learningPage__toggleBtn--summary"
                   onClick={toggleSummaryCollapse}
-                  title={isSummaryCollapsed ? "Mở rộng" : "Thu gọn"}
+                  title={isSummaryCollapsed ? "Expand" : "Collapse"}
                 >
                   <span className="material-symbols-outlined">
                     {isSummaryCollapsed ? "chevron_left" : "chevron_right"}
