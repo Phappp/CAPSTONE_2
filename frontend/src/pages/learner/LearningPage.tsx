@@ -12,6 +12,7 @@ import type { ModuleItem } from "../../components/LearnerCourseContentTree";
 import { isLikelyVideoResource, parseYoutubeVideoId } from "../courseManager/lesson-studio/utils";
 import QuizSubmission from "./QuizSubmission";
 import AssignmentSubmission from "./AssignmentSubmission";
+import DiscussionTab from "./DiscussionTab";
 import "../../components/CourseContentSimpleTree.css";
 import "./LearningPage.css";
 
@@ -2246,13 +2247,9 @@ export default function LearningPage() {
               )}
 
               {/* Discussion tab */}
-              {activeTab === "discussion" && (
+              {activeTab === "discussion" && modalLesson && (
                 <div className="learningPage__tabPanel">
-                  <EmptyState
-                    icon={<BrainCircuit size={40} />}
-                    title="Thảo luận bài học"
-                    description="Tính năng thảo luận đang được phát triển. Hãy quay lại sau!"
-                  />
+                  <DiscussionTab lesson={modalLesson} />
                 </div>
               )}
             </div>

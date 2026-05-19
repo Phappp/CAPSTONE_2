@@ -44,6 +44,7 @@ import { AiSummaryController } from './features/ai-summary/adapter/controller';
 import { AiSummaryServiceImpl } from './features/ai-summary/domain/service';
 import initAiSummaryRoute from './features/ai-summary/adapter/route';
 import initAnalyticsRoute from './features/analytics/adapter/route';
+import { createDiscussionController, initDiscussionRoutes } from './features/lesson-discussion/route';
 
 
 const app = express();
@@ -93,6 +94,10 @@ const createHttpServer = (redisClient: any) => {
   app.use('/api/v1/ai', initAiShortAnswerRoute(new AiShortAnswerController(new AiShortAnswerServiceImpl())));
   app.use('/api/v1/chatbot', initChatbotRoute());
   app.use('/api/v1', initAnalyticsRoute());
+
+  // Discussion routes
+  app.use('/api/v1/lessons/:lessonId/discussions', initDiscussionRoutes(createDiscussionController()));
+
   app.use(recoverMiddleware);
 
   // app.use('/search', searchRouter);
